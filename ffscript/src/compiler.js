@@ -5,15 +5,16 @@ const reID = new RegExp('^' + ID + '$', 'u');
 class FFError extends Error { constructor(line, msg) { super(msg); this.line = line; } }
 const fail = (n, m) => { throw new FFError(n, m); };
 
-const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart', 'ball', 'box', 'hero', 'slime', 'platform', 'spike', 'flag', 'gem', 'bomb', 'ghost', 'fish', 'cloud', 'tree', 'block', 'shot', 'checkpoint', 'ladder'];
+const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart', 'ball', 'box', 'hero', 'slime', 'platform', 'spike', 'flag', 'gem', 'bomb', 'ghost', 'fish', 'cloud', 'tree', 'block', 'shot', 'checkpoint', 'ladder', 'water', 'door', 'boss'];
 const BACKS = ['space', 'night', 'sky', 'sea', 'sunset', 'forest', 'lava', 'snow', 'grid'];
-const MAP_CHARS = '.# =CGSHB^FEPKL';
+const MAP_CHARS = '.# =CGSHB^FEPKLWD';
 const ART_CHARS = '.# kwrogybpcnmd';
-const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
+const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
 const COLOR_WORDS = ['red', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'gold', 'cyan', 'sky', 'brown'];
 const CONTROLS = ['arrows', 'wasd', 'leftright', 'mouse', 'platformer'];
 const MUSICS = ['chill', 'happy', 'action', 'off'];
-const SOUNDS = ['boom', 'coin', 'shoot', 'hit', 'jump', 'power', 'start', 'over', 'win', 'pop', 'laser', 'click', 'magic', 'hurt', 'whoosh'];
+const SOUNDS = ['boom', 'coin', 'shoot', 'hit', 'jump', 'power', 'start', 'over', 'win', 'pop', 'laser', 'click', 'magic', 'hurt', 'whoosh', 'splash'];
+const POWERS = ['fast', 'big', 'small', 'shield', 'magnet', 'jump'];
 const DIRS = ['up', 'down', 'left', 'right'];
 const WAVES = ['sine', 'square', 'triangle', 'saw'];
 const WEATHERS = ['rain', 'snow', 'leaves', 'petals', 'off'];
@@ -25,9 +26,9 @@ const CMDS = Object.assign(Object.create(null), {
   move: 'move', toward: 'toward', stop: 'stop', control: 'control', speed: 'setSpeed', size: 'setSize', color: 'setColor',
   spin: 'spin', bounce: 'setBounce', look: 'setLook', gravity: 'setGravity', jump: 'jump', solid: 'setSolid',
   health: 'setHealth', hurt: 'hurt', heal: 'heal', fade: 'setAlpha', hide: 'hide', show: 'show', glow: 'setGlow', trail: 'setTrail', wrap: 'setWrap',
-  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
+  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', jumps: 'setJumps', dash: 'dash', open: 'open', power: 'power', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
 });
-const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take'];
+const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take', 'minimap'];
 const BUILTIN = ['score', 'lives', 'level', 'time', 'scene', 'answer', 'has', 'choose', 'chance', 'distance', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
 const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times', 'follow', 'off', 'ends', 'topdown', 'answered'];
 const JS_RESERVED = ['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'enum', 'export', 'extends', 'finally', 'for', 'function', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'await', 'async', 'static', 'undefined', 'G', 'Math', '_o', 'window', 'document', 'eval'];
@@ -103,7 +104,7 @@ function rawRows(nd) {
 function compile(src) {
   const tree = parseTree(src);
   const LOOKS = [...BUILTIN_LOOKS];
-  const vars = new Set(), funcs = new Set(), scenes = new Set();
+  const vars = new Set(), funcs = new Set(), scenes = new Set(), sounds = new Set();
   let hasLives = false, firstLivesAdd = 0, usesLevel = false;
 
   const assignRe = new RegExp('^(' + ID + ')\\s*(?:=(?!=)|\\+=|-=|\\*=|/=)', 'u');
@@ -122,6 +123,7 @@ function compile(src) {
         if (NOT_VARS.has(tm[1]) || BUILTIN_LOOKS.includes(tm[1]) || tm[1] in Object.prototype) fail(nd.n, `'${tm[1]}'는 이미 있는 이름이라서 그림 이름으로 쓸 수 없어요.`);
         LOOKS.push(tm[1]);
       }
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^sound\\s+(' + ID + ')(\\s*=.*)?$', 'u'))) && (tm[2] || nd.children.length)) sounds.add(tm[1]);
       if (top && /^map\b/.test(nd.text) && nd.rowsRaw && nd.rowsRaw.some(r => r.text.includes('P'))) vars.add('player');
       const sm = nd.text.match(new RegExp('^set\\s+(' + ID + ')\\s+to\\b', 'u'));
       const m = nd.text.match(assignRe) || (sm && [null, sm[1]]);
@@ -229,7 +231,9 @@ function compile(src) {
         return a.join(',');
       }
       case 'control':
-        if (terms.length !== 1 || !CONTROLS.includes(terms[0])) fail(n, `control 뒤에는 ${quoteList(CONTROLS)} 중 하나가 와야 해요.${terms[0] ? hint(terms[0], CONTROLS) : ''}`);
+        if (terms.length === 2 && terms[0] === 'platformer' && (terms[1] === 'arrows' || terms[1] === 'wasd')) return `${q('platformer')},${q(terms[1])}`;
+        if (terms[0] === 'platformer' && terms.length > 1) fail(n, 'platformer 뒤에는 wasd 나 arrows 만 써요. (2인용: 한 명은 control platformer wasd, 다른 한 명은 control platformer arrows)');
+        if (terms.length !== 1 || !CONTROLS.includes(terms[0])) fail(n, `control 뒤에는 ${quoteList(CONTROLS)} 중 하나가 와야 해요.${terms[0] ? hint(terms[0], CONTROLS) : ''}\n2인용 플랫포머는 control platformer wasd 와 control platformer arrows 로 나눠요.`);
         return q(terms[0]);
       case 'speed': case 'size': case 'spin':
         need(rest, n, `${name} 뒤에는 숫자가 필요해요. (예: ${name} 300)`);
@@ -250,10 +254,21 @@ function compile(src) {
         return a.join(',');
       }
       case 'shoot': {
+        if (terms[0] === 'ring' || terms[0] === 'spread') {
+          if (terms.length > 3) fail(n, `shoot ${terms[0]}은 이렇게 써요: shoot ${terms[0]} 12 300  (개수, 속도)`);
+          return [q(terms[0]), terms[2] ? ex(terms[2], n, ctx) : 'undefined', terms[1] ? ex(terms[1], n, ctx) : 'undefined'].join(',');
+        }
         if (terms.length > 2) fail(n, 'shoot은 이렇게 써요: shoot up, shoot player 400, shoot mouse  (뒤 숫자는 속도)');
         const a = [!terms.length ? 'null' : DIRS.includes(terms[0]) ? q(terms[0]) : ex(terms[0], n, ctx)];
         if (terms[1]) a.push(ex(terms[1], n, ctx));
         return a.join(',');
+      }
+      case 'jumps': need(rest, n, 'jumps 뒤에는 점프 횟수가 필요해요. (예: jumps 2  → 이단 점프)'); return ex(rest, n, ctx);
+      case 'dash': return rest && rest.trim() ? ex(rest, n, ctx) : '';
+      case 'power': {
+        if (!terms.length || !POWERS.includes(terms[0])) fail(n, `power 뒤에는 ${quoteList(POWERS)} 중 하나와 시간을 써요. (예: player.power fast 5)${terms[0] ? hint(terms[0], POWERS) : ''}`);
+        const sec = terms.slice(1).join(' ').replace(/\s*(?:sec|secs|seconds?|s)$/i, '');
+        return q(terms[0]) + (sec ? ',' + ex(sec, n, ctx) : '');
       }
       case 'chase': case 'flee': {
         if (!terms.length) fail(n, `${name} 뒤에는 대상이 필요해요. (예: ${name} player 120 300  → 속도 120, 300 거리 안에서만)`);
@@ -450,7 +465,7 @@ function compile(src) {
         if (rest && rest.trim() !== 'topdown') fail(n, `map 뒤에는 아무것도 안 쓰거나 topdown(위에서 내려다보기)만 써요.${hint(rest.trim(), ['topdown'])}`);
         if (!nd.rowsRaw || !nd.rowsRaw.length) fail(n, 'map 아래에 지도를 그려 주세요. (# 땅, C 코인, P 플레이어, F 깃발 …)');
         const { rows, lines } = rawRows(nd);
-        rows.forEach((r, i) => { for (const ch of r) if (!MAP_CHARS.includes(ch)) fail(lines[i], `지도에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # = C G S H B ^ F E P 그리고 빈칸은 .`); });
+        rows.forEach((r, i) => { for (const ch of r) if (!MAP_CHARS.includes(ch)) fail(lines[i], `지도에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # = C G S H B ^ F E P K L W D 그리고 빈칸은 .`); });
         nd.usedKids = true;
         return `G.ln=${n};${rows.some(r => r.includes('P')) ? 'player=' : ''}G.buildMap(${JSON.stringify(rows)}${rest.trim() === 'topdown' ? ',"topdown"' : ''});`;
       }
@@ -544,9 +559,27 @@ function compile(src) {
       case 'win': if (rest) fail(n, 'win 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.win();`;
       case 'gameover': if (rest) fail(n, 'gameover 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.gameOver();`;
       case 'shake': return `G.ln=${n};G.shake(${rest ? ex(rest, n, ctx) : ''});`;
-      case 'sound':
-        if (!SOUNDS.includes(rest.trim())) fail(n, `sound 뒤에는 소리 이름이 필요해요: ${quoteList(SOUNDS)}.${rest ? hint(rest.trim(), SOUNDS) : ''}`);
-        return `G.ln=${n};G.sound(${q(rest.trim())});`;
+      case 'sound': {
+        const v = rest.trim(), mm = v.match(new RegExp('^(' + ID + ')\\s*=\\s*(.*)$', 'u'));
+        if (mm || (nd.children.length && reID.test(v))) {
+          if (!ctx.top || ctx.inScene) fail(n, '효과음 만들기는 scene 밖, 맨 왼쪽 줄에서 해 주세요. (예: sound boing = tone 200 to 900 0.15)');
+          if (mm && nd.children.length) fail(nd.children[0].n, '한 줄로 만든 효과음 아래에는 더 쓸 수 없어요. 여러 줄이면 sound 이름 아래에 들여써 주세요.');
+          const lines = mm ? [{ n, text: mm[2].trim(), children: [] }] : nd.children;
+          nd.usedKids = true;
+          const js = lines.map(c => {
+            if (!/^(tone|play|sound)\b/.test(c.text) || c.children.length) fail(c.n, '효과음 안에는 tone, play, sound 줄만 쓸 수 있어요. (예: sound boing = tone 200 to 900 0.15)');
+            return stmt(c, sub(ctx));
+          }).join('');
+          return `G.ln=${n};G.defSound(${q(mm ? mm[1] : v)},()=>{${js}});`;
+        }
+        if (!SOUNDS.includes(v) && !sounds.has(v)) fail(n, `sound 뒤에는 소리 이름이 필요해요: ${quoteList([...SOUNDS, ...sounds])}.${v ? hint(v, [...SOUNDS, ...sounds]) : ''}\n새 소리는 이렇게 만들어요: sound boing = tone 200 to 900 0.15`);
+        return `G.ln=${n};G.sound(${q(v)});`;
+      }
+      case 'minimap': {
+        const v = rest.trim();
+        if (v && v !== 'on' && v !== 'off') fail(n, 'minimap은 이렇게 써요: minimap  (끄려면 minimap off)');
+        return `G.ln=${n};G.setMinimap(${v !== 'off'});`;
+      }
       case 'label': {
         const terms = splitTerms(rest);
         need(rest, n, 'label 뒤에는 "글자"가 필요해요. (예: label "안녕" at center top)');
@@ -624,6 +657,6 @@ function explain(e) {
 }
 function toFunction(code) { return new Function('G', code); }
 
-const lists = { waves: WAVES, weathers: WEATHERS, statements: STATEMENTS, cmds: Object.keys(CMDS), looks: BUILTIN_LOOKS, backs: BACKS, colors: COLOR_WORDS, controls: CONTROLS, sounds: SOUNDS, dirs: DIRS, musics: MUSICS, pos: POS_WORDS, sides: SIDES, words: WORDS, builtin: BUILTIN };
+const lists = { powers: POWERS, waves: WAVES, weathers: WEATHERS, statements: STATEMENTS, cmds: Object.keys(CMDS), looks: BUILTIN_LOOKS, backs: BACKS, colors: COLOR_WORDS, controls: CONTROLS, sounds: SOUNDS, dirs: DIRS, musics: MUSICS, pos: POS_WORDS, sides: SIDES, words: WORDS, builtin: BUILTIN };
 global.FFScript = { compile, compileSafe, explain, toFunction, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
 })(typeof window !== 'undefined' ? window : globalThis);
