@@ -48,6 +48,9 @@ var flash_mat: StandardMaterial3D
 var flash_quad: QuadMesh
 var cam_pos := Vector3.ZERO
 var frame_budget_shots := 0
+var grass_root: Node3D
+var shell_t := 4.0
+var ads_t := 0.0
 
 
 func setup(s: Sim) -> void:
@@ -56,6 +59,8 @@ func setup(s: Sim) -> void:
 	var t := WorldGfx.terrain(sim.world)
 	add_child(t)
 	add_child(WorldGfx.props(sim.world))
+	grass_root = WorldGfx.grass(sim.world)
+	add_child(grass_root)
 	fx = Fx.new()
 	add_child(fx)
 	sfx = Sfx.new()
@@ -107,6 +112,7 @@ func _build_env() -> void:
 func apply_quality(q: int) -> void:
 	quality = q
 	sun.shadow_enabled = q >= 1
+	grass_root.visible = q >= 1
 	sun.directional_shadow_max_distance = 120.0 if q >= 2 else 80.0
 	var vp := get_viewport()
 	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
@@ -208,6 +214,22 @@ func _set_viewmodel(weapon: int) -> void:
 
 
 ## 프레임마다 호출. alpha = 틱 사이 보간 비율.
+func _shells(dt: float, shake_scale: float) -> void:
+	shell_t -= dt
+	if shell_t > 0.0:
+		return
+	shell_t = randf_range(5.0, 12.0)
+	var p := Vector3(randf_range(-120.0, 120.0), 0.0, randf_range(-85.0, 85.0))
+	p.y = sim.world.height_at(p.x, p.z)
+	var d := p.distance_to(cam_pos)
+	if d < 18.0:
+		return
+	fx.blast(p)
+	get_tree().create_timer(minf(d / 340.0, 1.6)).timeout.connect(func(): sfx.boom_at(p))
+	if shake_scale > 0.0 and d < 100.0:
+		shake = maxf(shake, (1.0 - d / 100.0) * 1.6 * shake_scale)
+
+
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
 	var me: Sim.Unit = sim.units[local_id]
 	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
@@ -217,7 +239,39 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	# 병사
 	for u in sim.units:
 		_update_unit(u, ugs[u.id], alpha, dt, local_id)
-	# 거점 표식
+	_update_points()
+	# 카메라
+	var sh := Vector3.ZERO
+	if shake > 0.0:
+		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
+	shake = maxf(0.0, shake - dt * 3.0)
+	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
+	if debug_3p:
+		cp += cam.basis * Vector3(0.9, 0.5, 3.2)
+	cam.position = cp
+	ads_t = move_toward(ads_t, 1.0 if (me.alive and me.in_ads) else 0.0, dt * 7.0)
+	cam.fov = lerpf(75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), 52.0, ads_t)
+	# 1인칭 총
+	_set_viewmodel(me.weapon)
+	vm.visible = me.alive and not debug_3p
+	kick = move_toward(kick, 0.0, dt * 7.0)
+	bob += me.speed_now * dt * 1.9
+	var amp := minf(1.0, me.speed_now * 0.25)
+	var sway := sin(bob) * 0.008 * amp
+	var lift := absf(cos(bob)) * 0.006 * amp
+	vm.scale = Vector3.ONE * 0.85
+	vm.position = Vector3(0.19 + sway, -0.2 - lift, -0.42 + kick * 0.07).lerp(Vector3(0.0, -0.118, -0.36 + kick * 0.05), ads_t)
+	vm.rotation = Vector3(kick * 0.09 + (0.04 if me.speed_now > 6.0 else 0.0), 0.0, sway * 1.2)
+	if me.reload_t > 0.0:
+		vm.rotation.x = -0.55
+		vm.position.y -= 0.1
+		vm.rotation.z = 0.2
+	_shells(dt, 1.0)
+	fx.update(dt)
+	sfx.update(dt, cp)
+
+
+func _update_points() -> void:
 	for i in Sim.NPOINTS:
 		var pt: Sim.Pt = sim.pts[i]
 		var fi := 0 if pt.owner < 0 else (1 if pt.owner == 0 else 2)
@@ -238,33 +292,25 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		zm.set_shader_parameter("contested", 1.0 if (pt.n_a > 0 and pt.n_b > 0) else 0.0)
 		var bm: ShaderMaterial = beam_nodes[i].material_override
 		bm.set_shader_parameter("col", oc)
-	# 카메라
-	var sh := Vector3.ZERO
-	if shake > 0.0:
-		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
-	shake = maxf(0.0, shake - dt * 3.0)
-	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
-	if debug_3p:
-		cp += cam.basis * Vector3(0.9, 0.5, 3.2)
-	cam.position = cp
-	cam.fov = lerpf(cam.fov, 75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), minf(1.0, dt * 6.0))
-	# 1인칭 총
-	_set_viewmodel(me.weapon)
-	vm.visible = me.alive and not debug_3p
-	kick = move_toward(kick, 0.0, dt * 7.0)
-	bob += me.speed_now * dt * 1.9
-	var amp := minf(1.0, me.speed_now * 0.25)
-	var sway := sin(bob) * 0.008 * amp
-	var lift := absf(cos(bob)) * 0.006 * amp
-	vm.scale = Vector3.ONE * 0.85
-	vm.position = Vector3(0.19 + sway, -0.2 - lift, -0.42 + kick * 0.07)
-	vm.rotation = Vector3(kick * 0.09 + (0.04 if me.speed_now > 6.0 else 0.0), 0.0, sway * 1.2)
-	if me.reload_t > 0.0:
-		vm.rotation.x = -0.55
-		vm.position.y -= 0.1
-		vm.rotation.z = 0.2
+
+
+## 메뉴 배경: 전장 위를 천천히 도는 카메라.
+func update_attract(alpha: float, dt: float, t: float) -> void:
+	var ang := t * 0.045
+	var c := Vector3(sin(ang * 0.7) * 30.0, 0.0, cos(ang * 0.5) * 12.0)
+	var pos := c + Vector3(sin(ang) * 58.0, 22.0 + sin(t * 0.13) * 5.0, cos(ang) * 58.0)
+	pos.y = maxf(pos.y, sim.world.height_at(pos.x, pos.z) + 9.0)
+	cam_pos = pos
+	cam.position = pos
+	cam.look_at(c + Vector3(0, 2.0, 0), Vector3.UP)
+	cam.fov = 62.0
+	vm.visible = false
+	for u in sim.units:
+		_update_unit(u, ugs[u.id], alpha, dt, -1)
+	_update_points()
+	_shells(dt, 0.0)
 	fx.update(dt)
-	sfx.update(dt, cp)
+	sfx.update(dt, pos)
 
 
 func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -> void:
