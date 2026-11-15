@@ -10,7 +10,8 @@ const COLORS = {
   navy: '#4b5bd6', purple: '#a66bff', pink: '#ff7ac6', white: '#ffffff', black: '#1a1a22',
   gray: '#9aa0ad', grey: '#9aa0ad', gold: '#ffcb3d', cyan: '#5ee7ff', sky: '#6fd3ff', brown: '#a86b45'
 };
-function color(c) { return COLORS[c] || c; }
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+function color(c) { return own(COLORS, c) ? COLORS[c] : String(c); }
 function shade(hex, f) {
   let h = hex.replace('#', '');
   if (h.length === 3) h = h.split('').map(c => c + c).join('');
@@ -65,6 +66,7 @@ const Sfx = {
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(fl); fl.connect(g); g.connect(this.out); s.start(t); s.stop(t + dur + 0.05);
   },
+  toggleMute() { this.muted = !this.muted; if (this.out) this.out.gain.value = this.muted ? 0 : 0.5; return this.muted; },
   setMusic(name) {
     clearInterval(this.mt); this.mt = 0;
     const P = MUSIC[name];
@@ -92,6 +94,11 @@ const Sfx = {
       case 'over': [392, 330, 262, 196].forEach((f, i) => this.tone('triangle', f, f * 0.98, 0.3, 0.22, i * 0.18)); break;
       case 'win': [523, 659, 784, 1047, 784, 1047].forEach((f, i) => this.tone('square', f, f, 0.14, 0.12, i * 0.1)); break;
       case 'pop': this.tone('sine', 600 * p, 1200, 0.06, 0.15); break;
+      case 'laser': this.tone('sawtooth', 1400 * p, 200, 0.18, 0.12); break;
+      case 'click': this.tone('square', 1800, 1200, 0.03, 0.1); break;
+      case 'magic': [784, 988, 1319, 1568].forEach((f, i) => this.tone('sine', f * p, f * p, 0.14, 0.14, i * 0.05)); break;
+      case 'hurt': this.tone('sawtooth', 220 * p, 90, 0.2, 0.22); this.hiss(0.1, 0.25, 1500, 200); break;
+      case 'whoosh': this.hiss(0.35, 0.3, 300, 4000); break;
     }
   }
 };
@@ -428,11 +435,192 @@ function hills(ctx, t, col, f, base, amp) {
   ctx.lineTo(W, H); ctx.fill();
 }
 
+
+look('gem', {
+  size: 38, color: '#5ee7ff', hit: 0.45, glow: 0.4,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color;
+    const g = ctx.createLinearGradient(-s, -s, s, s);
+    g.addColorStop(0, shade(c, 0.6)); g.addColorStop(0.5, c); g.addColorStop(1, shade(c, -0.45));
+    ctx.fillStyle = g; ctx.beginPath();
+    ctx.moveTo(-s * 0.55, -s * 0.8); ctx.lineTo(s * 0.55, -s * 0.8); ctx.lineTo(s, -s * 0.2); ctx.lineTo(0, s); ctx.lineTo(-s, -s * 0.2); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = rgba('#ffffff', 0.55); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-s, -s * 0.2); ctx.lineTo(s, -s * 0.2); ctx.moveTo(-s * 0.55, -s * 0.8); ctx.lineTo(-s * 0.25, -s * 0.2); ctx.lineTo(0, s);
+    ctx.moveTo(s * 0.55, -s * 0.8); ctx.lineTo(s * 0.25, -s * 0.2); ctx.lineTo(0, s); ctx.stroke();
+    const k = Math.max(0, Math.sin(t * 3 + o.seed)) ** 6;
+    ctx.fillStyle = rgba('#ffffff', k); ctx.fillRect(-s * 0.5 - 4, -s * 0.5 - 1, 8, 2); ctx.fillRect(-s * 0.5 - 1, -s * 0.5 - 4, 2, 8);
+  }
+});
+look('bomb', {
+  size: 44, color: '#2b2b38', hit: 0.4,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color;
+    const g = ctx.createRadialGradient(-s * 0.35, -s * 0.3, s * 0.05, 0, s * 0.1, s);
+    g.addColorStop(0, shade(c, 0.7)); g.addColorStop(0.5, c); g.addColorStop(1, shade(c, -0.6));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, s * 0.12, s * 0.82, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#8b8b9c'; ctx.fillRect(-s * 0.18, -s * 0.78, s * 0.36, s * 0.22);
+    ctx.strokeStyle = '#c9a66b'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(0, -s * 0.78); ctx.quadraticCurveTo(s * 0.3, -s * 1.1, s * 0.5, -s * 0.95); ctx.stroke();
+    const f = 0.6 + 0.4 * Math.sin(t * 30);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.translate(s * 0.5, -s * 0.95); glowHalo(ctx, s * 0.5 * f + 4, '#ffb43c', 0.9); ctx.restore();
+  }
+});
+look('ghost', {
+  size: 54, color: '#f4f6ff', hit: 0.4,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color, b = Math.sin(t * 3 + o.seed) * 3;
+    ctx.translate(0, b);
+    const g = ctx.createLinearGradient(0, -s, 0, s);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(1, shade(c, -0.25));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-s * 0.8, s * 0.8); ctx.lineTo(-s * 0.8, -s * 0.1);
+    ctx.bezierCurveTo(-s * 0.8, -s * 1.1, s * 0.8, -s * 1.1, s * 0.8, -s * 0.1); ctx.lineTo(s * 0.8, s * 0.8);
+    for (let i = 0; i < 4; i++) { const x1 = s * 0.8 - (i + 0.5) * s * 0.4, x2 = s * 0.8 - (i + 1) * s * 0.4; ctx.quadraticCurveTo(x1, s * (i % 2 ? 0.8 : 1.1) + Math.sin(t * 6 + i) * 2, x2, s * 0.8); }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#1a1a2a'; ctx.beginPath(); ctx.ellipse(-s * 0.3, -s * 0.15, s * 0.11, s * 0.17, 0, 0, TAU); ctx.ellipse(s * 0.3, -s * 0.15, s * 0.11, s * 0.17, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, s * 0.2, s * 0.1, s * 0.14, 0, 0, TAU); ctx.fill();
+  }
+});
+look('fish', {
+  size: 56, color: '#ff9a3c', hit: 0.38,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color;
+    if (o.vx < 0) ctx.scale(-1, 1);
+    const w = Math.sin(t * 9 + o.seed) * s * 0.18;
+    ctx.fillStyle = shade(c, -0.25); ctx.beginPath(); ctx.moveTo(-s * 0.55, 0); ctx.lineTo(-s * 1.05, -s * 0.5 + w); ctx.lineTo(-s * 1.05, s * 0.5 + w); ctx.closePath(); ctx.fill();
+    const g = ctx.createLinearGradient(0, -s * 0.6, 0, s * 0.6);
+    g.addColorStop(0, shade(c, 0.4)); g.addColorStop(1, shade(c, -0.3));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.75, s * 0.5, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = rgba('#ffffff', 0.35); ctx.beginPath(); ctx.ellipse(-s * 0.1, -s * 0.2, s * 0.35, s * 0.1, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s * 0.4, -s * 0.1, s * 0.13, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(s * 0.43, -s * 0.1, s * 0.06, 0, TAU); ctx.fill();
+  }
+});
+look('cloud', {
+  size: 110, color: '#ffffff', hit: 0.3,
+  draw(ctx, o) {
+    const s = o.size / 2, c = o.color;
+    ctx.fillStyle = rgba(c, 0.92); ctx.beginPath();
+    [[-0.5, 0.1, 0.38], [-0.1, -0.2, 0.5], [0.35, 0.05, 0.4], [0, 0.2, 0.42]].forEach(([x, y, r]) => { ctx.moveTo(x * s + r * s, y * s); ctx.arc(x * s, y * s, r * s, 0, TAU); });
+    ctx.fill();
+  }
+});
+look('tree', {
+  size: 90, color: '#3fae5a', hit: 0.3,
+  draw(ctx, o) {
+    const s = o.size / 2, c = o.color;
+    ctx.fillStyle = '#7a4e2c'; ctx.fillRect(-s * 0.12, s * 0.35, s * 0.24, s * 0.65);
+    [[0.35, 0.8], [0.0, 0.62], [-0.32, 0.45]].forEach(([y, w], i) => {
+      const g = ctx.createLinearGradient(-s * w, 0, s * w, 0);
+      g.addColorStop(0, shade(c, -0.25 + i * 0.05)); g.addColorStop(0.5, shade(c, 0.1 + i * 0.05)); g.addColorStop(1, shade(c, -0.35));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, y * s - s * 0.55); ctx.lineTo(s * w, y * s + s * 0.2); ctx.lineTo(-s * w, y * s + s * 0.2); ctx.closePath(); ctx.fill();
+    });
+  }
+});
+look('block', {
+  size: 48, color: '#8a6a4a', hit: 0.01, solid: true, full: true,
+  draw(ctx, o) {
+    const s = o.size, c = o.color, h = s / 2;
+    const g = ctx.createLinearGradient(0, -h, 0, h);
+    g.addColorStop(0, shade(c, 0.12)); g.addColorStop(1, shade(c, -0.4));
+    ctx.fillStyle = g; ctx.fillRect(-h, -h, s, s);
+    ctx.strokeStyle = rgba('#000000', 0.22); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-h, 0); ctx.lineTo(h, 0); ctx.moveTo(-h * 0.1, -h); ctx.lineTo(-h * 0.1, 0); ctx.moveTo(h * 0.45, 0); ctx.lineTo(h * 0.45, h); ctx.stroke();
+    ctx.strokeStyle = rgba('#000000', 0.3); ctx.strokeRect(-h + 0.5, -h + 0.5, s - 1, s - 1);
+    if (o.grassTop) {
+      ctx.fillStyle = '#5fd06a'; ctx.fillRect(-h, -h, s, s * 0.2);
+      ctx.fillStyle = '#8df08f'; ctx.fillRect(-h, -h, s, 3);
+      ctx.fillStyle = '#4aa552'; for (let x = -h + 3; x < h - 3; x += 9) ctx.fillRect(x, -h + s * 0.2, 4, 4);
+    }
+  }
+});
+
+const PAL = { k: '#14141c', w: '#ffffff', r: '#ff4d5e', o: '#ff9a3c', y: '#ffd93d', g: '#4ade80', b: '#4d8dff', p: '#a66bff', c: '#5ee7ff', n: '#a86b45', m: '#ff7ac6', d: '#6b7080' };
+function defineArt(name, rows, col) {
+  const R = rows.length, C = Math.max(1, ...rows.map(r => r.length));
+  LOOKS[name] = {
+    size: 56, color: color(col || 'white'), hit: 0.4,
+    draw(ctx, o) {
+      const ps = o.size / Math.max(R, C), x0 = -C * ps / 2, y0 = -R * ps / 2;
+      for (let r = 0; r < R; r++) for (let c = 0; c < rows[r].length; c++) {
+        const ch = rows[r][c]; if (ch === '.' || ch === ' ') continue;
+        ctx.fillStyle = ch === '#' ? o.color : (PAL[ch] || o.color);
+        ctx.fillRect(x0 + c * ps, y0 + r * ps, ps + 0.6, ps + 0.6);
+      }
+    }
+  };
+}
+
+function tree(ctx, x, base, h, col) {
+  ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x, base - h); ctx.lineTo(x + h * 0.3, base); ctx.lineTo(x - h * 0.3, base); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, base - h * 1.3); ctx.lineTo(x + h * 0.22, base - h * 0.5); ctx.lineTo(x - h * 0.22, base - h * 0.5); ctx.fill();
+}
+Object.assign(BACKGROUNDS, {
+  sunset(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#2b1055'); g.addColorStop(0.55, '#d4457a'); g.addColorStop(1, '#ffb36b'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(W * 0.5, H * 0.66); glowHalo(ctx, 300, '#ffd28a', 0.55); ctx.fillStyle = '#fff1c9'; ctx.beginPath(); ctx.arc(0, 0, 72, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.strokeStyle = 'rgba(40,10,50,0.7)'; ctx.lineWidth = 2.5;
+    for (let i = 0; i < 4; i++) {
+      const x = ((t * 40 + i * 260) % (W + 200)) - 100, y = 110 + (i % 2) * 60 + Math.sin(t * 2 + i) * 6, f = Math.sin(t * 9 + i) * 5;
+      ctx.beginPath(); ctx.moveTo(x - 12, y - f); ctx.quadraticCurveTo(x - 5, y - 6, x, y); ctx.quadraticCurveTo(x + 5, y - 6, x + 12, y - f); ctx.stroke();
+    }
+    hills(ctx, t, '#4a1d5e', 0.5, 420, 35); hills(ctx, t, '#2a0f3d', 1.2, 470, 28);
+  },
+  forest(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0d2430'); g.addColorStop(1, '#1f5a44'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.translate(780, 90); glowHalo(ctx, 120, '#cfffe0', 0.25); ctx.fillStyle = '#e6fff0'; ctx.beginPath(); ctx.arc(0, 0, 28, 0, TAU); ctx.fill(); ctx.restore();
+    for (let i = 0; i < 16; i++) tree(ctx, i * 66 + 20, 430, 120 + (i * 37) % 40, '#12392f');
+    for (let i = 0; i < 12; i++) tree(ctx, i * 90 + 50, 480, 170 + (i * 53) % 50, '#0b2a22');
+    hills(ctx, t, '#0a2219', 1, 500, 20);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, b] of STARS[1]) {
+      const px = x + Math.sin(t * 0.7 + y) * 20, py = 180 + y * 0.6 + Math.cos(t * 0.9 + x) * 14, a = 0.2 + 0.7 * Math.max(0, Math.sin(t * 2 + x));
+      ctx.fillStyle = rgba('#ffee88', a); ctx.beginPath(); ctx.arc(px, py, 1.5 + b * 1.5, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  },
+  lava(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#12040a'); g.addColorStop(0.6, '#3d0c08'); g.addColorStop(1, '#8a2a08'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#0c0306'; ctx.beginPath(); ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 40) ctx.lineTo(x, 330 + ((x * 7) % 90) + Math.sin(x * 0.02) * 30);
+    ctx.lineTo(W, H); ctx.fill();
+    const lg = ctx.createLinearGradient(0, H - 170, 0, H); lg.addColorStop(0, 'rgba(255,90,20,0)'); lg.addColorStop(1, 'rgba(255,120,30,0.65)');
+    ctx.fillStyle = lg; ctx.fillRect(0, H - 170, W, 170);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, b] of STARS[1]) {
+      const yy = H - ((H - y + t * (30 + b * 70)) % H), a = Math.min(1, yy / H * 1.6);
+      ctx.fillStyle = rgba('#ff9a3c', 0.25 + 0.6 * a * b); ctx.beginPath(); ctx.arc(x + Math.sin(t + y) * 10, yy, 1 + b * 2.2, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  },
+  snow(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#8cc7ff'); g.addColorStop(1, '#eaf5ff'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    hills(ctx, t, '#f7fbff', 0.5, 420, 38); hills(ctx, t, '#d3e5f7', 1.3, 475, 26);
+    for (const [x, y, b] of STARS[0]) {
+      const yy = (y + t * (22 + b * 50)) % H, xx = x + Math.sin(t * 0.8 + y) * 18;
+      ctx.fillStyle = `rgba(255,255,255,${0.5 + b * 0.5})`; ctx.beginPath(); ctx.arc(xx, yy, 1.4 + b * 2.4, 0, TAU); ctx.fill();
+    }
+  },
+  grid(ctx, t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a0220'); g.addColorStop(0.62, '#3b0a5a'); g.addColorStop(1, '#12031f'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    const hz = 330;
+    const sg = ctx.createLinearGradient(0, hz - 220, 0, hz); sg.addColorStop(0, '#ffe15a'); sg.addColorStop(1, '#ff3d8b');
+    ctx.save(); ctx.beginPath(); ctx.arc(W / 2, hz - 10, 130, Math.PI, TAU); ctx.closePath(); ctx.fillStyle = sg; ctx.fill(); ctx.restore();
+    ctx.strokeStyle = 'rgba(255,60,200,0.75)'; ctx.lineWidth = 1.5;
+    for (let i = -14; i <= 14; i++) { ctx.beginPath(); ctx.moveTo(W / 2 + i * 14, hz); ctx.lineTo(W / 2 + i * 130, H); ctx.stroke(); }
+    for (let i = 0; i < 10; i++) { const u = ((i + (t * 0.6) % 1) / 10), y = hz + (u * u) * (H - hz); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    ctx.fillStyle = '#12031f'; ctx.fillRect(0, hz - 1, W, 2);
+  }
+});
+
 /* ---------- objects ---------- */
 let seedN = 1;
 class Obj {
   constructor(G, kind, lookName) {
-    const L = LOOKS[lookName] || LOOKS.ball;
+    const L = own(LOOKS, lookName) ? LOOKS[lookName] : LOOKS.ball;
     this.G = G; this.kind = kind; this.name = null; this.L = L; this.lookName = lookName;
     this.x = W / 2; this.y = H / 2; this.vx = 0; this.vy = 0; this.size = L.size; this.color = L.color;
     this.angle = 0; this.spinV = L.spin ? rnd(-90, 90) : 0; this.alive = true; this.age = 0;
@@ -440,6 +628,8 @@ class Obj {
     this.flash = 0; this.pop = 0; this.homing = null; this.hp = 1;
     this.text = ''; this.gravity = 0; this.solid = !!L.solid; this.ph = L.ph || 0; this.onGround = false; this.standing = null;
     this.jumpV = 760; this.coyote = 0; this.jumpHeld = false;
+    this.maxHp = 1; this.alpha = 1; this.glowC = null; this.trailC = null; this.wrap = false; this.stay = false;
+    this.lifeLeft = 0; this.flipX = false; this.patrol = null; this.wander = 0; this.wanderT = 0; this.bounceK = 1; this.full = !!L.full;
     if (L.init) L.init(this);
   }
   get r() { return this.size * this.L.hit; }
@@ -463,12 +653,31 @@ class Obj {
   stop() { this.vx = this.vy = 0; this.homing = null; return this; }
   control(type) { this.ctrl = type; if (type === 'platformer' && !this.gravity) this.gravity = 1900; return this; }
   setSpeed(v) { this.speed = v; return this; }
-  setSize(v) { this.size = v; return this; }
+  setSize(v) { this.size = v; if (this.full) this.ph = v; return this; }
+  setHealth(n) { this.hp = this.maxHp = n; return this; }
+  hurt(n) {
+    if (n == null) n = 1;
+    this.hp -= n; this.flash = 0.35; this.pop = 0.6;
+    if (this.hp <= 0) this.G.explode(this); else { Sfx.play('hurt'); this.G.sparkBits(this, 8); }
+    return this;
+  }
+  heal(n) { this.hp = Math.min(this.maxHp, this.hp + (n == null ? 1 : n)); return this; }
+  setAlpha(v) { this.alpha = clamp(v, 0, 1); return this; }
+  hide() { this.alpha = 0; return this; }
+  show() { this.alpha = 1; return this; }
+  setGlow(c) { this.glowC = c ? color(c) : this.color; return this; }
+  setTrail(c) { this.trailC = c ? color(c) : this.color; return this; }
+  setWrap() { this.wrap = true; return this; }
+  setStay() { this.stay = true; return this; }
+  setLife(n) { this.lifeLeft = n; return this; }
+  flip() { this.flipX = !this.flipX; return this; }
+  setPatrol(range, sp) { this.patrol = { x0: this.x, range, sp: sp == null ? 80 : sp, dir: 1 }; return this; }
+  setWander(sp) { this.wander = sp == null ? 80 : sp; return this; }
   setColor(c) { this.color = color(c); return this; }
   spin(v) { this.spinV = v; return this; }
-  setBounce() { this.bounce = true; return this; }
+  setBounce(k) { this.bounce = true; this.bounceK = k == null ? 1 : k; return this; }
   setLook(n) {
-    const L = LOOKS[n];
+    const L = own(LOOKS, n) ? LOOKS[n] : null;
     if (L) { this.L = L; this.lookName = n; if (L.init) L.init(this); } else { this.L = LOOKS.text; this.lookName = 'text'; this.text = String(n); }
     return this;
   }
@@ -491,7 +700,8 @@ class Group {
   get y() { const l = this.list; return l.length ? l[0].y : 0; }
   get alive() { return this.list.length > 0; }
 }
-['move', 'toward', 'stop', 'control', 'setSpeed', 'setSize', 'setColor', 'spin', 'setBounce', 'setLook', 'setGravity', 'setSolid', 'jump', 'explode', 'sparkle', 'remove', 'say']
+['move', 'toward', 'stop', 'control', 'setSpeed', 'setSize', 'setColor', 'spin', 'setBounce', 'setLook', 'setGravity', 'setSolid', 'jump', 'explode', 'sparkle', 'remove', 'say',
+  'setHealth', 'hurt', 'heal', 'setAlpha', 'hide', 'show', 'setGlow', 'setTrail', 'setWrap', 'setStay', 'setLife', 'flip', 'setPatrol', 'setWander']
   .forEach(m => { Group.prototype[m] = function (...a) { this.list.forEach(o => o[m](...a)); return this; }; });
 
 /* ---------- engine ---------- */
@@ -518,13 +728,13 @@ function Engine(canvas) {
     G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = []; G.conds = [];
     G.contacts = new Set(); G.time = 0; G.score = 0; G.lives = null; G.titleText = ''; G.bg = 'space'; G.bgColor = null;
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
-    G.level = 1; G.showLevel = false; G.levelBanner = 0; G.musicName = null; G.newBest = false;
+    G.level = 1; G.showLevel = false; G.bannerT = 0; G.bannerText = ''; G.paused = false; G.hintT = 0; G.musicName = null; G.newBest = false;
   }
   G.rand = (a, b) => (Number.isInteger(a) && Number.isInteger(b)) ? Math.floor(rnd(a, b + 1)) : rnd(a, b);
   G.count = name => G.objs.filter(o => o.alive && (o.kind === name || o.name === name)).length;
   G.group = name => new Group(G, name);
   G.title = t => { G.titleText = String(t); };
-  G.background = b => { if (BACKGROUNDS[b]) { G.bg = b; G.bgColor = null; } else { G.bg = null; G.bgColor = color(b); } };
+  G.background = b => { if (own(BACKGROUNDS, b)) { G.bg = b; G.bgColor = null; } else { G.bg = null; G.bgColor = color(b); } };
   G.setLives = n => { G.lives = n; };
 
   G.make = function (kind, look, pos, from) {
@@ -574,14 +784,65 @@ function Engine(canvas) {
   G.floatText = (text, x, y, col, big) => { G.texts.push({ text: String(text), x, y, col: col || '#fff', life: 1, big }); };
   G.label = (text, pos) => {
     const o = { x: W / 2, y: H / 2, size: 30 }; G.place(o, pos);
-    G.labels.push({ text: String(text), x: o.x, y: o.y, born: G.time });
+    const a0 = pos && pos[0], align = a0 === 'left' ? 'left' : a0 === 'right' ? 'right' : 'center';
+    const x = align === 'left' ? 24 : align === 'right' ? W - 24 : o.x;
+    G.labels.push({ text, x, y: o.y, align, born: G.time });
   };
   G.shake = n => { G.shakeAmt = Math.max(G.shakeAmt, n == null ? 10 : n); };
   G.sound = n => Sfx.play(n);
+  G.banner = (text, sec) => { G.bannerText = String(text); G.bannerDur = G.bannerT = sec || 2; };
+  G.choose = (...a) => a[Math.floor(Math.random() * a.length)];
+  G.chance = p => Math.random() * 100 < p;
+  G.dist = (a, b) => { const A = a === 'mouse' ? G.mouse : a, B = b === 'mouse' ? G.mouse : b; return Math.hypot((A.x || 0) - (B.x || 0), (A.y || 0) - (B.y || 0)); };
+  G.flashScreen = c => { G.flashA = 0.45; G.flashC = color(c || 'white'); };
+  G.slowmo = sec => { G.slow = 0.3; G.slowT = sec == null ? 1 : sec; };
+  G.sparkBits = (o, n) => {
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(50, 220); G.particle({ x: o.x, y: o.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.25, 0.5), size: rnd(2, 4), color: o.color, drag: 3 }); }
+  };
+  G.burst = (n, c, pos) => {
+    const o = { x: W / 2, y: H / 2, size: 30 }; G.place(o, pos);
+    const col = color(c || 'gold');
+    for (let i = 0; i < n; i++) { const a = rnd(0, TAU), v = rnd(60, 380); G.particle({ x: o.x, y: o.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.4, 0.9), size: rnd(2, 5), color: i % 3 ? col : '#ffffff', drag: 2.2, star: i % 4 === 0 }); }
+    G.particle({ x: o.x, y: o.y, vx: 0, vy: 0, life: 0.35, size: 70, color: col, ring: true });
+  };
+  G.confetti = () => {
+    for (let i = 0; i < 160; i++) G.particle({ x: rnd(0, W), y: rnd(-200, 0), vx: rnd(-60, 60), vy: rnd(80, 260), life: rnd(1.5, 3), size: rnd(4, 8), color: ['#ff4d5e', '#ffd93d', '#4ade80', '#4d8dff', '#ff7ac6'][i % 5], confetti: true, rot: rnd(0, TAU) });
+  };
+  G.defineArt = defineArt;
+  G.buildMap = rows => {
+    const R = rows.length, C = Math.max(1, ...rows.map(r => r.length));
+    const cell = Math.max(16, Math.min(48, Math.floor(H / R), Math.floor(W / C)));
+    const ox = (W - C * cell) / 2, oy = H - R * cell;
+    const at = (r, c) => (rows[r] || '')[c] || '.';
+    let player;
+    rows.forEach((row, r) => {
+      for (let c = 0; c < row.length; c++) {
+        const ch = row[c]; if (ch === '.' || ch === ' ') continue;
+        const x = ox + (c + 0.5) * cell, y = oy + (r + 0.5) * cell, bottom = oy + (r + 1) * cell;
+        let o;
+        const item = (look, k) => { o = G.make(look, look, [x, y]); o.size = cell * k; };
+        const ground = (look, k) => { o = G.make(look, look, [x, bottom - cell * k / 2]); o.size = cell * k; };
+        switch (ch) {
+          case '#': o = G.make('block', 'block', [x, y]); o.size = cell; o.ph = cell; o.grassTop = at(r - 1, c) !== '#'; break;
+          case '=': o = G.make('platform', 'platform', [x, oy + r * cell + 11]); o.size = cell; break;
+          case 'C': item('coin', 0.72); break;
+          case 'G': item('gem', 0.8); break;
+          case 'S': item('star', 0.85); break;
+          case 'H': item('heart', 0.8); break;
+          case 'B': ground('bomb', 0.9); break;
+          case '^': ground('spike', 0.9); break;
+          case 'F': ground('flag', 1.5); break;
+          case 'E': ground('slime', 0.95); break;
+          case 'P': ground('hero', 0.95); o.name = 'player'; o.control('platformer'); o.speed = 340; player = o; break;
+        }
+      }
+    });
+    return player;
+  };
   G.music = n => { G.musicName = n; if (G.state === 'play') Sfx.setMusic(n); };
   G.useLevel = () => { G.showLevel = true; };
   G.levelUp = () => {
-    G.level++; G.showLevel = true; G.levelBanner = 2; G.flashA = 0.2; G.flashC = '#ffd93d';
+    G.level++; G.showLevel = true; G.banner('LEVEL ' + G.level, 2); G.flashA = 0.2; G.flashC = '#ffd93d';
     Sfx.play('power');
   };
 
@@ -633,7 +894,7 @@ function Engine(canvas) {
   G.load = function (fn, keepPlaying) {
     program = fn; reset();
     const was = G.state;
-    G.state = keepPlaying && (was === 'play' || was === 'over' || was === 'won') ? 'play' : 'title';
+    G.state = G.autostart || (keepPlaying && (was === 'play' || was === 'over' || was === 'won')) ? 'play' : 'title';
     try { program(G); } catch (e) { if (G.onError) G.onError(e); else throw e; }
     loadBest();
     if (G.state !== 'play') Sfx.setMusic(null);
@@ -666,6 +927,15 @@ function Engine(canvas) {
       o.age += dt;
       if (o.ctrl) controlStep(o, dt);
       if (o.homing) o.toward(o.homing.tg, o.homing.sp, true);
+      if (o.lifeLeft > 0) { o.lifeLeft -= dt; if (o.lifeLeft <= 0) { G.sparkBits(o, 6); o.alive = false; continue; } }
+      if (o.patrol) {
+        const pt = o.patrol; if (o.x - pt.x0 > pt.range) pt.dir = -1; else if (o.x - pt.x0 < -pt.range) pt.dir = 1;
+        o.vx = pt.dir * pt.sp; o.flipX = pt.dir < 0;
+      }
+      if (o.wander) {
+        o.wanderT -= dt;
+        if (o.wanderT <= 0) { o.wanderT = rnd(0.6, 1.6); const a = rnd(0, TAU); o.vx = Math.cos(a) * o.wander; if (!o.gravity) o.vy = Math.sin(a) * o.wander; o.flipX = o.vx < 0; }
+      }
       if (o.gravity) o.vy += o.gravity * dt;
       if (o.standing && o.standing.alive) { o.x += o.standing.vx * dt; o.y += o.standing.vy * dt; }
       const py = o.y;
@@ -674,13 +944,20 @@ function Engine(canvas) {
       if (o.L.update) o.L.update(o, G, dt);
       if (o.bounce) {
         const r = o.size / 2;
-        if (o.x < r && o.vx < 0 || o.x > W - r && o.vx > 0) { o.vx *= -1; o.x = clamp(o.x, r, W - r); }
-        if (o.y < r && o.vy < 0 || o.y > H - r && o.vy > 0) { o.vy *= -1; o.y = clamp(o.y, r, H - r); }
+        if (o.x < r && o.vx < 0 || o.x > W - r && o.vx > 0) { o.vx *= -o.bounceK; o.x = clamp(o.x, r, W - r); }
+        if (o.y < r && o.vy < 0 || o.y > H - r && o.vy > 0) { o.vy *= -o.bounceK; o.y = clamp(o.y, r, H - r); if (o.gravity && Math.abs(o.vy) < 60) o.vy = 0; }
       }
+      if (o.wrap) {
+        const h = o.size / 2;
+        if (o.x < -h) o.x = W + h; else if (o.x > W + h) o.x = -h;
+        if (o.y < -h) o.y = H + h; else if (o.y > H + h) o.y = -h;
+      }
+      if (o.stay) { const r = o.size / 2; o.x = clamp(o.x, r, W - r); o.y = clamp(o.y, r, H - r); }
+      if (o.trailC) G.particle({ x: o.x, y: o.y, vx: 0, vy: 0, life: 0.32, size: o.size * 0.2, color: o.trailC });
       if (o.ctrl) { const r = o.size / 2; o.x = clamp(o.x, r, W - r); o.y = clamp(o.y, r, H - r); }
       if (o.gravity) land(o, py);
       const out = o.x < -o.size * 2 || o.x > W + o.size * 2 || o.y < -o.size * 2 || o.y > H + o.size * 2;
-      if (out && !o.ctrl) {
+      if (out && !o.ctrl && !o.wrap) {
         o.alive = false;
         for (const lv of G.leaves) if (o.kind === lv.n || o.name === lv.n) run(lv.fn, o);
       }
@@ -706,12 +983,27 @@ function Engine(canvas) {
   }
 
   function land(o, py) {
-    const r = o.size / 2;
+    const r = o.size / 2, hw = r * 0.62;
     o.onGround = false;
-    if (o.vy >= 0) {
+    for (const p of G.objs) {
+      if (!p.full || !p.solid || !p.alive || p === o) continue;
+      const hx = p.size / 2, hy = p.ph / 2, dx = o.x - p.x, dy = o.y - p.y;
+      const ox = hw + hx - Math.abs(dx), oy = r + hy - Math.abs(dy);
+      if (ox <= 0 || oy <= 0) continue;
+      const pb = py + r, pt = py - r, top = p.y - hy, bot = p.y + hy;
+      const downTo = () => { o.y = top - r; o.vy = 0; o.onGround = true; o.standing = p; };
+      const upTo = () => { o.y = bot + r; o.vy = 0; };
+      if (ox > 3 && pb <= top + 8 && o.vy >= 0) downTo();
+      else if (ox > 3 && pt >= bot - 8 && o.vy < 0) upTo();
+      else if (ox < oy) { o.x += (dx >= 0 ? 1 : -1) * ox; o.vx = 0; }
+      else if (dy < 0 && o.vy >= 0) downTo();
+      else if (o.vy < 0) upTo();
+      else { o.x += (dx >= 0 ? 1 : -1) * ox; o.vx = 0; }
+    }
+    if (o.vy >= 0 && !o.onGround) {
       const pb = py + r, nb = o.y + r;
       for (const p of G.objs) {
-        if (!p.solid || !p.alive || p === o) continue;
+        if (!p.solid || p.full || !p.alive || p === o) continue;
         const top = p.y - p.ph / 2;
         if (pb <= top + 8 && nb >= top && Math.abs(o.x - p.x) < p.size / 2 + r * 0.45) { o.y = top - r; o.vy = 0; o.onGround = true; o.standing = p; break; }
       }
@@ -778,12 +1070,20 @@ function Engine(canvas) {
       if (!o.alive) continue;
       const popK = o.pop > 0 ? 1 + Math.sin((1 - o.pop) * Math.PI) * 0.25 - o.pop * 0.6 : 1;
       ctx.save(); ctx.translate(o.x, o.y);
+      ctx.globalAlpha = o.alpha * (o.flash > 0 ? 0.45 + 0.55 * Math.abs(Math.sin(rt * 50)) : 1);
       if (o.L.glow) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glowHalo(ctx, o.size * 1.1, o.color, o.L.glow); ctx.restore(); }
+      if (o.glowC) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; glowHalo(ctx, o.size * (1.3 + 0.1 * Math.sin(rt * 5)), o.glowC, 0.5); ctx.restore(); }
+      if (o.flipX) ctx.scale(-1, 1);
       ctx.rotate(o.angle + (o.ctrl && o.lookName === 'ship' ? clamp(o.vx / 2000, -0.3, 0.3) : 0));
       if (o.ctrl && o.lookName === 'ship') ctx.scale(1 - Math.min(0.25, Math.abs(o.vx) / 2400), 1);
       ctx.scale(popK, popK);
       o.L.draw(ctx, o, rt);
       ctx.restore();
+      if (o.maxHp > 1 && o.alpha > 0) {
+        const bw = Math.max(40, o.size * 0.9), bx = o.x - bw / 2, by = o.y - o.size * 0.62 - 12, k = clamp(o.hp / o.maxHp, 0, 1);
+        ctx.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(ctx, bx - 2, by - 2, bw + 4, 9, 4); ctx.fill();
+        ctx.fillStyle = k > 0.5 ? '#4ade80' : k > 0.25 ? '#ffd93d' : '#ff4d5e'; roundRect(ctx, bx, by, Math.max(2, bw * k), 5, 2.5); ctx.fill();
+      }
     }
 
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -817,9 +1117,11 @@ function Engine(canvas) {
     }
     ctx.globalAlpha = 1;
     for (const l of G.labels) {
-      ctx.font = `800 30px ${FONT}`; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-      ctx.strokeText(l.text, l.x, l.y); ctx.fillStyle = '#fff'; ctx.fillText(l.text, l.x, l.y);
+      let txt = ''; try { txt = typeof l.text === 'function' ? l.text() : l.text; } catch (e) { txt = '?'; }
+      ctx.textAlign = l.align || 'center'; ctx.font = `800 30px ${FONT}`; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.strokeText(txt, l.x, l.y); ctx.fillStyle = '#fff'; ctx.fillText(txt, l.x, l.y);
     }
+    ctx.textAlign = 'center';
     ctx.restore();
 
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
@@ -860,11 +1162,30 @@ function Engine(canvas) {
         }
       }
     }
-    if (G.levelBanner > 0 && G.state === 'play') {
-      const k = G.levelBanner / 2, a = Math.min(1, k * 3, (1 - k) * 6 + 0.2);
+    if (G.bannerT > 0 && G.state === 'play') {
+      const k = G.bannerT / G.bannerDur, a = Math.min(1, k * 3, (1 - k) * 6 + 0.2);
       ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.textAlign = 'center';
       ctx.font = `900 ${56 + (1 - k) * 10}px ${FONT}`; ctx.shadowColor = 'rgba(255,200,60,0.9)'; ctx.shadowBlur = 24;
-      ctx.fillStyle = '#fff3b0'; ctx.fillText('LEVEL ' + G.level, W / 2, H * 0.3 - (1 - k) * 20); ctx.restore();
+      ctx.fillStyle = '#fff3b0'; ctx.fillText(G.bannerText, W / 2, H * 0.3 - (1 - k) * 20); ctx.restore();
+    }
+    if (G.touchUI && G.state === 'play' && !G.paused) {
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (const b of TBTN) {
+        const on = G.keys[b.k];
+        ctx.fillStyle = on ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = `800 ${b.r * 0.7}px ${FONT}`; ctx.fillText(b.g, b.x, b.y + 2);
+      }
+      ctx.restore();
+    }
+    if (G.state === 'play' && !G.paused && G.hintT < 5 && !G.touchUI) {
+      ctx.save(); ctx.globalAlpha = Math.min(0.55, (5 - G.hintT) * 0.5); ctx.textAlign = 'right'; ctx.font = `600 13px ${FONT}`; ctx.fillStyle = '#fff';
+      ctx.fillText('P 일시정지  ·  M 소리 끄기', W - 18, H - 16); ctx.restore();
+    }
+    if (G.paused) {
+      ctx.fillStyle = 'rgba(5,5,20,0.6)'; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = `900 54px ${FONT}`; ctx.fillText('PAUSED', W / 2, H / 2 - 16);
+      ctx.font = `600 18px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillText('P 키나 화면을 눌러 계속', W / 2, H / 2 + 30);
     }
     if (G.state === 'title') overlay(G.titleText || 'FF Script', '클릭하거나 아무 키나 눌러 시작', t, 1);
     if (G.state === 'over') {
@@ -895,20 +1216,58 @@ function Engine(canvas) {
 
   /* ---------- loop & input ---------- */
   let last = 0, rt = 0, raf = 0;
+  const kb = {}, pad = {}, touch = {}, touchPts = new Map();
+  const KEYSET = ['left', 'right', 'up', 'down', 'space', 'a', 'd', 'w', 's'];
+  const TBTN = [
+    { k: 'left', x: 62, y: H - 88, r: 38, g: '◀' }, { k: 'right', x: 158, y: H - 88, r: 38, g: '▶' },
+    { k: 'up', x: 110, y: H - 142, r: 38, g: '▲' }, { k: 'down', x: 110, y: H - 34, r: 30, g: '▼' },
+    { k: 'space', x: W - 92, y: H - 84, r: 52, g: 'A' }
+  ];
+  let padStart = false;
+  function pollPad() {
+    for (const k in pad) pad[k] = false;
+    const pads = global.navigator && navigator.getGamepads ? navigator.getGamepads() : [];
+    const gp = pads && [...pads].find(x => x && x.connected);
+    if (!gp) return;
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, b = i => gp.buttons[i] && gp.buttons[i].pressed;
+    pad.left = ax < -0.4 || b(14); pad.right = ax > 0.4 || b(15); pad.up = ay < -0.5 || b(12); pad.down = ay > 0.5 || b(13);
+    pad.space = b(0) || b(2);
+    const st = b(9);
+    if (st && !padStart) togglePause();
+    padStart = st;
+  }
+  function mergeInput() {
+    pollPad();
+    for (const k in touch) touch[k] = false;
+    for (const pt of touchPts.values()) for (const b of TBTN) if (Math.hypot(pt.x - b.x, pt.y - b.y) < b.r * 1.2) touch[b.k] = true;
+    for (const k of KEYSET) {
+      const v = !!(kb[k] || pad[k] || touch[k]);
+      if (v && !G.keys[k] && !kb[k] && G.state === 'play' && !G.paused) fireKey(k);
+      G.keys[k] = v;
+    }
+  }
+  function togglePause() {
+    if (G.state !== 'play') return;
+    G.paused = !G.paused;
+    if (G.paused) Sfx.setMusic(null); else Sfx.setMusic(G.musicName);
+  }
   function frame(now) {
     raf = global.requestAnimationFrame(frame);
     const real = Math.min(0.05, (now - (last || now)) / 1000); last = now; rt += real;
     if (G.slowT > 0) G.slowT -= real; else G.slow = lerp(G.slow, 1, 1 - Math.exp(-8 * real));
     const dt = real * G.slow;
+    mergeInput();
+    if (G.paused) { fit(); ctx.setTransform(scale, 0, 0, scale, 0, 0); draw(rt); return; }
+    if (G.state === 'play' && G.hintT < 6) G.hintT += real;
     if (G.state === 'play') update(dt);
     if (G.state === 'over' || G.state === 'won') {
       G.overT += real;
       for (const o of G.objs) if (o.alive && !o.ctrl) { o.x += o.vx * dt; o.y += o.vy * dt; o.angle += o.spinV * Math.PI / 180 * dt; }
     }
-    for (const o of G.objs) if (o.pop > 0) o.pop = Math.max(0, o.pop - real * 4.5);
+    for (const o of G.objs) { if (o.pop > 0) o.pop = Math.max(0, o.pop - real * 4.5); if (o.flash > 0) o.flash -= real; }
     stepParticles(dt);
     G.shakeAmt *= Math.exp(-10 * real); G.flashA *= Math.exp(-6 * real);
-    if (G.levelBanner > 0) G.levelBanner -= real;
+    if (G.bannerT > 0) G.bannerT -= real;
     G.scorePop *= Math.exp(-10 * real); G.livesPop *= Math.exp(-8 * real);
     fit();
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -928,7 +1287,9 @@ function Engine(canvas) {
   }
   function fireKey(k) { for (const ev of G.keyEvents) if (ev.k === k) run(ev.fn); }
   function press() {
+    const fresh = !Sfx.ctx;
     Sfx.init();
+    if (fresh && G.state === 'play') Sfx.setMusic(G.musicName);
     if (G.state === 'title') { start(); return true; }
     if ((G.state === 'over' || G.state === 'won') && G.overT > 0.9) { restart(); return true; }
     return false;
@@ -940,29 +1301,39 @@ function Engine(canvas) {
     const k = keyName(e);
     if (['space', 'up', 'down', 'left', 'right'].includes(k)) e.preventDefault();
     if (press()) return;
-    if (!G.keys[k] && G.state === 'play') fireKey(k);
-    G.keys[k] = true;
+    if (k === 'p' || k === 'escape') { if (!e.repeat) togglePause(); return; }
+    if (k === 'm') { if (!e.repeat) { Sfx.init(); Sfx.toggleMute(); G.floatText(Sfx.muted ? '🔇' : '🔊', W - 60, 90, '#fff', true); } return; }
+    if (G.paused) return;
+    if (!kb[k] && G.state === 'play') fireKey(k);
+    kb[k] = true; G.keys[k] = true;
   };
-  const onKeyUp = e => { G.keys[keyName(e)] = false; };
+  const onKeyUp = e => { const k = keyName(e); kb[k] = false; G.keys[k] = !!(pad[k] || touch[k]); };
   const onDown = e => {
-    const p = toWorld(e); G.mouse.x = p.x; G.mouse.y = p.y; G.mouse.down = true;
-    if (e.pointerType !== 'mouse') G.mouse.active = true;
+    const p = toWorld(e); G.mouse.x = p.x; G.mouse.y = p.y;
+    if (e.pointerType !== 'mouse') { G.mouse.active = true; G.touchUI = true; }
     if (press()) return;
+    if (G.paused) { togglePause(); return; }
+    if (G.touchUI && e.pointerType !== 'mouse' && TBTN.some(b => Math.hypot(p.x - b.x, p.y - b.y) < b.r * 1.2)) { touchPts.set(e.pointerId, p); return; }
+    G.mouse.down = true;
     if (G.state === 'play') fireKey('click');
   };
-  const onMove = e => { const p = toWorld(e); G.mouse.x = p.x; G.mouse.y = p.y; };
-  const onUp = () => { G.mouse.down = false; };
+  const onMove = e => { const p = toWorld(e); G.mouse.x = p.x; G.mouse.y = p.y; if (touchPts.has(e.pointerId)) touchPts.set(e.pointerId, p); };
+  const onUp = e => { G.mouse.down = false; touchPts.delete(e.pointerId); };
+  const onVis = () => { if (document.visibilityState === 'hidden' && G.state === 'play' && !G.paused) togglePause(); };
   global.addEventListener('keydown', onKeyDown);
   global.addEventListener('keyup', onKeyUp);
   canvas.addEventListener('pointerdown', onDown);
   global.addEventListener('pointermove', onMove);
   global.addEventListener('pointerup', onUp);
+  global.addEventListener('pointercancel', onUp);
+  if (global.document) document.addEventListener('visibilitychange', onVis);
   canvas.style.touchAction = 'none';
   G.restart = restart;
   G.destroy = () => {
     global.cancelAnimationFrame(raf); Sfx.setMusic(null);
     global.removeEventListener('keydown', onKeyDown); global.removeEventListener('keyup', onKeyUp);
-    global.removeEventListener('pointermove', onMove); global.removeEventListener('pointerup', onUp);
+    global.removeEventListener('pointermove', onMove); global.removeEventListener('pointerup', onUp); global.removeEventListener('pointercancel', onUp);
+    if (global.document) document.removeEventListener('visibilitychange', onVis);
   };
   reset(); G.state = 'title';
   raf = global.requestAnimationFrame(frame);
