@@ -72,6 +72,10 @@ class Unit:
 	var stuck_t := 0.0
 	var last_pos := Vector3.ZERO
 	var label := ""
+	var killer := -1
+	var kill_w := 0
+	var kill_dist := 0.0
+	var kill_hp := 0.0
 
 
 class Pt:
@@ -161,6 +165,8 @@ func claim_slot(id: int, loadout: int = 0) -> void:
 	u.loadout = loadout
 	u.weapon = loadout
 	u.label = "P%d" % id
+	if not u.alive:
+		u.respawn_t = minf(u.respawn_t, 0.15)
 
 
 ## 슬롯을 다시 봇에게 돌려준다(접속 종료).
@@ -382,6 +388,10 @@ func damage(e: Unit, amount: float, attacker: Unit, head: bool) -> void:
 		e.deaths += 1
 		e.vel = Vector3.ZERO
 		attacker.kills += 1
+		e.killer = attacker.id
+		e.kill_w = attacker.weapon
+		e.kill_dist = attacker.pos.distance_to(e.pos)
+		e.kill_hp = maxf(attacker.hp, 0.0)
 		tickets[e.team] = maxi(0, tickets[e.team] - 1)
 		events.append({"t": "kill", "k": attacker.id, "v": e.id, "w": attacker.weapon, "head": head})
 
@@ -447,7 +457,7 @@ func _spawn(u: Unit) -> void:
 	u.ammo = WEAPONS[u.weapon].mag
 	u.reload_t = 0.0
 	u.fire_cd = 0.5
-	u.inv_t = 2.0
+	u.inv_t = 2.0 if u.is_bot else 4.0
 	u.target = -1
 	u.obj = -1
 	u.think_t = rng.randf() * 0.3

@@ -35,7 +35,7 @@ void vertex() {
 }
 
 void fragment() {
-	float kind = floor(vcol.a * 8.0 + 0.5);
+	float kind = floor(vcol.a * 16.0 + 0.5);
 	vec3 base = vcol.rgb;
 	vec3 an = abs(wnrm);
 	vec2 q = an.y > 0.75 ? wpos.xz : (an.x > an.z ? wpos.zy : wpos.xy);
@@ -91,6 +91,37 @@ void fragment() {
 		float bark = vnoise(vec2(wpos.x * 18.0 + wpos.z * 18.0, wpos.y * 3.0));
 		col = base * (0.55 + 0.7 * bark);
 		rough = 0.95;
+	} else if (kind > 7.5 && kind < 8.5) {
+		// 회반죽 벽: 벗겨진 곳엔 벽돌이 드러난다
+		float m = fbm(q * 1.5 + 3.0);
+		float flake = smoothstep(0.50, 0.60, m + (grime - 0.5) * 0.4);
+		float rowh2 = 0.2;
+		float r2 = floor(q.y / rowh2);
+		vec2 b2 = vec2((q.x + mod(r2, 2.0) * 0.2) / 0.4, q.y / rowh2);
+		vec2 f2 = fract(b2);
+		float mort2 = clamp(step(f2.x, 0.05) + step(f2.y, 0.09), 0.0, 1.0);
+		vec3 brickc = vec3(0.36, 0.17, 0.12) * (0.75 + 0.5 * h21(floor(b2)));
+		brickc = mix(brickc, vec3(0.5, 0.47, 0.42), mort2 * 0.8);
+		vec3 plaster = base * (0.8 + 0.3 * vnoise(q * 9.0)) * (0.7 + 0.45 * grime);
+		col = mix(plaster, brickc, flake);
+		col *= 0.78 + 0.22 * clamp((wpos.y + 1.0) * 0.6, 0.0, 1.0);
+		rough = 0.95;
+	} else if (kind > 8.5 && kind < 9.5) {
+		// 기와
+		vec2 uv = vec2(wpos.x / 0.26, wpos.z / 0.34);
+		float rw = floor(uv.y);
+		uv.x += mod(rw, 2.0) * 0.5;
+		vec2 ft = fract(uv);
+		float edge = smoothstep(0.0, 0.14, ft.x) * smoothstep(1.0, 0.86, ft.x) * smoothstep(0.0, 0.2, ft.y);
+		float tv = h21(floor(uv));
+		col = base * (0.7 + 0.55 * tv) * (0.62 + 0.38 * edge) * (0.8 + 0.3 * grime);
+		rough = 0.85;
+	} else if (kind > 6.5 && kind < 7.5) {
+		// 나뭇잎 뭉치: 덩어리 노이즈로 명암, 아래쪽은 그늘
+		float lf = vnoise(wpos.xz * 2.4 + wpos.y * 1.9);
+		float lf2 = vnoise(wpos.xz * 7.0 - wpos.y * 5.0);
+		col = base * (0.55 + 0.75 * lf) * (0.85 + 0.3 * lf2);
+		rough = 0.9;
 	} else {
 		float weave = 0.5 + 0.5 * sin(q.x * 70.0) * sin(q.y * 70.0);
 		col = base * (0.88 + 0.2 * grime) * (0.94 + 0.1 * weave);
