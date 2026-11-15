@@ -13,6 +13,10 @@ var local_id := 0
 var look_yaw := 0.0
 var font: Font
 var font_b: Font
+var font_st: Font
+var font_cd: Font
+var xp_gain := 0
+var spec_id := -1
 var feed: Array = []
 var indicators: Array = []
 var hit_t := 0.0
@@ -34,6 +38,12 @@ func setup(s: Sim, id: int) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	font = load("res://assets/fonts/Gothic.ttf")
 	font_b = load("res://assets/fonts/GothicBold.ttf")
+	font_st = load("res://assets/fonts/Stencil.ttf")
+	font_cd = load("res://assets/fonts/Condensed.ttf")
+	if font_st is FontFile:
+		font_st.fallbacks = [font_b]
+	if font_cd is FontFile:
+		font_cd.fallbacks = [font_b]
 	_build_minimap()
 
 
@@ -83,6 +93,10 @@ func consume(events: Array) -> void:
 					feed.pop_front()
 				if e.k == local_id:
 					_say("%s 처치%s" % [v.label, "  ·  헤드샷" if e.head else ""], 2.2)
+			"spawn":
+				if e.id == local_id:
+					var tgt := sim._front_index(me.team)
+					_say("전선에 투입되었습니다", 2.6)
 			"cap":
 				if e.o >= 0:
 					var mine: bool = e.o == me.team
@@ -116,7 +130,7 @@ func _process(dt: float) -> void:
 
 # ---------------------------------------------------------------- 그리기 도구
 
-func _panel(r: Rect2, col: Color = PANEL, radius: float = 8.0, border: float = 0.0, bcol: Color = Color(1, 1, 1, 0.12)) -> void:
+func _panel(r: Rect2, col: Color = PANEL, radius: float = 3.0, border: float = 0.0, bcol: Color = Color(1, 1, 1, 0.12)) -> void:
 	_style.bg_color = col
 	_style.set_corner_radius_all(int(radius * u))
 	_style.set_border_width_all(int(border * u))
@@ -130,6 +144,26 @@ func _t(pos: Vector2, s: String, sz: float, col: Color = WHITE, bold: bool = fal
 	var px := int(sz * u)
 	draw_string(f, pos + Vector2(1.5, 1.8) * u, s, align, width, px, Color(0, 0, 0, 0.7))
 	draw_string(f, pos, s, align, width, px, col)
+
+
+func _ts(pos: Vector2, s: String, sz: float, col: Color = WHITE, align: int = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0) -> void:
+	var px := int(sz * u)
+	draw_string(font_st, pos + Vector2(2, 2.5) * u, s, align, width, px, Color(0, 0, 0, 0.75))
+	draw_string(font_st, pos, s, align, width, px, col)
+
+
+func _tc(pos: Vector2, s: String, sz: float, col: Color = WHITE, align: int = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0) -> void:
+	var px := int(sz * u)
+	draw_string(font_cd, pos + Vector2(1.2, 1.5) * u, s, align, width, px, Color(0, 0, 0, 0.7))
+	draw_string(font_cd, pos, s, align, width, px, col)
+
+
+func _hex(c: Vector2, r: float, col: Color) -> void:
+	var pts := PackedVector2Array()
+	for k in 6:
+		var a := PI / 6.0 + k * PI / 3.0
+		pts.append(c + Vector2(cos(a), sin(a)) * r)
+	draw_colored_polygon(pts, col)
 
 
 func _draw() -> void:
@@ -189,17 +223,17 @@ func _draw_objectives(W: float, me: Sim.Unit) -> void:
 			col = COL_A
 		elif p.owner == 1:
 			col = COL_B
-		draw_circle(c, rad + 3.0 * u, Color(0, 0, 0, 0.55))
-		draw_circle(c, rad, col.darkened(0.45))
+		_hex(c, rad + 4.0 * u, Color(0, 0, 0, 0.6))
+		_hex(c, rad, col.darkened(0.5))
 		if p.owner >= 0:
-			draw_circle(c, rad * 0.72, Color(col.r, col.g, col.b, 0.35))
+			_hex(c, rad * 0.74, Color(col.r, col.g, col.b, 0.45))
 		# 점령 진행 링
 		if absf(p.cap) > 0.01 and p.owner != (0 if p.cap > 0.0 else 1):
 			var lead := 0 if p.cap > 0.0 else 1
 			draw_arc(c, rad + 5.0 * u, -PI * 0.5, -PI * 0.5 + TAU * absf(p.cap), 48, _team_col(lead), 3.5 * u, true)
 		if p.n_a > 0 and p.n_b > 0:
 			draw_arc(c, rad + 9.0 * u, 0, TAU, 40, Color(1, 0.3, 0.2, 0.5 + 0.4 * sin(Time.get_ticks_msec() * 0.012)), 2.0 * u)
-		_t(c + Vector2(-rad, rad * 0.38), str(i + 1), 17, WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0)
+		_ts(c + Vector2(-rad, rad * 0.42), str(i + 1), 20, WHITE, HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0)
 		if i == 0 or i == Sim.NPOINTS - 1:
 			_t(c + Vector2(-rad, rad + 17.0 * u), "본진", 11, Color(1, 1, 1, 0.7), false, HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0)
 	# 병력 바
@@ -214,8 +248,8 @@ func _draw_objectives(W: float, me: Sim.Unit) -> void:
 	_panel(Rect2(lx + bw * (1.0 - fa), by, bw * fa, bh), COL_A, 4.0)
 	_panel(Rect2(rx - 4 * u, by - 4 * u, bw + 8 * u, bh + 8 * u), PANEL, 6.0)
 	_panel(Rect2(rx, by, bw * fb, bh), COL_B, 4.0)
-	_t(Vector2(lx - 54 * u, cy + 7 * u), str(sim.tickets[0]), 20, COL_A, true, HORIZONTAL_ALIGNMENT_RIGHT, 46 * u)
-	_t(Vector2(rx + bw + 10 * u, cy + 7 * u), str(sim.tickets[1]), 20, COL_B, true)
+	_ts(Vector2(lx - 92 * u, cy + 9 * u), str(sim.tickets[0]), 24, COL_A, HORIZONTAL_ALIGNMENT_RIGHT, 84 * u)
+	_ts(Vector2(rx + bw + 10 * u, cy + 9 * u), str(sim.tickets[1]), 24, COL_B)
 	var rem := maxf(0.0, Sim.MATCH_TIME - sim.time)
 	_t(Vector2(0, cy + rad + 36 * u), "%d:%02d" % [int(rem) / 60, int(rem) % 60], 15, Color(1, 1, 1, 0.8), true, HORIZONTAL_ALIGNMENT_CENTER, W)
 
@@ -290,10 +324,10 @@ func _draw_status(W: float, H: float, me: Sim.Unit) -> void:
 	_panel(pr, PANEL, 10.0)
 	var f := clampf(me.hp / 100.0, 0.0, 1.0)
 	var hc := Color(0.5, 0.88, 0.42) if f > 0.5 else (Color(0.95, 0.76, 0.28) if f > 0.25 else Color(0.95, 0.32, 0.26))
-	_t(pr.position + Vector2(16, 40) * u, str(ceili(me.hp)), 34, WHITE, true)
-	_t(pr.position + Vector2(86, 22) * u, "체력", 11, Color(1, 1, 1, 0.6))
-	_panel(Rect2(pr.position + Vector2(86, 30) * u, Vector2(176 * u, 10 * u)), Color(1, 1, 1, 0.12), 5.0)
-	_panel(Rect2(pr.position + Vector2(86, 30) * u, Vector2(176 * u * f, 10 * u)), hc, 5.0)
+	_ts(pr.position + Vector2(16, 44) * u, str(ceili(me.hp)), 40, WHITE)
+	_tc(pr.position + Vector2(112, 24) * u, "체력", 13, Color(1, 1, 1, 0.6))
+	_panel(Rect2(pr.position + Vector2(112, 32) * u, Vector2(150 * u, 10 * u)), Color(1, 1, 1, 0.12), 2.0)
+	_panel(Rect2(pr.position + Vector2(112, 32) * u, Vector2(150 * u * f, 10 * u)), hc, 2.0)
 	# 탄약
 	var ar := Rect2(W - 24 * u - 280 * u, H - 86 * u, 280 * u, 62 * u)
 	_panel(ar, PANEL, 10.0)
@@ -303,8 +337,8 @@ func _draw_status(W: float, H: float, me: Sim.Unit) -> void:
 		var rf: float = 1.0 - me.reload_t / w.reload
 		_panel(Rect2(ar.position + Vector2(16, 48) * u, Vector2(248 * u * rf, 4 * u)), Color(1, 1, 1, 0.7), 2.0)
 	else:
-		_t(ar.position + Vector2(16, 42) * u, str(me.ammo), 38, ammo_col, true)
-		_t(ar.position + Vector2(86, 42) * u, "/ %d" % w.mag, 18, Color(1, 1, 1, 0.55))
+		_ts(ar.position + Vector2(16, 46) * u, str(me.ammo), 44, ammo_col)
+		_tc(ar.position + Vector2(96, 44) * u, "/ %d" % w.mag, 22, Color(1, 1, 1, 0.55))
 	_t(Vector2(ar.position.x, ar.position.y + 28 * u), w.name, 13, Color(1, 1, 1, 0.75), false, HORIZONTAL_ALIGNMENT_RIGHT, ar.size.x - 16 * u)
 	_t(Vector2(ar.position.x, ar.position.y + 48 * u), "1  소총   2  기관단총   3  경기관총", 10, Color(1, 1, 1, 0.38), false, HORIZONTAL_ALIGNMENT_RIGHT, ar.size.x - 16 * u)
 
@@ -334,21 +368,54 @@ func _draw_capture_hint(W: float, H: float, me: Sim.Unit) -> void:
 
 
 func _draw_death(W: float, H: float, me: Sim.Unit) -> void:
-	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.45))
-	_t(Vector2(0, H * 0.36), "전사", 46, Color(0.95, 0.4, 0.34), true, HORIZONTAL_ALIGNMENT_CENTER, W)
+	# 화면을 어둡게 + 위아래 검은 띠(시네마틱)
+	draw_rect(Rect2(0, 0, W, H), Color(0.02, 0.0, 0.0, 0.32))
+	draw_rect(Rect2(0, H - 190 * u, W, 190 * u), Color(0, 0, 0, 0.62))
+	_ts(Vector2(0, 122 * u), "처치당함", 36, Color(0.92, 0.3, 0.25), HORIZONTAL_ALIGNMENT_CENTER, W)
+	# 킬 카드: 누가, 무슨 무기로, 몇 미터에서
+	if me.killer >= 0 and me.killer < sim.units.size():
+		var k: Sim.Unit = sim.units[me.killer]
+		var kc := _team_col(k.team)
+		var cw := 520.0 * u
+		var r := Rect2((W - cw) * 0.5, 142 * u, cw, 78 * u)
+		_panel(r, Color(0.04, 0.05, 0.06, 0.88), 3.0, 1.0, Color(1, 1, 1, 0.14))
+		draw_rect(Rect2(r.position.x, r.position.y, 5 * u, r.size.y), kc)
+		_tc(r.position + Vector2(20, 26) * u, "나를 쓰러뜨린 사람", 13, Color(1, 1, 1, 0.55))
+		_ts(r.position + Vector2(20, 58) * u, k.label, 28, kc)
+		var wname: String = Sim.WEAPONS[me.kill_w].name
+		_tc(r.position + Vector2(190, 36) * u, wname, 19, WHITE)
+		_tc(r.position + Vector2(190, 62) * u, "거리 %dm   ·   남은 체력 %d" % [int(me.kill_dist), int(me.kill_hp)], 15, Color(1, 1, 1, 0.7))
+		_tc(Vector2(r.position.x, r.position.y + 26 * u), "킬 %d" % k.kills, 15, Color(1, 1, 1, 0.55), HORIZONTAL_ALIGNMENT_RIGHT, cw - 18 * u)
+	# 관전 안내
+	if spec_id >= 0 and spec_id < sim.units.size():
+		var su: Sim.Unit = sim.units[spec_id]
+		var tag := "킬캠" if su.team != me.team else "관전"
+		_tc(Vector2(28, H - 150 * u), "%s  ·  %s" % [tag, su.label], 18, _team_col(su.team))
+	# 재투입 카운트다운 링
 	if sim.tickets[me.team] > 0:
-		_t(Vector2(0, H * 0.36 + 40 * u), "%d초 후 재투입" % ceili(maxf(0.0, me.respawn_t)), 18, WHITE, false, HORIZONTAL_ALIGNMENT_CENTER, W)
-		var cw := 160.0 * u
-		var x0 := W * 0.5 - cw * 1.5 - 12 * u
-		for k in 3:
-			var wp: Dictionary = Sim.WEAPONS[k]
-			var r := Rect2(x0 + k * (cw + 12 * u), H * 0.36 + 70 * u, cw, 88 * u)
-			var sel := me.loadout == k
-			_panel(r, Color(0.2, 0.3, 0.5, 0.75) if sel else PANEL, 10.0, 2.0 if sel else 0.0, Color(0.5, 0.75, 1.0, 0.9))
-			_t(r.position + Vector2(12, 24) * u, "%d" % (k + 1), 20, Color(1, 1, 1, 0.5), true)
-			_t(r.position + Vector2(40, 24) * u, wp.name, 15, WHITE, true)
-			_t(r.position + Vector2(12, 50) * u, "피해 %d   장탄 %d" % [int(wp.dmg), wp.mag], 12, Color(1, 1, 1, 0.65))
-			_t(r.position + Vector2(12, 70) * u, "연사 %.1f/초" % (1.0 / wp.cd), 12, Color(1, 1, 1, 0.65))
+		var cx := W - 110.0 * u
+		var cy := H - 120.0 * u
+		var f := clampf(me.respawn_t / 5.5, 0.0, 1.0)
+		draw_arc(Vector2(cx, cy), 46 * u, 0, TAU, 48, Color(1, 1, 1, 0.15), 6.0 * u, true)
+		draw_arc(Vector2(cx, cy), 46 * u, -PI * 0.5, -PI * 0.5 + TAU * (1.0 - f), 48, Color(0.55, 0.85, 0.4), 6.0 * u, true)
+		_ts(Vector2(cx - 40 * u, cy + 14 * u), str(ceili(maxf(0.0, me.respawn_t))), 40, WHITE, HORIZONTAL_ALIGNMENT_CENTER, 80 * u)
+		_tc(Vector2(cx - 60 * u, cy + 66 * u), "재투입", 15, Color(1, 1, 1, 0.65), HORIZONTAL_ALIGNMENT_CENTER, 120 * u)
+		# 병과 선택 카드
+		var cw2 := 190.0 * u
+		var x0 := W * 0.5 - cw2 * 1.5 - 14 * u
+		for k2 in 3:
+			var wp: Dictionary = Sim.WEAPONS[k2]
+			var r2 := Rect2(x0 + k2 * (cw2 + 14 * u), H - 168 * u, cw2, 132 * u)
+			var sel := me.loadout == k2
+			_panel(r2, Color(0.16, 0.2, 0.1, 0.94) if sel else Color(0.05, 0.06, 0.07, 0.85), 3.0, 2.0 if sel else 1.0, Color(0.78, 0.6, 0.27, 1.0) if sel else Color(1, 1, 1, 0.14))
+			_ts(r2.position + Vector2(14, 36) * u, str(k2 + 1), 30, Color(1, 1, 1, 0.45))
+			_tc(r2.position + Vector2(52, 34) * u, ["소총병", "돌격병", "기관총수"][k2], 20, WHITE)
+			_tc(r2.position + Vector2(14, 62) * u, wp.name, 15, Color(0.8, 0.74, 0.55))
+			_tc(r2.position + Vector2(14, 90) * u, "피해 %d   장탄 %d" % [int(wp.dmg), wp.mag], 14, Color(1, 1, 1, 0.65))
+			_tc(r2.position + Vector2(14, 112) * u, "연사 %.1f / 초" % (1.0 / wp.cd), 14, Color(1, 1, 1, 0.65))
+		_tc(Vector2(0, H - 14 * u), "1 · 2 · 3  으로 다음 병과를 고르세요", 14, Color(1, 1, 1, 0.5), HORIZONTAL_ALIGNMENT_CENTER, W)
+	else:
+		_tc(Vector2(0, H - 90 * u), "병력이 모두 소진되었습니다", 24, Color(1, 0.6, 0.5), HORIZONTAL_ALIGNMENT_CENTER, W)
 
 
 func _draw_scoreboard(W: float, H: float) -> void:
@@ -389,7 +456,8 @@ func _draw_end(W: float, H: float, me: Sim.Unit) -> void:
 		col = Color(0.55, 0.95, 0.55) if win else Color(0.95, 0.4, 0.34)
 	_t(Vector2(0, H * 0.38), res, 72, col, true, HORIZONTAL_ALIGNMENT_CENTER, W)
 	_t(Vector2(0, H * 0.38 + 44 * u), sim.win_reason, 20, WHITE, false, HORIZONTAL_ALIGNMENT_CENTER, W)
-	_t(Vector2(0, H * 0.38 + 86 * u), "Enter 키로 다시 시작", 15, Color(1, 1, 1, 0.65), false, HORIZONTAL_ALIGNMENT_CENTER, W)
+	_tc(Vector2(0, H * 0.38 + 84 * u), "처치 %d   ·   사망 %d   ·   경험치 +%d" % [me.kills, me.deaths, xp_gain], 20, Color(0.85, 0.78, 0.55), HORIZONTAL_ALIGNMENT_CENTER, W)
+	_t(Vector2(0, H * 0.38 + 120 * u), "Enter 키로 로비로", 15, Color(1, 1, 1, 0.65), false, HORIZONTAL_ALIGNMENT_CENTER, W)
 
 
 func _draw_pause(W: float, H: float) -> void:
