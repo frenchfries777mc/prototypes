@@ -155,6 +155,10 @@ func _load_settings() -> void:
 			stats[k] = int(c.get_value("stats", k, 0))
 	else:
 		player_name = "병사%d" % (randi() % 900 + 100)
+	if OS.has_feature("web"):
+		var acc := str(JavaScriptBridge.eval("String((function(){try{var a=window.parent.FFAuth;return (a&&a.user())?(a.nickname()||''):''}catch(e){return ''}})())", true))
+		if acc != "" and acc != "null" and acc != "undefined":
+			player_name = acc.substr(0, 12)
 
 
 func save_settings() -> void:

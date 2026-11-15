@@ -18,6 +18,8 @@ canvas{display:block;touch-action:none;user-select:none;-webkit-user-select:none
 #ffFoot a{color:inherit;pointer-events:auto}
 </style>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>window.FF_INGAME=true</script>
+<script src="https://frenchfries777.com/games/ff-auth.js?v=20261115d"></script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -549,12 +551,9 @@ function drawAch(dt){
   txt(a.n+'  ·  칭호 '+a.t,W/2,y+43,19,'#fff',undefined,'');
 }
 function bossDown(t){if(!save.bossSet[t]){save.bossSet[t]=1;persist()}emit({k:'bk',t})}
-/* ===== 계정 연동: 접속 신호는 ff-presence.js 가, 플레이 기록과 도전과제는 여기서 허브 프로필로 보내요 ===== */
+/* ===== 계정 연동 ===== */
 let ffMarked='',ffAchT=0;
-function ffProfile(){
-  if(window.FFProfile)return Promise.resolve(true);
-  return new Promise(res=>{const sc=document.createElement('script');sc.src='';sc.onload=()=>res(!!window.FFProfile);sc.onerror=()=>res(false);document.head.appendChild(sc)});
-}
+function ffProfile(){return Promise.resolve(false)} /* prototypes 는 계정에는 연결되지만 프로필에는 기록하지 않아요 */
 function ffSync(){
   clearTimeout(ffAchT);ffAchT=setTimeout(async()=>{
     try{
