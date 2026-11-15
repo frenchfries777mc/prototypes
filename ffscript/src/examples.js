@@ -24,11 +24,11 @@ every 6 sec
 every 1 sec
   score +1
 
-when player hits rock
+if player hits rock
   rock.explode
   lives -1
 
-when player hits heart
+if player hits heart
   heart.sparkle
   lives +1
 `,
@@ -49,20 +49,19 @@ every 1.4 sec
     move down random(200, 320)
     spin 60
 
-when player hits coin
+if player hits coin
   coin.sparkle
   score +10
 
-when player hits box
+if player hits box
   box.explode
   lives -1
 
-when coin leaves
+if coin leaves
   lives -1
 
-always
-  if score >= 150
-    win
+if score >= 150
+  win
 `,
   'Star Shooter': `title "Star Shooter"
 background night
@@ -73,7 +72,7 @@ player = make ship at center bottom
   control arrows
   speed 440
 
-when key space
+if key space
   make bullet at player
     move up 700
 
@@ -85,22 +84,21 @@ every 4 sec
   make star from top
     move down 120
 
-when bullet hits enemy
+if bullet hits enemy
   enemy.explode
   bullet.remove
   score +10
 
-when player hits enemy
+if player hits enemy
   enemy.explode
   lives -1
 
-when player hits star
+if player hits star
   star.sparkle
   score +25
 
-always
-  if score >= 200
-    win
+if score >= 200
+  win
 `,
   'Sky Hopper': `title "Sky Hopper"
 background sky
@@ -129,17 +127,17 @@ make spike at 600 518
 
 make flag at 880 156
 
-when player hits coin
+if player hits coin
   coin.sparkle
   score +10
 
-when player hits spike
+if player hits spike
   lives -1
   player.x = 70
   player.y = 480
   player.vy = 0
 
-when player hits flag
+if player hits flag
   score +50
   win
 `,
@@ -164,15 +162,15 @@ every 2 sec
 every 10 sec
   level up
 
-when basket hits apple
+if basket hits apple
   apple.sparkle
   score +10
 
-when basket hits bomb
+if basket hits bomb
   bomb.explode
   lives -1
 
-when apple leaves
+if apple leaves
   lives -1
 `
 };

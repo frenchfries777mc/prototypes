@@ -583,7 +583,7 @@ function Engine(canvas) {
   }
 
   function reset() {
-    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = [];
+    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = []; G.conds = [];
     G.contacts = new Set(); G.time = 0; G.score = 0; G.lives = null; G.titleText = ''; G.bg = 'space'; G.bgColor = null;
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
     G.level = 1; G.showLevel = false; G.levelBanner = 0; G.musicName = null; G.newBest = false;
@@ -636,6 +636,7 @@ function Engine(canvas) {
   G.onHit = (a, b, fn) => { G.touches.push({ a, b, fn }); };
   G.onKey = (k, fn) => { G.keyEvents.push({ k, fn }); };
   G.onLeave = (n, fn) => { G.leaves.push({ n, fn }); };
+  G.onCond = (cond, fn) => { G.conds.push({ cond, fn, prev: false }); };
 
   G.particle = p => { p.max = p.life; if (G.parts.length < 1500) G.parts.push(p); };
   G.floatText = (text, x, y, col, big) => { G.texts.push({ text: String(text), x, y, col: col || '#fff', life: 1, big }); };
@@ -715,6 +716,12 @@ function Engine(canvas) {
   function update(dt) {
     G.time += dt;
     for (const ev of G.always) if (!ownerDead(ev)) run(ev.fn);
+    for (const c of G.conds) {
+      let v = false;
+      run(() => { v = !!c.cond(); });
+      if (v && !c.prev) run(c.fn);
+      c.prev = v;
+    }
     for (const tm of G.timers) {
       if (tm.dead) continue;
       if (ownerDead(tm)) { tm.dead = true; continue; }
@@ -1549,7 +1556,7 @@ function Engine(canvas) {
   }
 
   function reset() {
-    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = [];
+    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = []; G.conds = [];
     G.contacts = new Set(); G.time = 0; G.score = 0; G.lives = null; G.titleText = ''; G.bg = 'space'; G.bgColor = null;
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
     G.level = 1; G.showLevel = false; G.levelBanner = 0; G.musicName = null; G.newBest = false;
@@ -1602,6 +1609,7 @@ function Engine(canvas) {
   G.onHit = (a, b, fn) => { G.touches.push({ a, b, fn }); };
   G.onKey = (k, fn) => { G.keyEvents.push({ k, fn }); };
   G.onLeave = (n, fn) => { G.leaves.push({ n, fn }); };
+  G.onCond = (cond, fn) => { G.conds.push({ cond, fn, prev: false }); };
 
   G.particle = p => { p.max = p.life; if (G.parts.length < 1500) G.parts.push(p); };
   G.floatText = (text, x, y, col, big) => { G.texts.push({ text: String(text), x, y, col: col || '#fff', life: 1, big }); };
@@ -1681,6 +1689,12 @@ function Engine(canvas) {
   function update(dt) {
     G.time += dt;
     for (const ev of G.always) if (!ownerDead(ev)) run(ev.fn);
+    for (const c of G.conds) {
+      let v = false;
+      run(() => { v = !!c.cond(); });
+      if (v && !c.prev) run(c.fn);
+      c.prev = v;
+    }
     for (const tm of G.timers) {
       if (tm.dead) continue;
       if (ownerDead(tm)) { tm.dead = true; continue; }
@@ -2019,9 +2033,9 @@ const CMDS = {
   move: 'move', toward: 'toward', stop: 'stop', control: 'control', speed: 'setSpeed', size: 'setSize', color: 'setColor',
   spin: 'spin', bounce: 'setBounce', look: 'setLook', gravity: 'setGravity', jump: 'jump', solid: 'setSolid', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
 };
-const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music'];
+const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create'];
 const BUILTIN = ['score', 'lives', 'level', 'time', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
-const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'leaves', 'sec', 'elif'];
+const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times'];
 const JS_RESERVED = ['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'enum', 'export', 'extends', 'finally', 'for', 'function', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'await', 'async', 'static', 'undefined', 'G', 'Math', '_o', 'window', 'document', 'eval'];
 const NOT_VARS = new Set([...STATEMENTS, ...BUILTIN.filter(w => w !== 'score' && w !== 'lives' && w !== 'level'), ...WORDS, ...JS_RESERVED]);
 
@@ -2070,7 +2084,7 @@ const q = JSON.stringify;
 function parseTree(src) {
   const root = { n: 0, indent: -1, children: [] }, stack = [root];
   src.split('\n').forEach((raw, i) => {
-    const text = stripComment(raw.replace(/\t/g, '  ')).replace(/\s+$/, '');
+    const text = stripComment(raw.replace(/\t/g, '  ')).replace(/\s+$/, '').replace(/\s*:$/, '');
     if (!text.trim()) return;
     const node = { n: i + 1, indent: text.match(/^ */)[0].length, text: text.trim(), children: [] };
     while (stack[stack.length - 1].indent >= node.indent) stack.pop();
@@ -2088,7 +2102,8 @@ function compile(src) {
   const assignRe = new RegExp('^(' + ID + ')\\s*(?:=(?!=)|\\+=|-=|\\*=|/=)', 'u');
   (function collect(nodes) {
     for (const nd of nodes) {
-      const m = nd.text.match(assignRe);
+      const sm = nd.text.match(new RegExp('^set\\s+(' + ID + ')\\s+to\\b', 'u'));
+      const m = nd.text.match(assignRe) || (sm && [null, sm[1]]);
       if (m && m[1] !== 'score' && m[1] !== 'lives' && m[1] !== 'level') {
         if (NOT_VARS.has(m[1])) fail(nd.n, `'${m[1]}'는 FF Script가 이미 쓰는 단어라서 변수 이름으로 쓸 수 없어요. 다른 이름을 골라 주세요.`);
         vars.add(m[1]);
@@ -2195,6 +2210,7 @@ function compile(src) {
 
   function makeStmt(nd, ctx, varName, rest) {
     const n = nd.n, terms = splitTerms(rest || '');
+    if (['a', 'an', 'the'].includes(terms[0])) terms.shift();
     if (!terms.length) fail(n, `make 뒤에는 모양 이름이 필요해요. (예: make rock from top)\n쓸 수 있는 모양: ${quoteList(LOOKS)}`);
     const isText = /^["']/.test(terms[0]);
     const L = isText ? q('text') : look(terms[0], n);
@@ -2234,11 +2250,30 @@ function compile(src) {
     if (!ctx.top) fail(nd.n, `${w}은(는) 맨 왼쪽 줄(들여쓰기 없는 곳)에서만 쓸 수 있어요.`);
   }
 
+  const EVENT_RE = [new RegExp('^' + ID + '\\s+(?:hits|touches)\\s+' + ID + '$', 'u'), /^key\s+\S+$/, /^click$/, new RegExp('^' + ID + '\\s+leaves$', 'u')];
+  function eventStmt(nd, ctx, rest, w) {
+    const n = nd.n;
+    let mm;
+    rest = rest.trim();
+    if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+(?:hits|touches)\\s+(' + ID + ')$', 'u')))) {
+      for (const nm of [mm[1], mm[2]]) if (!LOOKS.includes(nm) && !vars.has(nm)) fail(n, `'${nm}'는 모양 이름도, 만든 이름도 아니에요.${hint(nm, [...LOOKS, ...vars])}`);
+      const b = mm[1] === mm[2] ? 'other' : mm[2];
+      return `G.ln=${n};G.onHit(${q(mm[1])},${q(mm[2])},(${mm[1]},${b})=>{${body(nd, ctx, [mm[1], b], w)}});`;
+    }
+    if ((mm = rest.match(/^key\s+(\S+)$/))) return `G.ln=${n};G.onKey(${q(mm[1].toLowerCase())},()=>{${body(nd, ctx, null, w)}});`;
+    if (/^click$/.test(rest)) return `G.ln=${n};G.onKey("click",()=>{${body(nd, ctx, null, w)}});`;
+    if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+leaves$', 'u')))) {
+      if (!LOOKS.includes(mm[1]) && !vars.has(mm[1])) fail(n, `'${mm[1]}'는 모양 이름도, 만든 이름도 아니에요.${hint(mm[1], [...LOOKS, ...vars])}`);
+      return `G.ln=${n};G.onLeave(${q(mm[1])},(${mm[1]})=>{${body(nd, ctx, [mm[1]], w)}});`;
+    }
+    return null;
+  }
+
   function stmt(nd, ctx) {
     const t = nd.text, n = nd.n;
     let m;
-    if ((m = t.match(new RegExp('^(' + ID + ')\\s*=\\s*make(?:\\s+(.*))?$', 'u'))) && m[1] !== 'score') return makeStmt(nd, ctx, m[1], m[2]);
-    if ((m = t.match(/^make(?:\s+(.*))?$/))) return makeStmt(nd, ctx, null, m[1]);
+    if ((m = t.match(new RegExp('^(' + ID + ')\\s*=\\s*(?:make|spawn|create)(?:\\s+(.*))?$', 'u'))) && m[1] !== 'score') return makeStmt(nd, ctx, m[1], m[2]);
+    if ((m = t.match(/^(?:make|spawn|create)(?:\s+(.*))?$/))) return makeStmt(nd, ctx, null, m[1]);
 
     if ((m = t.match(new RegExp('^(' + ID + '(?:\\.' + ID + ')*)\\s*(\\+=|-=|\\*=|/=|=(?!=))\\s*(.*)$', 'u')))) {
       need(m[3], n, `${m[2]} 뒤에 값이 필요해요.`);
@@ -2282,23 +2317,41 @@ function compile(src) {
       case 'always': topOnly(nd, ctx, w); if (rest) fail(n, 'always 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.onAlways(()=>{${body(nd, ctx, null, w)}});`;
       case 'when': {
         topOnly(nd, ctx, w);
-        let mm;
-        if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+hits\\s+(' + ID + ')$', 'u')))) {
-          for (const nm of [mm[1], mm[2]]) if (!LOOKS.includes(nm) && !vars.has(nm)) fail(n, `'${nm}'는 모양 이름도, 만든 이름도 아니에요.${hint(nm, [...LOOKS, ...vars])}`);
-          const b = mm[1] === mm[2] ? 'other' : mm[2];
-          return `G.ln=${n};G.onHit(${q(mm[1])},${q(mm[2])},(${mm[1]},${b})=>{${body(nd, ctx, [mm[1], b], 'when')}});`;
-        }
-        if ((mm = rest.match(/^key\s+(\S+)$/))) return `G.ln=${n};G.onKey(${q(mm[1].toLowerCase())},()=>{${body(nd, ctx, null, 'when')}});`;
-        if (/^click$/.test(rest)) return `G.ln=${n};G.onKey("click",()=>{${body(nd, ctx, null, 'when')}});`;
-        if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+leaves$', 'u')))) {
-          if (!LOOKS.includes(mm[1]) && !vars.has(mm[1])) fail(n, `'${mm[1]}'는 모양 이름도, 만든 이름도 아니에요.${hint(mm[1], [...LOOKS, ...vars])}`);
-          return `G.ln=${n};G.onLeave(${q(mm[1])},(${mm[1]})=>{${body(nd, ctx, [mm[1]], 'when')}});`;
-        }
-        fail(n, `when 뒤의 모양을 모르겠어요. 이렇게 써요:\n  when player hits rock\n  when key space\n  when click\n  when rock leaves`);
+        const ev = eventStmt(nd, ctx, rest, w);
+        if (ev) return ev;
+        fail(n, `${w} 뒤의 모양을 모르겠어요. 이렇게 써요:\n  if player hits rock\n  if key space\n  if click\n  if rock leaves`);
       }
-      case 'if': { need(rest, n, 'if 뒤에 조건이 필요해요. (예: if score >= 10)'); return `G.ln=${n};if(${ex(rest, n, ctx)}){${body(nd, ctx, null, 'if')}}`; }
+      case 'if': {
+        need(rest, n, 'if 뒤에 조건이 필요해요. (예: if score >= 10, if player hits rock)');
+        const ev = EVENT_RE.some(r => r.test(rest.trim())) ? eventStmt(nd, ctx, rest, w) : null;
+        if (ev) { if (!ctx.top) fail(n, "'if 누가 hits 무엇' 같은 이벤트 줄은 맨 왼쪽 줄에서만 쓸 수 있어요."); nd.isTrigger = true; return ev; }
+        if (ctx.top) { nd.isTrigger = true; return `G.ln=${n};G.onCond(()=>(${ex(rest, n, ctx)}),()=>{${body(nd, ctx, null, 'if')}});`; }
+        return `G.ln=${n};if(${ex(rest, n, ctx)}){${body(nd, ctx, null, 'if')}}`;
+      }
+      case 'add': case 'remove': {
+        const mm = rest.match(w === 'add' ? /^(.+?)\s+to\s+(.+)$/ : /^(.+?)\s+from\s+(.+)$/);
+        if (!mm) fail(n, w === 'add' ? 'add는 이렇게 써요: add 10 to score' : 'remove는 이렇게 써요: remove 1 from lives  (모양을 없애려면 rock.remove)');
+        const sign = w === 'add' ? '' : '-', tg = mm[2].trim(), amt = `${sign}(${ex(mm[1], n, ctx)})`;
+        if (tg === 'score') return `G.ln=${n};G.addScore(${amt});`;
+        if (tg === 'lives') { if (!firstLivesAdd) firstLivesAdd = n; return `G.ln=${n};G.addLives(${amt});`; }
+        if (tg === 'level') usesLevel = true;
+        return `G.ln=${n};${ex(tg, n, ctx)}${w === 'add' ? '+=' : '-='}${ex(mm[1], n, ctx)};`;
+      }
+      case 'set': {
+        const mm = rest.match(/^(.+?)\s+to\s+(.+)$/);
+        if (!mm) fail(n, 'set은 이렇게 써요: set score to 0');
+        const tg = mm[1].trim();
+        if (tg === 'lives') { hasLives = true; return `G.ln=${n};G.setLives(${ex(mm[2], n, ctx)});`; }
+        if (tg === 'level') usesLevel = true;
+        if (tg === 'time') fail(n, 'time은 읽기만 할 수 있어요.');
+        return `G.ln=${n};${ex(tg, n, ctx)}=${ex(mm[2], n, ctx)};`;
+      }
       case 'else': case 'elif': fail(n, `${w} 앞에는 같은 칸에 if 줄이 있어야 해요.`);
-      case 'repeat': need(rest, n, 'repeat 뒤에 횟수가 필요해요. (예: repeat 5)'); return `G.ln=${n};for(let i=0;i<${ex(rest, n, ctx)};i++){${body(nd, ctx, ['i'], 'repeat')}}`;
+      case 'repeat': case 'loop': {
+        const cnt = rest.replace(/\s+times?$/i, '');
+        need(cnt, n, `${w} 뒤에 횟수가 필요해요. (예: ${w} 5 times)`);
+        return `G.ln=${n};for(let i=0;i<${ex(cnt, n, ctx)};i++){${body(nd, ctx, ['i'], w)}}`;
+      }
       case 'level':
         if (rest.trim() !== 'up') fail(n, "level 뒤에는 up만 쓸 수 있어요. (예: level up) 현재 레벨 숫자는 level 이라고만 쓰면 돼요.");
         usesLevel = true; return `G.ln=${n};G.levelUp();`;
@@ -2330,7 +2383,8 @@ function compile(src) {
     for (let i = 0; i < nodes.length; i++) {
       const nd = nodes[i];
       let js = stmt(nd, ctx);
-      if (/^if\b/.test(nd.text)) {
+      if (nd.isTrigger && i + 1 < nodes.length && /^(else|elif)\b/.test(nodes[i + 1].text)) fail(nodes[i + 1].n, "맨 왼쪽 줄의 if(이벤트·조건 트리거)에는 else를 붙일 수 없어요. else는 다른 블록 안쪽의 if에서만 쓸 수 있어요.");
+      if (/^if\b/.test(nd.text) && !nd.isTrigger) {
         while (i + 1 < nodes.length) {
           const nx = nodes[i + 1], m = nx.text.match(/^(?:else\s+if|elif)\s+(.+)$/);
           if (m) { js += `else if(${ex(m[1], nx.n, ctx)}){${body(nx, ctx, null, 'else if')}}`; i++; continue; }
@@ -2397,11 +2451,11 @@ every 6 sec
 every 1 sec
   score +1
 
-when player hits rock
+if player hits rock
   rock.explode
   lives -1
 
-when player hits heart
+if player hits heart
   heart.sparkle
   lives +1
 `,
@@ -2422,20 +2476,19 @@ every 1.4 sec
     move down random(200, 320)
     spin 60
 
-when player hits coin
+if player hits coin
   coin.sparkle
   score +10
 
-when player hits box
+if player hits box
   box.explode
   lives -1
 
-when coin leaves
+if coin leaves
   lives -1
 
-always
-  if score >= 150
-    win
+if score >= 150
+  win
 `,
   'Star Shooter': `title "Star Shooter"
 background night
@@ -2446,7 +2499,7 @@ player = make ship at center bottom
   control arrows
   speed 440
 
-when key space
+if key space
   make bullet at player
     move up 700
 
@@ -2458,22 +2511,21 @@ every 4 sec
   make star from top
     move down 120
 
-when bullet hits enemy
+if bullet hits enemy
   enemy.explode
   bullet.remove
   score +10
 
-when player hits enemy
+if player hits enemy
   enemy.explode
   lives -1
 
-when player hits star
+if player hits star
   star.sparkle
   score +25
 
-always
-  if score >= 200
-    win
+if score >= 200
+  win
 `,
   'Sky Hopper': `title "Sky Hopper"
 background sky
@@ -2502,17 +2554,17 @@ make spike at 600 518
 
 make flag at 880 156
 
-when player hits coin
+if player hits coin
   coin.sparkle
   score +10
 
-when player hits spike
+if player hits spike
   lives -1
   player.x = 70
   player.y = 480
   player.vy = 0
 
-when player hits flag
+if player hits flag
   score +50
   win
 `,
@@ -2537,15 +2589,15 @@ every 2 sec
 every 10 sec
   level up
 
-when basket hits apple
+if basket hits apple
   apple.sparkle
   score +10
 
-when basket hits bomb
+if basket hits bomb
   bomb.explode
   lives -1
 
-when apple leaves
+if apple leaves
   lives -1
 `
 };
@@ -2616,10 +2668,14 @@ when apple leaves
     if (/^background\s+$/.test(t)) return [...L.backs, ...L.colors];
     if (/^music\s+$/.test(t)) return L.musics;
     if (/^level\s+$/.test(t)) return ['up'];
-    if (/^when\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames()];
-    if (/^when\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
-    if (/^when\s+\S+\s+$/.test(t) && !/key\s+$/.test(t)) return ['hits', 'leaves'];
-    if (/\shits\s+$/.test(t)) return [...L.looks, ...varNames()];
+    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames(), ...L.builtin];
+    if (/^(if|when)\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
+    if (/^(if|when)\s+(?!key\b)[\p{L}_][\p{L}\p{N}_]*\s+$/u.test(t)) return ['hits', 'touches', 'leaves'];
+    if (/\s(hits|touches)\s+$/.test(t)) return [...L.looks, ...varNames()];
+    if (/^set\s+\S+\s+$/.test(t)) return ['to'];
+    if (/^(add|remove)\s+\S+\s+$/.test(t)) return [/^add/.test(t) ? 'to' : 'from'];
+    if (/^(add|remove)\s+\S+\s+(to|from)\s+$/.test(t)) return ['score', 'lives', ...varNames()];
+    if (/^set\s+$/.test(t)) return ['score', 'lives', ...varNames()];
     if (!t || !word || t === word) return [...L.statements, ...L.cmds, ...varNames(), ...L.looks];
     return [...varNames(), ...L.looks, ...L.builtin];
   }
@@ -2654,13 +2710,13 @@ when apple leaves
 
   const HELP = [
     ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea 또는 색'], ['lives 3', '목숨']]],
-    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
+    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
     ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag', '플랫포머용']]],
     ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', '방향 up down left right'], ['  toward player 150 follow', '대상을 따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', '회전'], ['  bounce', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', '중력'], ['  jump 700', '점프'], ['  solid', '밟을 수 있게'], ['  stop', '']]],
-    ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['when player hits rock', '닿았을 때'], ['when key space', '키를 눌렀을 때'], ['when click', '클릭'], ['when rock leaves', '화면 밖으로 나감']]],
-    ['점수·상태', [['score +10', ''], ['lives -1', ''], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
+    ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['if player hits rock', '닿았을 때'], ['if key space', '키를 눌렀을 때'], ['if click', '클릭'], ['if rock leaves', '화면 밖으로 나감'], ['if score >= 100', '조건이 처음 참이 될 때 한 번'], ['loop 5 times', '반복']]],
+    ['점수·상태', [['add 10 to score', 'score +10 과 같아요'], ['remove 1 from lives', 'lives -1 과 같아요'], ['set score to 0', 'x = 0 과 같아요'], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
     ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "안녕!"', '말풍선'], ['shake', '화면 흔들림'], ['sound coin', 'boom coin shoot hit jump power pop'], ['music chill', 'chill happy action off'], ['label "글자" at center top', '']]],
-    ['조건·변수', [['if score >= 100', 'else, repeat 3 도 있어요'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
+    ['조건·변수', [['if x > 3', '다른 블록 안에서는 보통 조건문 (else 가능)'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
   ];
   help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
   $('helpBtn').addEventListener('click', () => { help.style.display = help.style.display === 'block' ? 'none' : 'block'; });
