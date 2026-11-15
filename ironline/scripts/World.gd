@@ -141,6 +141,9 @@ func _place_props(rng: RandomNumberGenerator) -> void:
 			_add_house(px - 3.0, pz + sgn * 22.0, rng)
 			for bq in 2:
 				_add_box(px - 3.0 + rng.randf_range(-6.0, 6.0), pz + sgn * (22.0 - 6.4 - rng.randf() * 1.5), 0.9, 0.9, 1.05, 5)
+		if i == 1 or i == 3:
+			var gsgn := -1.0 if pz > 0.0 else 1.0
+			_add_box(px + 4.0, pz - gsgn * 17.0, 3.8, 2.4, 1.5, 7)
 		if i == 0 or i == 4 or i == 2:
 			var nt := 3 if i != 2 else 1
 			for tq in nt:

@@ -25,9 +25,10 @@ var built_seed := -1
 var built_bots := -1
 var building := false
 var adaptive := false
+var fx_level := 2
 var fps_t := 0.0
 var render_scale := 1.0
-var cfg := {"bots": -1, "seed": 20260101, "team": -2, "tp": false, "perf": false, "nomouse": false,
+var cfg := {"bots": -1, "seed": 20260101, "team": -2, "tp": false, "tpd": 3.2, "perf": false, "nomouse": false,
 	"q": -1, "scale": 1.0, "join": "", "auto": "", "code": "", "name": "", "autostart": false,
 	"peerhost": "", "peerport": 443, "peersecure": true, "warp": ""}
 var perf_acc := 0.0
@@ -110,7 +111,8 @@ func _read_config() -> void:
 			"bots": cfg.bots = clampi(int(v), 3, 50)
 			"seed": cfg.seed = int(v)
 			"team": cfg.team = 1 if v == "b" else (0 if v == "a" else -1)
-			"tp": cfg.tp = v == "1"
+			"tp": cfg.tp = (v == "1" or v == "2")
+			"tpd": cfg.tpd = float(v)
 			"perf": cfg.perf = v == "1"
 			"nomouse": cfg.nomouse = v == "1"
 			"q": cfg.q = clampi(int(v), 0, 3)
@@ -147,6 +149,7 @@ func _ensure_world(seed_v: int, bots: int) -> void:
 	sim.setup(seed_v, bots)
 	view = View.new()
 	view.debug_3p = cfg.tp
+	view.tp_dist = cfg.tpd
 	add_child(view)
 	move_child(view, 0)
 	view.setup(sim)
@@ -164,6 +167,7 @@ func _apply_quality() -> void:
 	var q: int = menu.quality
 	adaptive = q >= 3
 	var eff := 1 if adaptive else q
+	fx_level = 2 if (adaptive or q >= 2) else q
 	view.apply_quality(eff)
 	render_scale = clampf(cfg.scale, 0.4, 1.0)
 	get_viewport().scaling_3d_scale = render_scale
@@ -333,6 +337,9 @@ func _process(dt: float) -> void:
 		_menu_bg(dt)
 	var pm: ShaderMaterial = post.material
 	var me: Sim.Unit = sim.units[local_id]
+	pm.set_shader_parameter("sun_uv", view.sun_uv)
+	pm.set_shader_parameter("sun_vis", view.sun_vis)
+	pm.set_shader_parameter("fx_level", float(fx_level))
 	pm.set_shader_parameter("hurt", clampf(hud.hurt_t / 0.6, 0.0, 1.0) if st == St.PLAYING else 0.0)
 	pm.set_shader_parameter("low_hp", clampf((45.0 - me.hp) / 45.0, 0.0, 1.0) if (st == St.PLAYING and me.alive) else 0.0)
 	if cfg.perf:

@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode diffuse_burley, specular_disabled;
+render_mode diffuse_burley, specular_schlick_ggx;
 // 지형: 고도·경사·노이즈로 풀/마른 풀/흙/진흙/바위를 섞는다. 텍스처 없이 셰이더 노이즈만 쓴다.
 
 uniform vec3 grass_a : source_color = vec3(0.15, 0.22, 0.07);
@@ -9,6 +9,7 @@ uniform vec3 dirt    : source_color = vec3(0.21, 0.17, 0.12);
 uniform vec3 mud     : source_color = vec3(0.17, 0.13, 0.10);
 uniform vec3 rock    : source_color = vec3(0.34, 0.32, 0.29);
 uniform vec2 points[5];
+uniform vec3 sky_refl : source_color = vec3(0.34, 0.42, 0.52);
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -80,9 +81,20 @@ void fragment() {
 	col = mix(col, dirt, smoothstep(0.1, 0.45, slope) * 0.6);
 	col = mix(col, rock * (0.7 + 0.6 * n4), smoothstep(0.5, 0.8, slope));
 
+	// 웅덩이: 낮은 곳 중 노이즈가 높은 자리에 물이 고여 하늘을 비춘다
+	float lowspot = smoothstep(-0.55, -1.25, wpos.y);
+	float puddle = lowspot * smoothstep(0.56, 0.70, n2 * 0.6 + n1 * 0.5);
+	puddle = max(puddle, (1.0 - smoothstep(0.0, 0.12, abs(wpos.y + 0.46))) * 0.0);
+	col = mix(col, vec3(0.05, 0.055, 0.06), puddle * 0.75);
 	ALBEDO = col * ao;
-	ROUGHNESS = 0.95;
+	ROUGHNESS = mix(0.95, 0.04, puddle);
+	SPECULAR = mix(0.05, 0.9, puddle);
+	float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
+	EMISSION = sky_refl * (0.07 + 0.42 * fres) * puddle;
 	// 가짜 요철: 노이즈 기울기로 법선을 살짝 흔든다
 	vec3 bump = vec3(n3 - 0.5, 0.0, n4 - 0.5) * 0.35;
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(bump, 0.0)).xyz);
+	// 웅덩이 수면은 평평하게(잔물결만)
+	float rip = (vnoise(p * 6.0 + TIME * 0.4) - 0.5) * 0.04;
+	NORMAL = normalize(mix(NORMAL, normalize((VIEW_MATRIX * vec4(rip, 1.0, rip, 0.0)).xyz), puddle));
 }

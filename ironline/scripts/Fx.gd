@@ -9,6 +9,10 @@ var _pools := {}
 var _next := {}
 var flash_light: OmniLight3D
 var blast_light: OmniLight3D
+var fires: Array = []
+var motes: CPUParticles3D
+var fire_lights := true
+var clock := 0.0
 
 
 func _ready() -> void:
@@ -27,6 +31,7 @@ func _ready() -> void:
 	_make_pool("wall", 14, 10, Color(0.62, 0.6, 0.56, 0.7), 0.7, 1.5, 3.5, 0.8, Vector3(0, -2.0, 0), 0.8)
 	_make_pool("blood", 10, 8, Color(0.55, 0.04, 0.03, 0.95), 0.5, 1.0, 3.2, 0.34, Vector3(0, -9.0, 0), 0.6)
 	_make_pool("flash", 6, 5, Color(1.0, 0.85, 0.5, 0.95), 0.1, 0.5, 1.5, 0.7, Vector3.ZERO, 0.8)
+	_make_pool("casing", 8, 1, Color(0.8, 0.6, 0.2, 1.0), 1.1, 2.2, 3.6, 0.045, Vector3(0, -9.8, 0), 0.0)
 	_make_pool("blast", 4, 30, Color(0.26, 0.20, 0.14, 0.9), 2.4, 7.0, 13.0, 2.2, Vector3(0, -7.0, 0), 0.7)
 	_make_pool("blastsmoke", 4, 18, Color(0.2, 0.19, 0.18, 0.7), 5.0, 1.5, 3.5, 4.0, Vector3(0.3, 0.6, 0), 0.4)
 	var mi := MeshInstance3D.new()
@@ -205,3 +210,91 @@ func update(dt: float) -> void:
 		tracer_im.surface_set_color(c)
 		tracer_im.surface_add_vertex(a + dir * head)
 	tracer_im.surface_end()
+
+
+func casing(pos: Vector3, right: Vector3) -> void:
+	burst("casing", pos, (right + Vector3(0.1, 0.7, 0.0)).normalized())
+
+
+## 지속되는 불: 불꽃 + 불씨 + 깜빡이는 조명 + 연기.
+func fire(pos: Vector3, size: float = 1.0) -> void:
+	var flame := _emitter(Color(1.0, 0.55, 0.12, 0.85), 16, 0.9, 0.7, 1.7, 1.1 * size, Vector3(0, 1.3, 0), true)
+	flame.position = pos
+	flame.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	flame.emission_sphere_radius = 0.35 * size
+	flame.spread = 14.0
+	add_child(flame)
+	var embers := _emitter(Color(1.0, 0.7, 0.2, 1.0), 8, 2.2, 1.0, 2.6, 0.07, Vector3(0.4, 0.9, 0), true)
+	embers.position = pos
+	embers.spread = 35.0
+	add_child(embers)
+	smoke_column(pos + Vector3(0, 0.8, 0), 0.7 * size)
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.55, 0.2)
+	l.omni_range = 11.0 * size
+	l.light_energy = 1.6
+	l.shadow_enabled = false
+	l.position = pos + Vector3(0, 1.0, 0)
+	add_child(l)
+	fires.append({"light": l, "phase": randf() * TAU})
+
+
+func _emitter(col: Color, amount: int, life: float, v0: float, v1: float, size: float, grav: Vector3, additive: bool) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.amount = amount
+	p.lifetime = life
+	p.preprocess = life
+	p.direction = Vector3.UP
+	p.initial_velocity_min = v0
+	p.initial_velocity_max = v1
+	p.gravity = grav
+	p.scale_amount_min = size * 0.7
+	p.scale_amount_max = size * 1.2
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 1.0))
+	sc.add_point(Vector2(1, 0.15))
+	p.scale_amount_curve = sc
+	var g := Gradient.new()
+	g.colors = PackedColorArray([Color(col.r, col.g, col.b, 0.0), col, Color(col.r * 0.6, col.g * 0.25, col.b * 0.1, 0.0)])
+	g.offsets = PackedFloat32Array([0.0, 0.2, 1.0])
+	p.color_ramp = g
+	var qm := QuadMesh.new()
+	qm.size = Vector2(1, 1)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if additive:
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.albedo_texture = _soft
+	qm.material = mat
+	p.mesh = qm
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return p
+
+
+## 카메라 주변에 떠다니는 먼지 입자(분위기용).
+func ensure_motes() -> void:
+	if motes != null:
+		return
+	motes = _emitter(Color(1.0, 0.95, 0.85, 0.35), 70, 7.0, 0.1, 0.5, 0.045, Vector3(0.35, 0.02, 0.12), false)
+	motes.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	motes.emission_box_extents = Vector3(16.0, 5.0, 16.0)
+	motes.direction = Vector3(1, 0.1, 0.3)
+	motes.spread = 180.0
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 1.0))
+	sc.add_point(Vector2(1, 1.0))
+	motes.scale_amount_curve = sc
+	add_child(motes)
+
+
+func follow(cam_pos: Vector3) -> void:
+	if motes != null:
+		motes.global_position = cam_pos + Vector3(0, 1.5, 0)
+	clock += get_process_delta_time()
+	for f in fires:
+		var l: OmniLight3D = f.light
+		l.visible = fire_lights
+		l.light_energy = 1.5 + 0.55 * sin(clock * 13.0 + f.phase) + 0.3 * sin(clock * 29.0 + f.phase * 2.0)
