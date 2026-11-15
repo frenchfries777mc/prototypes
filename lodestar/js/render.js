@@ -1,0 +1,382 @@
+'use strict';
+/* 로드스타 — 렌더링: 캔버스 2D로 지형, 유닛, 효과, 전장의 안개, 미니맵을 그린다 */
+
+var R = (function () {
+  var cv, ctx, cw = 1, ch = 1, dpr = 1, S = 0.5, zoom = 1;
+  var cam = { x: 1500, y: 3200 };
+  var fogCv, fogCtx, miniCv, miniCtx, miniBase, mw = 1, mh = 1;
+  var C = {
+    forest: '#0c181b', tree1: '#12292a', tree2: '#1a3835', edge: '#17282a', path: '#27383a', camp: '#293a3b',
+    lane: '#34443f', road: '#43534b', river: '#1b4d63', river2: '#27708a', pit: '#243f4a',
+    ally: '#4fe0d2', enemy: '#ff6b5e', neutral: '#b9a6ff', gold: '#ffd76a', me: '#f4f7c8', ink: '#e8f1ee'
+  };
+  var trees = {}, TB = 500;
+
+  function init(canvas, mini) {
+    cv = canvas; ctx = cv.getContext('2d');
+    fogCv = document.createElement('canvas'); fogCtx = fogCv.getContext('2d');
+    miniCv = mini; miniCtx = mini.getContext('2d');
+    var seed = 7;
+    function r() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    for (var y = 60; y < MAP.H; y += 115) for (var x = 60; x < MAP.W; x += 115) {
+      var tx = x + (r() - 0.5) * 90, ty = y + (r() - 0.5) * 90;
+      if (MAP.isWalk(tx, ty) || MAP.isWalk(tx + 70, ty) || MAP.isWalk(tx - 70, ty) || MAP.isWalk(tx, ty + 70) || MAP.isWalk(tx, ty - 70)) continue;
+      var k = ((tx / TB) | 0) + ',' + ((ty / TB) | 0);
+      (trees[k] = trees[k] || []).push({ x: tx, y: ty, r: 48 + r() * 34 });
+    }
+    resize();
+  }
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = cv.clientWidth || 1, h = cv.clientHeight || 1;
+    cw = Math.round(w * dpr); ch = Math.round(h * dpr);
+    cv.width = cw; cv.height = ch;
+    fogCv.width = Math.ceil(cw / 3); fogCv.height = Math.ceil(ch / 3);
+    S = Math.max(cw / 2700, ch / 1560) * zoom;
+    var mwc = miniCv.clientWidth || 200, mhc = miniCv.clientHeight || 128;
+    mw = Math.round(mwc * dpr); mh = Math.round(mhc * dpr);
+    miniCv.width = mw; miniCv.height = mh;
+    miniBase = document.createElement('canvas'); miniBase.width = mw; miniBase.height = mh;
+    var m = miniBase.getContext('2d');
+    m.fillStyle = '#0a1316'; m.fillRect(0, 0, mw, mh);
+    m.save(); m.scale(mw / MAP.W, mh / MAP.H);
+    terrain(m, true);
+    m.restore();
+  }
+  function setZoom(z) { zoom = Math.max(0.6, Math.min(1.7, z)); S = Math.max(cw / 2700, ch / 1560) * zoom; }
+  function getZoom() { return zoom; }
+  function s2w(px, py) { return { x: cam.x + (px * dpr - cw / 2) / S, y: cam.y + (py * dpr - ch / 2) / S }; }
+  function clampCam() {
+    var hw = cw / 2 / S, hh = ch / 2 / S;
+    cam.x = hw * 2 >= MAP.W ? MAP.W / 2 : Math.max(hw, Math.min(MAP.W - hw, cam.x));
+    cam.y = hh * 2 >= MAP.H ? MAP.H / 2 : Math.max(hh - 200, Math.min(MAP.H - hh + 200, cam.y));
+  }
+
+  function strokeShape(c, s, extra) {
+    c.beginPath();
+    if (s.c) { c.arc(s.c[0], s.c[1], s.r + extra / 2, 0, 6.2832); c.fill(); return; }
+    c.moveTo(s.pts[0][0], s.pts[0][1]);
+    for (var i = 1; i < s.pts.length; i++) c.lineTo(s.pts[i][0], s.pts[i][1]);
+    c.lineWidth = s.hw * 2 + extra; c.stroke();
+  }
+  function terrain(c, mini) {
+    var sh = MAP.shapes, i;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.strokeStyle = c.fillStyle = mini ? '#31474a' : C.edge;
+    for (i = 0; i < sh.length; i++) strokeShape(c, sh[i], mini ? 110 : 70);
+    var col = { path: C.path, camp: C.camp, lane: C.lane, base: C.lane, pit: C.pit };
+    if (mini) col = { path: '#4a6062', camp: '#4a6062', lane: '#667c76', base: '#667c76', pit: '#3d6a7c' };
+    var order = ['path', 'camp', 'pit', 'lane', 'base'];
+    for (var o = 0; o < order.length; o++) {
+      c.strokeStyle = c.fillStyle = col[order[o]];
+      for (i = 0; i < sh.length; i++) if (sh[i].kind === order[o]) strokeShape(c, sh[i], mini ? 60 : 0);
+    }
+    c.globalAlpha = 0.82;
+    c.strokeStyle = mini ? '#2f7e9c' : C.river;
+    for (i = 0; i < sh.length; i++) if (sh[i].kind === 'river') strokeShape(c, sh[i], mini ? 40 : -30);
+    if (!mini) {
+      c.globalAlpha = 0.35; c.strokeStyle = C.river2;
+      for (i = 0; i < sh.length; i++) if (sh[i].kind === 'river') strokeShape(c, sh[i], -300);
+      c.globalAlpha = 0.5; c.strokeStyle = C.road;
+      for (i = 0; i < sh.length; i++) if (sh[i].kind === 'lane') strokeShape(c, sh[i], -300);
+    }
+    c.globalAlpha = 1;
+    for (var T = 0; T < 2; T++) {
+      var b = MAP.BASE[T], g = c.createRadialGradient(b.x, b.y, 100, b.x, b.y, 950);
+      g.addColorStop(0, T ? 'rgba(255,107,94,0.20)' : 'rgba(79,224,210,0.20)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(b.x, b.y, 950, 0, 6.2832); c.fill();
+    }
+  }
+
+  function drawTrees(x0, y0, x1, y1) {
+    var list = [], bx, by, i;
+    for (by = ((y0 - 100) / TB) | 0; by <= ((y1 + 100) / TB) | 0; by++) for (bx = ((x0 - 100) / TB) | 0; bx <= ((x1 + 100) / TB) | 0; bx++) {
+      var t = trees[bx + ',' + by]; if (t) for (i = 0; i < t.length; i++) list.push(t[i]);
+    }
+    ctx.fillStyle = C.tree1; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { ctx.moveTo(list[i].x + list[i].r, list[i].y + 14); ctx.arc(list[i].x, list[i].y + 14, list[i].r, 0, 6.2832); }
+    ctx.fill();
+    ctx.fillStyle = C.tree2; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { var q = list[i].r * 0.62; ctx.moveTo(list[i].x + q - 8, list[i].y - 10); ctx.arc(list[i].x - 8, list[i].y - 10, q, 0, 6.2832); }
+    ctx.fill();
+  }
+
+  function teamCol(u, me) { return u.team === 2 ? C.neutral : u.team === me ? C.ally : C.enemy; }
+  function bar(x, y, w, h, frac, col, shield) {
+    ctx.fillStyle = 'rgba(4,9,11,0.85)'; ctx.fillRect(x - w / 2 - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = col; ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, frac)), h);
+    if (shield > 0) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(x - w / 2 + w * Math.min(1, frac), y, Math.min(w * shield, w * (1 - Math.min(1, frac)) + 6), h); }
+  }
+  function poly(x, y, r, n, rot) {
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) { var a = rot + i * 6.2832 / n; if (i) ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); else ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+    ctx.closePath();
+  }
+
+  function drawUnit(u, me, t) {
+    var col = teamCol(u, me), x = u.x, y = u.y, r = u.r;
+    if (u.type === 'hero') return drawHero(u, me, t);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
+    if (u.type === 'minion') {
+      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.strokeStyle = '#08110f'; ctx.lineWidth = 4;
+      if (u.mtype === 'melee') { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); }
+      else if (u.mtype === 'ranged') poly(x, y, r * 1.15, 4, Math.PI / 2);
+      else poly(x, y, r * 1.1, 4, Math.PI / 4);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#08110f'; ctx.beginPath(); ctx.arc(x + Math.cos(u.face) * r * 0.45, y + Math.sin(u.face) * r * 0.45, r * 0.28, 0, 6.2832); ctx.fill();
+      if (u.hp < u.maxHp) bar(x, y - r - 16, 40, 5, u.hp / u.maxHp, col, 0);
+    } else if (u.type === 'monster') {
+      var boss = !!u.boss;
+      ctx.fillStyle = u.flash > 0 ? '#ffffff' : (u.boss === 'hoard' ? '#d9a93a' : boss ? '#7d5fd6' : '#6b5a9a');
+      ctx.strokeStyle = '#0d0a18'; ctx.lineWidth = boss ? 7 : 4;
+      poly(x, y, r * 1.1, boss ? 8 : 6, t * (boss ? 0.2 : 0) + u.id); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = boss ? '#fff3c4' : '#e6dcff';
+      ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.1, r * 0.14, 0, 6.2832); ctx.arc(x + r * 0.3, y - r * 0.1, r * 0.14, 0, 6.2832); ctx.fill();
+      if (boss || u.hp < u.maxHp) bar(x, y - r - 22, boss ? 150 : 54, boss ? 10 : 6, u.hp / u.maxHp, boss ? C.gold : C.neutral, 0);
+      if (boss) label(u.name, x, y - r - 34, 22, C.gold);
+    } else if (u.type === 'tower') {
+      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 7;
+      poly(x, y, r, 6, Math.PI / 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.globalAlpha = u.invuln ? 0.45 : 1;
+      poly(x, y - 14, r * 0.5, 4, Math.PI / 2 + 0); ctx.fill();
+      ctx.globalAlpha = 1;
+      bar(x, y - r - 30, 120, 9, u.hp / u.maxHp, u.invuln ? '#6f7f80' : col, 0);
+    } else if (u.type === 'core') {
+      var pu = 1 + Math.sin(t * 2) * 0.05;
+      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 9;
+      poly(x, y, r, 8, Math.PI / 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.globalAlpha = u.invuln ? 0.5 : 1;
+      poly(x, y, r * 0.62 * pu, 4, t * 0.6); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.7; poly(x, y, r * 0.28 * pu, 4, -t * 0.9); ctx.fill();
+      ctx.globalAlpha = 1;
+      bar(x, y - r - 34, 190, 12, u.hp / u.maxHp, u.invuln ? '#6f7f80' : col, 0);
+      label('로드스톤', x, y - r - 48, 22, col);
+    }
+  }
+  function label(txt, x, y, size, col) {
+    ctx.font = '700 ' + size + 'px "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(4,9,11,0.9)'; ctx.strokeText(txt, x, y);
+    ctx.fillStyle = col; ctx.fillText(txt, x, y);
+  }
+  function drawHero(h, me, t) {
+    if (h.dead) return;
+    var mine = h.team === me, x = h.x, y = h.y, r = h.r, col = h.isPlayer ? C.me : teamCol(h, me);
+    ctx.globalAlpha = h.stealth ? 0.4 : 1;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.6, r * 1.1, r * 0.5, 0, 0, 6.2832); ctx.fill();
+    if (h.isPlayer) { ctx.strokeStyle = 'rgba(244,247,200,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r + 14 + Math.sin(t * 3) * 2, 0, 6.2832); ctx.stroke(); }
+    if (h.recallT > 0) {
+      ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, r + 26, -1.57, -1.57 + 6.2832 * (1 - h.recallT / 6)); ctx.stroke();
+    }
+    /* 무기: 바라보는 방향 */
+    var fa = h.face + (h.swing > 0 ? Math.sin(h.swing / 0.18 * Math.PI) * 0.9 : 0);
+    ctx.strokeStyle = '#dfe9e6'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + Math.cos(fa) * r * 0.7, y + Math.sin(fa) * r * 0.7);
+    ctx.lineTo(x + Math.cos(fa) * (r + (h.def.melee ? 34 : 20)), y + Math.sin(fa) * (r + (h.def.melee ? 34 : 20))); ctx.stroke();
+    ctx.fillStyle = '#0b1417'; ctx.strokeStyle = col; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = h.flash > 0 ? '#ffffff' : h.color; ctx.beginPath(); ctx.arc(x, y, r - 9, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = '#0b1417'; ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(h.name.charAt(0), x, y + 3);
+    if (h.shield > 0) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, r + 8, 0, 6.2832); ctx.stroke(); }
+    if (h.stunT > 0) { ctx.strokeStyle = '#ffe36a'; ctx.lineWidth = 5; ctx.setLineDash([14, 12]); ctx.lineDashOffset = -t * 60; ctx.beginPath(); ctx.arc(x, y - r - 4, 22, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
+    if (h.rootT > 0) { ctx.strokeStyle = '#9fd6ff'; ctx.lineWidth = 5; poly(x, y, r + 12, 6, t); ctx.stroke(); }
+    for (var b = 0; b < h.buffs.length; b++) if (h.buffs[b].titan) { ctx.strokeStyle = 'rgba(168,130,255,0.8)'; ctx.lineWidth = 4; poly(x, y, r + 20, 8, t * 1.5); ctx.stroke(); }
+    /* 체력·마나 막대 */
+    var by = y - r - 34, w = 104;
+    bar(x + 10, by, w, 11, h.hp / h.maxHp, h.isPlayer ? '#8ef08a' : mine ? C.ally : C.enemy, h.shield / h.maxHp);
+    ctx.fillStyle = 'rgba(4,9,11,0.55)';
+    for (var k = 250; k < h.maxHp; k += 250) ctx.fillRect(x + 10 - w / 2 + w * k / h.maxHp, by, 1.5, 11);
+    if (mine) { ctx.fillStyle = 'rgba(4,9,11,0.85)'; ctx.fillRect(x + 10 - w / 2 - 2, by + 13, w + 4, 6); ctx.fillStyle = '#5aa8ff'; ctx.fillRect(x + 10 - w / 2, by + 13, w * h.mp / h.maxMp, 4); }
+    ctx.fillStyle = '#0b1417'; ctx.strokeStyle = col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x - w / 2 - 4, by + 7, 15, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.font = '700 18px "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText(h.level, x - w / 2 - 4, by + 8);
+    label(h.name, x + 10, by - 8, 19, col);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFx(t) {
+    var i, f, k;
+    for (i = 0; i < G.fx.length; i++) {
+      f = G.fx[i]; k = f.t / f.dur;
+      var fxX = f.follow ? f.follow.x : f.x, fxY = f.follow ? f.follow.y : f.y;
+      ctx.globalAlpha = 1 - k;
+      if (f.type === 'ring') {
+        var rr = f.r * (0.55 + 0.45 * k);
+        if (f.fill) { ctx.fillStyle = f.color; ctx.globalAlpha = (1 - k) * 0.35; ctx.beginPath(); ctx.arc(fxX, fxY, f.r, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1 - k; }
+        ctx.strokeStyle = f.color; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(fxX, fxY, rr, 0, 6.2832); ctx.stroke();
+      } else if (f.type === 'burst') {
+        ctx.fillStyle = f.color; ctx.globalAlpha = (1 - k) * 0.6; ctx.beginPath(); ctx.arc(fxX, fxY, f.r * (0.3 + 0.7 * k), 0, 6.2832); ctx.fill();
+      } else if (f.type === 'spark') {
+        ctx.strokeStyle = f.color; ctx.lineWidth = 4; ctx.beginPath();
+        for (var a = 0; a < 5; a++) { var an = a * 1.257 + f.x; ctx.moveTo(fxX + Math.cos(an) * f.r * k * 0.5, fxY + Math.sin(an) * f.r * k * 0.5); ctx.lineTo(fxX + Math.cos(an) * f.r * (0.4 + k), fxY + Math.sin(an) * f.r * (0.4 + k)); }
+        ctx.stroke();
+      } else if (f.type === 'slash') {
+        ctx.strokeStyle = f.color; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(fxX, fxY, f.r, f.a - 1 + k, f.a + 1 + k); ctx.stroke();
+      } else if (f.type === 'trail') {
+        ctx.fillStyle = f.color; ctx.globalAlpha = (1 - k) * 0.35; ctx.beginPath(); ctx.arc(fxX, fxY, f.r * (1 - k * 0.5), 0, 6.2832); ctx.fill();
+      } else if (f.type === 'mark') {
+        ctx.strokeStyle = f.color; ctx.lineWidth = 5; poly(fxX, fxY, f.r * (1 - k * 0.6), 4, Math.PI / 4 + k * 2); ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawZones(me, t) {
+    for (var i = 0; i < G.zones.length; i++) {
+      var z = G.zones[i], col = z.team === me ? z.color : C.enemy;
+      if (z.sk.ai === 'heal' && !z.t0) continue;
+      ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.fillStyle = col;
+      if (z.delay > 0) {
+        var k = z.t0 > 0 ? 1 - z.delay / z.t0 : 1;
+        ctx.globalAlpha = 0.14; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.arc(z.x, z.y, z.r * k, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.stroke();
+      } else {
+        ctx.globalAlpha = 0.2 + Math.sin(t * 8) * 0.05; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.fill();
+        ctx.globalAlpha = 0.8; ctx.setLineDash([26, 18]); ctx.lineDashOffset = -t * 90; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawProj(me) {
+    for (var i = 0; i < G.proj.length; i++) {
+      var p = G.proj[i];
+      if (p.homing) {
+        if (p.team !== me && !p.target.vis[me] && !(p.src && p.src.vis[me])) continue;
+        ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.big ? 17 : 10, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(p.x, p.y, p.big ? 8 : 4, 0, 6.2832); ctx.fill();
+      } else {
+        var a = Math.atan2(p.vy, p.vx), col = p.team === me ? p.color : C.enemy, w = p.w * 0.5, len = Math.min(170, p.w * 1.8);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(a);
+        var g = ctx.createLinearGradient(-len, 0, 20, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, col);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-len, 0); ctx.lineTo(0, -w); ctx.lineTo(w * 1.2, 0); ctx.lineTo(0, w); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, w * 0.4, 0, 6.2832); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawAim(aim, p) {
+    var sk = p.def.skills[aim.slot], dx = aim.x - p.x, dy = aim.y - p.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+    ctx.strokeStyle = 'rgba(244,247,200,0.75)'; ctx.fillStyle = 'rgba(244,247,200,0.16)'; ctx.lineWidth = 3;
+    var reach = skillReach(sk);
+    if (sk.kind === 'shot' || sk.kind === 'dash' || sk.kind === 'blink') {
+      var len = sk.kind === 'shot' ? sk.range : Math.max(140, Math.min(d, sk.range)), w = (sk.width || (sk.hitRadius ? sk.hitRadius * 2 : 60)) / 2;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(uy, ux));
+      ctx.beginPath(); ctx.rect(0, -w, len, w * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      var lr = sk.landRadius || sk.aoe;
+      if (lr) { ctx.beginPath(); ctx.arc(p.x + ux * len, p.y + uy * len, lr, 0, 6.2832); ctx.fill(); ctx.stroke(); }
+    } else if (sk.kind === 'area') {
+      var dd = Math.min(d, sk.range);
+      ctx.setLineDash([18, 14]); ctx.beginPath(); ctx.arc(p.x, p.y, sk.range, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(p.x + ux * dd, p.y + uy * dd, sk.radius, 0, 6.2832); ctx.fill(); ctx.stroke();
+    } else if (reach) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, reach, 0, 6.2832); ctx.fill(); ctx.stroke();
+    }
+  }
+
+  /* 메인 장면. view = {me: 시야 팀, aim, player, fog} */
+  function draw(view, t) {
+    var me = view.me, i, u;
+    clampCam();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = C.forest; ctx.fillRect(0, 0, cw, ch);
+    ctx.setTransform(S, 0, 0, S, cw / 2 - cam.x * S, ch / 2 - cam.y * S);
+    var x0 = cam.x - cw / 2 / S, x1 = cam.x + cw / 2 / S, y0 = cam.y - ch / 2 / S, y1 = cam.y + ch / 2 / S;
+    terrain(ctx, false);
+    /* 우물 */
+    for (var T = 0; T < 2; T++) {
+      var f = MAP.FOUNT[T], col = T === me ? C.ally : C.enemy;
+      ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.lineWidth = 6; ctx.setLineDash([30, 22]); ctx.lineDashOffset = t * 30;
+      ctx.beginPath(); ctx.arc(f.x, f.y, 300, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = 0.12; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(f.x, f.y, 300, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    drawTrees(x0, y0, x1, y1);
+    drawZones(me, t);
+    /* 적 포탑 사거리 경고 */
+    var p = view.player;
+    if (p && !p.dead) for (i = 0; i < G.towers.length; i++) {
+      var tw = G.towers[i];
+      if (tw.team === me || tw.dead || dist(p, tw) > tw.range + 500) continue;
+      var hot = tw.target === p;
+      ctx.strokeStyle = hot ? 'rgba(255,107,94,0.95)' : 'rgba(255,107,94,0.35)'; ctx.lineWidth = hot ? 6 : 3;
+      ctx.beginPath(); ctx.arc(tw.x, tw.y, tw.range, 0, 6.2832); ctx.stroke();
+      if (hot) { ctx.fillStyle = 'rgba(255,107,94,0.08)'; ctx.fill(); }
+    }
+    var list = [];
+    for (i = 0; i < G.units.length; i++) {
+      u = G.units[i];
+      if (u.dead || !u.vis[me] && u.type !== 'tower' && u.type !== 'core') continue;
+      if (u.x < x0 - 250 || u.x > x1 + 250 || u.y < y0 - 250 || u.y > y1 + 250) continue;
+      list.push(u);
+    }
+    list.sort(function (a, b) { return a.y - b.y; });
+    for (i = 0; i < list.length; i++) drawUnit(list[i], me, t);
+    drawProj(me);
+    drawFx(t);
+    if (view.aim && p && !p.dead) drawAim(view.aim, p);
+    if (view.hover && !view.hover.dead) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(view.hover.x, view.hover.y, view.hover.r + 12, 0, 6.2832); ctx.stroke(); }
+    /* 전장의 안개 */
+    if (view.fog) {
+      var fs = fogCv.width / cw;
+      fogCtx.setTransform(1, 0, 0, 1, 0, 0); fogCtx.globalCompositeOperation = 'source-over';
+      fogCtx.clearRect(0, 0, fogCv.width, fogCv.height);
+      fogCtx.fillStyle = 'rgba(4,10,13,0.62)'; fogCtx.fillRect(0, 0, fogCv.width, fogCv.height);
+      fogCtx.globalCompositeOperation = 'destination-out';
+      for (i = 0; i < G.units.length; i++) {
+        u = G.units[i];
+        if (u.dead || u.team !== me) continue;
+        var sr = u.sight;
+        if (u.x < x0 - sr || u.x > x1 + sr || u.y < y0 - sr || u.y > y1 + sr) continue;
+        var sx = (cw / 2 + (u.x - cam.x) * S) * fs, sy = (ch / 2 + (u.y - cam.y) * S) * fs, rr = sr * S * fs;
+        var g = fogCtx.createRadialGradient(sx, sy, rr * 0.55, sx, sy, rr);
+        g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        fogCtx.fillStyle = g; fogCtx.beginPath(); fogCtx.arc(sx, sy, rr, 0, 6.2832); fogCtx.fill();
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(fogCv, 0, 0, cw, ch);
+      ctx.setTransform(S, 0, 0, S, cw / 2 - cam.x * S, ch / 2 - cam.y * S);
+    }
+    /* 떠오르는 숫자 */
+    for (i = 0; i < G.texts.length; i++) {
+      var x = G.texts[i];
+      ctx.globalAlpha = 1 - x.t / 0.9;
+      label(x.txt, x.x, x.y, 26, x.color);
+    }
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  function drawMini(me, player) {
+    var c = miniCtx, sx = mw / MAP.W, sy = mh / MAP.H, i, u;
+    c.drawImage(miniBase, 0, 0);
+    for (i = 0; i < G.camps.length; i++) {
+      var cp = G.camps[i]; if (cp.alive <= 0) continue;
+      c.fillStyle = cp.boss ? C.gold : '#9a8ad0';
+      var q = (cp.boss ? 4 : 2.2) * dpr; c.fillRect(cp.x * sx - q, cp.y * sy - q, q * 2, q * 2);
+    }
+    for (i = 0; i < G.units.length; i++) {
+      u = G.units[i];
+      if (u.dead || u.type === 'monster') continue;
+      var st = u.type === 'tower' || u.type === 'core';
+      if (!st && !u.vis[me]) continue;
+      c.fillStyle = teamCol(u, me);
+      if (u.type === 'minion') c.fillRect(u.x * sx - dpr, u.y * sy - dpr, 2 * dpr, 2 * dpr);
+      else if (st) { var w = (u.type === 'core' ? 5 : 3.2) * dpr; c.fillRect(u.x * sx - w, u.y * sy - w, w * 2, w * 2); c.strokeStyle = '#061013'; c.lineWidth = dpr; c.strokeRect(u.x * sx - w, u.y * sy - w, w * 2, w * 2); }
+    }
+    for (i = 0; i < G.heroes.length; i++) {
+      u = G.heroes[i];
+      if (u.dead || !u.vis[me]) continue;
+      c.fillStyle = u.color; c.strokeStyle = u.isPlayer ? '#ffffff' : teamCol(u, me); c.lineWidth = (u.isPlayer ? 2.4 : 1.8) * dpr;
+      c.beginPath(); c.arc(u.x * sx, u.y * sy, (u.isPlayer ? 5.5 : 4.5) * dpr, 0, 6.2832); c.fill(); c.stroke();
+    }
+    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = dpr;
+    var vw = cw / S, vh = ch / S;
+    c.strokeRect((cam.x - vw / 2) * sx, (cam.y - vh / 2) * sy, vw * sx, vh * sy);
+  }
+
+  return { init: init, resize: resize, draw: draw, drawMini: drawMini, cam: cam, s2w: s2w, setZoom: setZoom, getZoom: getZoom, C: C };
+})();

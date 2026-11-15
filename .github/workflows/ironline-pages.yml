@@ -1,6 +1,6 @@
 name: Prototypes site build and deploy
 
-# main 에 반영되면 사이트(site/) + Ironline 웹 빌드 + FF Script 를 한 묶음으로 GitHub Pages 에 올린다.
+# main 에 반영되면 사이트(site/) + Ironline 웹 빌드 + FF Script + 로드스타를 한 묶음으로 GitHub Pages 에 올린다.
 # 수동 실행(workflow_dispatch)도 가능. 처음 한 번 Settings → Pages → Source 를 "GitHub Actions" 로 바꿔야 한다.
 on:
   push:
@@ -8,6 +8,7 @@ on:
     paths:
       - "ironline/**"
       - "ffscript/**"
+      - "lodestar/**"
       - "site/**"
       - ".github/workflows/ironline-pages.yml"
   workflow_dispatch:
@@ -40,10 +41,12 @@ jobs:
           ls -la build/web
       - name: Assemble site
         run: |
-          mkdir -p _site/ironline _site/ffscript
+          mkdir -p _site/ironline _site/ffscript _site/lodestar/js
           cp -r site/. _site/
           cp -r ironline/build/web/. _site/ironline/
           cp ffscript/index.html _site/ffscript/index.html
+          cp lodestar/index.html lodestar/style.css _site/lodestar/
+          cp lodestar/js/*.js _site/lodestar/js/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
