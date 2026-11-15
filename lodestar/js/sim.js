@@ -9,8 +9,24 @@ function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function val(v, rk) { return Array.isArray(v) ? v[Math.max(0, Math.min(v.length, rk) - 1)] : v; }
 function ev(k, o) { if (G.events.length < 300) { o = o || {}; o.k = k; G.events.push(o); } }
 function fx(o) { if (G.fx.length < 400) { o.t = 0; G.fx.push(o); } }
-function ftext(u, txt, color) {
-  if (G.texts.length < 80) G.texts.push({ x: u.x + (rnd() - 0.5) * 40, y: u.y - u.r - 20, txt: txt, color: color, t: 0 });
+/* 연출 전용: 규칙에는 영향이 없으므로 rnd() 대신 Math.random() 을 쓴다 */
+function part(x, y, vx, vy, life, size, color, o) {
+  if (G.parts.length > 520) return;
+  var p = { x: x, y: y, vx: vx, vy: vy, life: life, t: 0, size: size, color: color, g: 0, drag: 0.93, glow: false, dust: false };
+  if (o) for (var k in o) p[k] = o[k];
+  G.parts.push(p);
+}
+function sparks(x, y, n, speed, color, size, life, o) {
+  for (var i = 0; i < n; i++) {
+    var a = Math.random() * 6.2832, sp = speed * (0.3 + Math.random() * 0.7);
+    part(x, y, Math.cos(a) * sp, Math.sin(a) * sp * 0.75, life * (0.6 + Math.random() * 0.6), size * (0.6 + Math.random() * 0.8), color, o);
+  }
+}
+function shake(m) { if (m > (G.shake || 0)) G.shake = m; }
+function flash(col, a) { G.flash = { col: col, a: a }; }
+function nearP(x, y, R) { return G.player && Math.hypot(G.player.x - x, G.player.y - y) < R; }
+function ftext(u, txt, color, size) {
+  if (G.texts.length < 80) G.texts.push({ x: u.x + (Math.random() - 0.5) * 50, y: u.y - u.r - 30, txt: txt, color: color, size: size || 26, t: 0 });
 }
 
 /* 성석 운반전: 점수 5점 또는 10분, 영웅은 처음부터 완성된 상태(레벨 7 능력치, 스킬 3·3·3·2랭크) */
@@ -84,7 +100,7 @@ function newGame(opt) {
   UID = 1; _seed = (opt.seed || (Date.now() & 0x7fffffff)) | 0;
   G = {
     t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], kills: [0, 0], score: [0, 0], timeLeft: MATCH_TIME, overtime: false,
-    over: null, visT: 0, stratT: 1, focus: [0, 0], pickers: [[], []], player: null, diff: opt.diff === undefined ? 1 : opt.diff,
+    parts: [], shake: 0, flash: null, over: null, visT: 0, stratT: 1, focus: [0, 0], pickers: [[], []], player: null, diff: opt.diff === undefined ? 1 : opt.diff,
     stone: { state: 'center', x: MAP.STONE.x, y: MAP.STONE.y, carrier: null, freeT: 0, waitT: 0, team: -1, thrower: null, lockT: 0, z: 0 },
     packs: MAP.packs.map(function (p, i) { return { i: i, x: p.x, y: p.y, ready: true, t: 0 }; })
   };
@@ -155,6 +171,11 @@ function damage(src, tgt, amt, kind) {
     }
   }
   tgt.hp -= a; tgt.lastDmgT = G.t; tgt.flash = 0.12;
+  if (dealt > 2) {
+    var big = Math.min(1, dealt / 200);
+    sparks(tgt.x, tgt.y - 44, 4 + ((big * 10) | 0), 230 + big * 300, (src && src.color) || '#ffffff', 6 + big * 8, 0.32 + big * 0.3, { glow: true });
+    if (G.player && (tgt === G.player || src === G.player)) shake(Math.min(15, 2 + dealt / 14) * (tgt === G.player ? 1 : 0.55));
+  }
   if (src) {
     tgt.lastAttacker = src;
     if (src.type === 'hero') {
@@ -162,7 +183,7 @@ function damage(src, tgt, amt, kind) {
       if (kind === 'basic' && src.ls > 0 && !src.dead) healUnit(src, dealt * src.ls);
     }
     if (G.player && (src === G.player || tgt === G.player) && dealt >= 4) {
-      ftext(tgt, String(Math.round(dealt)), tgt === G.player ? '#ff7b7b' : (kind === 'skill' ? '#ffd27a' : '#ffffff'));
+      ftext(tgt, String(Math.round(dealt)), tgt === G.player ? '#ff7b7b' : (kind === 'skill' ? '#ffd27a' : '#ffffff'), 22 + Math.min(34, dealt / 5));
     }
   }
   if (tgt.hp <= 0) { tgt.hp = 0; kill(src, tgt); }
@@ -187,7 +208,10 @@ function killHero(src, v) {
   if (killer) { killer.kills++; killer.ult = Math.min(100, killer.ult + 15); }
   ass.forEach(function (a) { if (a !== killer) { a.assists++; a.ult = Math.min(100, a.ult + 8); } });
   v.hitBy = {};
-  fx({ type: 'burst', x: v.x, y: v.y, r: 200, dur: 0.6, color: v.color });
+  fx({ type: 'burst', x: v.x, y: v.y, r: 260, dur: 0.7, color: v.color });
+  fx({ type: 'shock', x: v.x, y: v.y, r: 460, dur: 0.6, color: v.color, w: 16 });
+  sparks(v.x, v.y - 40, 38, 560, v.color, 12, 1.0, { g: 380, glow: true }); sparks(v.x, v.y - 40, 16, 420, '#ffffff', 8, 0.7, { g: 300, glow: true });
+  if (nearP(v.x, v.y, 1500)) shake(10);
   ev('kill', { killer: killer ? killer.id : 0, victim: v.id, by: src ? src.type : '' });
 }
 
@@ -197,6 +221,8 @@ function respawn(h) {
   h.face = h.team ? Math.PI : 0; h.lastDmgT = -99;
   if (h.ai) h.ai.heal = false;
   fx({ type: 'ring', x: h.x, y: h.y, r: 140, dur: 0.6, color: h.color });
+  fx({ type: 'pillar', x: h.x, y: h.y, w: 70, dur: 0.8, color: h.color });
+  sparks(h.x, h.y, 18, 300, h.color, 8, 0.8, { g: -140, glow: true });
   if (h.isPlayer) ev('respawn');
 }
 
@@ -239,9 +265,10 @@ function tryAttack(u, t) {
   if (u.ranged) {
     G.proj.push({ homing: true, x: u.x, y: u.y, target: t, speed: 1350, dmg: dmg, src: u, team: u.team,
       color: u.type === 'hero' ? u.color : (u.team === 0 ? '#7fe6dc' : u.team === 1 ? '#ff8c7a' : '#cfc3ff') });
+    sparks(u.x + Math.cos(u.face) * 50, u.y - 30, 4, 280, u.color, 6, 0.25, { glow: true });
   } else {
     damage(u, t, dmg, 'basic');
-    fx({ type: 'slash', x: t.x, y: t.y, r: 34, dur: 0.16, color: '#ffffff', a: u.face });
+    fx({ type: 'slash', x: t.x, y: t.y, r: 78, dur: 0.24, color: u.color || '#ffffff', a: u.face });
   }
   if (u.type === 'hero') ev('atk', { id: u.id });
 }
@@ -346,6 +373,22 @@ function castSkill(h, i, tx, ty) {
     if (sk.allyR) G.heroes.forEach(function (a) { if (a !== h && a.team === h.team && !a.dead && dist(a, h) < sk.allyR) addBuff(a, mkBuff(h, sk, rk)); });
   }
   if (sk.empower) h.empower = val(sk.empower, rk) + (sk.empSAd || 0) * h.ad;
+  var cc = h.color, np = nearP(h.x, h.y, 1600);
+  sparks(h.x, h.y - 40, 10, 360, cc, 8, 0.5, { glow: true });
+  fx({ type: 'shock', x: h.x, y: h.y, r: 150, dur: 0.35, color: cc, w: 8 });
+  if (sk.kind === 'shot') {
+    var mx = h.x + ux * 70, my = h.y - 30 + uy * 70;
+    fx({ type: 'shock', x: mx, y: my, r: 110, dur: 0.25, color: cc, w: 10 }); sparks(mx, my, 10, 620, '#ffffff', 6, 0.3, { glow: true });
+  } else if (sk.kind === 'nova') {
+    fx({ type: 'shock', x: h.x, y: h.y, r: sk.radius * 1.05, dur: 0.6, color: cc, w: 16 }); fx({ type: 'shock', x: h.x, y: h.y, r: sk.radius * 0.7, dur: 0.45, color: '#ffffff', w: 8 });
+    sparks(h.x, h.y, 26, sk.radius * 1.6, cc, 10, 0.7, { glow: true }); if (np) shake(9);
+  } else if (sk.kind === 'self') {
+    for (var q2 = 0; q2 < 16; q2++) { var an = q2 / 16 * 6.2832, rr = 60 + Math.random() * 40; part(h.x + Math.cos(an) * rr, h.y + 20 + Math.sin(an) * rr * 0.5, 0, -90 - Math.random() * 120, 0.8, 8, cc, { glow: true, drag: 0.97 }); }
+  } else if (sk.kind === 'dash') { sparks(h.x, h.y, 14, 520, '#ffffff', 7, 0.4, { glow: true }); }
+  if (i === 3) {
+    fx({ type: 'pillar', x: h.x, y: h.y, w: 110, dur: 1.0, color: cc }); fx({ type: 'shock', x: h.x, y: h.y, r: 620, dur: 0.8, color: cc, w: 20 });
+    sparks(h.x, h.y - 40, 40, 700, cc, 12, 0.9, { glow: true, g: 120 }); if (np) { shake(16); flash(cc, 0.3); }
+  }
   ev('cast', { id: h.id, slot: i });
   return true;
 }
@@ -355,13 +398,16 @@ function updDash(h, dt) {
   var nx = h.x + ds.ux * st, ny = h.y + ds.uy * st, blocked = false;
   if (MAP.isWalk(nx, ny)) { h.x = nx; h.y = ny; ds.left -= st; } else blocked = true;
   if (ds.sk.hitRadius) hitCircle(h, h.x, h.y, ds.sk.hitRadius, ds.sk, ds.rk, ds.dmg, ds.hit);
-  if (G.fx.length < 300) G.fx.push({ type: 'trail', x: h.x, y: h.y, r: h.r, dur: 0.25, color: h.color, t: 0 });
+  if (G.fx.length < 300) G.fx.push({ type: 'trail', x: h.x, y: h.y, r: h.r * 1.5, dur: 0.3, color: h.color, t: 0 });
+  part(h.x, h.y - 30, (Math.random() - 0.5) * 140, (Math.random() - 0.5) * 140, 0.4, 9, h.color, { glow: true });
   if (!h.dash) return; /* 맞힌 대상의 반격으로 끊길 일은 없지만 안전하게 */
   if (ds.left <= 0.5 || blocked) {
     h.dash = null;
     if (ds.sk.landRadius) {
       hitCircle(h, h.x, h.y, ds.sk.landRadius, ds.sk, ds.rk, ds.dmg, null);
       fx({ type: 'ring', x: h.x, y: h.y, r: ds.sk.landRadius, dur: 0.4, color: h.color, fill: true });
+      fx({ type: 'shock', x: h.x, y: h.y, r: ds.sk.landRadius * 1.15, dur: 0.5, color: h.color, w: 14 });
+      sparks(h.x, h.y, 24, 500, h.color, 10, 0.7, { g: 200, glow: true }); if (nearP(h.x, h.y, 1500)) shake(9);
     }
   }
 }
@@ -380,7 +426,7 @@ function pickAssist(h) {
   var c = h.atkHold, best = null, bs = 1e9;
   for (var i = 0; i < G.units.length; i++) {
     var u = G.units[i];
-    if (u.dead || u.team === h.team || u.invuln || !u.vis[h.team] || !inRange(h, u)) continue;
+    if (u.dead || u.team === h.team || u.invuln || !u.vis[h.team] || dist(h, u) > h.range + u.r + 50) continue;
     var sc = Math.hypot(u.x - c.x, u.y - c.y) - (u.type === 'hero' ? 260 : 0);
     if (sc < bs) { bs = sc; best = u; }
   }
@@ -392,6 +438,7 @@ function chase(h, t, dt) {
 }
 function updHero(h, dt) {
   if (h.dead) { h.respawnT -= dt; if (h.respawnT <= 0) respawn(h); return; }
+  if (Math.hypot(h.vx || 0, h.vy || 0) > 120 && Math.random() < dt * 8) part(h.x - Math.cos(h.face) * 14, h.y + h.r * 0.7, (Math.random() - 0.5) * 60, -20 - Math.random() * 30, 0.5, 9, 'rgba(210,200,180,0.55)', { dust: true, drag: 0.9 });
   for (var i = 0; i < 4; i++) if (h.cds[i] > 0) h.cds[i] -= dt;
   h.ult = Math.min(100, h.ult + ULT_PASSIVE * dt);
   var reg = h.hpr + (h.regenB || 0);
@@ -443,12 +490,14 @@ function updProj(dt) {
       if (t.dead) rm = true;
       else {
         var dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy), st = p.speed * dt;
-        if (d <= st + t.r * 0.6) { damage(p.src, t, p.dmg, 'basic'); fx({ type: 'spark', x: t.x, y: t.y, r: p.big ? 50 : 26, dur: 0.18, color: p.color }); rm = true; }
-        else { p.x += dx / d * st; p.y += dy / d * st; }
+        if (d <= st + t.r * 0.6) { damage(p.src, t, p.dmg, 'basic'); fx({ type: 'spark', x: t.x, y: t.y - 40, r: 56, dur: 0.24, color: p.color }); rm = true; }
+        else { p.x += dx / d * st; p.y += dy / d * st; if (Math.random() < 0.7) part(p.x, p.y, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, 0.28, 7, p.color, { glow: true }); }
       }
     } else {
       var step = Math.hypot(p.vx, p.vy) * dt;
       p.x += p.vx * dt; p.y += p.vy * dt; p.left -= step;
+      part(p.x, p.y, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, 0.4, Math.max(6, p.w * 0.14), p.color, { glow: true });
+      if (Math.random() < 0.6) part(p.x, p.y, (Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160, 0.3, 5, '#ffffff', { glow: true });
       for (var j = 0; j < G.units.length && !rm; j++) {
         var u = G.units[j];
         if (!hittable(u, p.team) || p.hit.has(u.id)) continue;
@@ -457,7 +506,7 @@ function updProj(dt) {
         if (Math.hypot(u.x - p.x, u.y - p.y) > p.w / 2 + u.r) continue;
         p.hit.add(u.id);
         if (p.sk.aoe) { burst(p); rm = true; }
-        else { applyHit(p.src, u, p.sk, p.rk, p.dmg); fx({ type: 'spark', x: u.x, y: u.y, r: 40, dur: 0.2, color: p.color }); if (!p.sk.pierce) rm = true; }
+        else { applyHit(p.src, u, p.sk, p.rk, p.dmg); fx({ type: 'spark', x: u.x, y: u.y - 40, r: 96, dur: 0.28, color: p.color }); if (!p.sk.pierce) rm = true; }
       }
       if (!rm && p.left <= 0) { if (p.sk.endBurst) burst(p); rm = true; }
     }
@@ -467,6 +516,17 @@ function updProj(dt) {
 function burst(p) {
   hitCircle(p.src, p.x, p.y, p.sk.aoe, p.sk, p.rk, p.dmg, null);
   fx({ type: 'ring', x: p.x, y: p.y, r: p.sk.aoe, dur: 0.35, color: p.color, fill: true });
+  fx({ type: 'shock', x: p.x, y: p.y, r: p.sk.aoe * 1.15, dur: 0.5, color: p.color, w: 14 });
+  fx({ type: 'pillar', x: p.x, y: p.y, w: p.sk.aoe * 0.5, dur: 0.5, color: p.color });
+  sparks(p.x, p.y, 26, 540, p.color, 10, 0.7, { g: 220, glow: true });
+  if (nearP(p.x, p.y, 1500)) shake(8);
+}
+function zoneBlast(z) {
+  fx({ type: 'ring', x: z.x, y: z.y, r: z.r, dur: 0.4, color: z.color, fill: true });
+  fx({ type: 'shock', x: z.x, y: z.y, r: z.r * 1.15, dur: 0.55, color: z.color, w: 14 });
+  fx({ type: 'pillar', x: z.x, y: z.y, w: z.r * 0.45, dur: 0.55, color: z.color });
+  sparks(z.x, z.y, 24, z.r * 1.6, z.color, 10, 0.8, { g: 200, glow: true });
+  if (nearP(z.x, z.y, 1500)) shake(7);
 }
 function zoneHit(z) {
   for (var i = 0; i < G.units.length; i++) {
@@ -484,11 +544,12 @@ function updZones(dt) {
     if (z.delay > 0) {
       z.delay -= dt;
       if (z.delay > 0) continue;
-      if (!z.dur) { zoneHit(z); fx({ type: 'ring', x: z.x, y: z.y, r: z.r, dur: 0.4, color: z.color, fill: true }); G.zones.splice(i, 1); continue; }
+      if (!z.dur) { zoneHit(z); zoneBlast(z); G.zones.splice(i, 1); continue; }
     } else if (!z.dur && z.t0 === 0 && !z.fired) {
-      zoneHit(z); fx({ type: 'ring', x: z.x, y: z.y, r: z.r, dur: 0.4, color: z.color, fill: true }); G.zones.splice(i, 1); continue;
+      zoneHit(z); zoneBlast(z); G.zones.splice(i, 1); continue;
     }
     z.tickT -= dt;
+    if (Math.random() < dt * 22) { var za = Math.random() * 6.2832, zr = Math.random() * z.r; part(z.x + Math.cos(za) * zr, z.y + Math.sin(za) * zr * 0.6, 0, -60 - Math.random() * 80, 0.9, 7, z.color, { glow: true, drag: 0.98 }); }
     if (z.tickT <= 0) { z.tickT += 0.5; zoneHit(z); }
     z.dur -= dt;
     if (z.dur <= 0) G.zones.splice(i, 1);
@@ -546,6 +607,7 @@ function finish(w) { if (G.over) return; G.over = { winner: w, t: G.t }; ev('ove
 function dropStone(h) {
   var s = G.stone; if (s.carrier !== h) return;
   h.carry = false; s.carrier = null; s.state = 'free'; s.x = h.x; s.y = h.y; s.freeT = STONE_FREE_T; s.thrower = null; s.team = -1;
+  sparks(h.x, h.y - 50, 18, 380, '#ffe9a8', 9, 0.7, { g: 260, glow: true });
   ev('drop', { id: h.id, team: h.team });
 }
 function throwStone(h, tx, ty) {
@@ -562,23 +624,34 @@ function takeStone(h) {
   s.state = 'carried'; s.carrier = h; s.team = h.team; h.carry = true; s.thrower = null;
   breakStealth(h); h.dash = null;
   fx({ type: 'ring', x: h.x, y: h.y, r: 150, dur: 0.5, color: '#ffe9a8' });
+  fx({ type: 'shock', x: h.x, y: h.y, r: 280, dur: 0.5, color: '#ffe9a8', w: 12 });
+  sparks(h.x, h.y - 60, 24, 460, '#ffe9a8', 9, 0.8, { g: -60, glow: true });
   ev('pickup', { id: h.id, team: h.team });
 }
 function scorePoint(h) {
   var s = G.stone, T = h.team;
   G.score[T]++; h.scores++; h.carry = false; s.carrier = null; s.state = 'wait'; s.waitT = STONE_WAIT_T; s.team = -1; s.x = MAP.STONE.x; s.y = MAP.STONE.y;
   G.heroes.forEach(function (a) { if (a.team === T) a.ult = Math.min(100, a.ult + 25); });
-  fx({ type: 'burst', x: MAP.ALTAR[T].x, y: MAP.ALTAR[T].y, r: 500, dur: 1.0, color: T === 0 ? '#4fe0d2' : '#ff6b5e' });
+  var A = MAP.ALTAR[T], tc = T === 0 ? '#4fe0d2' : '#ff6b5e';
+  fx({ type: 'burst', x: A.x, y: A.y, r: 620, dur: 1.1, color: tc }); fx({ type: 'shock', x: A.x, y: A.y, r: 760, dur: 1.0, color: tc, w: 22 });
+  fx({ type: 'pillar', x: A.x, y: A.y - 140, w: 120, dur: 1.4, color: tc });
+  for (var fw = 0; fw < 7; fw++) sparks(A.x + (Math.random() - 0.5) * 600, A.y - 160 - Math.random() * 300, 30, 620, fw % 2 ? tc : '#ffe9a8', 11, 1.2, { g: 260, glow: true });
+  if (nearP(A.x, A.y, 2200)) { shake(8); flash(tc, 0.22); }
   ev('score', { team: T, id: h.id });
   if (G.score[T] >= WIN_SCORE || G.overtime) finish(T);
 }
 function updStone(dt) {
   var s = G.stone, C = MAP.STONE;
   if (s.lockT > 0) s.lockT -= dt;
-  if (s.state === 'wait') { s.waitT -= dt; if (s.waitT <= 0) { s.state = 'center'; ev('spawn'); } return; }
+  if (s.state === 'wait') {
+    s.waitT -= dt;
+    if (s.waitT <= 0) { s.state = 'center'; fx({ type: 'pillar', x: C.x, y: C.y, w: 100, dur: 1.2, color: '#ffe9a8' }); fx({ type: 'shock', x: C.x, y: C.y, r: 420, dur: 0.8, color: '#ffe9a8', w: 16 }); sparks(C.x, C.y - 40, 36, 520, '#ffe9a8', 10, 1, { g: -80, glow: true }); ev('spawn'); }
+    return;
+  }
   if (s.state === 'flying') {
     s.fT += dt; var k = Math.min(1, s.fT / s.fDur);
     s.x = s.sx + (s.tx - s.sx) * k; s.y = s.sy + (s.ty - s.sy) * k; s.z = Math.sin(k * Math.PI) * 140;
+    part(s.x, s.y - 40 - s.z, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, 0.45, 8, '#ffe9a8', { glow: true });
     if (k >= 1) { s.state = 'free'; s.freeT = STONE_FREE_T; s.z = 0; }
     return;
   }
@@ -588,6 +661,7 @@ function updStone(dt) {
     if (Math.hypot(c.x - A.x, c.y - A.y) < ALTAR_R) scorePoint(c);
     return;
   }
+  if (Math.random() < dt * 14) part(s.x + (Math.random() - 0.5) * 60, s.y - 20, 0, -70 - Math.random() * 70, 1.0, 6, '#ffe9a8', { glow: true, drag: 0.98 });
   if (s.state === 'free') { s.freeT -= dt; if (s.freeT <= 0) { s.state = 'center'; s.x = C.x; s.y = C.y; ev('return'); } }
   var best = null, bd = 1e9;
   for (var i = 0; i < G.heroes.length; i++) {
@@ -604,11 +678,13 @@ function updPacks(dt) {
   for (var i = 0; i < G.packs.length; i++) {
     var p = G.packs[i];
     if (!p.ready) { p.t -= dt; if (p.t <= 0) p.ready = true; continue; }
+    if (Math.random() < dt * 2.5) part(p.x + (Math.random() - 0.5) * 40, p.y - 20, 0, -50 - Math.random() * 40, 1.0, 5, '#9dffb0', { glow: true, drag: 0.98 });
     for (var k = 0; k < G.heroes.length; k++) {
       var h = G.heroes[k];
       if (h.dead || Math.hypot(h.x - p.x, h.y - p.y) > 95 || (h.hp > h.maxHp * 0.97 && h.ult >= 100)) continue;
       healUnit(h, h.maxHp * 0.45); h.ult = Math.min(100, h.ult + 20);
       p.ready = false; p.t = PACK_T;
+      sparks(p.x, p.y - 30, 24, 420, '#9dffb0', 9, 0.9, { g: -100, glow: true }); fx({ type: 'shock', x: p.x, y: p.y, r: 220, dur: 0.5, color: '#9dffb0', w: 10 });
       fx({ type: 'ring', x: p.x, y: p.y, r: 130, dur: 0.5, color: '#9dffb0', fill: true });
       ev('pack', { id: h.id, i: i });
       break;
@@ -676,4 +752,12 @@ function ageFx(dt) {
   var i;
   for (i = G.fx.length - 1; i >= 0; i--) { var f = G.fx[i]; f.t += dt; if (f.t >= f.dur) G.fx.splice(i, 1); }
   for (i = G.texts.length - 1; i >= 0; i--) { var x = G.texts[i]; x.t += dt; x.y -= 60 * dt; if (x.t >= 0.9) G.texts.splice(i, 1); }
+  for (i = G.parts.length - 1; i >= 0; i--) {
+    var q = G.parts[i]; q.t += dt;
+    if (q.t >= q.life) { G.parts.splice(i, 1); continue; }
+    var dr = Math.pow(q.drag, dt * 60);
+    q.vx *= dr; q.vy = q.vy * dr + q.g * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+  }
+  if (G.shake) { G.shake *= Math.exp(-9 * dt); if (G.shake < 0.3) G.shake = 0; }
+  if (G.flash) { G.flash.a -= dt * 1.8; if (G.flash.a <= 0) G.flash = null; }
 }
