@@ -187,11 +187,7 @@ var ROLE_PREF = {
   sup: ['sera', 'brom', 'morgen', 'garr']
 };
 
-var MINION = {
-  melee:  { hp: 470, ad: 13, range: 110, as: 0.8, ms: 320, r: 24, gold: 21, xp: 58 },
-  ranged: { hp: 280, ad: 23, range: 500, as: 0.7, ms: 320, r: 21, gold: 15, xp: 30, ranged: true },
-  siege:  { hp: 900, ad: 40, range: 620, as: 0.55, ms: 300, r: 32, gold: 45, xp: 85, ranged: true, siege: true }
-};
+var NODE_NAMES = ['북서 거점', '북쪽 거점', '북동 거점', '남서 거점', '남쪽 거점', '남동 거점', '심장'];
 
 var MONSTER = {
   small: { hp: 300, ad: 11, as: 0.8, range: 120, r: 26, gold: 20, xp: 38, name: '숲늑대' },

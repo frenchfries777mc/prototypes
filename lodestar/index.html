@@ -16,9 +16,9 @@
 
   <div id="hud" hidden>
     <div id="top">
-      <span class="side ally"><b id="ka">0</b><small id="towA">포탑 9</small></span>
-      <span id="clock">00:00</span>
-      <span class="side enemy"><small id="towB">포탑 9</small><b id="kb">0</b></span>
+      <div class="chg ally"><i id="chA"></i><b><span id="ka">0</span><small id="kda"></small></b></div>
+      <div id="midtop"><span id="clock">00:00</span><span id="pips" aria-label="점령 지점"></span></div>
+      <div class="chg enemy"><i id="chB"></i><b><span id="kb">0</span><small id="kdb"></small></b></div>
     </div>
     <div id="tools">
       <button type="button" id="scoreBtn" title="전적 (Tab)">전적</button>
@@ -42,22 +42,14 @@
       </div>
       <div id="inv">
         <div id="items"></div>
-        <button type="button" id="shopBtn"><b id="gold">500</b><span>상점 <kbd>P</kbd></span></button>
       </div>
     </div>
 
+    <div id="relic" hidden><b>유물을 고르세요</b><div id="relicOpts"></div></div>
     <div id="stick" hidden><i></i></div>
     <button type="button" id="atkBtn" aria-label="공격">공격</button>
     <div id="tip" hidden></div>
-    <div id="dead" hidden><strong>쓰러졌습니다</strong><span id="deadT"></span><small>기다리는 동안 상점(P)에서 장비를 살 수 있습니다.</small></div>
-
-    <section id="shop" class="sheet" hidden>
-      <header><h2>상점</h2><span id="shopGold"></span><button type="button" class="x" id="shopX">닫기</button></header>
-      <p id="shopNote"></p>
-      <div id="shopGrid"></div>
-      <h3>가방 <small>누르면 구매가의 60%에 팝니다</small></h3>
-      <div id="shopInv"></div>
-    </section>
+    <div id="dead" hidden><strong>쓰러졌습니다</strong><span id="deadT"></span><small>곧 우물에서 다시 일어납니다. 아군이 점령한 지점은 계속 충전됩니다.</small></div>
 
     <section id="score" class="sheet" hidden>
       <header><h2>전적</h2><button type="button" class="x" id="scoreX">닫기</button></header>
@@ -72,9 +64,9 @@
 
   <div id="menu">
     <div class="panel">
-      <p class="eyebrow">5 대 5 공성전 · 봇 9명과 함께</p>
+      <p class="eyebrow">5 대 5 점령전 · 봇 9명과 함께</p>
       <h1>로드스타</h1>
-      <p class="lede">세 갈래 공격로를 밀고 올라가 적 진영 깊숙한 곳의 <b>로드스톤</b>을 부수면 이깁니다.</p>
+      <p class="lede">지도 곳곳의 <b>점령 지점 7곳</b>을 차지하면 팀 충전량이 차오릅니다. 적보다 먼저 <b>1000</b>을 채우면 이깁니다.</p>
       <div id="heroGrid" role="listbox" aria-label="영웅 선택"></div>
       <div id="heroInfo"></div>
       <div class="row">

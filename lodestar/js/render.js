@@ -134,38 +134,13 @@ var R = (function () {
   function drawUnit(u, me, t) {
     var col = teamCol(u, me), x = u.x, y = u.y, r = u.r;
     if (u.type === 'hero') return drawHero(u, me, t);
-    if (u.type === 'minion') {
-      var ms = u.mtype === 'siege' ? 1.25 : u.mtype === 'ranged' ? 0.98 : 1.02, fy = y + r * 0.62;
-      foot(u, r, col, 0.8);
-      Spr.minion(ctx, u.mtype, x, fy, ms, u.dx === undefined ? (u.team ? -1 : 1) : u.dx, col, pose(u, t));
-      if (u.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.ellipse(x, fy - 34 * ms, 15 * ms, 26 * ms, 0, 0, 6.2832); ctx.fill(); }
-      if (u.hp < u.maxHp) bar(x, fy - 100 * ms, 44, 6, u.hp / u.maxHp, col, 0);
-    } else if (u.type === 'monster') {
+    if (u.type === 'monster') {
       var boss = !!u.boss, big = u.mtype === 'big', ms2 = boss ? r / 62 : big ? 1.1 : u.mtype === 'wisp' ? 1.3 : 1.3, fy2 = y + r * 0.62, top = boss ? 190 : big ? 108 : u.mtype === 'wisp' ? 70 : 52;
       foot(u, r, null);
       Spr.monster(ctx, u.mtype, x, fy2, ms2, u.dx === undefined ? 1 : u.dx, pose(u, t));
       if (u.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(x, fy2 - top * ms2 * 0.5, r * 0.8, top * ms2 * 0.45, 0, 0, 6.2832); ctx.fill(); }
       if (boss || u.hp < u.maxHp) bar(x, fy2 - top * ms2 - 14, boss ? 170 : 58, boss ? 11 : 6, u.hp / u.maxHp, boss ? C.gold : C.neutral, 0);
       if (boss) label(u.name, x, fy2 - top * ms2 - 28, 22, C.gold);
-    } else if (u.type === 'tower') {
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 7;
-      poly(x, y, r, 6, Math.PI / 6); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.globalAlpha = u.invuln ? 0.45 : 1;
-      poly(x, y - 14, r * 0.5, 4, Math.PI / 2 + 0); ctx.fill();
-      ctx.globalAlpha = 1;
-      bar(x, y - r - 30, 120, 9, u.hp / u.maxHp, u.invuln ? '#6f7f80' : col, 0);
-    } else if (u.type === 'core') {
-      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
-      var pu = 1 + Math.sin(t * 2) * 0.05;
-      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 9;
-      poly(x, y, r, 8, Math.PI / 8); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.globalAlpha = u.invuln ? 0.5 : 1;
-      poly(x, y, r * 0.62 * pu, 4, t * 0.6); ctx.fill();
-      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.7; poly(x, y, r * 0.28 * pu, 4, -t * 0.9); ctx.fill();
-      ctx.globalAlpha = 1;
-      bar(x, y - r - 34, 190, 12, u.hp / u.maxHp, u.invuln ? '#6f7f80' : col, 0);
-      label('로드스톤', x, y - r - 48, 22, col);
     }
   }
   function label(txt, x, y, size, col) {
@@ -200,6 +175,33 @@ var R = (function () {
     ctx.fillText(h.level, x - w / 2 - 4, by + 8);
     label(h.name, x + 10, by - 8, 19, col);
     ctx.globalAlpha = 1;
+  }
+
+  /* 점령 지점: 바닥 링 + 점령 진행 호 + 가운데 수정. 소유한 팀 색으로 물든다 */
+  function drawNodes(me, t, x0, y0, x1, y1) {
+    for (var i = 0; i < G.nodes.length; i++) {
+      var n = G.nodes[i];
+      if (n.x + n.r < x0 || n.x - n.r > x1 || n.y + n.r < y0 || n.y - n.r > y1) continue;
+      var col = n.owner < 0 ? '#cfd8dc' : n.owner === me ? C.ally : C.enemy, x = n.x, y = n.y, r = n.r;
+      var prog = n.owner < 0 && n.c === 0 ? 0 : Math.abs(n.c) / 100, pc = n.c === 0 ? '#cfd8dc' : (n.c > 0) === (me === 0) ? C.ally : C.enemy;
+      ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.62);
+      ctx.fillStyle = col; ctx.globalAlpha = n.owner < 0 ? 0.08 : 0.16; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = 0.55; ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.setLineDash([36, 22]); ctx.lineDashOffset = -t * 22; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
+      if (prog > 0 && prog < 1 || n.contested) {
+        ctx.globalAlpha = 0.95; ctx.strokeStyle = n.contested ? '#ffd76a' : pc; ctx.lineWidth = 16; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.82, -1.5708, -1.5708 + 6.2832 * (n.contested ? Math.abs(n.c) / 100 : prog)); ctx.stroke(); ctx.lineCap = 'butt';
+      }
+      ctx.restore();
+      /* 수정 */
+      var h = n.heart ? 120 : 84, bob = Math.sin(t * 2 + i) * 6, up = y - 22 + bob;
+      ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + 8, h * 0.45, h * 0.16, 0, 0, 6.2832); ctx.fill();
+      var g = ctx.createRadialGradient(x, up - h * 0.5, 4, x, up - h * 0.5, h * 1.1); g.addColorStop(0, n.owner < 0 ? 'rgba(207,216,220,.55)' : (n.owner === me ? 'rgba(79,224,210,.6)' : 'rgba(255,107,94,.6)')); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, up - h * 0.5, h * 1.1, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(x, up - h); ctx.lineTo(x + h * 0.34, up - h * 0.46); ctx.lineTo(x + h * 0.2, up); ctx.lineTo(x - h * 0.2, up); ctx.lineTo(x - h * 0.34, up - h * 0.46); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.moveTo(x, up - h * 0.9); ctx.lineTo(x + h * 0.18, up - h * 0.48); ctx.lineTo(x, up - h * 0.12); ctx.lineTo(x - h * 0.18, up - h * 0.48); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+      label(n.name, x, y + r * 0.62 + 34, n.heart ? 26 : 20, col);
+    }
   }
 
   function drawFx(t) {
@@ -302,21 +304,13 @@ var R = (function () {
       ctx.globalAlpha = 0.12; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(f.x, f.y, 300, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
     }
     drawTrees(x0, y0, x1, y1);
+    drawNodes(me, t, x0, y0, x1, y1);
     drawZones(me, t);
-    /* 적 포탑 사거리 경고 */
     var p = view.player;
-    if (p && !p.dead) for (i = 0; i < G.towers.length; i++) {
-      var tw = G.towers[i];
-      if (tw.team === me || tw.dead || dist(p, tw) > tw.range + 500) continue;
-      var hot = tw.target === p;
-      ctx.strokeStyle = hot ? 'rgba(255,107,94,0.95)' : 'rgba(255,107,94,0.35)'; ctx.lineWidth = hot ? 6 : 3;
-      ctx.beginPath(); ctx.arc(tw.x, tw.y, tw.range, 0, 6.2832); ctx.stroke();
-      if (hot) { ctx.fillStyle = 'rgba(255,107,94,0.08)'; ctx.fill(); }
-    }
     var list = [];
     for (i = 0; i < G.units.length; i++) {
       u = G.units[i];
-      if (u.dead || !u.vis[me] && u.type !== 'tower' && u.type !== 'core') continue;
+      if (u.dead || !u.vis[me]) continue;
       if (u.x < x0 - 250 || u.x > x1 + 250 || u.y < y0 - 250 || u.y > y1 + 250) continue;
       list.push(u);
     }
@@ -365,14 +359,12 @@ var R = (function () {
       c.fillStyle = cp.boss ? C.gold : '#9a8ad0';
       var q = (cp.boss ? 4 : 2.2) * dpr; c.fillRect(cp.x * sx - q, cp.y * sy - q, q * 2, q * 2);
     }
-    for (i = 0; i < G.units.length; i++) {
-      u = G.units[i];
-      if (u.dead || u.type === 'monster') continue;
-      var st = u.type === 'tower' || u.type === 'core';
-      if (!st && !u.vis[me]) continue;
-      c.fillStyle = teamCol(u, me);
-      if (u.type === 'minion') c.fillRect(u.x * sx - dpr, u.y * sy - dpr, 2 * dpr, 2 * dpr);
-      else if (st) { var w = (u.type === 'core' ? 5 : 3.2) * dpr; c.fillRect(u.x * sx - w, u.y * sy - w, w * 2, w * 2); c.strokeStyle = '#061013'; c.lineWidth = dpr; c.strokeRect(u.x * sx - w, u.y * sy - w, w * 2, w * 2); }
+    for (i = 0; i < G.nodes.length; i++) {
+      var n = G.nodes[i], col = n.owner < 0 ? '#cfd8dc' : n.owner === me ? C.ally : C.enemy, rr = (n.heart ? 8 : 6) * dpr;
+      c.fillStyle = 'rgba(4,10,13,.7)'; c.beginPath(); c.arc(n.x * sx, n.y * sy, rr + dpr, 0, 6.2832); c.fill();
+      c.strokeStyle = col; c.lineWidth = 2 * dpr; c.beginPath(); c.arc(n.x * sx, n.y * sy, rr, 0, 6.2832); c.stroke();
+      var pr = Math.abs(n.c) / 100;
+      if (n.owner >= 0 || pr > 0) { c.fillStyle = (n.c > 0) === (me === 0) ? C.ally : C.enemy; c.globalAlpha = n.owner >= 0 ? 0.9 : 0.6; c.beginPath(); c.moveTo(n.x * sx, n.y * sy); c.arc(n.x * sx, n.y * sy, rr - dpr, -1.5708, -1.5708 + 6.2832 * pr); c.closePath(); c.fill(); c.globalAlpha = 1; }
     }
     for (i = 0; i < G.heroes.length; i++) {
       u = G.heroes[i];
