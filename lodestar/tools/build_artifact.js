@@ -5,7 +5,7 @@ const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = html.split('<!--APP-->')[1].split('<!--/APP-->')[0].trim();
 const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
-const js = ['data', 'map', 'sim', 'ai', 'render', 'ui'].map(f => fs.readFileSync(path.join(root, 'js', f + '.js'), 'utf8')).join('\n');
+const js = ['data', 'map', 'sim', 'ai', 'sprites', 'render', 'ui'].map(f => fs.readFileSync(path.join(root, 'js', f + '.js'), 'utf8')).join('\n');
 const head = '<title>로드스타</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n' +
   '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">\n';
 let out = head + '<style>\n' + css + '</style>\n' + app + '\n<script>\n' + js.replace(/<\/script/g, '<\\/script') + '\n</script>\n';
