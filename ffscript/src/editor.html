@@ -438,10 +438,11 @@ button,select{white-space:nowrap}
     if (!r.ok) { toast(r.error || '바꾸지 못했어요'); return; }
     jsLock = false; conv.style.display = 'none';
     code.focus(); code.select();
-    const big = r.code.length > BIG;
+    const big = r.code.length > BIG, mostly = r.share > 0.7 && r.code.length > 2000, warn = '대부분 변환할 수 없었어요 (JS가 ' + Math.round(r.share * 100) + '%). 이런 코드는 그대로 HTML 파일로 쓰는 편이 나아요';
     if (r.code.length > 30000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
-    sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast('변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요'); return; } run(false);
-    toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
+    sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast(mostly ? warn : '변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요', mostly ? 9000 : 0); return; } run(false);
+    if (mostly) toast(warn, 9000);
+    else toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
   });
 
   $('export').addEventListener('click', () => {
@@ -461,7 +462,7 @@ button,select{white-space:nowrap}
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
-  const toast = msg => { status.textContent = msg; status.className = 'ok'; setTimeout(() => { if (status.textContent === msg) status.textContent = errLine ? '고쳐야 할 곳이 있어요' : '실행 중'; }, 2200); };
+  const toast = (msg, ms) => { status.textContent = msg; status.className = 'ok'; setTimeout(() => { if (status.textContent === msg) status.textContent = errLine ? '고쳐야 할 곳이 있어요' : '실행 중'; }, ms || 2200); };
   $('share').addEventListener('click', async () => {
     const b64 = btoa(unescape(encodeURIComponent(code.value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const url = location.href.split('#')[0] + '#c=' + b64;
