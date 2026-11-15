@@ -60,6 +60,8 @@ button,select{white-space:nowrap}
   <h1>FF <b>Script</b></h1>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
+  <button id="save" class="ic" title="내 게임으로 저장">💾</button>
+  <button id="del" class="ic" title="저장한 게임 지우기" hidden>🗑</button>
   <button id="tutBtn">🎓 튜토리얼</button>
   <span class="spacer"></span>
   <span id="status"></span>
@@ -91,13 +93,23 @@ button,select{white-space:nowrap}
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
   };
-  names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+  const exGroup = document.createElement('optgroup'); exGroup.label = '예제'; sel.appendChild(exGroup);
+  names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; exGroup.appendChild(o); });
+  const myGroup = document.createElement('optgroup'); myGroup.label = '내 게임'; sel.appendChild(myGroup);
   const custom = document.createElement('option'); custom.value = ''; custom.textContent = '내 코드'; custom.hidden = true; sel.appendChild(custom);
+  const myGames = () => { try { const o = JSON.parse(store.get('ff-games') || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } };
+  function drawMy(pick) {
+    const g = myGames(); myGroup.innerHTML = '';
+    Object.keys(g).sort().forEach(n => { const o = document.createElement('option'); o.value = 'my:' + n; o.textContent = n; myGroup.appendChild(o); });
+    myGroup.hidden = !myGroup.children.length;
+    if (pick != null) sel.value = pick;
+    $('del').hidden = !sel.value.startsWith('my:');
+  }
 
   const L = FFScript.lists, hl = $('hl'), ac = $('ac'), help = $('help');
   const SETS = {
     k: new Set(L.statements), c: new Set(L.cmds), l: new Set(L.looks),
-    w: new Set([...L.backs, ...L.colors, ...L.controls, ...L.sounds, ...L.dirs, ...L.musics, ...L.pos, ...L.sides, ...L.words, 'up', 'follow', 'space', 'enter', 'click', 'sec'])
+    w: new Set([...L.backs, ...L.colors, ...L.controls, ...L.sounds, ...L.dirs, ...L.musics, ...L.pos, ...L.sides, ...L.words, ...L.waves, ...L.weathers, 'up', 'follow', 'space', 'enter', 'click', 'sec', 'scene'])
   };
   const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const TOKRE = /(\/\/.*|#(?:\s.*)?$)|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?)|(\d+\.?\d*)|([\p{L}_][\p{L}\p{N}_]*)|([^\s\p{L}\p{N}_]+)|(\s+)/gu;
@@ -126,13 +138,14 @@ button,select{white-space:nowrap}
     }
     return out;
   }
-  const dyn = { looks: new Set(), funcs: new Set() };
-  const RAWCOL = { '#': '#c9a27a', '=': '#8df08f', C: '#ffd93d', G: '#5ee7ff', S: '#ffe680', H: '#ff7a8a', '^': '#c9cfe0', F: '#ff4d5e', P: '#6fb3ff', E: '#7ee08a', B: '#9aa0b4' };
+  const dyn = { looks: new Set(), funcs: new Set(), scenes: [] };
+  const RAWCOL = { '#': '#c9a27a', '=': '#8df08f', C: '#ffd93d', G: '#5ee7ff', S: '#ffe680', H: '#ff7a8a', '^': '#c9cfe0', F: '#ff4d5e', P: '#6fb3ff', E: '#7ee08a', B: '#9aa0b4', K: '#4ade80', L: '#e0a96d' };
   const ARTCOL = { '#': '#e8eaf6', k: '#6b6f8a', w: '#ffffff', r: '#ff4d5e', o: '#ff9a3c', y: '#ffd93d', g: '#4ade80', b: '#4d8dff', p: '#a66bff', c: '#5ee7ff', n: '#a86b45', m: '#ff7ac6', d: '#9aa0b4' };
   const hlRaw = (line, art) => [...line].map(ch => { const c = (art ? ARTCOL : RAWCOL)[ch]; return c ? `<span style="color:${c}">${esc(ch)}</span>` : esc(ch); }).join('');
   function scanDyn() {
     dyn.looks = new Set([...code.value.matchAll(/^art\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]));
     dyn.funcs = new Set([...code.value.matchAll(/^to\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]));
+    dyn.scenes = [...code.value.matchAll(/^scene\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
   }
   function highlight() {
     scanDyn();
@@ -141,7 +154,7 @@ button,select{white-space:nowrap}
       const ind = line.match(/^ */)[0].length;
       if (raw) { if (!line.trim()) return ''; if (ind > raw.ind) return hlRaw(line, raw.art); raw = null; }
       const t = line.trim().replace(/\s*:$/, '');
-      if (t === 'map') raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
+      if (/^map(\s+\S+)?$/.test(t)) raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
       return hlLine(line);
     });
     hl.innerHTML = out.join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
@@ -163,6 +176,18 @@ button,select{white-space:nowrap}
     if (/(^|\s)from\s+$/.test(before)) return L.sides;
     if (/(^|\s)at\s+(\S+\s+)?$/.test(before)) return [...L.pos, ...varNames(), ...L.looks];
     if (/^move\s+$/.test(t)) return L.dirs;
+    if (/^go\s+$/.test(t)) return ['to'];
+    if (/^go\s+to\s+$/.test(t)) return dyn.scenes;
+    if (/^camera\s+$/.test(t)) return ['follow', 'off'];
+    if (/^camera\s+follow\s+$/.test(t) || /^(chase|flee)\s+$/.test(t)) return [...varNames(), ...allLooks(), 'mouse'];
+    if (/^weather\s+$/.test(t)) return L.weathers;
+    if (/^map\s+$/.test(t)) return ['topdown'];
+    if (/^patrol\s+$/.test(t)) return ['up'];
+    if (/^(save|load|forget)\s+$/.test(t)) return ['score', 'lives', 'level', ...varNames()];
+    if (/^(tone|play)\s+.*\s$/.test(t)) return L.waves;
+    if (/^(if|when)\s+(talk|countdown)\s+$/.test(t)) return ['ends'];
+    if (/^shoot\s+$/.test(t)) return [...L.dirs, 'mouse', ...varNames(), ...allLooks()];
+    if (/^countdown\s+$/.test(t)) return ['off'];
     if (/^control\s+$/.test(t)) return L.controls;
     if (/^color\s+$/.test(t)) return L.colors;
     if (/^look\s+$/.test(t)) return allLooks();
@@ -170,7 +195,7 @@ button,select{white-space:nowrap}
     if (/^background\s+$/.test(t)) return [...L.backs, ...L.colors];
     if (/^music\s+$/.test(t)) return L.musics;
     if (/^level\s+$/.test(t)) return ['up'];
-    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', ...allLooks(), ...varNames(), ...L.builtin];
+    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', 'talk', 'answered', 'countdown', ...allLooks(), ...varNames(), ...L.builtin];
     if (/^(if|when)\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
     if (/^(if|when)\s+(?!key\b)[\p{L}_][\p{L}\p{N}_]*\s+$/u.test(t)) return ['hits', 'touches', 'leaves'];
     if (/\s(hits|touches)\s+$/.test(t)) return [...L.looks, ...varNames()];
@@ -215,7 +240,10 @@ button,select{white-space:nowrap}
     ['만들기', [['player = make ship at center bottom', '이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', 'top bottom left right'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자 / 이름']]],
     ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag block', '플랫포머용'], ['gem bomb ghost fish cloud tree', '']]],
     ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', 'up down left right'], ['  toward player 150 follow', '따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', ''], ['  bounce 0.8', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', ''], ['  jump 700', ''], ['  solid', ''], ['  patrol 100 80', '좌우 왕복'], ['  wander 80', '제멋대로 돌아다님'], ['  wrap', '반대쪽으로 나옴'], ['  stay', '화면 안에 가둠'], ['  life 5 sec', '시간이 지나면 사라짐'], ['  trail', '꼬리 효과'], ['  glow', '빛나기'], ['  fade 0.5', '투명도'], ['  hide', 'show 도 있어요'], ['  flip', '좌우 뒤집기'], ['  health 5', '체력 (막대 자동)'], ['  hurt 1', 'heal 도 있어요'], ['  stop', '']]],
-    ['지도 · 그림 (맨 왼쪽 줄)', [['map\n  ..........\n  .P..C..F..\n  ##########', '# 땅 = 얇은 발판 C 코인 G 보석 S 별 H 하트 ^ 가시 B 폭탄 F 깃발 E 슬라임 P 플레이어'], ['art cat orange\n  #.#\n  ###\n  #k#', '# 기본색 k w r o y g b p c n m d 색깔']]],
+    ['지도 · 그림 (맨 왼쪽 줄)', [['map\n  ..........\n  .P..C..F..\n  ##########', '# 땅 = 얇은 발판 C 코인 G 보석 S 별 H 하트 ^ 가시 B 폭탄 F 깃발 E 슬라임 K 체크포인트 L 사다리 P 플레이어'], ['art cat orange\n  #.#\n  ###\n  #k#', '# 기본색 k w r o y g b p c n m d 색깔'], ['art bird yellow\n  #.#\n  .#.\n  ---\n  ...\n  ###', '--- 줄로 나누면 움직이는 그림']]],
+    ['장면 · 저장 · 대사', [['scene menu\n  label "시작!" at center\n  if key space\n    go to play', '장면 만들기 (첫 장면부터 시작)'], ['go to play', '장면 바꾸기'], ['if scene is "play"', '지금 장면'], ['save coins', '브라우저에 저장'], ['load coins', '저장한 값 불러오기'], ['forget coins', '저장 지우기'], ['talk "할아버지" "어서 오너라"', '대사창 (스페이스·클릭으로 넘김)'], ['if talk ends', '대사가 다 끝났을 때'], ['ask "무엇을 살까?" "칼" "방패"', '선택지 창'], ['if answered', '골랐을 때 (answer 에 담겨요)'], ['countdown 60', '제한 시간 (끝나면 게임 오버)'], ['if countdown ends', '시간이 다 됐을 때'], ['give "🔑"', '가방에 넣기 (take 로 빼기)'], ['if has("🔑") > 0', '가방에 있는지']]],
+    ['카메라 · 큰 지도 · AI', [['camera follow player', '화면이 따라감 (camera off)'], ['map topdown\n  #####\n  #P.E#\n  #####', '위에서 보는 지도 (벽에 막힘)'], ['  patrol up 100 60', '위아래 왕복 (움직이는 발판)'], ['  chase player 120 300', '가까우면 쫓아옴'], ['  flee player 150 200', '가까우면 도망'], ['enemy.shoot player 300', '총알 쏘기 (if player hits shot)'], ['player.respawn', '시작점·체크포인트로 돌아가기']]],
+    ['소리 만들기 · 날씨', [['tone 440 0.2', '높이(Hz) 길이'], ['tone 300 to 900 0.3 saw', 'sine square triangle saw'], ['play "C E G C5"', '음 이름 (도 레 미 도 됨), - 쉼표'], ['play "도 레 미" 0.3', '한 음 길이'], ['weather rain', 'rain snow leaves petals off']]],
     ['함수', [['to boom power\n  shake power\n  burst 20 red at center', '만들기'], ['boom 12', '부르기 (do boom 12 도 같아요)']]],
     ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['if player hits rock', '닿았을 때'], ['if key space', '키를 눌렀을 때'], ['if click', '클릭'], ['if rock leaves', '화면 밖으로 나감'], ['if score >= 100', '조건이 처음 참이 될 때 한 번'], ['loop 5 times', '반복']]],
     ['점수·상태', [['add 10 to score', ''], ['remove 1 from lives', ''], ['set score to 0', ''], ['level up', 'level 로 읽기'], ['win', ''], ['gameover', '']]],
@@ -262,7 +290,7 @@ button,select{white-space:nowrap}
 
   let timer = 0;
   code.addEventListener('input', () => {
-    drawGutter(); store.set('ff-code', code.value); sel.value = '';
+    drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
     clearTimeout(timer); timer = setTimeout(() => run(true), 350);
   });
   code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
@@ -283,14 +311,28 @@ button,select{white-space:nowrap}
       document.execCommand('insertText', false, '  ');
     } else if (e.key === 'Enter' && s === en) {
       const ls = v.lastIndexOf('\n', s - 1) + 1, line = v.slice(ls, s), ind = line.match(/^ */)[0];
-      const opens = /^\s*(every|after|when|always|if|else|elif|repeat)\b/.test(line) || /^\s*(\S+\s*=\s*)?make\b/.test(line);
+      const opens = /^\s*(every|after|when|always|if|else|elif|repeat|loop|scene|to|map|art)\b/.test(line) || /^\s*(\S+\s*=\s*)?(make|spawn|create)\b/.test(line);
       e.preventDefault();
       document.execCommand('insertText', false, '\n' + ind + (opens ? '  ' : ''));
     }
   });
   sel.addEventListener('change', () => {
+    $('del').hidden = !sel.value.startsWith('my:');
     if (!sel.value) return;
-    code.value = EX[sel.value]; store.set('ff-code', code.value); run(false);
+    const src = sel.value.startsWith('my:') ? myGames()[sel.value.slice(3)] : EX[sel.value];
+    if (src == null) return;
+    code.value = src; store.set('ff-code', code.value); drawGutter(); run(false);
+  });
+  $('save').addEventListener('click', () => {
+    const m = code.value.match(/^\s*title\s+["'](.+?)["']/m);
+    let name = m ? m[1].trim() : '';
+    if (!name) { name = (prompt('게임 이름', '') || '').trim(); if (!name) return; }
+    const g = myGames(); g[name] = code.value; store.set('ff-games', JSON.stringify(g));
+    drawMy('my:' + name); toast(`'${name}' 저장했어요`);
+  });
+  $('del').addEventListener('click', () => {
+    const name = sel.value.slice(3); if (!name.length || !confirm(`'${name}'을(를) 지울까요?`)) return;
+    const g = myGames(); delete g[name]; store.set('ff-games', JSON.stringify(g)); drawMy(''); toast('지웠어요');
   });
   $('restart').addEventListener('click', () => run(false));
 
@@ -343,7 +385,7 @@ button,select{white-space:nowrap}
   const hm = location.hash.match(/^#c=([\w-]+)$/);
   if (hm) { try { saved = decodeURIComponent(escape(atob(hm[1].replace(/-/g, '+').replace(/_/g, '/')))); } catch (e) { } }
   if (saved && saved.trim()) { code.value = saved; sel.value = ''; } else { code.value = EX[names[0]]; sel.value = names[0]; }
-  drawGutter(); run(false);
+  drawMy(); drawGutter(); run(false);
   window.FF_DEBUG = { G, code, run };
 })();
 </script>
