@@ -98,6 +98,19 @@ var _grid_t := 0.0
 func setup(seed_v: int, per_team: int) -> void:
 	rng.seed = seed_v
 	world = World.new(seed_v)
+	reset(per_team)
+
+
+## 월드는 그대로 두고 유닛·거점·병력·시간을 처음 상태로 되돌린다(메뉴 배경 → 본 게임 전환용).
+func reset(per_team: int) -> void:
+	tickets = [START_TICKETS, START_TICKETS]
+	time = 0.0
+	winner = -1
+	win_reason = ""
+	events.clear()
+	tick_count = 0
+	_grid.clear()
+	_grid_t = 0.0
 	pts.clear()
 	for i in NPOINTS:
 		var p := Pt.new()
@@ -147,6 +160,21 @@ func claim_slot(id: int, loadout: int = 0) -> void:
 	u.loadout = loadout
 	u.weapon = loadout
 	u.label = "P%d" % id
+
+
+## 슬롯을 다시 봇에게 돌려준다(접속 종료).
+func release_slot(id: int) -> void:
+	var u: Unit = units[id]
+	u.is_bot = true
+	u.in_move = Vector2.ZERO
+	u.in_fire = false
+	u.label = "%s%d" % ["A" if u.team == 0 else "B", u.id]
+
+
+## 클라이언트 예측: 서버와 같은 이동 함수를 로컬 유닛에만 적용한다.
+func predict_local(u: Unit, dt: float) -> void:
+	u.fire_cd = maxf(0.0, u.fire_cd - dt)
+	_integrate(u, dt)
 
 
 func set_input(id: int, move: Vector2, yaw: float, pitch: float, fire: bool, jump: bool,
