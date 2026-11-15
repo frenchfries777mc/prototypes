@@ -38,5 +38,10 @@ window.FF_TUTORIAL = [
   "title": "내 그림과 내 지도",
   "text": "art 아래에 글자로 그림을 그리면 나만의 모양이 생겨요. (# 는 기본 색, r o y g b p 는 색깔) map 은 글자로 지도를 그려요. (# 땅, C 코인, P 플레이어, F 깃발, ^ 가시) 직접 바꿔 보세요!",
   "code": "title \"My Map\"\nbackground sunset\nlives 3\nmusic happy\n\nart cat orange\n  ##.....##\n  ###...###\n  #########\n  ##k###k##\n  #########\n  ####m####\n  .#######.\n\nmap\n  ....................\n  ....................\n  ..................F.\n  ................####\n  .............G......\n  ...........###......\n  .....C..............\n  ....###.......C.....\n  .P......^.....^..S..\n  ####################\n  ####################\n\nmake cat at 700 100\n  wander 80\n  gravity 1900\n\nif player hits spike\n  remove 1 from lives\n  player.x = 70\n  player.y = 380\n  player.vy = 0\n\nif player hits coin\n  coin.sparkle\n  add 10 to score\n\nif player hits gem\n  gem.sparkle\n  add 50 to score\n\nif player hits flag\n  banner \"GOAL!\"\n  confetti\n  win\n"
+ },
+ {
+  "title": "장면 만들기",
+  "text": "scene 으로 화면을 여러 개로 나눠요. 맨 위에 쓴 장면부터 시작하고, go to 로 다른 장면으로 넘어가요. 장면 안에서 만든 것은 장면을 바꿀 때 알아서 사라져요.",
+  "code": "title \"My Scenes\"\nmusic happy\n\nscene menu\n  background night\n  set score to 0\n  label \"MY GAME\" at center 200\n  label \"스페이스를 눌러 시작\" at center 300\n  if key space\n    go to play\n\nscene play\n  background sky\n  player = make hero at center\n    control arrows\n  every 1 sec\n    make coin at random random\n      life 3 sec\n  if player hits coin\n    coin.sparkle\n    add 10 to score\n  if score >= 50\n    go to clear\n\nscene clear\n  background sunset\n  confetti\n  label \"클리어! 점수 {score}\" at center 220\n  label \"스페이스를 누르면 처음으로\" at center 300\n  if key space\n    go to menu\n"
  }
 ];
