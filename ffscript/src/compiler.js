@@ -5,9 +5,9 @@ const reID = new RegExp('^' + ID + '$', 'u');
 class FFError extends Error { constructor(line, msg) { super(msg); this.line = line; } }
 const fail = (n, m) => { throw new FFError(n, m); };
 
-const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart', 'ball', 'box', 'hero', 'slime', 'platform', 'spike', 'flag', 'gem', 'bomb', 'ghost', 'fish', 'cloud', 'tree', 'block'];
+const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart', 'ball', 'box', 'hero', 'slime', 'platform', 'spike', 'flag', 'gem', 'bomb', 'ghost', 'fish', 'cloud', 'tree', 'block', 'shot', 'checkpoint', 'ladder'];
 const BACKS = ['space', 'night', 'sky', 'sea', 'sunset', 'forest', 'lava', 'snow', 'grid'];
-const MAP_CHARS = '.# =CGSHB^FEP';
+const MAP_CHARS = '.# =CGSHB^FEPKL';
 const ART_CHARS = '.# kwrogybpcnmd';
 const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
 const COLOR_WORDS = ['red', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'gold', 'cyan', 'sky', 'brown'];
@@ -25,11 +25,11 @@ const CMDS = Object.assign(Object.create(null), {
   move: 'move', toward: 'toward', stop: 'stop', control: 'control', speed: 'setSpeed', size: 'setSize', color: 'setColor',
   spin: 'spin', bounce: 'setBounce', look: 'setLook', gravity: 'setGravity', jump: 'jump', solid: 'setSolid',
   health: 'setHealth', hurt: 'hurt', heal: 'heal', fade: 'setAlpha', hide: 'hide', show: 'show', glow: 'setGlow', trail: 'setTrail', wrap: 'setWrap',
-  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
+  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
 });
-const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather'];
-const BUILTIN = ['score', 'lives', 'level', 'time', 'scene', 'choose', 'chance', 'distance', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
-const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times', 'follow', 'off', 'ends', 'topdown'];
+const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take'];
+const BUILTIN = ['score', 'lives', 'level', 'time', 'scene', 'answer', 'has', 'choose', 'chance', 'distance', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
+const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times', 'follow', 'off', 'ends', 'topdown', 'answered'];
 const JS_RESERVED = ['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'enum', 'export', 'extends', 'finally', 'for', 'function', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'await', 'async', 'static', 'undefined', 'G', 'Math', '_o', 'window', 'document', 'eval'];
 const NOT_VARS = new Set([...STATEMENTS, ...BUILTIN.filter(w => w !== 'score' && w !== 'lives' && w !== 'level'), ...WORDS, ...JS_RESERVED]);
 
@@ -166,6 +166,8 @@ function compile(src) {
         case 'level': usesLevel = true; out.push('G.level'); continue;
         case 'score': case 'lives': case 'time': out.push('G.' + t); continue;
         case 'scene': out.push('G.sceneName'); continue;
+        case 'answer': out.push('G.answer'); continue;
+        case 'has': out.push('G.has'); continue;
         case 'mouse': out.push('G.mouse'); continue;
         case 'key': out.push('G.keys'); continue;
         case 'width': out.push('G.W'); continue;
@@ -247,6 +249,12 @@ function compile(src) {
         if (vert) a.push('true');
         return a.join(',');
       }
+      case 'shoot': {
+        if (terms.length > 2) fail(n, 'shoot은 이렇게 써요: shoot up, shoot player 400, shoot mouse  (뒤 숫자는 속도)');
+        const a = [!terms.length ? 'null' : DIRS.includes(terms[0]) ? q(terms[0]) : ex(terms[0], n, ctx)];
+        if (terms[1]) a.push(ex(terms[1], n, ctx));
+        return a.join(',');
+      }
       case 'chase': case 'flee': {
         if (!terms.length) fail(n, `${name} 뒤에는 대상이 필요해요. (예: ${name} player 120 300  → 속도 120, 300 거리 안에서만)`);
         if (terms.length > 3) fail(n, `${name}는 '${name} 대상 속도 거리' 까지만 써요. 수식은 괄호로 묶어 주세요.`);
@@ -304,7 +312,7 @@ function compile(src) {
     if (!ctx.top) fail(nd.n, `${w}은(는) 맨 왼쪽 줄(들여쓰기 없는 곳)에서만 쓸 수 있어요.`);
   }
 
-  const EVENT_RE = [new RegExp('^' + ID + '\\s+(?:hits|touches)\\s+' + ID + '$', 'u'), /^key\s+\S+$/, /^click$/, new RegExp('^' + ID + '\\s+leaves$', 'u'), /^talk\s+ends$/];
+  const EVENT_RE = [new RegExp('^' + ID + '\\s+(?:hits|touches)\\s+' + ID + '$', 'u'), /^key\s+\S+$/, /^click$/, new RegExp('^' + ID + '\\s+leaves$', 'u'), /^talk\s+ends$/, /^answered$/, /^countdown\s+ends$/];
   function eventStmt(nd, ctx, rest, w) {
     const n = nd.n;
     let mm;
@@ -317,6 +325,8 @@ function compile(src) {
     if ((mm = rest.match(/^key\s+(\S+)$/))) return `G.ln=${n};G.onKey(${q(mm[1].toLowerCase())},()=>{${body(nd, ctx, null, w)}});`;
     if (/^click$/.test(rest)) return `G.ln=${n};G.onKey("click",()=>{${body(nd, ctx, null, w)}});`;
     if (/^talk\s+ends$/.test(rest)) return `G.ln=${n};G.onTalkEnd(()=>{${body(nd, ctx, null, w)}});`;
+    if (/^answered$/.test(rest)) return `G.ln=${n};G.onAnswer(()=>{${body(nd, ctx, null, w)}});`;
+    if (/^countdown\s+ends$/.test(rest)) return `G.ln=${n};G.onCountdownEnd(()=>{${body(nd, ctx, null, w)}});`;
     if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+leaves$', 'u')))) {
       if (!LOOKS.includes(mm[1]) && !vars.has(mm[1])) fail(n, `'${mm[1]}'는 모양 이름도, 만든 이름도 아니에요.${hint(mm[1], [...LOOKS, ...vars])}`);
       return `G.ln=${n};G.onLeave(${q(mm[1])},(${mm[1]})=>{${body(nd, ctx, [mm[1]], w)}});`;
@@ -506,6 +516,22 @@ function compile(src) {
         }
         return `G.ln=${n};G.playNotes(${tpl(other[0], n, ctx)},${other[1] ? ex(other[1], n, ctx) : 'null'},${q(wv[0] || 'triangle')});`;
       }
+      case 'ask': {
+        const terms = splitTerms(rest);
+        if (terms.length < 3 || terms.length > 6 || terms.some(x => !/^["']/.test(x))) fail(n, 'ask는 이렇게 써요: ask "무엇을 살까요?" "칼" "방패"  (질문 하나, 고를 것 2~5개, 모두 따옴표)');
+        return `G.ln=${n};G.ask(${tpl(terms[0], n, ctx)},[${terms.slice(1).map(x => tpl(x, n, ctx)).join(',')}]);`;
+      }
+      case 'countdown': {
+        const v = rest.replace(/\s*(?:sec|secs|seconds?|s)$/i, '').trim();
+        if (v === 'off' || v === 'stop') return `G.ln=${n};G.countdown(null);`;
+        need(v, n, 'countdown 뒤에는 초가 필요해요. (예: countdown 60, 끝났을 때는 if countdown ends)');
+        return `G.ln=${n};G.countdown(${ex(v, n, ctx)});`;
+      }
+      case 'give': case 'take': {
+        const terms = splitTerms(rest);
+        if (!terms.length || terms.length > 2) fail(n, `${w}는 이렇게 써요: ${w} "🔑"  또는  ${w} "🍎" 3  (가방은 has("🔑") 로 확인)`);
+        return `G.ln=${n};G.${w}(${ex(terms[0], n, ctx)}${terms[1] ? ',' + ex(terms[1], n, ctx) : ''});`;
+      }
       case 'weather':
         if (!WEATHERS.includes(rest.trim())) fail(n, `weather 뒤에는 ${quoteList(WEATHERS)} 중 하나가 와야 해요.${rest ? hint(rest.trim(), WEATHERS) : ''}`);
         return `G.ln=${n};G.setWeather(${q(rest.trim())});`;
@@ -563,10 +589,17 @@ function compile(src) {
     if (!mm) fail(nd.n, 'art는 이렇게 써요: art ghost white  (아래 줄에 글자로 그림을 그려요)');
     if (!nd.rowsRaw.length) fail(nd.n, 'art 아래에 글자로 그림을 그려 주세요. (# 는 기본 색, k w r o y g b p c n m d 는 색깔)');
     const { rows, lines } = rawRows(nd);
-    if (rows.length > 32 || rows.some(r => r.length > 32)) fail(nd.n, '그림은 가로세로 32칸까지 가능해요.');
-    rows.forEach((r, i) => { for (const ch of r) if (!ART_CHARS.includes(ch)) fail(lines[i], `그림에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # . k w r o y g b p c n m d`); });
+    const frames = [[]];
+    rows.forEach((r, i) => {
+      if (/^-+$/.test(r.trim())) { if (frames[frames.length - 1].length) frames.push([]); return; }
+      for (const ch of r) if (!ART_CHARS.includes(ch)) fail(lines[i], `그림에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # . k w r o y g b p c n m d  (--- 줄은 다음 장면 그림)`);
+      frames[frames.length - 1].push(r);
+    });
+    if (!frames[frames.length - 1].length) frames.pop();
+    if (frames.length > 8) fail(nd.n, '움직이는 그림은 8장까지 가능해요.');
+    if (frames.some(f => f.length > 32 || f.some(r => r.length > 32))) fail(nd.n, '그림은 가로세로 32칸까지 가능해요.');
     const col = mm[2] ? colorArg(mm[2], nd.n, null) : q('white');
-    return `G.defineArt(${q(mm[1])},${JSON.stringify(rows)},${col});`;
+    return `G.defineArt(${q(mm[1])},${JSON.stringify(frames.length === 1 ? frames[0] : frames)},${col});`;
   }).join('');
   const code = artCode + block(rest0, { bound: new Set(), top: true, inScene: false });
   if (firstLivesAdd && !hasLives) fail(firstLivesAdd, "목숨을 늘리고 줄이려면 먼저 맨 위에서 목숨 수를 정해 주세요. (예: lives 3)");
