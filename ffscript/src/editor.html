@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FF Script</title>
+<style>
+:root{--bg:#0e0f1a;--panel:#161828;--line:#262a44;--text:#e8eaf6;--dim:#8b90b0;--accent:#6fb3ff;--err:#ff6b81;--ok:#5be3a0}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif}
+body{display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:18px;margin:0 8px 0 0;letter-spacing:.5px}
+header h1 b{color:var(--accent)}
+select,button{font:inherit;color:var(--text);background:#20243d;border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover,select:hover{border-color:var(--accent)}
+.spacer{flex:1}
+#status{font-size:13px;color:var(--dim)}
+#status.ok{color:var(--ok)}
+main{flex:1;display:grid;grid-template-columns:minmax(320px,42%) 1fr;min-height:0}
+.left{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+.ed{flex:1;display:flex;min-height:0;position:relative}
+#gutter{width:44px;padding:14px 0;text-align:right;color:#4b5075;font:14px/22px ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow:hidden;background:#12142200;user-select:none;white-space:pre}
+#gutter div{padding-right:10px}
+#gutter .bad{background:#ff6b8133;color:var(--err)}
+#code{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(--text);padding:14px 14px 14px 4px;font:14px/22px ui-monospace,"SF Mono",Menlo,Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
+#err{display:none;margin:0;padding:12px 16px;background:#3a1522;color:#ffc2cc;border-top:1px solid #6b2a3d;font-size:14px;line-height:1.5;white-space:pre-wrap;max-height:34%;overflow:auto}
+#err b{color:#fff}
+.right{display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;min-height:0;background:radial-gradient(circle at 50% 40%,#1a1d33,#0b0c16)}
+canvas{width:100%;max-width:calc((100vh - 120px)*16/9);aspect-ratio:16/9;border-radius:14px;box-shadow:0 20px 60px #000a,0 0 0 1px #ffffff14;background:#000;display:block}
+button,select{white-space:nowrap}
+@media(max-width:820px){header{flex-wrap:wrap;gap:8px}#status{display:none}main{grid-template-columns:1fr;grid-template-rows:auto 1fr}.left{border-right:0;border-bottom:1px solid var(--line);height:46vh}.right{padding:10px}canvas{max-width:100%}}
+</style>
+</head>
+<body>
+<header>
+  <h1>FF <b>Script</b></h1>
+  <select id="ex"></select>
+  <button id="restart">다시 시작</button>
+  <span class="spacer"></span>
+  <span id="status"></span>
+  <button id="export">HTML로 저장</button>
+</header>
+<main>
+  <section class="left">
+    <div class="ed"><div id="gutter"></div><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></div>
+    <pre id="err"></pre>
+  </section>
+  <section class="right"><canvas id="game" width="960" height="540"></canvas></section>
+</main>
+<script type="text/plain" id="rt-src">/*@RUNTIME_TEXT*/</script>
+<script>/*@RUNTIME*/</script>
+<script>/*@COMPILER*/</script>
+<script>/*@EXAMPLES*/</script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const code = $('code'), gutter = $('gutter'), err = $('err'), status = $('status'), sel = $('ex');
+  const EX = window.FF_EXAMPLES, names = Object.keys(EX);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+  };
+  names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+  const custom = document.createElement('option'); custom.value = ''; custom.textContent = '내 코드'; custom.hidden = true; sel.appendChild(custom);
+
+  const G = new FFRuntime.Engine($('game'));
+  let current = null, errLine = 0;
+
+  function drawGutter() {
+    const n = code.value.split('\n').length;
+    let h = '';
+    for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop;
+  }
+  function showError(line, msg) {
+    errLine = line; err.style.display = 'block';
+    err.innerHTML = (line ? `<b>${line}번째 줄</b>\n` : '') + msg.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    status.textContent = '고쳐야 할 곳이 있어요'; status.className = ''; drawGutter();
+  }
+  function clearError() { errLine = 0; err.style.display = 'none'; drawGutter(); }
+
+  G.onError = e => { showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e)); };
+
+  function run(keep) {
+    const r = FFScript.compileSafe(code.value);
+    if (!r.ok) { showError(r.line, r.message); return; }
+    clearError();
+    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
+    catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
+  }
+
+  let timer = 0;
+  code.addEventListener('input', () => {
+    drawGutter(); store.set('ff-code', code.value); sel.value = '';
+    clearTimeout(timer); timer = setTimeout(() => run(true), 350);
+  });
+  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; });
+  code.addEventListener('keydown', e => {
+    const v = code.value, s = code.selectionStart, en = code.selectionEnd;
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertText', false, '  ');
+    } else if (e.key === 'Enter' && s === en) {
+      const ls = v.lastIndexOf('\n', s - 1) + 1, line = v.slice(ls, s), ind = line.match(/^ */)[0];
+      const opens = /^\s*(every|after|when|always|if|else|elif|repeat)\b/.test(line) || /^\s*(\S+\s*=\s*)?make\b/.test(line);
+      e.preventDefault();
+      document.execCommand('insertText', false, '\n' + ind + (opens ? '  ' : ''));
+    }
+  });
+  sel.addEventListener('change', () => {
+    if (!sel.value) return;
+    code.value = EX[sel.value]; store.set('ff-code', code.value); run(false);
+  });
+  $('restart').addEventListener('click', () => run(false));
+
+  $('export').addEventListener('click', () => {
+    const r = FFScript.compileSafe(code.value);
+    if (!r.ok) { showError(r.line, r.message); return; }
+    const m = code.value.match(/^\s*title\s+["'](.+?)["']/m), title = m ? m[1] : 'FF Script Game';
+    const rt = $('rt-src').textContent;
+    const prog = JSON.stringify(r.code).replace(/</g, '\\u003c');
+    const esc = title.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    const html = '<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc + '</title>' +
+      '<style>html,body{margin:0;height:100%;background:#07070f;display:flex;align-items:center;justify-content:center}canvas{width:min(100vw,calc(100vh*16/9));aspect-ratio:16/9;display:block}</style></head><body><canvas id="g" width="960" height="540"></canvas>' +
+      '<script>' + rt + '<\/script><script>new FFRuntime.Engine(document.getElementById("g")).load(new Function("G",' + prog + '));<\/script></body></html>';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    a.download = title.replace(/[^\p{L}\p{N}_-]+/gu, '_') + '.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  const saved = store.get('ff-code');
+  if (saved && saved.trim()) { code.value = saved; sel.value = ''; } else { code.value = EX[names[0]]; sel.value = names[0]; }
+  drawGutter(); run(false);
+  window.FF_DEBUG = { G, code, run };
+})();
+</script>
+</body>
+</html>
