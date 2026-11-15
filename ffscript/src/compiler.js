@@ -115,6 +115,7 @@ function jsSource(nd) {
     code = rest.slice(1, -1).replace(/\\([\s\S])/g, '$1');
   }
   try { new Function(code); } catch (e) { fail(n, 'JS 코드에 문법 오류가 있어요: ' + e.message); }
+  if (/\b(?:global|window|globalThis|self)\s*(?:\.\s*(?:FFRuntime|FFScript)|\[\s*['"](?:FFRuntime|FFScript)['"]\s*\])\s*=(?!=)/.test(code)) fail(n, '이 JS는 FF Script 편집기 자체를 다시 만들려고 해요. 그대로 실행하면 편집기가 멈춰서 막았어요.\nFF Script 편집기 같은 큰 HTML 앱은 변환하지 말고 HTML 파일 그대로 쓰세요.');
   return code;
 }
 function skipLit(code, i, prev) {
