@@ -6,6 +6,7 @@ const out = r('editor.html')
   .replace('/*@RUNTIME_TEXT*/', () => rt)
   .replace('/*@RUNTIME*/', () => rt)
   .replace('/*@COMPILER*/', () => r('compiler.js'))
-  .replace('/*@EXAMPLES*/', () => r('examples.js'));
+  .replace('/*@EXAMPLES*/', () => r('examples.js'))
+  .replace('/*@TUTORIAL*/', () => r('tutorial.js'));
 fs.writeFileSync(path.join(__dirname, '..', 'index.html'), out);
 console.log('built', out.length, 'bytes');
