@@ -437,5 +437,77 @@ if key h
 if key space
   play "도 미 솔 도5 솔 미 도" 0.14
   confetti
+`,
+  'Key Castle': `title "Key Castle"
+background forest
+lives 3
+music action
+countdown 90
+
+art bat purple
+  #...#
+  ##.##
+  .###.
+  -----
+  .....
+  #####
+  .###.
+
+map
+  ............................................
+  ............................................
+  ...........C.C.C..........G.................
+  .........L######......L######........F......
+  .........L............L............####.....
+  ....C.C..L............L............####.....
+  .P.......L.....E...K..L.....^^.E...####.C.C.
+  ############################################
+
+make bat at 700 110
+  size 46
+  patrol 260 110
+
+slime.gravity
+slime.patrol 70 60
+
+every 1.6 sec
+  bat.shoot player 260
+
+if player hits shot
+  shot.remove
+  remove 1 from lives
+  player.respawn
+
+if player hits slime
+  if player.vy > 0 and player.y < slime.y - 10
+    slime.explode
+    player.vy = -560
+    add 20 to score
+  else
+    remove 1 from lives
+    player.respawn
+
+if player hits spike
+  remove 1 from lives
+  player.respawn
+
+if player hits coin
+  coin.sparkle
+  add 10 to score
+
+if player hits gem
+  gem.sparkle
+  give "🔑"
+
+if player hits flag
+  if has("🔑") > 0
+    ask "성문을 열까요?" "열기" "아직"
+  else
+    player.say "열쇠가 필요해"
+
+if answered
+  if answer is "열기"
+    take "🔑"
+    win
 `
 };
