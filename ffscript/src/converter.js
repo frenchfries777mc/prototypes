@@ -1,7 +1,7 @@
 (function (global) {
 'use strict';
 const MATH = ['sin', 'cos', 'tan', 'abs', 'floor', 'ceil', 'round', 'min', 'max', 'sqrt', 'pow', 'atan2', 'sign'];
-const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score)$/;
+const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score|length)$/;
 const KEYNAME = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'space', Space: 'space', Spacebar: 'space', Enter: 'enter', NumpadEnter: 'enter', Shift: 'shift', ShiftLeft: 'shift', ShiftRight: 'shift' };
 const KEYCODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 32: 'space', 13: 'enter', 16: 'shift' };
 const BAD_IDS = new Set(['new', 'this', 'typeof', 'instanceof', 'in', 'of', 'void', 'delete', 'function', 'class', 'await', 'yield', 'async', 'arguments', 'super', 'import', 'export', 'return', 'var', 'let', 'const']);
@@ -181,6 +181,11 @@ function expr(toks, cx) {
         if (MATH.includes(m) && isP(toks[i + 3], '(')) { out.push(m); i += 2; continue; }
         FB();
       }
+      if (isP(nx, '.') && isId(toks[i + 2], 'includes') && isP(toks[i + 3], '(') && !isP(toks[i - 1], '.')) {
+        const ce = matchClose(toks, i + 3), args = ce > 0 ? splitTop(toks.slice(i + 4, ce), ',') : [];
+        if (args.length !== 1 || !args[0].length || (cx.banned && cx.banned.has(t.t))) FB();
+        out.push('contains(' + (cx.rename && cx.rename[t.t] ? cx.rename[t.t] : t.t) + ', ' + expr(args[0], cx) + ')'); i = ce; continue;
+      }
       if (isP(nx, '(') && !(cx.calls && cx.calls.has(t.t))) FB();
       const nm = cx.rename && cx.rename[t.t] ? cx.rename[t.t] : t.t;
       if (isP(toks[i - 1], '.')) { if (!PROP_OK.test(t.t) || isP(nx, '(')) FB(); out.push(t.t); continue; }
@@ -194,11 +199,11 @@ function expr(toks, cx) {
     }
     if (t.type === 'p') {
       if (t.t === '.') { if (!isId(nx) || !out.length) FB(); out.push('.'); continue; }
-      if ('(),?:'.includes(t.t)) { out.push(t.t); continue; }
+      if ('(),?:[]'.includes(t.t)) { out.push(t.t); continue; }
       FB();
     }
   }
-  return out.join(' ').replace(/ \. /g, '.').replace(/\( /g, '(').replace(/ \)/g, ')').replace(/ ,/g, ',').replace(/([\p{L}\p{N}_]) \(/gu, (m, a) => a + '(').replace(/\b(and|or|not)\(/g, '$1 (');
+  return out.join(' ').replace(/ \. /g, '.').replace(/\( /g, '(').replace(/ \)/g, ')').replace(/ ,/g, ',').replace(/([\p{L}\p{N}_]) \(/gu, (m, a) => a + '(').replace(/\b(and|or|not)\(/g, '$1 (').replace(/([\p{L}\p{N}_\]]) \[ /gu, '$1[').replace(/\[ /g, '[').replace(/ \]/g, ']');
 }
 const term = (s) => /\s/.test(s) && !/^\(.*\)$/.test(s) ? '(' + s + ')' : s;
 
@@ -221,9 +226,10 @@ function convertJS(src, opts) {
     return lines.map((l, i) => i === 0 ? l.trim() : l.slice(Math.min(ind, l.match(/^\s*/)[0].length))).join('\n').replace(/\s+$/, '');
   };
   function lineStart(pos) { return src.lastIndexOf('\n', pos - 1) + 1; }
-  const funcs = new Set();
+  const funcs = new Set(), listVars = new Set();
   for (const st of tree) {
     if (st.k === 'func') funcs.add(st.name);
+    if (st.k === 'expr' && /^(let|const|var)$/.test(toks[st.from].t) && isId(toks[st.from + 1]) && toks[st.from + 2] && toks[st.from + 2].t === '=' && isP(toks[st.from + 3], '[')) listVars.add(toks[st.from + 1].t);
     if (st.k === 'expr' && /^(let|const|var)$/.test(toks[st.from].t) && isId(toks[st.from + 1]) && toks[st.from + 2] && toks[st.from + 2].t === '=' && (isId(toks[st.from + 3], 'function') || toks.slice(st.from + 3, st.to).some(t => t.t === '=>'))) funcs.add(toks[st.from + 1].t);
   }
 
@@ -348,6 +354,12 @@ function convertJS(src, opts) {
         return top ? [[ind, 'after 0 sec', st], ...lines] : lines;
       }
       case 'for': {
+        if (st.head.some(t => isId(t, 'of')) && !st.head.some(t => t.t === ';')) {
+          let h = st.head; if (/^(let|const|var)$/.test(h[0].t)) h = h.slice(1);
+          if (h.length < 3 || !isId(h[0]) || !isId(h[1], 'of') || (cx.banned && cx.banned.has(h[0].t))) FB();
+          const v = h[0].t, sub0 = Object.assign({}, cx, { top: false });
+          return [[ind, 'loop each ' + v + ' in ' + expr(h.slice(2), sub0), st], ...body(st.body, ind + 2, sub0)];
+        }
         const h = splitTop(st.head, ';');
         if (h.length !== 3) FB();
         let [ini, cond, upd] = h;
@@ -394,6 +406,7 @@ function convertJS(src, opts) {
         const c = colorWord(unquote(rhs[0].t)); if (!c) FB();
         return [[ind, 'background ' + c, st]];
       }
+      if (isId(tk[0]) && isP(tk[1], '[') && matchClose(tk, 1) === ai - 1 && listVars.has(T[0]) && !(cx.banned && cx.banned.has(T[0]))) return [[ind, `${expr(tk.slice(0, ai), cx)} ${op} ${expr(rhs, cx)}`, st]];
       if (!/^[\p{L}_$][\p{L}\p{N}_$]*(\.[\p{L}_$][\p{L}\p{N}_$]*)?$/u.test(lhs)) FB();
       const parts = lhs.split('.');
       if (parts.length === 2 && !PROP_OK.test(parts[1])) FB();
@@ -419,6 +432,8 @@ function convertJS(src, opts) {
       }
       const lm = callee.match(/^(?:(?:window|document|document\.body|canvas|[\p{L}_$][\p{L}\p{N}_$]*)\.)?addEventListener$/u);
       if (lm && args.length >= 2 && args[0].length === 1 && args[0][0].type === 'str') return convListener(unquote(args[0][0].t), fnExpr(args[1], cx), ind, cx, st);
+      const pm = callee.match(/^([\p{L}_][\p{L}\p{N}_]*)\.push$/u);
+      if (pm && listVars.has(pm[1]) && args.length === 1 && args[0].length && !(cx.banned && cx.banned.has(pm[1]))) return [[ind, 'add ' + expr(args[0], cx) + ' to ' + (cx.rename && cx.rename[pm[1]] || pm[1]), st]];
       if (funcs.has(callee)) return [[ind, callee + args.map(a => ' ' + term(expr(a, cx))).join(''), st]];
     }
     FB();

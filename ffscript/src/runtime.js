@@ -777,6 +777,56 @@ look('bee', {
   }
 });
 
+look('spider', {
+  size: 46, color: '#4a3b5c', hit: 0.4,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color.startsWith('#') ? o.color : '#4a3b5c', w = Math.sin(t * 9 + o.seed) * 0.12;
+    ctx.strokeStyle = shade(c, -0.25); ctx.lineWidth = Math.max(1.5, s * 0.1); ctx.lineCap = 'round';
+    for (const k of [-1, 1]) for (let i = 0; i < 4; i++) {
+      const a = (-0.55 + i * 0.4) + w * (i % 2 ? 1 : -1), kx = k * s * (0.55 + 0.25 * Math.cos(a * 2.2)), ky = s * (-0.45 + i * 0.3);
+      ctx.beginPath(); ctx.moveTo(k * s * 0.2, s * (-0.1 + i * 0.08)); ctx.quadraticCurveTo(kx, ky - s * 0.45, k * s * 1.0, s * (0.35 + i * 0.12) + w * s); ctx.stroke();
+    }
+    const g = ctx.createRadialGradient(-s * 0.15, -s * 0.2, s * 0.05, 0, 0, s * 0.7);
+    g.addColorStop(0, shade(c, 0.35)); g.addColorStop(1, shade(c, -0.3));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, s * 0.12, s * 0.52, s * 0.46, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -s * 0.34, s * 0.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#ff4d5e'; ctx.beginPath(); ctx.arc(-s * 0.12, -s * 0.38, s * 0.08, 0, TAU); ctx.arc(s * 0.12, -s * 0.38, s * 0.08, 0, TAU); ctx.fill();
+    ctx.fillStyle = rgba('#ffffff', 0.7); ctx.beginPath(); ctx.arc(-s * 0.1, -s * 0.4, s * 0.025, 0, TAU); ctx.arc(s * 0.14, -s * 0.4, s * 0.025, 0, TAU); ctx.fill();
+  }
+});
+look('crab', {
+  size: 46, color: '#ff6a4d', hit: 0.42,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color.startsWith('#') ? o.color : '#ff6a4d', w = Math.sin(t * 10 + o.seed);
+    ctx.strokeStyle = shade(c, -0.3); ctx.lineWidth = Math.max(1.5, s * 0.1); ctx.lineCap = 'round';
+    for (const k of [-1, 1]) for (let i = 0; i < 3; i++) {
+      const y = s * (0.2 + i * 0.12), sw = w * s * 0.08 * (i % 2 ? 1 : -1);
+      ctx.beginPath(); ctx.moveTo(k * s * 0.4, y); ctx.lineTo(k * s * 0.8, y + s * 0.1 + sw); ctx.lineTo(k * s * 0.95, y + s * 0.4); ctx.stroke();
+    }
+    for (const k of [-1, 1]) {
+      ctx.save(); ctx.translate(k * s * 0.72, -s * 0.28 - Math.abs(w) * s * 0.06); ctx.rotate(k * (0.5 + w * 0.15));
+      ctx.fillStyle = shade(c, -0.1); ctx.beginPath(); ctx.ellipse(0, 0, s * 0.26, s * 0.2, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#14141c'; ctx.beginPath(); ctx.moveTo(0, -s * 0.02); ctx.lineTo(k * s * 0.24, -s * 0.14); ctx.lineTo(k * s * 0.24, s * 0.1); ctx.closePath(); ctx.fill(); ctx.restore();
+    }
+    const g = ctx.createLinearGradient(0, -s * 0.4, 0, s * 0.5); g.addColorStop(0, shade(c, 0.3)); g.addColorStop(1, shade(c, -0.25));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, s * 0.1, s * 0.62, s * 0.46, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff'; for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(k * s * 0.2, -s * 0.28, s * 0.13, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#14141c'; for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(k * s * 0.2, -s * 0.26, s * 0.06, 0, TAU); ctx.fill(); }
+  }
+});
+look('mushroom', {
+  size: 44, color: '#e0463c', hit: 0.42,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color.startsWith('#') ? o.color : '#e0463c', b = Math.sin(t * 6 + o.seed) * s * 0.05;
+    ctx.fillStyle = '#f3e6cf'; roundRect(ctx, -s * 0.3, -s * 0.05 + b, s * 0.6, s * 0.95 - b, s * 0.18); ctx.fill();
+    ctx.fillStyle = '#14141c'; ctx.beginPath(); ctx.arc(-s * 0.1, s * 0.3, s * 0.06, 0, TAU); ctx.arc(s * 0.1, s * 0.3, s * 0.06, 0, TAU); ctx.fill();
+    const g = ctx.createLinearGradient(0, -s, 0, s * 0.1); g.addColorStop(0, shade(c, 0.3)); g.addColorStop(1, shade(c, -0.25));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(-s * 0.95, s * 0.05 + b); ctx.bezierCurveTo(-s * 0.95, -s * 1.05, s * 0.95, -s * 1.05, s * 0.95, s * 0.05 + b); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = rgba('#ffffff', 0.9);
+    for (const [x, y, r] of [[-0.45, -0.35, 0.16], [0.1, -0.6, 0.18], [0.5, -0.25, 0.14]]) { ctx.beginPath(); ctx.arc(x * s, y * s, r * s, 0, TAU); ctx.fill(); }
+  }
+});
+
 const PAL = { k: '#14141c', w: '#ffffff', r: '#ff4d5e', o: '#ff9a3c', y: '#ffd93d', g: '#4ade80', b: '#4d8dff', p: '#a66bff', c: '#5ee7ff', n: '#a86b45', m: '#ff7ac6', d: '#6b7080' };
 const SHADOWED = Object.create(null);
 function restoreLooks() { for (const k in SHADOWED) { LOOKS[k] = SHADOWED[k]; delete SHADOWED[k]; } }
@@ -1371,6 +1421,9 @@ function Engine(canvas) {
           case 'T': o = G.make('spring', 'spring', [x, bottom - cell * 0.2]); o.size = cell; o.ph = cell * 0.4; break;
           case 'V': o = G.make('waterfall', 'waterfall', [x, y]); o.size = cell; o.foam = at(r + 1, c) !== 'V'; break;
           case 'A': item('bat', 0.85); o.setPatrol(cell * 2, 90); break;
+          case 'Q': item('spider', 0.85); o.setDangle(cell * 2.4); break;
+          case 'R': ground('crab', 0.9); o.setPatrol(cell * 1.5, 60); break;
+          case 'M': if (top) { item('mushroom', 0.8); o.setWander(50); } else { ground('mushroom', 0.9); o.setPatrol(cell * 2, 40); } break;
           case 'E': if (top) { item('slime', 0.8); o.setWander(70); } else ground('slime', 0.95); break;
           case 'P':
             if (top) { item('hero', 0.8); o.name = 'player'; o.control('arrows'); o.speed = 260; }
@@ -1793,6 +1846,10 @@ function Engine(canvas) {
   const isBoss = o => o.lookName === 'boss' && o.maxHp > 1;
   function drawObj(o, rt, camX, camY, big) {
     {
+      if (o.dangle && o.alpha > 0) {
+        ctx.save(); ctx.strokeStyle = 'rgba(235,240,255,0.6)'; ctx.lineWidth = 1.4; ctx.beginPath();
+        ctx.moveTo(o.x, o.dangle.y0 - o.size * 0.7); ctx.lineTo(o.x, o.y - o.size * 0.15); ctx.stroke(); ctx.restore();
+      }
       if (big) { const m = o.size * 1.5 + 40; if (o.x < camX - m || o.x > camX + W + m || o.y < camY - m || o.y > camY + H + m) return; }
       const popK = o.pop > 0 ? 1 + Math.sin((1 - o.pop) * Math.PI) * 0.25 - o.pop * 0.6 : 1;
       ctx.save(); ctx.translate(o.x, o.y);
@@ -1820,10 +1877,34 @@ function Engine(canvas) {
   function draw(rt) {
     ctx.save();
     if (G.shakeAmt > 0.3) ctx.translate(rnd(-1, 1) * G.shakeAmt, rnd(-1, 1) * G.shakeAmt);
-    PAR = G.cam.x;
-    if (G.bg) BACKGROUNDS[G.bg](ctx, rt); else { ctx.fillStyle = G.bgColor; ctx.fillRect(-30, -30, W + 60, H + 60); }
-    const camX = Math.round(G.cam.x), camY = Math.round(G.cam.y), big = G.WW > W || G.WH > H;
-    ctx.save(); ctx.translate(-camX, -camY);
+    const bgDraw = () => { if (G.bg) BACKGROUNDS[G.bg](ctx, rt); else { ctx.fillStyle = G.bgColor; ctx.fillRect(-30, -30, W + 60, H + 60); } };
+    const pair = G.split && G.camTarget && G.camTarget.pair, two = pair && pair[0].alive && pair[1].alive && G.cams;
+    if (two) {
+      for (let i = 0; i < 2; i++) {
+        ctx.save(); ctx.beginPath(); ctx.rect(i * W / 2, 0, W / 2, H); ctx.clip();
+        PAR = G.cams[i].x; bgDraw();
+        worldPass(rt, Math.round(G.cams[i].x), Math.round(G.cams[i].y), i * W / 2);
+        ctx.restore();
+      }
+      ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(W / 2 - 2, 0, 4, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(W / 2 - 0.5, 0, 1, H);
+    } else {
+      PAR = G.cam.x; bgDraw();
+      worldPass(rt, Math.round(G.cam.x), Math.round(G.cam.y), 0);
+    }
+    drawWeather();
+    for (const l of G.labels) {
+      let txt = ''; try { txt = typeof l.text === 'function' ? l.text() : l.text; } catch (e) { txt = '?'; }
+      ctx.textAlign = l.align || 'center'; ctx.font = `800 30px ${FONT}`; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.strokeText(txt, l.x, l.y); ctx.fillStyle = '#fff'; ctx.fillText(txt, l.x, l.y);
+    }
+    ctx.textAlign = 'center';
+    ctx.restore();
+    overlayPass(rt);
+  }
+  function worldPass(rt, camX, camY, offX) {
+    const big = G.WW > W || G.WH > H;
+    ctx.save(); ctx.translate(offX - camX, -camY);
 
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     for (const p of G.parts) if (p.smoke) {
@@ -1867,15 +1948,8 @@ function Engine(canvas) {
     }
     ctx.globalAlpha = 1;
     ctx.restore();
-    drawWeather();
-    for (const l of G.labels) {
-      let txt = ''; try { txt = typeof l.text === 'function' ? l.text() : l.text; } catch (e) { txt = '?'; }
-      ctx.textAlign = l.align || 'center'; ctx.font = `800 30px ${FONT}`; ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-      ctx.strokeText(txt, l.x, l.y); ctx.fillStyle = '#fff'; ctx.fillText(txt, l.x, l.y);
-    }
-    ctx.textAlign = 'center';
-    ctx.restore();
-
+  }
+  function overlayPass(rt) {
     const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.95);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
@@ -1886,6 +1960,16 @@ function Engine(canvas) {
     hud(rt);
   }
 
+  function stepWind(dt) {
+    const w = G.wind; if (!w || G.state !== 'play' || G.paused) return;
+    const sp = Math.hypot(w.x, w.y); if (sp < 5) return;
+    w.acc += dt * Math.min(40, 4 + sp / 12);
+    while (w.acc >= 1) {
+      w.acc -= 1;
+      const x = G.cam.x + (w.x ? (w.x > 0 ? rnd(-40, W * 0.6) : rnd(W * 0.4, W + 40)) : rnd(0, W)), y = G.cam.y + (w.y ? (w.y > 0 ? rnd(-40, H * 0.6) : rnd(H * 0.4, H + 40)) : rnd(0, H));
+      G.particle({ x, y, vx: w.x * rnd(1.4, 2.2), vy: w.y * rnd(1.4, 2.2) + rnd(-12, 12), life: rnd(0.35, 0.7), size: rnd(1.2, 2.4), color: '#e6f3ff' });
+    }
+  }
   function stepWeather(dt) {
     const k = G.weather;
     if (k) {
@@ -1951,7 +2035,7 @@ function Engine(canvas) {
     ctx.restore();
   }
   const PICON = { fast: '⚡', big: '💪', small: '🐜', shield: '🛡️', magnet: '🧲', jump: '🦘' };
-  const MINI_ITEM = ['coin', 'gem', 'star', 'heart'], MINI_GOAL = ['flag', 'checkpoint'], MINI_BAD = ['slime', 'enemy', 'ghost', 'boss', 'bomb', 'spike', 'bat', 'bee'];
+  const MINI_ITEM = ['coin', 'gem', 'star', 'heart'], MINI_GOAL = ['flag', 'checkpoint'], MINI_BAD = ['slime', 'enemy', 'ghost', 'boss', 'bomb', 'spike', 'bat', 'bee', 'spider', 'crab', 'mushroom'];
   function minimap(t) {
     const k = Math.min(200 / G.WW, 110 / G.WH), mw = G.WW * k, mh = G.WH * k, x = W - 18 - mw, y = G.lives != null ? 72 : 18;
     ctx.save();
@@ -2197,7 +2281,7 @@ function Engine(canvas) {
     if (G.state === 'play' && !G.talkCur) update(dt);
     if (G.camTarget) camStep(1 - Math.exp(-7 * real));
     G.mouse.x = G.mouse.sx + G.cam.x; G.mouse.y = G.mouse.sy + G.cam.y;
-    stepWeather(real);
+    stepWeather(real); stepWind(real);
     if (G.state === 'over' || G.state === 'won') {
       G.overT += real;
       for (const o of G.objs) if (o.alive && !o.ctrl) { o.x += o.vx * dt; o.y += o.vy * dt; o.angle += o.spinV * Math.PI / 180 * dt; }
