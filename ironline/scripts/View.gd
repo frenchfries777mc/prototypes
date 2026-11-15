@@ -57,6 +57,9 @@ var vm_flash: MeshInstance3D
 var vm_flash_t := 0.0
 var bolt_t := 0.0
 var step_acc := 0.0
+var spec_id := -1
+var spec_cam := Vector3.ZERO
+var spec_init := false
 var sun_vis := 0.0
 
 
@@ -237,6 +240,31 @@ func _set_viewmodel(weapon: int) -> void:
 
 
 ## 프레임마다 호출. alpha = 틱 사이 보간 비율.
+## 사망 후: 처음 몇 초는 나를 쓰러뜨린 사람(킬캠), 이후엔 가까운 아군을 따라간다. 대상이 없으면 false.
+func _pick_spectate(me: Sim.Unit) -> bool:
+	var valid := false
+	if spec_id >= 0 and spec_id < sim.units.size():
+		var cur: Sim.Unit = sim.units[spec_id]
+		valid = cur.alive and cur.id != me.id
+		if valid and me.death_age > 3.2 and cur.team != me.team:
+			valid = false
+	if not valid:
+		var pick := -1
+		if me.killer >= 0 and me.death_age < 3.2 and sim.units[me.killer].alive:
+			pick = me.killer
+		else:
+			var best := 1e12
+			for u in sim.units:
+				if u.alive and u.team == me.team and u.id != me.id:
+					var d: float = u.pos.distance_squared_to(me.pos)
+					if d < best:
+						best = d
+						pick = u.id
+		spec_id = pick
+		spec_init = false
+	return spec_id >= 0
+
+
 func _update_sun() -> void:
 	var to_sun := sun.global_transform.basis.z
 	var far_p := cam.global_position + to_sun * 500.0
@@ -267,8 +295,14 @@ func _shells(dt: float, shake_scale: float) -> void:
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
 	var me: Sim.Unit = sim.units[local_id]
 	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
+	var spectating := false
 	if not me.alive:
 		cp.y = maxf(cp.y - minf(me.death_age * 2.0, 1.2), me.pos.y + 0.35)
+		if me.death_age > 0.9:
+			spectating = _pick_spectate(me)
+	else:
+		spec_id = -1
+		spec_init = false
 	cam_pos = cp
 	# 병사
 	for u in sim.units:
@@ -280,7 +314,21 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
 	shake = maxf(0.0, shake - dt * 3.0)
 	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
-	if debug_3p:
+	if spectating:
+		var tu: Sim.Unit = sim.units[spec_id]
+		var ty := lerp_angle(tu.prev_yaw, tu.yaw, alpha)
+		var tp: Vector3 = tu.prev_pos.lerp(tu.pos, alpha)
+		var want := tp + Basis(Vector3.UP, ty) * Vector3(0.7, 1.9, 3.6)
+		want.y = maxf(want.y, sim.world.height_at(want.x, want.z) + 0.8)
+		if not spec_init:
+			spec_cam = cp
+			spec_init = true
+		spec_cam = spec_cam.lerp(want, minf(1.0, dt * 4.0))
+		cp = spec_cam
+		cam.position = cp
+		cam.look_at(tp + Vector3(0, 1.35, 0), Vector3.UP)
+		cam_pos = cp
+	if debug_3p and not spectating:
 		cp += cam.basis * Vector3(0.9 * tp_dist / 3.2, 0.5 * tp_dist / 3.2, tp_dist)
 	cam.position = cp
 	ads_t = move_toward(ads_t, 1.0 if (me.alive and me.in_ads) else 0.0, dt * 7.0)

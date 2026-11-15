@@ -29,6 +29,7 @@ var craters: Array = []
 var boxes: Array = []
 var box_cells := {}
 var houses: Array = []
+var house_centers: Array = []
 
 
 func _init(s: int = 1) -> void:
@@ -46,6 +47,9 @@ func _init(s: int = 1) -> void:
 		if _near_point(cx, cz, POINT_R + 6.0):
 			continue
 		craters.append([cx, cz, rng.randf_range(3.0, 7.0), rng.randf_range(0.8, 1.7)])
+	for i in range(1, 4):
+		var sg := -1.0 if POINT_Z[i] > 0.0 else 1.0
+		house_centers.append(Vector2(POINT_X[i] - 3.0, POINT_Z[i] + sg * 22.0))
 	gx0 = -(HALF_X + MARGIN)
 	gz0 = -(HALF_Z + MARGIN)
 	gw = int((HALF_X + MARGIN) * 2.0 / GRID) + 1
@@ -62,7 +66,25 @@ func point_pos(i: int) -> Vector3:
 
 
 func trench_center(tx: float, z: float) -> float:
-	return tx + 7.0 * sin(z * 0.045 + tx * 0.1)
+	# 완만한 곡선 + 참호 특유의 지그재그(엄호 구간)
+	var zig := (absf(fposmod(z / 13.0 + tx * 0.07, 1.0) - 0.5) * 2.0 - 0.5) * 2.2
+	return tx + 6.0 * sin(z * 0.04 + tx * 0.1) + zig
+
+
+## 거점들을 잇는 비포장 도로의 중심선 z.
+func road_z(x: float) -> float:
+	var xs := [-190.0, -140.0, -70.0, 0.0, 70.0, 140.0, 190.0]
+	var zs := [8.0, 8.0, -14.0, 10.0, -12.0, 6.0, 6.0]
+	var i := 0
+	while i < xs.size() - 2 and x >= xs[i + 1]:
+		i += 1
+	var t := clampf((x - xs[i]) / (xs[i + 1] - xs[i]), 0.0, 1.0)
+	return lerpf(zs[i], zs[i + 1], smoothstep(0.0, 1.0, t)) + sin(x * 0.07) * 1.6 + sin(x * 0.19) * 0.5
+
+
+func road_mask(x: float, z: float) -> float:
+	var d := absf(z - road_z(x))
+	return 1.0 - smoothstep(1.1, 2.7, d)
 
 
 func _near_point(x: float, z: float, r: float) -> bool:
@@ -77,12 +99,23 @@ func _raw_height(x: float, z: float) -> float:
 	var w := 0.0
 	for i in 5:
 		var d := Vector2(x - POINT_X[i], z - POINT_Z[i]).length()
-		w = maxf(w, 1.0 - smoothstep(POINT_R + 2.0, POINT_R + 16.0, d))
+		w = maxf(w, 1.0 - smoothstep(POINT_R - 3.0, POINT_R + 9.0, d))
 	h = lerpf(h, FLAT_Y, w)
+	# 집터는 평평하게
+	var wh := 0.0
+	for hc in house_centers:
+		wh = maxf(wh, 1.0 - smoothstep(7.5, 13.0, Vector2(x - hc.x, z - hc.y).length()))
+	h = lerpf(h, 0.35, wh)
+	var fl := maxf(w, wh)
+	# 길은 아주 살짝 다져져 있다
+	h -= 0.07 * road_mask(x, z)
 	for tx in TRENCH_X:
 		var cx := trench_center(tx, z)
 		var dd := absf(x - cx)
-		h -= 1.7 * (1.0 - smoothstep(1.3, 3.4, dd)) * (1.0 - w)
+		var depth := 1.55 + 0.25 * sin(z * 0.21 + tx)
+		h -= depth * (1.0 - smoothstep(1.2, 3.0, dd)) * (1.0 - fl)
+		# 퍼 올린 흙둑
+		h += 0.5 * smoothstep(2.4, 3.5, dd) * (1.0 - smoothstep(3.5, 6.5, dd)) * (1.0 - fl)
 	for c in craters:
 		var dx: float = x - c[0]
 		var dz: float = z - c[1]
@@ -91,7 +124,7 @@ func _raw_height(x: float, z: float) -> float:
 		if d2 < r * r * 1.6:
 			var t := sqrt(d2) / r
 			h -= c[3] * (1.0 - smoothstep(0.0, 1.0, t))
-			h += 0.25 * smoothstep(0.8, 1.0, t) * (1.0 - smoothstep(1.0, 1.25, t))
+			h += 0.3 * smoothstep(0.8, 1.0, t) * (1.0 - smoothstep(1.0, 1.3, t))
 	return h
 
 
@@ -117,6 +150,14 @@ func _add_box(cx: float, cz: float, sx: float, sz: float, h: float, kind: int) -
 		minf(height_at(mn.x, mx.z), height_at(mx.x, mx.z))) - 0.35
 	mn.y = by
 	mx.y = by + h + 0.35
+	_register(mn, mx, kind)
+
+
+func _add_box_y(cx: float, cz: float, sx: float, sz: float, y0: float, y1: float, kind: int, gy: float) -> void:
+	_register(Vector3(cx - sx * 0.5, gy + y0, cz - sz * 0.5), Vector3(cx + sx * 0.5, gy + y1, cz + sz * 0.5), kind)
+
+
+func _register(mn: Vector3, mx: Vector3, kind: int) -> void:
 	var idx := boxes.size()
 	boxes.append({"mn": mn, "mx": mx, "kind": kind})
 	var x0 := int(floor((mn.x - 1.0) / CELL))
@@ -201,18 +242,63 @@ func _place_props(rng: RandomNumberGenerator) -> void:
 		placed += 1
 
 
+## 창문과 문이 뚫린 벽체. 창으로는 총알이 지나가고(LOS 통과), 부서진 벽은 낮고 들쑥날쑥하다.
 func _add_house(cx: float, cz: float, rng: RandomNumberGenerator) -> void:
-	var hw := 4.6
-	var hd := 3.6
-	var t := 0.7
-	var h := rng.randf_range(2.8, 3.4)
-	houses.append({"cx": cx, "cz": cz, "hw": hw, "hd": hd, "h": h})
-	# 남쪽(z+)은 통벽, 북쪽(z-)은 출입구
-	_add_box(cx, cz + hd, hw * 2.0, t, h, 0)
-	_add_box(cx - hw * 0.5 - 1.0, cz - hd, hw - 2.0, t, h * 0.85, 0)
-	_add_box(cx + hw * 0.5 + 1.0, cz - hd, hw - 2.0, t, h, 0)
-	_add_box(cx - hw, cz, t, hd * 2.0 - 3.0, h, 3)
-	_add_box(cx + hw, cz - 0.5, t, hd * 2.0 - 2.0, h * 0.6, 0)
+	var hw := 4.8
+	var hd := 3.7
+	var t := 0.5
+	var h := rng.randf_range(3.0, 3.5)
+	var gy := height_at(cx, cz)
+	var wrecked := rng.randi_range(0, 3)  # 0 북 1 남 2 서 3 동 중 한 면이 크게 무너짐
+	var op: Array = []
+	var door := [cx, 1.5, 0.0, 2.25]
+	var win_n := [[cx - 3.0, 1.1, 0.95, 2.15], [cx + 3.0, 1.1, 0.95, 2.15]]
+	var win_s := [[cx - 2.0, 1.1, 0.95, 2.15], [cx + 2.0, 1.1, 0.95, 2.15]]
+	var win_w := [[cz, 1.1, 0.95, 2.15]]
+	var win_e := [[cz - 1.6, 1.1, 0.95, 2.15], [cz + 1.6, 1.1, 0.95, 2.15]]
+	_wall_run(cx - hw, cx + hw, cz - hd, true, h, t, [door] + win_n, gy, rng, wrecked == 0, op)
+	_wall_run(cx - hw, cx + hw, cz + hd, true, h, t, win_s, gy, rng, wrecked == 1, op)
+	_wall_run(cz - hd + t * 0.5, cz + hd - t * 0.5, cx - hw, false, h, t, win_w, gy, rng, wrecked == 2, op)
+	_wall_run(cz - hd + t * 0.5, cz + hd - t * 0.5, cx + hw, false, h, t, win_e, gy, rng, wrecked == 3, op)
+	houses.append({"cx": cx, "cz": cz, "hw": hw, "hd": hd, "h": h, "gy": gy, "open": op, "wrecked": wrecked})
+
+
+## 한 면의 벽을 창/문 구멍 둘레의 조각으로 쪼개 충돌체로 등록한다.
+## along_x=true 면 x 방향으로 뻗는 벽(고정 좌표는 z), 아니면 z 방향(고정 좌표는 x).
+func _wall_run(u_start: float, u_end: float, fixed: float, along_x: bool, h: float, t: float,
+		openings: Array, gy: float, rng: RandomNumberGenerator, wrecked: bool, op_out: Array) -> void:
+	var wall_h := h * (0.55 if wrecked else 1.0)
+	var ops := openings.duplicate()
+	ops.sort_custom(func(a, b): return a[0] < b[0])
+	var cursor := u_start
+	var pieces: Array = []  # [u0, u1, y0, y1]
+	for o in ops:
+		var u0: float = o[0] - o[1] * 0.5
+		var u1: float = o[0] + o[1] * 0.5
+		var y0: float = o[2]
+		var y1: float = minf(o[3], wall_h)
+		if u0 > cursor + 0.05:
+			pieces.append([cursor, u0, 0.0, wall_h])
+		if y0 > 0.05:
+			pieces.append([u0, u1, 0.0, y0])
+		if y1 < wall_h - 0.05 and y1 > y0:
+			pieces.append([u0, u1, y1, wall_h])
+		op_out.append({"u": o[0], "w": o[1], "y0": y0, "y1": y1, "fixed": fixed, "along_x": along_x, "t": t})
+		cursor = u1
+	if u_end > cursor + 0.05:
+		pieces.append([cursor, u_end, 0.0, wall_h])
+	for i in pieces.size():
+		var pc: Array = pieces[i]
+		var y1: float = pc[3]
+		# 맨 끝 조각과 무너진 벽은 높이가 들쑥날쑥
+		if pc[2] == 0.0 and (i == 0 or i == pieces.size() - 1 or wrecked):
+			y1 = pc[3] * rng.randf_range(0.5, 1.0)
+		var uc: float = (pc[0] + pc[1]) * 0.5
+		var ul: float = pc[1] - pc[0]
+		if along_x:
+			_add_box_y(uc, fixed, ul, t, pc[2], y1, 8, gy)
+		else:
+			_add_box_y(fixed, uc, t, ul, pc[2], y1, 8, gy)
 
 
 # ---------------------------------------------------------------- 충돌/시야
