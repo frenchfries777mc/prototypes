@@ -206,10 +206,11 @@ var CAMP_TYPES = {
   wraith: ['wisp', 'wisp', 'wisp', 'wisp']
 };
 
+/* react: 날아오는 스킬을 보고 피하는 확률, lead: 움직이는 상대를 얼마나 앞질러 맞추는지 */
 var DIFFS = [
-  { name: '쉬움', think: 1.9, gain: 0.85, lead: 0 },
-  { name: '보통', think: 1.0, gain: 1.0, lead: 0.8 },
-  { name: '어려움', think: 0.8, gain: 1.15, lead: 1.0 }
+  { name: '쉬움', think: 1.9, gain: 0.85, lead: 0, react: 0.2 },
+  { name: '보통', think: 1.0, gain: 1.0, lead: 0.8, react: 0.55 },
+  { name: '어려움', think: 0.8, gain: 1.15, lead: 1.0, react: 0.85 }
 ];
 
 if (typeof module !== 'undefined') module.exports = {};
