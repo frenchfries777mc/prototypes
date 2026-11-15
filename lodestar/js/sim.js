@@ -13,8 +13,9 @@ function ftext(u, txt, color) {
   if (G.texts.length < 80) G.texts.push({ x: u.x + (rnd() - 0.5) * 40, y: u.y - u.r - 20, txt: txt, color: color, t: 0 });
 }
 
-/* 점령전: 점령 속도(영웅 1명 기준 초당), 승리에 필요한 충전량, 지점 하나의 초당 충전량 */
-var NODE_RATE = 12, WIN_CHARGE = 1000, NODE_INCOME = 0.3;
+/* 성석 운반전: 점수 5점 또는 10분, 영웅은 처음부터 완성된 상태(레벨 7 능력치, 스킬 3·3·3·2랭크) */
+var WIN_SCORE = 7, MATCH_TIME = 600, RESPAWN_T = 7, FIXED_LEVEL = 7, SKILL_RANKS = [3, 3, 3, 2];
+var STONE_R = 75, ALTAR_R = 260, STONE_FREE_T = 12, STONE_WAIT_T = 10, CARRY_SLOW = 0.76, THROW_RANGE = 950, ULT_PASSIVE = 1.1, PACK_T = 20;
 var FOUNT_R = 650;
 
 function mkUnit(type, team, x, y, o) {
@@ -40,7 +41,6 @@ function spawnPos(team, slot) {
 function recalc(h) {
   var d = h.def, b = d.base, g = d.grow, L = h.level - 1;
   var it = { hp: 0, mp: 0, ad: 0, ap: 0, armor: 0, as: 0, ms: 0, ls: 0, haste: 0, mpr: 0 };
-  for (var i = 0; i < h.items.length; i++) { var I = ITEMS[h.items[i]]; for (var k in it) if (I[k]) it[k] += I[k]; }
   var oh = h.maxHp, om = h.maxMp;
   h.maxHp = b.hp + g.hp * L + it.hp;
   h.maxMp = b.mp + g.mp * L + it.mp;
@@ -60,9 +60,9 @@ function mkHero(defId, team, isPlayer, slot, role) {
   var d = HEROES[defId], sp = spawnPos(team, slot);
   var h = mkUnit('hero', team, sp.x, sp.y, {
     r: 42, def: d, defId: defId, name: d.name, isPlayer: isPlayer, slot: slot, role: role, ranged: !d.melee,
-    level: 1, xp: 0, relicPicks: 0, relicOffer: null, caps: 0, items: [], ranks: [0, 0, 0, 0], cds: [0, 0, 0, 0], points: 1,
-    mp: 0, maxMp: 0, kills: 0, deaths: 0, assists: 0, cs: 0, dmgDealt: 0,
-    respawnT: 0, order: null, path: null, dash: null, recallT: 0, sight: 1250, hitBy: {},
+    level: FIXED_LEVEL, items: [], ranks: SKILL_RANKS.slice(), cds: [0, 0, 0, 0], points: 0, ult: 0, carry: false, scores: 0, healed: 0,
+    mp: 0, maxMp: 0, kills: 0, deaths: 0, assists: 0, dmgDealt: 0,
+    respawnT: 0, order: null, path: null, dash: null, sight: 1250, hitBy: {},
     empower: 0, gx: 0, gy: 0, repT: 0, aggroT: -99, aggroVictim: null, ai: null, bLs: 0, haste: 0, bAp: 0,
     hpr: 0, mpr: 0, color: d.color
   });
@@ -83,17 +83,11 @@ function newGame(opt) {
   opt = opt || {};
   UID = 1; _seed = (opt.seed || (Date.now() & 0x7fffffff)) | 0;
   G = {
-    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], camps: [], nodes: [], charge: [0, 0],
-    kills: [0, 0], over: null, visT: 0, stratT: 1, focus: [0, 0], bossPlan: [null, null], behind: [false, false],
-    player: null, diff: opt.diff === undefined ? 1 : opt.diff
+    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], kills: [0, 0], score: [0, 0], timeLeft: MATCH_TIME, overtime: false,
+    over: null, visT: 0, stratT: 1, focus: [0, 0], pickers: [[], []], player: null, diff: opt.diff === undefined ? 1 : opt.diff,
+    stone: { state: 'center', x: MAP.STONE.x, y: MAP.STONE.y, carrier: null, freeT: 0, waitT: 0, team: -1, thrower: null, lockT: 0, z: 0 },
+    packs: MAP.packs.map(function (p, i) { return { i: i, x: p.x, y: p.y, ready: true, t: 0 }; })
   };
-  MAP.nodes.forEach(function (n, i) {
-    G.nodes.push({ i: i, x: n.x, y: n.y, r: n.heart ? 380 : 300, lane: n.lane, heart: n.heart, c: n.start === 0 ? 100 : n.start === 1 ? -100 : 0,
-      owner: n.start, present: [0, 0], contested: false, name: NODE_NAMES[i] });
-  });
-  MAP.camps.forEach(function (c) { G.camps.push({ x: c.x, y: c.y, type: c.type, side: c.side, units: [], alive: 0, respawnT: 40, target: null }); });
-  MAP.bosses.forEach(function (b) { G.camps.push({ x: b.x, y: b.y, type: b.type, side: 2, boss: true, units: [], alive: 0, respawnT: 300, target: null }); });
-
   var rolesA = opt.noPlayer ? ['top', 'mid', 'jungle', 'bot', 'sup'] : ['mid', 'top', 'jungle', 'bot', 'sup'];
   var rolesB = ['top', 'mid', 'jungle', 'bot', 'sup'];
   var usedA = {}, usedB = {};
@@ -131,6 +125,7 @@ function updStatus(u, dt) {
     if (b.shield > 0) sh += b.shield; if (b.dmgMul) dm += b.dmgMul; if (b.regen) rg += b.regen;
   }
   u.ms = u.bMs * (1 + ms) * (1 - slow);
+  if (u.carry) u.ms *= CARRY_SLOW;
   u.as = u.bAs * (1 + as);
   u.ad = u.bAd + ad;
   u.armor = u.bArmor + armor;
@@ -140,30 +135,11 @@ function updStatus(u, dt) {
 }
 
 /* ───────── 피해와 처치 ───────── */
-function gainMul(h) { return (h.team === 1 && G.player) ? DIFFS[G.diff].gain : 1; }
-function xpNeed(l) { return 160 + 110 * l; }
-function gainXp(h, x) {
-  if (h.level >= MAX_LEVEL) return;
-  /* 뒤처진 팀은 경험치를 더 받는다 (상대 평균 레벨과의 차이 1당 9%, 최대 45%) */
-  var sum = 0, n = 0;
-  for (var q = 0; q < G.heroes.length; q++) { var e = G.heroes[q]; if (e.team !== h.team) { sum += e.level; n++; } }
-  var catchUp = n ? 1 + Math.max(0, Math.min(0.45, 0.09 * (sum / n - h.level))) : 1;
-  h.xp += x * gainMul(h) * catchUp;
-  while (h.level < MAX_LEVEL && h.xp >= xpNeed(h.level)) {
-    h.xp -= xpNeed(h.level); h.level++; h.points++; recalc(h);
-    if (h.level % 2 === 0 && h.level <= 12 && h.items.length + h.relicPicks < 6) {
-      h.relicPicks++; if (!h.relicOffer) h.relicOffer = rollRelics(h);
-      if (h.isPlayer) ev('relic');
-    }
-    fx({ type: 'ring', x: h.x, y: h.y, r: 120, dur: 0.6, color: '#ffe9a8', follow: h });
-    if (h.isPlayer) ev('level', { level: h.level });
-  }
-  if (h.level >= MAX_LEVEL) h.xp = 0;
-}
 function healUnit(u, a) {
-  if (u.dead || a <= 0) return;
-  var b = u.hp; u.hp = Math.min(u.maxHp, u.hp + a);
-  if (G.player && u === G.player && u.hp - b >= 12) ftext(u, '+' + Math.round(u.hp - b), '#7dffa0');
+  if (u.dead || a <= 0) return 0;
+  var b = u.hp, got; u.hp = Math.min(u.maxHp, u.hp + a); got = u.hp - b;
+  if (G.player && u === G.player && got >= 12) ftext(u, '+' + Math.round(got), '#7dffa0');
+  return got;
 }
 
 function damage(src, tgt, amt, kind) {
@@ -179,12 +155,10 @@ function damage(src, tgt, amt, kind) {
     }
   }
   tgt.hp -= a; tgt.lastDmgT = G.t; tgt.flash = 0.12;
-  if (tgt.recallT > 0) tgt.recallT = 0;
   if (src) {
     tgt.lastAttacker = src;
     if (src.type === 'hero') {
-      if (tgt.type === 'hero') { tgt.hitBy[src.id] = G.t; src.aggroT = G.t; src.aggroVictim = tgt; src.dmgDealt += dealt; }
-      else if (tgt.type === 'monster' && !tgt.camp.target) tgt.camp.target = src;
+      if (tgt.type === 'hero') { tgt.hitBy[src.id] = G.t; src.aggroT = G.t; src.aggroVictim = tgt; src.dmgDealt += dealt; src.ult = Math.min(100, src.ult + dealt / 50); }
       if (kind === 'basic' && src.ls > 0 && !src.dead) healUnit(src, dealt * src.ls);
     }
     if (G.player && (src === G.player || tgt === G.player) && dealt >= 4) {
@@ -195,46 +169,13 @@ function damage(src, tgt, amt, kind) {
   return dealt;
 }
 
-function nearHeroes(team, x, y, R) {
-  var out = [];
-  for (var i = 0; i < G.heroes.length; i++) { var h = G.heroes[i]; if (h.team === team && !h.dead && Math.hypot(h.x - x, h.y - y) < R) out.push(h); }
-  return out;
-}
-function shareXp(team, x, y, xp, killer) {
-  var hs = nearHeroes(team, x, y, 1300);
-  if (killer && hs.indexOf(killer) < 0) hs.push(killer);
-  var n = hs.length; if (!n) return;
-  var each = xp * (n === 1 ? 1 : n === 2 ? 0.62 : 0.45);
-  for (var i = 0; i < n; i++) gainXp(hs[i], each);
-}
-
-function kill(src, v) {
-  if (v.dead) return;
-  var killer = src && src.type === 'hero' ? src : null;
-  if (v.type === 'hero') return killHero(src, v);
-  v.dead = true;
-  fx({ type: 'burst', x: v.x, y: v.y, r: v.r * 2.2, dur: 0.35, color: '#d9c7a0' });
-  if (v.type !== 'monster') return;
-  var c = v.camp; c.alive--;
-  if (killer) { killer.cs++; shareXp(killer.team, v.x, v.y, v.xp, killer); }
-  if (c.alive <= 0) { c.respawnT = c.boss ? 240 : 70; c.target = null; }
-  var team = killer ? killer.team : (src && src.team < 2 ? src.team : -1);
-  if (v.boss && team >= 0) {
-    /* 보스: 태고의 거신은 충전량 +40 과 피해 증가, 황금 골렘은 충전량 +70 과 체력 회복 */
-    G.charge[team] += v.boss === 'titan' ? 40 : 70;
-    G.heroes.forEach(function (h) {
-      if (h.team !== team || h.dead) return;
-      if (v.boss === 'titan') addBuff(h, { id: 'titan', t: 150, dmgMul: 0.15, regen: 25, titan: true });
-      else { healUnit(h, h.maxHp * 0.35); h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.35); }
-    });
-    ev('boss', { team: team, boss: v.boss });
-  }
-}
+function kill(src, v) { if (!v.dead && v.type === 'hero') killHero(src, v); }
 
 function killHero(src, v) {
   v.dead = true; v.deaths++; v.hp = 0;
-  v.respawnT = 6 + 2.3 * v.level + G.t / 120;
-  v.buffs.length = 0; v.order = null; v.path = null; v.dash = null; v.recallT = 0; v.stunT = 0; v.rootT = 0; v.empower = 0;
+  v.respawnT = RESPAWN_T;
+  v.buffs.length = 0; v.order = null; v.path = null; v.dash = null; v.stunT = 0; v.rootT = 0; v.empower = 0; v.ult *= 0.5;
+  if (v.carry) dropStone(v);
   var killer = src && src.type === 'hero' ? src : null, ass = [], recent = null, rt = -1;
   G.heroes.forEach(function (h) {
     if (h.team === v.team) return;
@@ -243,16 +184,8 @@ function killHero(src, v) {
   });
   if (!killer) killer = recent;
   G.kills[1 - v.team]++;
-  var sharers = ass.slice(); if (killer && sharers.indexOf(killer) < 0) sharers.push(killer);
-  /* 현상금: 연속으로 처치한 영웅은 비싸고, 연속으로 죽은 영웅은 싸다 */
-  var vs = v.streak || 0, vd = v.dStreak || 0;
-  v.streak = 0; v.dStreak = vd + 1;
-  if (killer) { killer.kills++; killer.streak = (killer.streak || 0) + 1; killer.dStreak = 0; }
-  ass.forEach(function (a) { if (a !== killer) a.assists++; });
-  /* 처치하면 충전량 +10. 연속 처치한 영웅은 더 크고, 연속으로 죽은 영웅은 작다 */
-  G.charge[1 - v.team] += Math.max(4, 10 + Math.min(10, 2 * vs) - Math.min(5, vd));
-  var xp = (140 + 22 * v.level) / (sharers.length > 1 ? sharers.length * 0.7 : 1);
-  sharers.forEach(function (h) { gainXp(h, xp); });
+  if (killer) { killer.kills++; killer.ult = Math.min(100, killer.ult + 15); }
+  ass.forEach(function (a) { if (a !== killer) { a.assists++; a.ult = Math.min(100, a.ult + 8); } });
   v.hitBy = {};
   fx({ type: 'burst', x: v.x, y: v.y, r: 200, dur: 0.6, color: v.color });
   ev('kill', { killer: killer ? killer.id : 0, victim: v.id, by: src ? src.type : '' });
@@ -260,9 +193,10 @@ function killHero(src, v) {
 
 function respawn(h) {
   var sp = spawnPos(h.team, h.slot);
-  h.dead = false; h.x = sp.x; h.y = sp.y; h.hp = h.maxHp; h.mp = h.maxMp; h.order = null; h.path = null;
+  h.dead = false; h.x = sp.x; h.y = sp.y; h.hp = h.maxHp; h.order = null; h.path = null; h.vx = h.vy = 0;
   h.face = h.team ? Math.PI : 0; h.lastDmgT = -99;
-  if (h.ai) h.ai.mode = 'node';
+  if (h.ai) h.ai.heal = false;
+  fx({ type: 'ring', x: h.x, y: h.y, r: 140, dur: 0.6, color: h.color });
   if (h.isPlayer) ev('respawn');
 }
 
@@ -330,25 +264,6 @@ function skillDmg(h, sk, rk) { return sk.dmg ? val(sk.dmg, rk) + (sk.sAd || 0) *
 function skillHeal(h, sk, rk) { return sk.heal ? val(sk.heal, rk) + (sk.hSAp || 0) * h.ap : 0; }
 function skillCd(h, i) { return val(h.def.skills[i].cd, h.ranks[i]) * 100 / (100 + h.haste); }
 function skillReach(sk) { return sk.kind === 'nova' ? sk.radius : sk.kind === 'self' ? (sk.allyR || 0) : sk.range; }
-function rankCap(h, i) {
-  if (i === 3) return h.level >= 15 ? 3 : h.level >= 11 ? 2 : h.level >= 6 ? 1 : 0;
-  return Math.min(4, Math.ceil(h.level / 2));
-}
-function levelSkill(h, i) {
-  if (h.points <= 0 || h.ranks[i] >= rankCap(h, i)) return false;
-  h.ranks[i]++; h.points--; return true;
-}
-function autoSkill(h) {
-  var guard = 0;
-  while (h.points > 0 && guard++ < 20) {
-    if (levelSkill(h, 3)) continue;
-    var ord = h.def.order, okd = false;
-    if (h.level <= 3) { for (var a = 0; a < 3 && !okd; a++) if (h.ranks[ord[a]] === 0) okd = levelSkill(h, ord[a]); }
-    for (var b = 0; b < 3 && !okd; b++) okd = levelSkill(h, ord[b]);
-    if (!okd) break;
-  }
-}
-
 function mkBuff(h, sk, rk) {
   var b = sk.buff, o = { id: 'sk:' + sk.name, t: b.dur };
   if (b.ms) o.ms = b.ms; if (b.as) o.as = val(b.as, rk); if (b.ad) o.ad = val(b.ad, rk);
@@ -364,7 +279,7 @@ function applyHit(src, t, sk, rk, dmg) {
   if (t.dead) return;
   var cc = t.boss ? 0.3 : 1;
   if (sk.slow) addBuff(t, { id: 'slow:' + sk.name, t: sk.slow[1] * cc, slow: sk.slow[0] });
-  if (sk.stun) { t.stunT = Math.max(t.stunT, val(sk.stun, rk) * cc); t.dash = null; t.recallT = 0; }
+  if (sk.stun) { t.stunT = Math.max(t.stunT, val(sk.stun, rk) * cc); t.dash = null; }
   if (sk.root) { t.rootT = Math.max(t.rootT, sk.root * cc); t.dash = null; }
 }
 function hittable(u, team) { return !u.dead && u.team !== team; }
@@ -376,9 +291,10 @@ function hitCircle(src, x, y, R, sk, rk, dmg, skip) {
   }
 }
 
+/* 마나는 없다. 일반 스킬은 쿨다운만, 궁극기(3번)는 충전이 가득 차야 쓴다 */
 function canCast(h, i) {
-  var rk = h.ranks[i];
-  return rk > 0 && h.cds[i] <= 0 && !h.dead && h.stunT <= 0 && !h.dash && h.mp >= val(h.def.skills[i].cost, rk);
+  if (h.dead || h.stunT > 0 || h.dash || h.cds[i] > 0) return false;
+  return i === 3 ? h.ult >= 100 : true;
 }
 function castSkill(h, i, tx, ty) {
   if (!canCast(h, i)) return false;
@@ -387,7 +303,8 @@ function castSkill(h, i, tx, ty) {
   var dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
   if (d < 1) { dx = Math.cos(h.face); dy = Math.sin(h.face); d = 1; }
   var ux = dx / d, uy = dy / d;
-  h.mp -= val(sk.cost, rk); h.cds[i] = skillCd(h, i); h.recallT = 0; h.castT = 0.4;
+  if (i === 3) { h.ult = 0; h.cds[3] = 1.2; } else h.cds[i] = skillCd(h, i);
+  h.castT = 0.4;
   if (sk.kind !== 'self' && sk.kind !== 'blink') h.face = Math.atan2(uy, ux);
   if (!(sk.buff && sk.buff.stealth)) breakStealth(h);
   var dmg = skillDmg(h, sk, rk);
@@ -452,31 +369,12 @@ function updDash(h, dt) {
 /* ───────── 영웅 ───────── */
 function inFountain(h) { return dist(h, MAP.FOUNT[h.team]) < FOUNT_R; }
 function cmdMove(h, x, y) {
-  h.order = { type: 'move', x: x, y: y }; h.recallT = 0; h.gx = x; h.gy = y; h.repT = 5;
+  h.order = { type: 'move', x: x, y: y }; h.gx = x; h.gy = y; h.repT = 5;
   h.path = MAP.los(h.x, h.y, x, y) ? [[x, y]] : MAP.findPath(h.x, h.y, x, y);
 }
-function cmdAttack(h, t) { h.order = { type: 'attack', target: t }; h.recallT = 0; h.path = null; }
-function cmdAMove(h, x, y) { h.order = { type: 'amove', x: x, y: y }; h.recallT = 0; h.path = null; }
-function cmdStop(h) { h.order = null; h.path = null; h.recallT = 0; }
-function startRecall(h) { if (h.dead || h.dash || h.stunT > 0) return; h.order = null; h.path = null; h.recallT = 6; }
-
-/* 유물: 짝수 레벨(2~12)마다 세 개 중 하나를 고른다. 같은 유물은 두 번 못 고른다 */
-function rollRelics(h) {
-  var pool = ITEM_IDS.filter(function (id) { return h.items.indexOf(id) < 0; });
-  var fav = (BUILDS[h.def.cls] || []).filter(function (id) { return h.items.indexOf(id) < 0; });
-  var out = [];
-  if (fav.length) out.push(fav[(rnd() * Math.min(3, fav.length)) | 0]);
-  while (out.length < 3 && pool.length) { var id = pool[(rnd() * pool.length) | 0]; if (out.indexOf(id) < 0) out.push(id); }
-  return out;
-}
-function pickRelic(h, idx) {
-  if (!h.relicOffer || h.relicPicks <= 0 || h.items.length >= 6) return false;
-  var id = h.relicOffer[idx]; if (!id) return false;
-  h.items.push(id); h.relicPicks--; recalc(h);
-  h.relicOffer = h.relicPicks > 0 && h.items.length < 6 ? rollRelics(h) : null;
-  return true;
-}
-
+function cmdAttack(h, t) { h.order = { type: 'attack', target: t }; h.path = null; }
+function cmdAMove(h, x, y) { h.order = { type: 'amove', x: x, y: y }; h.path = null; }
+function cmdStop(h) { h.order = null; h.path = null; }
 /* 마우스 커서 가까이에 있는, 사거리 안의 적을 고른다. 영웅을 우선한다 */
 function pickAssist(h) {
   var c = h.atkHold, best = null, bs = 1e9;
@@ -495,7 +393,7 @@ function chase(h, t, dt) {
 function updHero(h, dt) {
   if (h.dead) { h.respawnT -= dt; if (h.respawnT <= 0) respawn(h); return; }
   for (var i = 0; i < 4; i++) if (h.cds[i] > 0) h.cds[i] -= dt;
-  gainXp(h, 6 * dt);
+  h.ult = Math.min(100, h.ult + ULT_PASSIVE * dt);
   var reg = h.hpr + (h.regenB || 0);
   if (inFountain(h)) { reg += h.maxHp * 0.14; h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.14 * dt); }
   if (h.hp < h.maxHp) h.hp = Math.min(h.maxHp, h.hp + reg * dt);
@@ -503,29 +401,20 @@ function updHero(h, dt) {
   if (dist(h, MAP.FOUNT[1 - h.team]) < 760) { damage(null, h, h.maxHp * 0.35 * dt, 'true'); if (h.dead) return; }
   if (h.dash) { updDash(h, dt); return; }
   if (h.stunT > 0) return;
+  if (h.throwReq) { throwStone(h, h.throwReq.x, h.throwReq.y); h.throwReq = null; }
   var md = h.moveDir, moving = false;
   if (md && (md.x || md.y)) {
     var ml = Math.hypot(md.x, md.y);
-    h.recallT = 0; h.order = null; h.path = null; moving = true;
+    h.order = null; h.path = null; moving = true;
     stepTo(h, h.x + md.x / ml * 200, h.y + md.y / ml * 200, dt);
     if (h.aimF !== null && h.aimF !== undefined) h.face = h.aimF;
   }
-  if (h.atkHold && h.recallT <= 0) {
+  if (h.atkHold) {
     var at = pickAssist(h);
     if (at) { tryAttack(h, at); return; }
     if (h.aimF !== null && h.aimF !== undefined) h.face = h.aimF;
   }
   if (moving) return;
-  if (h.recallT > 0) {
-    h.recallT -= dt;
-    if (h.recallT <= 0) {
-      var sp = spawnPos(h.team, h.slot);
-      fx({ type: 'ring', x: h.x, y: h.y, r: 120, dur: 0.5, color: '#bfe9ff' });
-      h.x = sp.x; h.y = sp.y; h.path = null; h.recallT = 0;
-      if (h.isPlayer) ev('recalled');
-    }
-    return;
-  }
   var o = h.order;
   if (!o) {
     if (h.stealth) return;
@@ -542,32 +431,6 @@ function updHero(h, dt) {
     var t2 = acquire(h, h.range + 320, true);
     if (t2) chase(h, t2, dt);
     else if (moveGoal(h, o.x, o.y, dt)) h.order = null;
-  }
-}
-
-/* ───────── 정글 ───────── */
-function spawnCamp(c) {
-  var list = c.boss ? [c.type] : CAMP_TYPES[c.type], min = G.t / 60, sc = 1 + 0.03 * min;
-  c.units = []; c.alive = list.length; c.target = null;
-  list.forEach(function (k, i) {
-    var d = MONSTER[k], a = i * 2.2 + 0.6, rr = list.length > 1 ? 85 : 0;
-    var m = mkUnit('monster', 2, c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr, {
-      r: d.r, maxHp: Math.round(d.hp * sc), bAd: d.ad * sc, bAs: d.as, bMs: 310, range: d.range, bArmor: d.armor || 0, ranged: !!d.ranged,
-      mtype: k, camp: c, boss: d.boss || null, xp: d.xp, name: d.name, sight: 0
-    });
-    m.hx = m.x; m.hy = m.y;
-    c.units.push(m);
-  });
-  if (c.boss) ev('bossSpawn', { boss: c.type });
-}
-function updMonster(m, dt) {
-  var c = m.camp, t = c.target;
-  if (t && (t.dead || Math.hypot(t.x - c.x, t.y - c.y) > 800 || t.stealth)) { c.target = null; t = null; }
-  if (m.stunT > 0) return;
-  if (t) { if (inRange(m, t)) tryAttack(m, t); else stepTo(m, t.x, t.y, dt); }
-  else {
-    if (Math.hypot(m.x - m.hx, m.y - m.hy) > 12) stepTo(m, m.hx, m.hy, dt);
-    if (m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.12 * dt);
   }
 }
 
@@ -609,7 +472,9 @@ function zoneHit(z) {
   for (var i = 0; i < G.units.length; i++) {
     var u = G.units[i];
     if (u.dead || Math.hypot(u.x - z.x, u.y - z.y) > z.r + u.r * 0.5) continue;
-    if (u.team === z.team) { if (z.heal && u.type === 'hero') healUnit(u, z.heal); }
+    if (u.team === z.team) {
+      if (z.heal && u.type === 'hero') { var got = healUnit(u, z.heal); if (z.src && got > 0) { z.src.healed += got; z.src.ult = Math.min(100, z.src.ult + got / 60); } }
+    }
     else if (hittable(u, z.team) && (z.dmg > 0 || z.sk.slow || z.sk.root)) applyHit(z.src, u, z.sk, z.rk, z.dmg);
   }
 }
@@ -647,17 +512,9 @@ function updVision() {
       v.vis[T] = true;
     }
   }
-  /* 내 지점은 주변 1000 범위를 밝혀 준다 */
-  for (i = 0; i < G.nodes.length; i++) {
-    var nd = G.nodes[i]; if (nd.owner < 0) continue;
-    for (j = 0; j < n; j++) {
-      var w = us[j];
-      if (w.team === nd.owner || w.vis[nd.owner] || w.dead) continue;
-      var ex = w.x - nd.x, ey = w.y - nd.y, e2 = ex * ex + ey * ey;
-      if (e2 > 1000000 || (w.stealth && e2 > 78400)) continue;
-      w.vis[nd.owner] = true;
-    }
-  }
+  /* 성석을 든 영웅은 양 팀 모두에게 보인다 */
+  var cr = G.stone.carrier;
+  if (cr && !cr.dead) { cr.vis[0] = true; cr.vis[1] = true; }
 }
 
 /* ───────── 밀어내기 ───────── */
@@ -684,76 +541,106 @@ function separate() {
 }
 function nudge(u, dx, dy) { if (MAP.isWalk(u.x + dx, u.y + dy)) { u.x += dx; u.y += dy; } }
 
-/* ───────── 점령 지점 ───────── */
-function nodeProg(n, T) { return T === 0 ? n.c : -n.c; }
-function updNodes(dt) {
-  for (var i = 0; i < G.nodes.length; i++) {
-    var n = G.nodes[i], cnt = [0, 0], here = [[], []];
+/* ───────── 성석 ───────── */
+function finish(w) { if (G.over) return; G.over = { winner: w, t: G.t }; ev('over', { winner: w }); }
+function dropStone(h) {
+  var s = G.stone; if (s.carrier !== h) return;
+  h.carry = false; s.carrier = null; s.state = 'free'; s.x = h.x; s.y = h.y; s.freeT = STONE_FREE_T; s.thrower = null; s.team = -1;
+  ev('drop', { id: h.id, team: h.team });
+}
+function throwStone(h, tx, ty) {
+  var s = G.stone; if (s.carrier !== h || h.dead) return false;
+  var dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, rng = Math.min(THROW_RANGE, Math.max(350, d)), lx = h.x, ly = h.y;
+  for (var k = 40; k <= rng; k += 40) { var px = h.x + ux * k, py = h.y + uy * k; if (!MAP.isWalk(px, py)) break; lx = px; ly = py; }
+  h.carry = false; s.carrier = null; s.state = 'flying'; s.sx = h.x; s.sy = h.y; s.tx = lx; s.ty = ly; s.fT = 0;
+  s.fDur = 0.3 + Math.hypot(lx - h.x, ly - h.y) / 1800; s.thrower = h; s.lockT = 0.6; s.team = h.team;
+  ev('throw', { id: h.id, team: h.team });
+  return true;
+}
+function takeStone(h) {
+  var s = G.stone;
+  s.state = 'carried'; s.carrier = h; s.team = h.team; h.carry = true; s.thrower = null;
+  breakStealth(h); h.dash = null;
+  fx({ type: 'ring', x: h.x, y: h.y, r: 150, dur: 0.5, color: '#ffe9a8' });
+  ev('pickup', { id: h.id, team: h.team });
+}
+function scorePoint(h) {
+  var s = G.stone, T = h.team;
+  G.score[T]++; h.scores++; h.carry = false; s.carrier = null; s.state = 'wait'; s.waitT = STONE_WAIT_T; s.team = -1; s.x = MAP.STONE.x; s.y = MAP.STONE.y;
+  G.heroes.forEach(function (a) { if (a.team === T) a.ult = Math.min(100, a.ult + 25); });
+  fx({ type: 'burst', x: MAP.ALTAR[T].x, y: MAP.ALTAR[T].y, r: 500, dur: 1.0, color: T === 0 ? '#4fe0d2' : '#ff6b5e' });
+  ev('score', { team: T, id: h.id });
+  if (G.score[T] >= WIN_SCORE || G.overtime) finish(T);
+}
+function updStone(dt) {
+  var s = G.stone, C = MAP.STONE;
+  if (s.lockT > 0) s.lockT -= dt;
+  if (s.state === 'wait') { s.waitT -= dt; if (s.waitT <= 0) { s.state = 'center'; ev('spawn'); } return; }
+  if (s.state === 'flying') {
+    s.fT += dt; var k = Math.min(1, s.fT / s.fDur);
+    s.x = s.sx + (s.tx - s.sx) * k; s.y = s.sy + (s.ty - s.sy) * k; s.z = Math.sin(k * Math.PI) * 140;
+    if (k >= 1) { s.state = 'free'; s.freeT = STONE_FREE_T; s.z = 0; }
+    return;
+  }
+  if (s.state === 'carried') {
+    var c = s.carrier; s.x = c.x; s.y = c.y; s.z = 0;
+    var A = MAP.ALTAR[c.team];
+    if (Math.hypot(c.x - A.x, c.y - A.y) < ALTAR_R) scorePoint(c);
+    return;
+  }
+  if (s.state === 'free') { s.freeT -= dt; if (s.freeT <= 0) { s.state = 'center'; s.x = C.x; s.y = C.y; ev('return'); } }
+  var best = null, bd = 1e9;
+  for (var i = 0; i < G.heroes.length; i++) {
+    var h = G.heroes[i];
+    if (h.dead || h.stunT > 0 || (s.thrower === h && s.lockT > 0)) continue;
+    var d = Math.hypot(h.x - s.x, h.y - s.y);
+    if (d < STONE_R + h.r && d < bd) { bd = d; best = h; }
+  }
+  if (best) takeStone(best);
+}
+
+/* ───────── 회복 구슬 ───────── */
+function updPacks(dt) {
+  for (var i = 0; i < G.packs.length; i++) {
+    var p = G.packs[i];
+    if (!p.ready) { p.t -= dt; if (p.t <= 0) p.ready = true; continue; }
     for (var k = 0; k < G.heroes.length; k++) {
       var h = G.heroes[k];
-      if (!h.dead && Math.hypot(h.x - n.x, h.y - n.y) < n.r) { cnt[h.team]++; here[h.team].push(h); }
+      if (h.dead || Math.hypot(h.x - p.x, h.y - p.y) > 95 || (h.hp > h.maxHp * 0.97 && h.ult >= 100)) continue;
+      healUnit(h, h.maxHp * 0.45); h.ult = Math.min(100, h.ult + 20);
+      p.ready = false; p.t = PACK_T;
+      fx({ type: 'ring', x: p.x, y: p.y, r: 130, dur: 0.5, color: '#9dffb0', fill: true });
+      ev('pack', { id: h.id, i: i });
+      break;
     }
-    n.present = cnt; n.contested = cnt[0] > 0 && cnt[1] > 0;
-    var T = n.contested ? -1 : cnt[0] > 0 ? 0 : cnt[1] > 0 ? 1 : -1;
-    if (T >= 0) {
-      var rate = (NODE_RATE + 6 * (cnt[T] - 1)) * dt * (n.heart ? 0.7 : 1);
-      n.c = Math.max(-100, Math.min(100, n.c + (T === 0 ? rate : -rate)));
-    }
-    var prev = n.owner;
-    if (n.owner === 0 && n.c <= 0) n.owner = -1;
-    if (n.owner === 1 && n.c >= 0) n.owner = -1;
-    if (n.owner !== 0 && n.c >= 100) n.owner = 0;
-    if (n.owner !== 1 && n.c <= -100) n.owner = 1;
-    if (n.owner !== prev) {
-      ev('node', { i: n.i, owner: n.owner, prev: prev });
-      fx({ type: 'ring', x: n.x, y: n.y, r: n.r, dur: 0.9, color: n.owner === 0 ? '#4fe0d2' : n.owner === 1 ? '#ff6b5e' : '#cfd8dc', fill: true });
-      if (n.owner >= 0) here[n.owner].forEach(function (h) { h.caps++; gainXp(h, n.heart ? 90 : 60); });
-    }
-    if (n.owner >= 0) {
-      G.charge[n.owner] += (n.heart ? 2 : 1) * NODE_INCOME * dt;
-      /* 내 지점 안에 있으면 천천히 회복한다 */
-      here[n.owner].forEach(function (h) { h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.025 * dt); h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.02 * dt); });
-    }
-  }
-  for (var t = 0; t < 2; t++) {
-    if (G.charge[t] >= WIN_CHARGE && !G.over) { G.charge[t] = WIN_CHARGE; G.over = { winner: t, t: G.t }; ev('over', { winner: t }); }
   }
 }
 
 /* ───────── 팀 단위 판단 (3초마다) ───────── */
 function strategy() {
-  var lv = [0, 0];
-  G.heroes.forEach(function (h) { lv[h.team] += h.level; });
-  for (var B = 0; B < 2; B++) {
-    var gap = lv[1 - B] - lv[B], kg = G.kills[1 - B] - G.kills[B], cg = G.charge[1 - B] - G.charge[B];
-    G.behind[B] = (kg >= 6 && gap >= 4) || gap >= 7 || cg >= 200;
-  }
+  var st = G.stone;
   for (var T = 0; T < 2; T++) {
-    /* 집중 공격 대상: 체력이 낮고 몸이 약하고 아군이 가까이 있는 적 영웅 */
+    /* 집중 공격 대상: 성석을 든 적을 가장 먼저, 그다음 약하고 가까운 적 */
     var fb = null, fs = -1e9, cx = 0, cy = 0, cn = 0;
     G.heroes.forEach(function (a) { if (a.team === T && !a.dead) { cx += a.x; cy += a.y; cn++; } });
     if (cn) {
       cx /= cn; cy /= cn;
       G.heroes.forEach(function (e) {
         if (e.team === T || e.dead || !e.vis[T]) return;
-        var d = Math.hypot(e.x - cx, e.y - cy); if (d > 2600) return;
+        var d = Math.hypot(e.x - cx, e.y - cy); if (d > 2800 && !e.carry) return;
         var near = 0; G.heroes.forEach(function (a) { if (a.team === T && !a.dead && dist(a, e) < 1500) near++; });
-        var sc = (1 - e.hp / e.maxHp) * 800 + (e.armor < 35 ? 150 : 0) - e.hp * 0.15 + near * 140 - d * 0.1;
+        var sc = (1 - e.hp / e.maxHp) * 800 + (e.armor < 35 ? 150 : 0) - e.hp * 0.12 + near * 140 - d * 0.1 + (e.carry ? 1800 : 0);
         if (sc > fs) { fs = sc; fb = e; }
       });
     }
     G.focus[T] = fb ? fb.id : 0;
-    /* 보스: 셋 이상이 건강하게 가까이 있으면 함께 잡으러 간다 */
-    G.bossPlan[T] = null;
-    if (G.t > 270 && cn && !G.behind[T]) {
-      var boss = null, bd = 1e9;
-      G.camps.forEach(function (cp) { if (cp.boss && cp.alive > 0) { var d2 = Math.hypot(cp.x - cx, cp.y - cy); if (d2 < bd) { bd = d2; boss = cp; } } });
-      if (boss) {
-        var sq = G.heroes.filter(function (a) { return a.team === T && !a.dead && a.ai && a.ai.mode !== 'retreat' && a.hp / a.maxHp > 0.6 && Math.hypot(a.x - boss.x, a.y - boss.y) < 4800; });
-        if (sq.length >= 3) G.bossPlan[T] = boss;
-      }
+    /* 성석이 바닥에 있으면 가장 가까운 둘이 줍는다 */
+    G.pickers[T] = [];
+    if (st.state === 'center' || st.state === 'free' || st.state === 'flying') {
+      var al = G.heroes.filter(function (a) { return a.team === T && !a.dead; });
+      al.sort(function (a, b) { return Math.hypot(a.x - st.x, a.y - st.y) - Math.hypot(b.x - st.x, b.y - st.y); });
+      G.pickers[T] = al.slice(0, 2).map(function (a) { return a.id; });
     }
-    aiAssignNodes(T);
   }
 }
 
@@ -761,26 +648,29 @@ function strategy() {
 function tick(dt) {
   if (G.over) { ageFx(dt); return; }
   G.t += dt;
-  for (var c = 0; c < G.camps.length; c++) { var cp = G.camps[c]; if (cp.alive <= 0) { cp.respawnT -= dt; if (cp.respawnT <= 0) spawnCamp(cp); } }
+  if (!G.overtime) {
+    G.timeLeft -= dt;
+    if (G.timeLeft <= 0) {
+      G.timeLeft = 0;
+      if (G.score[0] !== G.score[1]) finish(G.score[0] > G.score[1] ? 0 : 1);
+      else { G.overtime = true; ev('overtime'); }
+    }
+  }
   G.visT -= dt; if (G.visT <= 0) { G.visT = 0.15; updVision(); }
-  G.stratT -= dt; if (G.stratT <= 0) { G.stratT = 3; strategy(); }
+  G.stratT -= dt; if (G.stratT <= 0) { G.stratT = 1.5; strategy(); }
   var us = G.units, n = us.length, i;
   for (i = 0; i < n; i++) {
     var u = us[i];
-    if (u.dead && u.type !== 'hero') continue;
     u.px = u.x; u.py = u.y;
     if (!u.dead) { updStatus(u, dt); u.atkCd -= dt; }
-    if (u.type === 'hero') { if (u.ai) aiUpdate(u, dt); updHero(u, dt); }
-    else if (u.type === 'monster') updMonster(u, dt);
+    if (u.ai) aiUpdate(u, dt);
+    updHero(u, dt);
     if (G.over) break;
   }
-  updNodes(dt);
+  updStone(dt); updPacks(dt);
   separate();
   for (i = 0; i < us.length; i++) { var w = us[i]; w.vx = (w.x - w.px) / dt; w.vy = (w.y - w.py) / dt; }
   updProj(dt); updZones(dt); ageFx(dt);
-  var alive = [];
-  for (i = 0; i < G.units.length; i++) { var q = G.units[i]; if (!q.dead || q.type === 'hero') alive.push(q); }
-  G.units = alive;
 }
 function ageFx(dt) {
   var i;

@@ -1,14 +1,12 @@
 'use strict';
-/* 로드스타 — 봇 AI (노드 점령전)
-   봇은 항상 가야 할 점령 지점이 있다. 지점은 팀이 3초마다 나눠 맡기고(aiAssignNodes),
-   공격받는 지점은 서로 구하러 간다. 싸울 때는 집중 공격, 고립된 적 사냥, 스킬 피하기, 거리 유지,
-   보스 함께 잡기를 한다. */
+/* 로드스타 — 봇 AI (성석 운반전)
+   성석이 어디에 있는지가 모든 판단을 정한다.
+   바닥에 있으면 가까운 둘이 줍고 나머지는 길목을 지키고, 아군이 들었으면 호위하고,
+   적이 들었으면 달라붙거나 앞질러 가로막는다. 운반자는 적이 적은 길을 골라 달리고,
+   위험하면 동료에게 던진다. 싸울 때는 집중 공격, 스킬 피하기, 거리 유지를 한다. */
 
 function aiInit(h, role) {
-  h.ai = {
-    role: role, node: -1, think: rnd() * 0.3, mode: 'node', defend: null, off: rnd() * 6.28,
-    dodgeUntil: 0, sT: 0, lx: h.x, ly: h.y
-  };
+  h.ai = { role: role, think: rnd() * 0.3, heal: false, off: rnd() * 6.28, dodgeUntil: 0, sT: 0, lx: h.x, ly: h.y, route: -1, routeT: 0, wp: 0 };
 }
 function aiPow(u) { return u.hp * (1 + 0.09 * u.level) + (u.shield || 0) + 150; }
 function aiReact(h) { return h.team === 1 && G.player ? DIFFS[G.diff].react : 0.6; }
@@ -18,60 +16,16 @@ function aiGo(h, x, y) {
   if (Math.hypot(h.x - x, h.y - y) < 40) { h.order = null; return; }
   cmdMove(h, x, y);
 }
+function aiGoWalk(h, x, y) { var q = MAP.nearestWalk(x, y); aiGo(h, q[0], q[1]); }
 function aiDanger(x, y, team) { var f = MAP.FOUNT[1 - team]; return Math.hypot(x - f.x, y - f.y) < 900; }
-
-/* 레벨업으로 생긴 유물 선택: 직업에 맞는 것을 우선한다 */
-function aiPickRelic(h) {
-  var offer = h.relicOffer, build = BUILDS[h.def.cls] || [], best = 0, bs = -1;
-  for (var i = 0; i < offer.length; i++) {
-    var r = build.indexOf(offer[i]), sc = (r >= 0 ? 10 - r : 0) + rnd() * 3;
-    if (sc > bs) { bs = sc; best = i; }
-  }
-  pickRelic(h, best);
-}
-
-/* ── 팀: 누가 어느 지점으로 갈지 나눈다 ── */
-function aiNodeValue(T, n) {
-  var base = n.heart ? 1.7 : 1, p = nodeProg(n, T);
-  if (p >= 100) return base * (n.present[1 - T] > 0 ? 2.2 : 0.3);   /* 내 것: 적이 올 때만 급하다 */
-  if (n.owner === 1 - T) return base * 2.0;                          /* 적의 것: 빼앗기 */
-  if (p > 0) return base * 2.2;                                      /* 내 쪽으로 기운 지점: 마무리 */
-  return base * 1.6;                                                 /* 중립 */
-}
-function aiAssignNodes(T) {
-  var bots = G.heroes.filter(function (h) { return h.team === T && h.ai && !h.dead; });
-  bots.sort(function (a, b) { return a.slot - b.slot; });
-  var load = {}, carry = null;
-  bots.forEach(function (h) {
-    var s = h.ai;
-    if (s.role === 'sup') return;
-    var best = -1, bs = -1e9;
-    for (var i = 0; i < G.nodes.length; i++) {
-      var n = G.nodes[i], sc = aiNodeValue(T, n) - dist(h, n) / 2600;
-      if (s.node === i) sc += 0.35;
-      if (s.node === i && n.present[T] > 0 && nodeProg(n, T) < 100) sc += 0.8;
-      var cnt = load[i] || 0; if (cnt >= 1) sc -= 1.2 * cnt;
-      if (s.role === 'top' && n.lane === 'top') sc += 0.3;
-      if (s.role === 'bot' && n.lane === 'bot') sc += 0.3;
-      if (s.role === 'mid' && n.heart) sc += 0.4;
-      if (sc > bs) { bs = sc; best = i; }
-    }
-    s.node = best; load[best] = (load[best] || 0) + 1;
-    if (s.role === 'bot') carry = h;
-  });
-  /* 지원가는 원거리 딜러와 같은 지점으로 간다 */
-  bots.forEach(function (h) { if (h.ai.role === 'sup') h.ai.node = carry ? carry.ai.node : (h.ai.node >= 0 ? h.ai.node : 4); });
-}
 
 function aiUpdate(h, dt) {
   var s = h.ai;
-  if (h.dead) { while (h.relicPicks > 0 && h.relicOffer) aiPickRelic(h); return; }
+  if (h.dead) return;
   s.think -= dt;
   if (s.think > 0) return;
   var step = (0.2 + rnd() * 0.1) * (h.team === 1 && G.player ? DIFFS[G.diff].think : 1);
   s.think = step;
-  if (h.points > 0) autoSkill(h);
-  while (h.relicPicks > 0 && h.relicOffer) aiPickRelic(h);
   if (h.dash || h.stunT > 0) return;
   aiUnstick(h, step);
   if (aiDodge(h)) return;
@@ -84,7 +38,7 @@ function aiUnstick(h, step) {
   s.sT += step;
   if (s.sT < 2.6) return;
   var o = h.order, moved = Math.hypot(h.x - s.lx, h.y - s.ly);
-  if (o && moved < 30 && h.rootT <= 0 && h.recallT <= 0 && !(o.type === 'attack' && inRange(h, o.target))) {
+  if (o && moved < 30 && h.rootT <= 0 && !(o.type === 'attack' && inRange(h, o.target))) {
     var q = MAP.nearestWalk(h.x + (rnd() - 0.5) * 500, h.y + (rnd() - 0.5) * 500);
     h.path = null; cmdMove(h, q[0], q[1]);
   }
@@ -151,26 +105,100 @@ function aiBlocked(h, t, sk) {
   return false;
 }
 
-/* 물러날 곳: 우물, 또는 적이 없는 가까운 내 지점 */
-function aiSafeSpot(h) {
-  var T = h.team, f = MAP.FOUNT[T], best = { x: f.x, y: f.y, node: false }, bd = dist(h, f) * 0.6;
-  for (var i = 0; i < G.nodes.length; i++) {
-    var n = G.nodes[i];
-    if (n.owner !== T || n.present[1 - T] > 0) continue;
-    var d = dist(h, n); if (d < bd) { bd = d; best = { x: n.x, y: n.y, node: true }; }
+/* 다쳤을 때 가는 곳: 가까운 회복 구슬, 없으면 우리 우물 */
+function aiHealSpot(h) {
+  var f = MAP.FOUNT[h.team], best = { x: f.x, y: f.y }, bd = dist(h, f) * 0.8;
+  for (var i = 0; i < G.packs.length; i++) {
+    var p = G.packs[i]; if (!p.ready) continue;
+    var d = dist(h, p); if (d < bd) { bd = d; best = { x: p.x, y: p.y }; }
   }
   return best;
 }
 
+/* ── 운반 ── */
+/* 길 세 갈래: 가운데로 곧장, 위쪽 길, 아래쪽 길. 위·아래 길에는 거치는 지점이 있다 */
+function aiRoutes(T) {
+  var W = MAP.W, H = MAP.H, top = [[3400, 800], [2300, 1050], [1500, 2100]];
+  function mk(flipY) { return top.map(function (p) { return [T === 0 ? p[0] : W - p[0], flipY ? H - p[1] : p[1]]; }); }
+  return [[], mk(false), mk(true)];
+}
+function aiRouteCost(h, wps) {
+  var A = MAP.ALTAR[h.team], pts = [[h.x, h.y]].concat(wps).concat([[A.x, A.y]]), len = 0, danger = 0;
+  for (var i = 0; i < pts.length - 1; i++) {
+    var ax = pts[i][0], ay = pts[i][1], bx = pts[i + 1][0], by = pts[i + 1][1], l = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.round(l / 300));
+    len += l;
+    for (var k = 1; k <= n; k++) {
+      var px = ax + (bx - ax) * k / n, py = ay + (by - ay) * k / n;
+      for (var j = 0; j < G.heroes.length; j++) { var e = G.heroes[j]; if (e.team !== h.team && !e.dead && Math.hypot(e.x - px, e.y - py) < 850) danger++; }
+    }
+  }
+  return len + danger * 170;
+}
+function aiCarry(h, foes, hpP) {
+  var s = h.ai, T = h.team, A = MAP.ALTAR[T], nearFoe = null, nd = 1e9, i;
+  for (i = 0; i < foes.length; i++) { var d = dist(h, foes[i]); if (d < nd) { nd = d; nearFoe = foes[i]; } }
+  /* 위험하면 제단에 더 가까운 동료에게 던진다 */
+  if (nearFoe && nd < 650 && (hpP < 0.4 || foes.length >= 3)) {
+    var mate = null, md = 1e9;
+    for (i = 0; i < G.heroes.length; i++) {
+      var a = G.heroes[i];
+      if (a.team !== T || a.dead || a === h) continue;
+      var da = dist(h, a);
+      if (da < 850 && da > 200 && dist(a, A) < dist(h, A) - 150 && dist(a, nearFoe) > 450 && da < md) { md = da; mate = a; }
+    }
+    if (mate && throwStone(h, mate.x, mate.y)) return;
+  }
+  if (nearFoe && nd < 520 && hpP < 0.75) aiEscape(h, A);
+  /* 길 고르기: 2초마다 다시 계산하되, 확실히 나을 때만 바꾼다 */
+  var routes = aiRoutes(T);
+  if (G.t >= s.routeT || s.route < 0) {
+    s.routeT = G.t + 2;
+    var best = -1, bc = 1e9, cur = s.route >= 0 ? aiRouteCost(h, routes[s.route].filter(function (w) { return Math.hypot(w[0] - A.x, w[1] - A.y) < dist(h, A) - 300; })) : 1e9;
+    for (i = 0; i < 3; i++) {
+      var wps = routes[i].filter(function (w) { return Math.hypot(w[0] - A.x, w[1] - A.y) < dist(h, A) - 300; });
+      var c = aiRouteCost(h, wps) + (i ? 400 : 0);
+      if (c < bc) { bc = c; best = i; }
+    }
+    if (s.route < 0 || bc < cur - 900) { s.route = best; s.wp = 0; }
+  }
+  var wl = routes[s.route].filter(function (w) { return Math.hypot(w[0] - A.x, w[1] - A.y) < dist(h, A) - 300; });
+  while (s.wp < wl.length && Math.hypot(h.x - wl[s.wp][0], h.y - wl[s.wp][1]) < 380) s.wp++;
+  if (s.wp < wl.length) aiGo(h, wl[s.wp][0], wl[s.wp][1]); else aiGo(h, A.x, A.y);
+}
+
+/* 아군이 성석을 들었다: 곁을 지킨다. 근접은 앞, 원거리는 뒤 */
+function aiEscort(h, c) {
+  var T = h.team, A = MAP.ALTAR[T], dx = A.x - c.x, dy = A.y - c.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+  var lat = ((h.slot % 3) - 1) * 230, fwd = h.def.melee ? 330 : -180;
+  aiGoWalk(h, c.x + ux * fwd - uy * lat, c.y + uy * fwd + ux * lat);
+}
+/* 적이 성석을 들었다: 가까운 셋은 달라붙고, 나머지는 가는 길 앞을 막는다 */
+function aiIntercept(h, c) {
+  var T = h.team, E = 1 - T, A = MAP.ALTAR[E], mates = G.heroes.filter(function (a) { return a.team === T && !a.dead; });
+  mates.sort(function (a, b) { return dist(a, c) - dist(b, c); });
+  var rank = mates.indexOf(h);
+  if (rank < 3 || dist(c, A) < 1300) { aiGo(h, c.x + c.vx * 0.5, c.y + c.vy * 0.5); return; }
+  var dx = A.x - c.x, dy = A.y - c.y, l = Math.hypot(dx, dy) || 1, ahead = Math.min(1500, l * 0.55);
+  aiGoWalk(h, c.x + dx / l * ahead + ((h.slot % 3) - 1) * 200, c.y + dy / l * ahead);
+}
+/* 성석이 바닥이나 하늘에 있다: 줍는 둘은 달려가고, 나머지는 우리 쪽 길목을 잡는다 */
+function aiStoneRace(h) {
+  var T = h.team, st = G.stone, spot = { x: st.state === 'flying' ? st.tx : st.x, y: st.state === 'flying' ? st.ty : st.y };
+  if (st.state === 'wait') spot = { x: MAP.STONE.x, y: MAP.STONE.y };
+  if (G.pickers[T].indexOf(h.id) >= 0 || dist(h, spot) < 650) { aiGo(h, spot.x, spot.y); return; }
+  var A = MAP.ALTAR[T], dx = A.x - spot.x, dy = A.y - spot.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, lat = ((h.slot % 3) - 1) * 260;
+  aiGoWalk(h, spot.x + ux * 560 - uy * lat, spot.y + uy * 560 + ux * lat);
+}
+
 function aiDecide(h) {
-  var s = h.ai, T = h.team, E = 1 - T;
-  var hpP = h.hp / h.maxHp, mpP = h.mp / h.maxMp;
+  var s = h.ai, T = h.team, st = G.stone;
+  var hpP = h.hp / h.maxHp;
   var foes = [], pals = [], i, u, d;
-  for (i = 0; i < G.units.length; i++) {
-    u = G.units[i];
-    if (u.dead || u === h || u.type !== 'hero') continue;
+  for (i = 0; i < G.heroes.length; i++) {
+    u = G.heroes[i];
+    if (u.dead || u === h) continue;
     d = dist(h, u);
-    if (d > 1600) continue;
+    if (d > 1600 && !(u.carry && u.team !== T)) continue;
     if (u.team === T) pals.push(u); else if (u.vis[T]) foes.push(u);
   }
   var myPow = aiPow(h), palPow = 0, foePow = 0, nearFoe = null, nd = 1e9;
@@ -179,51 +207,46 @@ function aiDecide(h) {
 
   aiSupport(h, pals, foes, hpP);
 
-  /* 1. 후퇴 */
-  if (s.mode === 'retreat') {
-    var sp = aiSafeSpot(h);
-    if (dist(h, sp) < (sp.node ? 260 : 400) || inFountain(h)) {
-      if (hpP > 0.85 && mpP > 0.55) s.mode = 'node';
-      else if (nearFoe && nd < 900) { /* 쉴 곳까지 쫓아오면 싸운다 */ s.mode = 'node'; }
-      else { h.order = null; return; }
-    } else {
-      if (nearFoe && nd < 750) aiEscape(h, sp);
-      aiGo(h, sp.x, sp.y);
-      return;
-    }
-  }
-  if (hpP < 0.27 || (hpP < 0.42 && foePow > myPow + palPow) || (mpP < 0.08 && hpP < 0.55 && !foes.length)) {
-    s.mode = 'retreat'; s.defend = null;
-    var sp2 = aiSafeSpot(h); aiGo(h, sp2.x, sp2.y);
+  /* 운반 중이면 달리는 것이 전부다 */
+  if (h.carry) { aiCarry(h, foes, hpP); return; }
+
+  /* 다쳤으면 회복 구슬이나 우물로 */
+  if (hpP < 0.32 || (hpP < 0.45 && foePow > myPow + palPow)) s.heal = true;
+  if (s.heal && (hpP > 0.8 || (G.stone.state === 'carried' && G.stone.carrier.team === T && hpP > 0.5))) s.heal = false;
+  if (s.heal) {
+    var sp = aiHealSpot(h);
+    if (nearFoe && nd < 650) aiEscape(h, sp);
+    aiGo(h, sp.x, sp.y);
     return;
   }
 
-  /* 2. 적 우물 근처는 피한다 */
-  if (dist(h, MAP.FOUNT[E]) < 1100) { var nn = G.nodes[s.node >= 0 ? s.node : 6]; aiGo(h, nn.x, nn.y); return; }
+  /* 줍는 담당은 눈앞에 적이 붙지 않으면 곧장 성석으로 */
+  var racing = (st.state === 'center' || st.state === 'free' || st.state === 'flying') && G.pickers[T].indexOf(h.id) >= 0;
+  if (racing && (!nearFoe || nd > 260)) { aiStoneRace(h); return; }
 
-  /* 3. 교전: 집중 공격 대상과 고립된 적을 우선한다 */
+  /* 교전: 성석을 든 적을 가장 먼저, 집중 공격 대상과 고립된 적 우선 */
   if (foes.length) {
     var tgt = null, bs = 1e9, reach = hpP > 0.6 ? 1500 : 1150, focus = G.focus[T];
     for (i = 0; i < foes.length; i++) {
-      d = dist(h, foes[i]); if (d > reach) continue;
+      d = dist(h, foes[i]); if (d > reach && !foes[i].carry) continue;
       var alone = true;
       for (var k = 0; k < foes.length; k++) if (k !== i && dist(foes[i], foes[k]) < 800) alone = false;
-      var sc = foes[i].hp + d * 0.6 - (foes[i].id === focus ? 300 : 0) - (alone ? 150 : 0);
+      var sc = foes[i].hp + d * 0.6 - (foes[i].id === focus ? 300 : 0) - (alone ? 150 : 0) - (foes[i].carry ? 900 : 0);
       if (sc < bs) { bs = sc; tgt = foes[i]; }
     }
     if (tgt) {
       var td = dist(h, tgt), tp = tgt.hp / tgt.maxHp;
-      var adv = myPow + palPow >= foePow * 0.85 || tp < 0.3;
+      var adv = myPow + palPow >= foePow * 0.85 || tp < 0.3 || tgt.carry;
       if (adv) {
         aiSkills(h, tgt, td, true, foes.length);
         if (!h.dash) {
-          if (!h.def.melee && h.atkCd > 0.15 && td < h.range * 0.85 && nd < 520 && aiKite(h, nearFoe || tgt)) return;
+          if (!h.def.melee && h.atkCd > 0.15 && td < h.range * 0.85 && nd < 520 && !tgt.carry && aiKite(h, nearFoe || tgt)) return;
           if (!h.order || h.order.target !== tgt) cmdAttack(h, tgt);
         }
         return;
       } else if (td < 800 && foePow > (myPow + palPow) * 1.3) {
         aiSkills(h, tgt, td, false, foes.length);
-        var sp3 = aiSafeSpot(h);
+        var sp3 = aiHealSpot(h);
         if (td < 500) aiEscape(h, sp3);
         aiGo(h, sp3.x, sp3.y);
         return;
@@ -231,88 +254,12 @@ function aiDecide(h) {
     }
   }
 
-  /* 4. 목표: 보스 → 정글(초반 정글러) → 사냥 → 맡은 지점 */
-  var bp = G.bossPlan[T];
-  if (bp && bp.alive > 0 && hpP > 0.55 && dist(h, bp) < 4800) return aiBoss(h, bp);
-  if (s.role === 'jungle' && h.level < 6 && G.t < 330 && aiJungle(h)) return;
-  var prey = aiHunt(h, hpP);
-  if (prey) { aiGo(h, prey.x, prey.y); return; }
-  aiNode(h);
-}
-
-/* 맡은 지점으로 간다. 도착하면 지점 안을 천천히 돌며 지킨다 */
-function aiNode(h) {
-  var s = h.ai, n = G.nodes[s.node >= 0 ? s.node : 6];
-  if (dist(h, n) > n.r * 0.55) { aiGo(h, n.x, n.y); return; }
-  var a = G.t * 0.35 + s.off, px = n.x + Math.cos(a) * n.r * 0.4, py = n.y + Math.sin(a) * n.r * 0.4;
-  if (!MAP.isWalk(px, py)) { px = n.x; py = n.y; }
-  aiGo(h, px, py);
-}
-
-/* 혼자 떨어진 적 영웅을 찾아 덮친다 (정글러는 더 멀리까지, 다른 영웅은 가까이만) */
-function aiHunt(h, hpP) {
-  var T = h.team, s = h.ai;
-  if (hpP < 0.65 || h.level < 3 || G.t < 120 || G.behind[T]) return null;
-  var R = s.role === 'jungle' ? 3600 : 2100, best = null, bs = 1e9;
-  for (var i = 0; i < G.heroes.length; i++) {
-    var e = G.heroes[i];
-    if (e.team === T || e.dead || !e.vis[T]) continue;
-    var d = dist(h, e); if (d > R || aiDanger(e.x, e.y, T)) continue;
-    var escort = 0, theirs = 0, k;
-    for (k = 0; k < G.heroes.length; k++) { var o = G.heroes[k]; if (o.team === T && !o.dead && o !== h && dist(o, e) < 1500) escort++; }
-    for (k = 0; k < G.heroes.length; k++) { var q = G.heroes[k]; if (q.team !== T && !q.dead && q !== e && dist(q, e) < 1100) theirs++; }
-    if (theirs > escort) continue;
-    var sc = e.hp / e.maxHp * 1500 + d * 0.5 - escort * 200;
-    if (sc < bs) { bs = sc; best = e; }
-  }
-  return best;
-}
-
-/* 보스: 가까이 모여 함께 친다 */
-function aiBoss(h, camp) {
-  var T = h.team, m = null, md = 1e9, i;
-  for (i = 0; i < camp.units.length; i++) { var u = camp.units[i]; if (!u.dead) { var d = dist(h, u); if (d < md) { md = d; m = u; } } }
-  if (!m) return;
-  if (md > 650) {
-    var f = MAP.FOUNT[T], dx = f.x - camp.x, dy = f.y - camp.y, l = Math.hypot(dx, dy) || 1;
-    var q = MAP.nearestWalk(camp.x + dx / l * 420 + (rnd() - 0.5) * 160, camp.y + dy / l * 420);
-    aiGo(h, q[0], q[1]);
+  /* 목표: 성석 상태에 따라 */
+  if (st.state === 'carried') {
+    if (st.carrier.team === T) aiEscort(h, st.carrier); else aiIntercept(h, st.carrier);
     return;
   }
-  if (h.mp / h.maxMp > 0.3) aiFarmSkill(h, m.x, m.y, [m]);
-  if (!h.order || h.order.target !== m) cmdAttack(h, m);
-}
-
-/* 초반 정글러: 우리 쪽 정글 캠프를 돈다. 할 일이 있으면 true */
-function aiJungle(h) {
-  var T = h.team, best = null, bd = 1e9, i;
-  for (i = 0; i < G.camps.length; i++) {
-    var c = G.camps[i];
-    if (c.alive <= 0 || c.boss || c.side !== T) continue;
-    var d = Math.hypot(c.x - h.x, c.y - h.y);
-    if (d < bd) { bd = d; best = c; }
-  }
-  if (!best) return false;
-  if (Math.hypot(best.x - h.x, best.y - h.y) > 520) { aiGo(h, best.x, best.y); return true; }
-  var m = null, md = 1e9;
-  for (i = 0; i < best.units.length; i++) { var u = best.units[i]; if (!u.dead) { var dd = dist(h, u) + u.hp * 0.2; if (dd < md) { md = dd; m = u; } } }
-  if (!m) return false;
-  if (h.mp / h.maxMp > 0.35) aiFarmSkill(h, m.x, m.y, best.units);
-  if (!h.order || h.order.target !== m) cmdAttack(h, m);
-  return true;
-}
-
-/* 정글 몬스터에 쓰는 범위 스킬 */
-function aiFarmSkill(h, x, y, list) {
-  for (var i = 0; i < 3; i++) {
-    var sk = h.def.skills[i];
-    if (!canCast(h, i) || !sk.dmg) continue;
-    var d = Math.hypot(x - h.x, y - h.y);
-    if (sk.kind === 'shot' && (sk.pierce || sk.aoe) && d < sk.range * 0.85) { castSkill(h, i, x, y); return; }
-    if (sk.kind === 'area' && d < sk.range) { castSkill(h, i, x, y); return; }
-    if (sk.kind === 'nova' && d < sk.radius * 0.7) { castSkill(h, i, x, y); return; }
-    if (sk.kind === 'shot' && list.length && list[0].type === 'monster' && d < sk.range * 0.8) { castSkill(h, i, x, y); return; }
-  }
+  aiStoneRace(h);
 }
 
 /* 도주기 */
@@ -345,7 +292,7 @@ function aiSupport(h, pals, foes, hpP) {
     } else if (sk.ai === 'shield') {
       if (hpP < 0.75 && G.t - h.lastDmgT < 1 && foes.length) { castSkill(h, i, h.x, h.y); return; }
     } else if (sk.ai === 'haste') {
-      var fighters = 0; for (var f = 0; f < pals.length; f++) if (dist(h, pals[f]) < sk.allyR && G.t - pals[f].aggroT < 1.5) fighters++;
+      var fighters = 0; for (var f = 0; f < pals.length; f++) if (dist(h, pals[f]) < sk.allyR && (G.t - pals[f].aggroT < 1.5 || pals[f].carry)) fighters++;
       if (fighters >= 1 && foes.length) { castSkill(h, i, h.x, h.y); return; }
     }
   }
@@ -359,7 +306,7 @@ function aiSkills(h, t, d, allIn, nFoes) {
     var sk = h.def.skills[i];
     if (!canCast(h, i)) continue;
     var ult = i === 3, ax = t.x, ay = t.y, tt;
-    if (ult && !(allIn && (tp < 0.75 || nFoes >= 2))) continue;
+    if (ult && !(allIn && (tp < 0.75 || nFoes >= 2 || t.carry))) continue;
     switch (sk.ai) {
       case 'dmg':
         if (sk.kind === 'shot') {
@@ -370,7 +317,6 @@ function aiSkills(h, t, d, allIn, nFoes) {
           if (d > sk.range + sk.radius * 0.4) continue;
           tt = (sk.delay || 0) * 0.8; ax += t.vx * tt * lead; ay += t.vy * tt * lead;
         } else if (sk.kind === 'nova') { if (d > sk.radius * 0.85) continue; }
-        if (!allIn && h.mp / h.maxMp < 0.4) continue;
         castSkill(h, i, ax, ay); return;
       case 'engage':
         if (!allIn) continue;

@@ -3,7 +3,6 @@
 
 var LANES = ['top', 'mid', 'bot'];
 var LANE_NAME = { top: '상단', mid: '중앙', bot: '하단' };
-var MAX_LEVEL = 15;
 
 /* 스킬 사양
    kind: shot(직선 투사체) | area(지면 지정) | dash(돌진) | blink(순간이동) | nova(자기 주변) | self(강화)
@@ -151,33 +150,6 @@ var HEROES = {
 };
 var HERO_IDS = Object.keys(HEROES);
 
-/* 아이템: 조합 없이 능력치만 올리는 단순한 상점 */
-var ITEMS = {
-  boots:  { name: '신속의 장화', g: '화', cost: 350, ms: 55, unique: true, d: '이동 속도 +55' },
-  sword:  { name: '장검', g: '검', cost: 400, ad: 22, d: '공격력 +22' },
-  great:  { name: '대검', g: '대', cost: 1100, ad: 55, d: '공격력 +55' },
-  dagger: { name: '속사 단검', g: '단', cost: 600, as: 0.3, d: '공격 속도 +30%' },
-  vamp:   { name: '흡혈 낫', g: '낫', cost: 900, ad: 22, ls: 0.12, d: '공격력 +22, 기본 공격 흡혈 12%' },
-  tome:   { name: '마법서', g: '서', cost: 420, ap: 38, d: '주문력 +38' },
-  staff:  { name: '대마법봉', g: '봉', cost: 1150, ap: 90, d: '주문력 +90' },
-  mana:   { name: '마나 수정', g: '수', cost: 400, mp: 350, mpr: 0.5, d: '마나 +350, 마나 재생 +50%' },
-  haste:  { name: '가속 톱니', g: '톱', cost: 800, haste: 25, ad: 12, ap: 20, d: '스킬 가속 +25, 공격력 +12, 주문력 +20' },
-  gem:    { name: '생명의 보석', g: '보', cost: 400, hp: 300, d: '체력 +300' },
-  chain:  { name: '사슬 갑옷', g: '갑', cost: 500, armor: 35, d: '방어력 +35' },
-  plate:  { name: '거인의 흉갑', g: '흉', cost: 1200, armor: 55, hp: 380, d: '방어력 +55, 체력 +380' }
-};
-var ITEM_IDS = Object.keys(ITEMS);
-var SELL_RATE = 0.6;
-
-var BUILDS = {
-  carry:    ['boots', 'sword', 'dagger', 'great', 'vamp', 'great'],
-  mage:     ['boots', 'tome', 'mana', 'staff', 'haste', 'staff'],
-  tank:     ['boots', 'gem', 'chain', 'plate', 'plate', 'haste'],
-  fighter:  ['boots', 'sword', 'chain', 'great', 'plate', 'vamp'],
-  assassin: ['boots', 'sword', 'great', 'haste', 'great', 'vamp'],
-  support:  ['boots', 'mana', 'tome', 'haste', 'gem', 'staff']
-};
-
 /* 역할별로 봇이 고르는 영웅 우선순위 */
 var ROLE_PREF = {
   top: ['kael', 'brom', 'garr', 'nyx'],
@@ -187,26 +159,11 @@ var ROLE_PREF = {
   sup: ['sera', 'brom', 'morgen', 'garr']
 };
 
-var NODE_NAMES = ['북서 거점', '북쪽 거점', '북동 거점', '남서 거점', '남쪽 거점', '남동 거점', '심장'];
-
-var MONSTER = {
-  small: { hp: 300, ad: 11, as: 0.8, range: 120, r: 26, gold: 20, xp: 38, name: '숲늑대' },
-  wisp:  { hp: 200, ad: 10, as: 0.8, range: 420, r: 22, gold: 16, xp: 30, ranged: true, name: '도깨비불' },
-  big:   { hp: 900, ad: 26, as: 0.7, range: 140, r: 44, gold: 62, xp: 115, name: '이끼 골렘' },
-  titan: { hp: 5600, ad: 105, as: 0.75, range: 220, r: 95, gold: 0, xp: 300, armor: 40, boss: 'titan', name: '태고의 거신' },
-  hoard: { hp: 4200, ad: 80, as: 0.75, range: 200, r: 85, gold: 0, xp: 250, armor: 30, boss: 'hoard', name: '황금 골렘' }
-};
-var CAMP_TYPES = {
-  wolves: ['small', 'small', 'small'],
-  golem: ['big', 'small'],
-  wraith: ['wisp', 'wisp', 'wisp', 'wisp']
-};
-
 /* react: 날아오는 스킬을 보고 피하는 확률, lead: 움직이는 상대를 얼마나 앞질러 맞추는지 */
 var DIFFS = [
-  { name: '쉬움', think: 1.9, gain: 0.85, lead: 0, react: 0.2 },
-  { name: '보통', think: 1.0, gain: 1.0, lead: 0.8, react: 0.55 },
-  { name: '어려움', think: 0.8, gain: 1.15, lead: 1.0, react: 0.85 }
+  { name: '쉬움', think: 1.9, lead: 0, react: 0.2 },
+  { name: '보통', think: 1.0, lead: 0.8, react: 0.55 },
+  { name: '어려움', think: 0.8, lead: 1.0, react: 0.85 }
 ];
 
 if (typeof module !== 'undefined') module.exports = {};
