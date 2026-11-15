@@ -91,6 +91,12 @@ void fragment() {
 		float bark = vnoise(vec2(wpos.x * 18.0 + wpos.z * 18.0, wpos.y * 3.0));
 		col = base * (0.55 + 0.7 * bark);
 		rough = 0.95;
+	} else if (kind > 6.5) {
+		// 나뭇잎 뭉치: 덩어리 노이즈로 명암, 아래쪽은 그늘
+		float lf = vnoise(wpos.xz * 2.4 + wpos.y * 1.9);
+		float lf2 = vnoise(wpos.xz * 7.0 - wpos.y * 5.0);
+		col = base * (0.55 + 0.75 * lf) * (0.85 + 0.3 * lf2);
+		rough = 0.9;
 	} else {
 		float weave = 0.5 + 0.5 * sin(q.x * 70.0) * sin(q.y * 70.0);
 		col = base * (0.88 + 0.2 * grime) * (0.94 + 0.1 * weave);
