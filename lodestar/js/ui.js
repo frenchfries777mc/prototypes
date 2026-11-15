@@ -7,7 +7,7 @@
   var STEP = 1 / 60, KEYS = ['Q', 'E', 'R', 'F'], CODES = { KeyQ: 0, KeyE: 1, KeyR: 2, KeyF: 3 }, MOVEKEYS = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, ArrowUp: 1, ArrowLeft: 1, ArrowDown: 1, ArrowRight: 1 };
   var cv = $('cv'), state = 'menu', sel = 'kael', diff = 1, P = null;
   var mouse = { px: 0, py: 0, x: 0, y: 0, inside: false, down: false }, aim = null, keys = {}, stick = { x: 0, y: 0 }, stickId = null, touchAtk = false, touchMode = false;
-  var muted = false, last = 0, acc = 0, demoT = 0, demoH = null, annT = 0, throwTouch = false;
+  var clickBuf = 0, muted = false, last = 0, acc = 0, demoT = 0, demoH = null, annT = 0, throwTouch = false;
   var cache = {};
   function set(id, v) { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
   function setW(id, f) { var v = (Math.max(0, Math.min(1, f)) * 100).toFixed(1) + '%'; if (cache['w' + id] !== v) { cache['w' + id] = v; $(id).style.width = v; } }
@@ -289,7 +289,7 @@
     if (e.button === 0) {
       try { cv.setPointerCapture(e.pointerId); } catch (x) {}
       if (aim) { if (!castSkill(P, aim.slot, mouse.x, mouse.y)) sfx('err'); aim = null; }
-      else mouse.down = true;
+      else { mouse.down = true; clickBuf = 0.45; G.fx.push({ type: 'mark', x: mouse.x, y: mouse.y, r: 50, dur: 0.3, color: '#f4f7c8', t: 0 }); }
     }
     e.preventDefault();
   });
@@ -350,7 +350,7 @@
       aim = null;
     }
   });
-  window.addEventListener('blur', function () { keys = {}; aim = null; mouse.down = false; touchAtk = false; });
+  window.addEventListener('blur', function () { keys = {}; aim = null; mouse.down = false; clickBuf = 0; touchAtk = false; });
   window.addEventListener('resize', function () { R.resize(); });
 
   /* 매 프레임, 키보드·마우스·터치 입력을 영웅에게 전한다 */
@@ -362,7 +362,7 @@
     var useMouse = mouse.inside && !touchMode;
     P.aimF = useMouse ? Math.atan2(mouse.y - P.y, mouse.x - P.x) : null;
     if (P.aimF !== null && !P.dash && P.stunT <= 0) P.face = P.aimF;
-    P.atkHold = touchAtk ? { x: P.x, y: P.y } : (mouse.down && useMouse && !aim ? { x: mouse.x, y: mouse.y } : null);
+    P.atkHold = touchAtk ? { x: P.x, y: P.y } : ((mouse.down || clickBuf > 0) && useMouse && !aim ? { x: mouse.x, y: mouse.y } : null);
   }
 
   /* ── 카메라 ── */
@@ -389,6 +389,7 @@
     var dt = Math.min(0.1, (ts - last) / 1000 || 0); last = ts;
     if (mouse.inside) { var mw0 = R.s2w(mouse.px, mouse.py); mouse.x = mw0.x; mouse.y = mw0.y; }
     feedInput();
+    if (clickBuf > 0) clickBuf -= dt;
     acc += dt; var n = 0;
     while (acc >= STEP && n < 5) { tick(STEP); acc -= STEP; n++; }
     if (n === 5) acc = 0;
