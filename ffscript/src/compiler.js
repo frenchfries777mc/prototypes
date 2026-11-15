@@ -117,37 +117,75 @@ function jsSource(nd) {
   try { new Function(code); } catch (e) { fail(n, 'JS 코드에 문법 오류가 있어요: ' + e.message); }
   return code;
 }
+function skipLit(code, i, prev) {
+  const c = code[i];
+  if (c === '"' || c === "'") { let j = i + 1; while (j < code.length && code[j] !== c && code[j] !== '\n') { if (code[j] === '\\') j++; j++; } return j + 1; }
+  if (c === '`') {
+    let j = i + 1;
+    while (j < code.length && code[j] !== '`') {
+      if (code[j] === '\\') { j += 2; continue; }
+      if (code[j] === '$' && code[j + 1] === '{') {
+        let d = 1, pv = '{'; j += 2;
+        while (j < code.length && d > 0) {
+          const e = skipLit(code, j, pv);
+          if (e >= 0) { j = e; pv = ')'; continue; }
+          if (code[j] === '{') d++; else if (code[j] === '}') d--;
+          if (!/\s/.test(code[j])) pv = code[j];
+          j++;
+        }
+        continue;
+      }
+      j++;
+    }
+    return j + 1;
+  }
+  if (c === '/' && code[i + 1] === '/') { let j = i; while (j < code.length && code[j] !== '\n') j++; return j; }
+  if (c === '/' && code[i + 1] === '*') { const e = code.indexOf('*/', i + 2); return e < 0 ? code.length : e + 2; }
+  if (c === '/' && (!prev || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || prev === 'W')) {
+    let j = i + 1, cls = false;
+    while (j < code.length && code[j] !== '\n') {
+      if (code[j] === '\\') { j += 2; continue; }
+      if (code[j] === '[') cls = true; else if (code[j] === ']') cls = false; else if (code[j] === '/' && !cls) break;
+      j++;
+    }
+    if (code[j] === '/') { j++; while (/[a-z]/i.test(code[j] || '')) j++; return j; }
+  }
+  return -1;
+}
 function jsTopDecls(code) {
   const names = [], cuts = [];
-  let d = 0, i = 0, q = null;
+  let d = 0, i = 0, prev = '';
+  const KW = /(?:^|[^\p{L}\p{N}_$.])(?:return|typeof|case|in|of|new|delete|void|throw|else|do)$/u;
   while (i < code.length) {
     const c = code[i];
-    if (q) { if (c === '\\') i++; else if (c === q) q = null; i++; continue; }
-    if (c === '"' || c === "'" || c === '`') { q = c; i++; continue; }
-    if (c === '/' && code[i + 1] === '/') { while (i < code.length && code[i] !== '\n') i++; continue; }
-    if (c === '/' && code[i + 1] === '*') { const e = code.indexOf('*/', i + 2); i = e < 0 ? code.length : e + 2; continue; }
+    const e = skipLit(code, i, KW.test(code.slice(Math.max(0, i - 8), i).trimEnd()) ? 'W' : prev);
+    if (e >= 0) { i = e; prev = ')'; continue; }
     if ('([{'.includes(c)) d++; else if (')]}'.includes(c)) d--;
     if (!d && /[lcv]/.test(c) && (i === 0 || !/[\p{L}\p{N}_$.]/u.test(code[i - 1]))) {
       const m = code.slice(i).match(/^(let|const|var)\s+([\p{L}_$][\p{L}\p{N}_$]*)(?=\s*[=;,\n]|\s*$)/u);
       if (m) {
         cuts.push([i, m[1].length]); names.push(m[2]);
-        let j = i + m[0].length, dd = 0, qq = null;
+        let j = i + m[0].length, dd = 0, pv = '=';
         while (j < code.length) {
           const ch = code[j];
-          if (qq) { if (ch === '\\') j++; else if (ch === qq) qq = null; j++; continue; }
-          if (ch === '"' || ch === "'" || ch === '`') { qq = ch; j++; continue; }
+          const e2 = skipLit(code, j, pv);
+          if (e2 >= 0) { j = e2; pv = ')'; continue; }
           if ('([{'.includes(ch)) dd++; else if (')]}'.includes(ch)) dd--;
           if (!dd && (ch === ';' || ch === '\n')) break;
           if (!dd && ch === ',') { const mm = code.slice(j + 1).match(/^\s*([\p{L}_$][\p{L}\p{N}_$]*)/u); if (mm) names.push(mm[1]); }
+          if (!/\s/.test(ch)) pv = ch;
           j++;
         }
-        i += m[0].length; continue;
+        i += m[0].length; prev = 'x'; continue;
       }
     }
+    if (!/\s/.test(c)) prev = c;
     i++;
   }
+  if (d !== 0) return { names: [], code };
   let out = code;
   for (let k = cuts.length - 1; k >= 0; k--) out = out.slice(0, cuts[k][0]) + out.slice(cuts[k][0] + cuts[k][1]);
+  try { new Function(out); } catch (e) { return { names: [], code }; }
   return { names, code: out };
 }
 
