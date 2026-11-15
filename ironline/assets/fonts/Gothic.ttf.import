@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://d0kxdihdtp2cd"
-path="res://.godot/imported/Galmuri11.ttf-dc494bdf43221ea4068442166ca7b6a4.fontdata"
+uid="uid://biey6304o3qlv"
+path="res://.godot/imported/Gothic.ttf-11856d13309727012512dfd9e7b443a5.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Galmuri11.ttf"
-dest_files=["res://.godot/imported/Galmuri11.ttf-dc494bdf43221ea4068442166ca7b6a4.fontdata"]
+source_file="res://assets/fonts/Gothic.ttf"
+dest_files=["res://.godot/imported/Gothic.ttf-11856d13309727012512dfd9e7b443a5.fontdata"]
 
 [params]
 

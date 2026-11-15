@@ -1,365 +1,352 @@
 class_name View
 extends Node3D
-## 시뮬레이션 상태를 3D 장면으로 그린다. 시뮬레이션은 읽기만 한다.
-## 병사 100명은 팀별 MultiMesh 하나로 그려 드로콜을 최소화한다.
+## 시뮬레이션 상태를 3D 장면으로 그린다(읽기 전용). 조명·그림자·스키닝 캐릭터·이펙트·사운드를 담당한다.
 
-const FOG_COLOR := Color(0.70, 0.71, 0.68)
+const HAZE := Color(0.74, 0.72, 0.66)
+const COL_A := Color(0.36, 0.58, 1.0)
+const COL_B := Color(1.0, 0.78, 0.3)
+const COL_N := Color(0.82, 0.82, 0.82)
+const FAR_CULL := 150.0
+const ANIM_DIST := 70.0
+const SHADOW_DIST := 45.0
+const LOD_DIST := 48.0
+
+
+class UG:
+	var root: Node3D
+	var sk: Skeleton3D
+	var mi: MeshInstance3D
+	var flash: MeshInstance3D
+	var st := {}
+	var weapon := -1
+	var flash_t := 0.0
+	var shadow := true
+	var low := false
+	var shown := false
+	var dead := false
+
 
 var sim: Sim
 var cam: Camera3D
-var mmesh := []
-var slot := {}
-var walk_t := PackedFloat32Array()
-var flag_mesh_n: ArrayMesh
-var flag_mesh_a: ArrayMesh
-var flag_mesh_b: ArrayMesh
+var sun: DirectionalLight3D
+var env: Environment
+var ugs: Array = []
+var fx: Fx
+var sfx: Sfx
+var flag_meshes: Array = []
 var flag_nodes: Array = []
-var ring_nodes: Array = []
-var fill_nodes: Array = []
-var tracer_im := ImmediateMesh.new()
-var tracers: Array = []
+var zone_nodes: Array = []
+var beam_nodes: Array = []
 var vm: MeshInstance3D
 var vm_weapon := -1
-var flash: MeshInstance3D
-var flash_t := 0.0
 var kick := 0.0
+var shake := 0.0
 var bob := 0.0
-var cam_pos := Vector3.ZERO
 var debug_3p := false
-var use_mm := true
-var unit_nodes: Array = []
+var quality := 2
+var flash_mat: StandardMaterial3D
+var flash_quad: QuadMesh
+var cam_pos := Vector3.ZERO
+var frame_budget_shots := 0
 
 
 func setup(s: Sim) -> void:
 	sim = s
 	_build_env()
-	_build_terrain()
-	_build_props()
+	var t := WorldGfx.terrain(sim.world)
+	add_child(t)
+	add_child(WorldGfx.props(sim.world))
+	fx = Fx.new()
+	add_child(fx)
+	sfx = Sfx.new()
+	add_child(sfx)
 	_build_points()
+	_build_smoke()
 	_build_units()
 	_build_camera()
-	_build_tracers()
 
 
 func _build_env() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = FOG_COLOR
+	env = Environment.new()
+	env.background_mode = Environment.BG_SKY
+	var sky := Sky.new()
+	var sm := ShaderMaterial.new()
+	sm.shader = load("res://shaders/sky.gdshader")
+	sky.sky_material = sm
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.52, 0.56, 0.64)
+	env.ambient_light_energy = 0.9
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.05
+	env.tonemap_white = 5.0
 	env.fog_enabled = true
-	env.fog_light_color = FOG_COLOR
-	env.fog_density = 0.0075
+	env.fog_light_color = HAZE
+	env.fog_density = 0.0042
+	env.fog_sun_scatter = 0.25
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.08
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	sun = DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-38.0, 42.0, 0.0)
+	sun.light_color = Color(1.0, 0.9, 0.76)
+	sun.light_energy = 1.55
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 120.0
+	sun.directional_shadow_split_1 = 0.25
+	sun.shadow_bias = 0.05
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.3
+	add_child(sun)
 
 
-func _terrain_color(x: float, z: float, n: Vector3, h: float, salt: int) -> Color:
-	var grass := Color(0.38, 0.43, 0.22)
-	var dry := Color(0.55, 0.50, 0.30)
-	var mud := Color(0.34, 0.27, 0.19)
-	var k := VoxelModel.hash3(int(x * 0.5), int(z * 0.5), salt)
-	var col := grass.lerp(dry, clampf(0.15 + k * 0.55 + h * 0.03, 0.0, 1.0))
-	if h < -0.9:
-		col = col.lerp(mud, clampf((-0.9 - h) * 0.9 + 0.35, 0.0, 1.0))
-	for i in 5:
-		var d := Vector2(x - World.POINT_X[i], z - World.POINT_Z[i]).length()
-		if d < World.POINT_R + 3.0:
-			col = col.lerp(Color(0.50, 0.42, 0.29), 0.55 * (1.0 - smoothstep(World.POINT_R - 4.0, World.POINT_R + 3.0, d)))
-	var light := Vector3(0.45, 0.8, 0.3).normalized()
-	var shade := 0.72 + 0.42 * maxf(0.0, n.dot(light))
-	var jit := 1.0 + (VoxelModel.hash3(int(x), int(z), salt + 9) - 0.5) * 0.14
-	return VoxelModel.tint(col, shade * jit)
-
-
-func _build_terrain() -> void:
-	var w := sim.world
-	var verts := PackedVector3Array()
-	var cols := PackedColorArray()
-	for j in w.gh - 1:
-		for i in w.gw - 1:
-			var x0 := w.gx0 + i * World.GRID
-			var z0 := w.gz0 + j * World.GRID
-			var x1 := x0 + World.GRID
-			var z1 := z0 + World.GRID
-			var h00: float = w.hmap[j * w.gw + i]
-			var h10: float = w.hmap[j * w.gw + i + 1]
-			var h01: float = w.hmap[(j + 1) * w.gw + i]
-			var h11: float = w.hmap[(j + 1) * w.gw + i + 1]
-			var p00 := Vector3(x0, h00, z0)
-			var p10 := Vector3(x1, h10, z0)
-			var p01 := Vector3(x0, h01, z1)
-			var p11 := Vector3(x1, h11, z1)
-			var n1 := (p01 - p00).cross(p11 - p00).normalized()
-			var n2 := (p11 - p00).cross(p10 - p00).normalized()
-			var hm := (h00 + h10 + h01 + h11) * 0.25
-			var c1 := _terrain_color(x0, z0, n1.abs() if n1.y < 0.0 else n1, hm, 1)
-			var c2 := _terrain_color(x1, z1, n2.abs() if n2.y < 0.0 else n2, hm, 2)
-			verts.append_array([p00, p01, p11, p00, p11, p10])
-			for k in 3:
-				cols.append(c1)
-			for k in 3:
-				cols.append(c2)
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_COLOR] = cols
-	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	m.surface_set_material(0, VoxelModel.material())
-	var mi := MeshInstance3D.new()
-	mi.mesh = m
-	mi.name = "Terrain"
-	add_child(mi)
-
-
-func _build_props() -> void:
-	var v := VoxelModel.new()
-	var colors := [Color(0.60, 0.58, 0.53), Color(0.64, 0.56, 0.38), Color(0.52, 0.38, 0.22), Color(0.43, 0.31, 0.21)]
-	var n := 0
-	for b in sim.world.boxes:
-		var kind: int = b.kind
-		v.box_faces(b.mn, b.mx, colors[kind], 0.3, 0.12, true, n)
-		n += 1
-	var mi := MeshInstance3D.new()
-	mi.mesh = v.commit()
-	mi.name = "Props"
-	add_child(mi)
-
-
-func _circle_mesh(radius: float, follow_ground: bool, y_off: float) -> ArrayMesh:
-	var verts := PackedVector3Array()
-	var cols := PackedColorArray()
-	var segs := 72
-	for i in segs + 1:
-		var a := TAU * float(i) / segs
-		var x := cos(a) * radius
-		var z := sin(a) * radius
-		var y := y_off
-		verts.append(Vector3(x, y, z))
-		cols.append(Color.WHITE)
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_COLOR] = cols
-	var m := ArrayMesh.new()
-	m.add_surface_from_arrays(Mesh.PRIMITIVE_LINE_STRIP, arr)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	m.surface_set_material(0, mat)
-	return m
+func apply_quality(q: int) -> void:
+	quality = q
+	sun.shadow_enabled = q >= 1
+	sun.directional_shadow_max_distance = 120.0 if q >= 2 else 80.0
+	var vp := get_viewport()
+	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
+	if q == 0:
+		for ug in ugs:
+			ug.mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 
 func _build_points() -> void:
-	flag_mesh_n = Models.flag(Color("#9a9a9a"))
-	flag_mesh_a = Models.flag(Models.PALETTE[0].flag)
-	flag_mesh_b = Models.flag(Models.PALETTE[1].flag)
+	flag_meshes = [WorldGfx.flag(Color(0.72, 0.72, 0.72)), WorldGfx.flag(COL_A * 0.8), WorldGfx.flag(COL_B * 0.85)]
 	for i in Sim.NPOINTS:
 		var p: Sim.Pt = sim.pts[i]
 		var f := MeshInstance3D.new()
-		f.mesh = flag_mesh_n
+		f.mesh = flag_meshes[0]
 		f.position = p.pos
 		add_child(f)
 		flag_nodes.append(f)
-		var ring := MeshInstance3D.new()
-		ring.mesh = _circle_mesh(World.POINT_R, false, 0.0)
-		ring.position = p.pos + Vector3(0, 0.35, 0)
-		add_child(ring)
-		ring_nodes.append(ring)
-		var fill := MeshInstance3D.new()
-		fill.mesh = _circle_mesh(1.0, false, 0.0)
-		fill.position = p.pos + Vector3(0, 0.4, 0)
-		add_child(fill)
-		fill_nodes.append(fill)
+		var z := WorldGfx.zone_disc(World.POINT_R)
+		z.position = p.pos + Vector3(0, 0.12, 0)
+		add_child(z)
+		zone_nodes.append(z)
+		var b := WorldGfx.beam(70.0)
+		b.position = p.pos + Vector3(0, 35.0, 0)
+		add_child(b)
+		beam_nodes.append(b)
+
+
+func _build_smoke() -> void:
+	var w := sim.world
+	var n := 0
+	for c in w.craters:
+		if n >= 7:
+			break
+		var x: float = c[0]
+		var z: float = c[1]
+		if absf(x) > World.HALF_X - 10.0:
+			continue
+		fx.smoke_column(Vector3(x, w.height_at(x, z) + 0.3, z), 0.8 + 0.4 * (n % 3))
+		n += 1
 
 
 func _build_units() -> void:
-	var counts := [0, 0]
+	var mats := {}
+	flash_quad = QuadMesh.new()
+	flash_quad.size = Vector2(0.9, 0.9)
+	flash_mat = StandardMaterial3D.new()
+	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	flash_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash_mat.albedo_color = Color(1.0, 0.82, 0.45, 1.0)
+	flash_mat.albedo_texture = fx._soft
+	flash_quad.material = flash_mat
+	var skin := Rig.skin()
 	for u in sim.units:
-		slot[u.id] = counts[u.team]
-		counts[u.team] += 1
-	walk_t.resize(sim.units.size())
-	if not use_mm:
-		var meshes := [Models.soldier(0), Models.soldier(1)]
-		for u in sim.units:
-			var mi := MeshInstance3D.new()
-			mi.mesh = meshes[u.team]
-			mi.visible = false
-			add_child(mi)
-			unit_nodes.append(mi)
-		return
-	for t in 2:
-		var mm := MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = Models.soldier(t)
-		mm.instance_count = counts[t]
-		mm.custom_aabb = AABB(Vector3(-300, -10, -200), Vector3(600, 40, 400))
-		var mmi := MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.name = "Soldiers%d" % t
-		add_child(mmi)
-		mmesh.append(mm)
-		for i in counts[t]:
-			mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
+		var ug := UG.new()
+		ug.root = Node3D.new()
+		ug.sk = Rig.make_skeleton()
+		ug.root.add_child(ug.sk)
+		ug.mi = MeshInstance3D.new()
+		ug.mi.mesh = Rig.soldier_mesh(u.team, u.weapon)
+		ug.weapon = u.weapon
+		ug.sk.add_child(ug.mi)
+		ug.mi.skeleton = NodePath("..")
+		ug.mi.skin = skin
+		ug.mi.custom_aabb = AABB(Vector3(-1.5, -0.2, -1.5), Vector3(3, 2.6, 3))
+		var ba := BoneAttachment3D.new()
+		ba.bone_name = "chest"
+		ug.sk.add_child(ba)
+		ug.flash = MeshInstance3D.new()
+		ug.flash.mesh = flash_quad
+		ug.flash.position = Vector3(0.10, 0.12, -1.25)
+		ug.flash.visible = false
+		ug.flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ba.add_child(ug.flash)
+		ug.st = Rig.new_state()
+		ug.root.visible = false
+		add_child(ug.root)
+		ugs.append(ug)
 
 
 func _build_camera() -> void:
 	cam = Camera3D.new()
-	cam.fov = 72.0
+	cam.fov = 75.0
 	cam.near = 0.05
-	cam.far = 420.0
+	cam.far = 700.0
 	cam.current = true
 	add_child(cam)
 	vm = MeshInstance3D.new()
+	vm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	cam.add_child(vm)
-	var fm := BoxMesh.new()
-	fm.size = Vector3(0.16, 0.16, 0.05)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(1.0, 0.86, 0.45)
-	fm.material = mat
-	flash = MeshInstance3D.new()
-	flash.mesh = fm
-	flash.visible = false
-	cam.add_child(flash)
-
-
-func _build_tracers() -> void:
-	var mi := MeshInstance3D.new()
-	mi.mesh = tracer_im
-	mi.custom_aabb = AABB(Vector3(-300, -20, -200), Vector3(600, 80, 400))
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mi.material_override = mat
-	add_child(mi)
 
 
 func _set_viewmodel(weapon: int) -> void:
 	if weapon == vm_weapon:
 		return
 	vm_weapon = weapon
-	vm.mesh = Models.viewmodel(weapon)
+	vm.mesh = Rig.viewmodel_mesh(weapon)
 
 
 ## 프레임마다 호출. alpha = 틱 사이 보간 비율.
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
 	var me: Sim.Unit = sim.units[local_id]
-	# 병사 변환
-	for u in sim.units:
-		var hidden: bool = (u.id == local_id and u.alive and not debug_3p) or (not u.alive and u.death_age > 8.0)
-		if hidden:
-			if use_mm:
-				mmesh[u.team].set_instance_transform(slot[u.id], Transform3D(Basis.from_scale(Vector3.ZERO), Vector3.ZERO))
-			else:
-				unit_nodes[u.id].visible = false
-			continue
-		var p: Vector3 = u.prev_pos.lerp(u.pos, alpha)
-		var yaw := lerp_angle(u.prev_yaw, u.yaw, alpha)
-		var b := Basis(Vector3.UP, yaw)
-		if u.alive:
-			walk_t[u.id] += u.speed_now * dt * 2.4
-			var s := sin(walk_t[u.id])
-			p.y += absf(s) * 0.045 * minf(1.0, u.speed_now * 0.3)
-			b = b * Basis(Vector3(0, 0, 1), s * 0.05 * minf(1.0, u.speed_now * 0.3))
-		else:
-			var fall := clampf(u.death_age * 4.5, 0.0, 1.0) * (PI * 0.5)
-			b = b * Basis(Vector3(1, 0, 0), fall)
-			p.y += 0.1
-		if use_mm:
-			mmesh[u.team].set_instance_transform(slot[u.id], Transform3D(b, p))
-		else:
-			var nd: MeshInstance3D = unit_nodes[u.id]
-			nd.visible = true
-			nd.transform = Transform3D(b, p)
-	# 점령 지점 표시
-	for i in Sim.NPOINTS:
-		var pt: Sim.Pt = sim.pts[i]
-		var fm: ArrayMesh = flag_mesh_n if pt.owner < 0 else (flag_mesh_a if pt.owner == 0 else flag_mesh_b)
-		if flag_nodes[i].mesh != fm:
-			flag_nodes[i].mesh = fm
-		var oc := Color(0.75, 0.75, 0.75)
-		if pt.owner == 0:
-			oc = Models.PALETTE[0].flag
-		elif pt.owner == 1:
-			oc = Models.PALETTE[1].flag
-		ring_nodes[i].material_override = _ring_mat(oc)
-		var lead := 0 if pt.cap > 0.0 else 1
-		var fc: Color = Models.PALETTE[lead].flag
-		var r := World.POINT_R * absf(pt.cap)
-		fill_nodes[i].visible = r > 0.5 and pt.owner != lead
-		fill_nodes[i].scale = Vector3(r, 1.0, r)
-		fill_nodes[i].material_override = _ring_mat(fc)
-	# 카메라
 	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
 	if not me.alive:
 		cp.y = maxf(cp.y - minf(me.death_age * 2.0, 1.2), me.pos.y + 0.35)
 	cam_pos = cp
-	cam.basis = Basis.from_euler(Vector3(look_pitch, look_yaw, 0.0))
+	# 병사
+	for u in sim.units:
+		_update_unit(u, ugs[u.id], alpha, dt, local_id)
+	# 거점 표식
+	for i in Sim.NPOINTS:
+		var pt: Sim.Pt = sim.pts[i]
+		var fi := 0 if pt.owner < 0 else (1 if pt.owner == 0 else 2)
+		if flag_nodes[i].mesh != flag_meshes[fi]:
+			flag_nodes[i].mesh = flag_meshes[fi]
+		var oc := COL_N
+		if pt.owner == 0:
+			oc = COL_A
+		elif pt.owner == 1:
+			oc = COL_B
+		var lead := 0 if pt.cap > 0.0 else 1
+		var fc := COL_A if lead == 0 else COL_B
+		var fill := absf(pt.cap) if pt.owner != lead else 0.0
+		var zm: ShaderMaterial = zone_nodes[i].material_override
+		zm.set_shader_parameter("col", oc)
+		zm.set_shader_parameter("col_fill", fc)
+		zm.set_shader_parameter("fill", fill)
+		zm.set_shader_parameter("contested", 1.0 if (pt.n_a > 0 and pt.n_b > 0) else 0.0)
+		var bm: ShaderMaterial = beam_nodes[i].material_override
+		bm.set_shader_parameter("col", oc)
+	# 카메라
+	var sh := Vector3.ZERO
+	if shake > 0.0:
+		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
+	shake = maxf(0.0, shake - dt * 3.0)
+	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
 	if debug_3p:
 		cp += cam.basis * Vector3(0.9, 0.5, 3.2)
 	cam.position = cp
-	# 총
+	cam.fov = lerpf(cam.fov, 75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), minf(1.0, dt * 6.0))
+	# 1인칭 총
 	_set_viewmodel(me.weapon)
 	vm.visible = me.alive and not debug_3p
-	kick = move_toward(kick, 0.0, dt * 6.0)
-	bob += me.speed_now * dt * 2.2
-	var sway := sin(bob) * 0.006 * minf(1.0, me.speed_now * 0.3)
-	vm.position = Vector3(0.15 + sway, -0.17 + absf(sway), -0.40 + kick * 0.05)
-	vm.rotation = Vector3(kick * 0.06, 0.04, 0.0)
+	kick = move_toward(kick, 0.0, dt * 7.0)
+	bob += me.speed_now * dt * 1.9
+	var amp := minf(1.0, me.speed_now * 0.25)
+	var sway := sin(bob) * 0.008 * amp
+	var lift := absf(cos(bob)) * 0.006 * amp
+	vm.scale = Vector3.ONE * 0.85
+	vm.position = Vector3(0.19 + sway, -0.2 - lift, -0.42 + kick * 0.07)
+	vm.rotation = Vector3(kick * 0.09 + (0.04 if me.speed_now > 6.0 else 0.0), 0.0, sway * 1.2)
 	if me.reload_t > 0.0:
-		vm.rotation.x = -0.5
-		vm.position.y -= 0.08
-	flash_t = maxf(0.0, flash_t - dt)
-	flash.visible = flash_t > 0.0 and me.alive
-	flash.position = Vector3(0.2, -0.13, -0.95 - (0.4 if me.weapon != 1 else 0.0))
-	# 예광탄
-	tracer_im.clear_surfaces()
-	var i := tracers.size() - 1
-	var any := false
-	while i >= 0:
-		var t: Dictionary = tracers[i]
-		t.age += dt
-		if t.age > 0.35:
-			tracers.remove_at(i)
-		i -= 1
-	if tracers.size() > 0:
-		tracer_im.surface_begin(Mesh.PRIMITIVE_LINES)
-		for t in tracers:
-			var a: Vector3 = t.a
-			var bb: Vector3 = t.b
-			var len := a.distance_to(bb)
-			var head := minf(len, t.age * 260.0)
-			var tail := maxf(0.0, head - 9.0)
-			if head <= tail:
-				continue
-			var dir := (bb - a) / maxf(len, 0.001)
-			var c: Color = t.col
-			tracer_im.surface_set_color(c)
-			tracer_im.surface_add_vertex(a + dir * tail)
-			tracer_im.surface_set_color(c)
-			tracer_im.surface_add_vertex(a + dir * head)
-		tracer_im.surface_end()
+		vm.rotation.x = -0.55
+		vm.position.y -= 0.1
+		vm.rotation.z = 0.2
+	fx.update(dt)
+	sfx.update(dt, cp)
 
 
-var _ring_cache := {}
+func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -> void:
+	var hide: bool = (u.id == local_id and u.alive and not debug_3p) or (not u.alive and u.death_age > 8.0)
+	var p: Vector3 = u.prev_pos.lerp(u.pos, alpha)
+	var dist := p.distance_to(cam_pos)
+	if hide or dist > FAR_CULL:
+		if ug.shown:
+			ug.root.visible = false
+			ug.shown = false
+		return
+	if not ug.shown:
+		ug.root.visible = true
+		ug.shown = true
+	var want_low: bool = dist > LOD_DIST - (6.0 if ug.low else 0.0)
+	if ug.weapon != u.weapon or ug.low != want_low:
+		ug.weapon = u.weapon
+		ug.low = want_low
+		ug.mi.mesh = Rig.soldier_mesh(u.team, u.weapon, want_low)
+	var yaw := lerp_angle(u.prev_yaw, u.yaw, alpha)
+	var b := Basis(Vector3.UP, yaw)
+	if u.alive:
+		ug.dead = false
+		if dist < ANIM_DIST:
+			var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+			var strafe := clampf(u.vel.dot(right) / 4.5, -1.0, 1.0)
+			Rig.animate(ug.sk, ug.st, u.speed_now, dt, u.pitch, not u.on_ground, strafe)
+	else:
+		if not ug.dead:
+			ug.dead = true
+			Rig.death_pose(ug.sk)
+		var fall := clampf(u.death_age * 3.2, 0.0, 1.0)
+		fall = 1.0 - (1.0 - fall) * (1.0 - fall)
+		b = b * Basis(Vector3.RIGHT, fall * (PI * 0.5 - 0.1))
+		p.y += fall * 0.12
+	ug.root.transform = Transform3D(b, p)
+	var want_shadow := dist < SHADOW_DIST and quality >= 1
+	if want_shadow != ug.shadow:
+		ug.shadow = want_shadow
+		ug.mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if want_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if ug.flash_t > 0.0:
+		ug.flash_t -= dt
+		ug.flash.visible = ug.flash_t > 0.0 and u.alive
+		ug.flash.rotation.z = randf() * TAU
+	elif ug.flash.visible:
+		ug.flash.visible = false
 
-func _ring_mat(c: Color) -> StandardMaterial3D:
-	var key := c.to_html()
-	if not _ring_cache.has(key):
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.albedo_color = c
-		_ring_cache[key] = m
-	return _ring_cache[key]
 
-
-## 시뮬레이션 이벤트 중 화면 효과가 필요한 것만 소비한다.
+## 시뮬레이션 이벤트 중 화면/소리 효과가 필요한 것만 소비한다.
 func consume(events: Array, local_id: int) -> void:
+	sfx.begin_frame()
+	var w := sim.world
 	for e in events:
-		if e.t == "shot":
-			var col := Color(1.0, 0.92, 0.65) if e.team == 0 else Color(1.0, 0.8, 0.5)
-			tracers.append({"a": e.a, "b": e.b, "age": 0.0, "col": col})
-			if e.id == local_id:
-				kick = 1.0
-				flash_t = 0.05
+		match e.t:
+			"shot":
+				var shooter: Sim.Unit = sim.units[e.id]
+				fx.add_tracer(e.a, e.b, e.team)
+				var b: Vector3 = e.b
+				if e.hit:
+					fx.burst("blood", b, Vector3.UP)
+				else:
+					var gy := w.height_at(b.x, b.z)
+					if w.inside_box(b + Vector3(0, -0.05, 0)) or b.y > gy + 1.2:
+						fx.burst("wall", b, Vector3.UP)
+					else:
+						fx.burst("dust", b, Vector3.UP)
+				if e.id == local_id:
+					kick = 1.0
+					shake += 0.35
+					sfx.own_shot(shooter.weapon)
+					fx.muzzle_light(cam_pos + cam.basis * Vector3(0.2, -0.1, -1.2))
+				else:
+					ugs[e.id].flash_t = 0.06
+					sfx.shot_at(shooter.weapon, e.a, e.a.distance_to(cam_pos))
+			"hit":
+				if e.a == local_id:
+					sfx.play2d(sfx.tick, -4.0, 1.4 if e.head else 1.0)
+				if e.v == local_id:
+					shake += 1.0
+					sfx.play2d(sfx.thump, -2.0)
+			"kill":
+				if e.k == local_id:
+					sfx.play2d(sfx.chime, -6.0)
+			"cap":
+				sfx.play2d(sfx.chime, -8.0, 0.8 if e.o != sim.units[local_id].team else 1.2)
