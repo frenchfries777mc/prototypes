@@ -217,27 +217,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	# 병사
 	for u in sim.units:
 		_update_unit(u, ugs[u.id], alpha, dt, local_id)
-	# 거점 표식
-	for i in Sim.NPOINTS:
-		var pt: Sim.Pt = sim.pts[i]
-		var fi := 0 if pt.owner < 0 else (1 if pt.owner == 0 else 2)
-		if flag_nodes[i].mesh != flag_meshes[fi]:
-			flag_nodes[i].mesh = flag_meshes[fi]
-		var oc := COL_N
-		if pt.owner == 0:
-			oc = COL_A
-		elif pt.owner == 1:
-			oc = COL_B
-		var lead := 0 if pt.cap > 0.0 else 1
-		var fc := COL_A if lead == 0 else COL_B
-		var fill := absf(pt.cap) if pt.owner != lead else 0.0
-		var zm: ShaderMaterial = zone_nodes[i].material_override
-		zm.set_shader_parameter("col", oc)
-		zm.set_shader_parameter("col_fill", fc)
-		zm.set_shader_parameter("fill", fill)
-		zm.set_shader_parameter("contested", 1.0 if (pt.n_a > 0 and pt.n_b > 0) else 0.0)
-		var bm: ShaderMaterial = beam_nodes[i].material_override
-		bm.set_shader_parameter("col", oc)
+	_update_points()
 	# 카메라
 	var sh := Vector3.ZERO
 	if shake > 0.0:
@@ -265,6 +245,47 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		vm.rotation.z = 0.2
 	fx.update(dt)
 	sfx.update(dt, cp)
+
+
+func _update_points() -> void:
+	for i in Sim.NPOINTS:
+		var pt: Sim.Pt = sim.pts[i]
+		var fi := 0 if pt.owner < 0 else (1 if pt.owner == 0 else 2)
+		if flag_nodes[i].mesh != flag_meshes[fi]:
+			flag_nodes[i].mesh = flag_meshes[fi]
+		var oc := COL_N
+		if pt.owner == 0:
+			oc = COL_A
+		elif pt.owner == 1:
+			oc = COL_B
+		var lead := 0 if pt.cap > 0.0 else 1
+		var fc := COL_A if lead == 0 else COL_B
+		var fill := absf(pt.cap) if pt.owner != lead else 0.0
+		var zm: ShaderMaterial = zone_nodes[i].material_override
+		zm.set_shader_parameter("col", oc)
+		zm.set_shader_parameter("col_fill", fc)
+		zm.set_shader_parameter("fill", fill)
+		zm.set_shader_parameter("contested", 1.0 if (pt.n_a > 0 and pt.n_b > 0) else 0.0)
+		var bm: ShaderMaterial = beam_nodes[i].material_override
+		bm.set_shader_parameter("col", oc)
+
+
+## 메뉴 배경: 전장 위를 천천히 도는 카메라.
+func update_attract(alpha: float, dt: float, t: float) -> void:
+	var ang := t * 0.045
+	var c := Vector3(sin(ang * 0.7) * 30.0, 0.0, cos(ang * 0.5) * 12.0)
+	var pos := c + Vector3(sin(ang) * 58.0, 22.0 + sin(t * 0.13) * 5.0, cos(ang) * 58.0)
+	pos.y = maxf(pos.y, sim.world.height_at(pos.x, pos.z) + 9.0)
+	cam_pos = pos
+	cam.position = pos
+	cam.look_at(c + Vector3(0, 2.0, 0), Vector3.UP)
+	cam.fov = 62.0
+	vm.visible = false
+	for u in sim.units:
+		_update_unit(u, ugs[u.id], alpha, dt, -1)
+	_update_points()
+	fx.update(dt)
+	sfx.update(dt, pos)
 
 
 func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -> void:
