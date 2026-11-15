@@ -559,7 +559,22 @@ function renameClashes(code) {
   const all = new Set(toks.filter(t => t.type === 'id').map(t => t.t));
   const to = Object.create(null); for (const n of hit) { let m = n + '_'; while (all.has(m)) m += '_'; to[n] = m; }
   let out = '', last = 0;
+  const names = Object.keys(to), reN = names.length ? new RegExp('(?<![\\p{L}\\p{N}_$.])(' + names.map(n => n.replace(/[$]/g, '\\$')).join('|') + ')(?![\\p{L}\\p{N}_$])', 'gu') : null;
+  const fixTpl = txt => {
+    let r = '', k = 0;
+    while (k < txt.length) {
+      if (txt[k] === '\\') { r += txt.slice(k, k + 2); k += 2; continue; }
+      if (txt[k] === '$' && txt[k + 1] === '{') {
+        let d = 1, e = k + 2;
+        while (e < txt.length && d) { if (txt[e] === '{') d++; else if (txt[e] === '}') d--; e++; }
+        r += '${' + fixTpl(txt.slice(k + 2, e - 1)).replace(reN, m => to[m]) + '}'; k = e; continue;
+      }
+      r += txt[k++];
+    }
+    return r;
+  };
   toks.forEach((t, i) => {
+    if (t.type === 'tpl' && reN && t.t.includes('${')) { out += code.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
     if (t.type !== 'id' || !to[t.t] || isP(toks[i - 1], '.') || isP(toks[i - 1], '?.')) return;
     if (isP(toks[i + 1], ':') && (isP(toks[i - 1], '{') || isP(toks[i - 1], ','))) return;
     out += code.slice(last, t.s) + to[t.t]; last = t.e;
@@ -576,6 +591,18 @@ function detectOther(s) {
   return null;
 }
 const jsBlock = (code) => ['JS', ...code.split('\n').filter(l => l.trim()).map(l => '  ' + l)];
+function jsShare(text) {
+  let js = 0, all = 0, base = -1;
+  for (const l of text.split('\n')) {
+    if (!l.trim()) continue;
+    const ind = l.match(/^ */)[0].length, n = l.trim().length;
+    all += n;
+    if (base >= 0 && ind > base) { js += n; continue; }
+    base = -1;
+    if (/^JS(\s|$)/.test(l.trim())) { js += n; if (l.trim() === 'JS') base = ind; } else if (/^G\.addHTML/.test(l.trim())) js += n;
+  }
+  return all ? js / all : 0;
+}
 function convert(input, opts) {
   opts = opts || {};
   const t0 = Date.now(), budget = opts.budgetMs || 20000, over = () => Date.now() - t0 > budget;
@@ -607,7 +634,7 @@ function convert(input, opts) {
     const head = headOf(), body = code.trim() ? jsBlock(code) : [];
     const text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
     const r = FF ? FF.compileSafe(text) : { ok: true };
-    return { code: text, ok: r.ok, error: r.ok ? '' : '바꾸지 못했어요: ' + (r.message || ''), js: 1, whole: why };
+    return { code: text, ok: r.ok, error: r.ok ? '' : '바꾸지 못했어요: ' + (r.message || ''), js: 1, whole: why, share: 1 };
   };
   try {
   const C = convertJS(code);
@@ -689,7 +716,7 @@ function convert(input, opts) {
   }
   let error = '';
   if (!okRun && FF) { const r = FF.compileSafe(text); error = /문법 오류/.test(r.message || '') ? '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + String(r.message).replace(/^.*문법 오류가 있어요: /, '') + ')' : '바꾸지 못했어요: ' + (r.message || ''); }
-  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length, timedOut };
+  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length, timedOut, share: jsShare(text) };
   } catch (e) {
     const w = wholeJS('error'); w.note = String(e && e.message || e).slice(0, 80); return w;
   }
