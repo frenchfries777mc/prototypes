@@ -334,7 +334,12 @@ button,select{white-space:nowrap}
   }
   function clearError() { errLine = 0; err.style.display = 'none'; drawGutter(); }
 
-  G.onError = e => { showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e)); };
+  G.onError = e => {
+    let hint = '';
+    const nm = String(e && e.message || '').match(/^(\S+) is not defined$/), ln = code.value.split('\n')[(G.ln || 0) - 1] || '';
+    if (nm && /^\s*JS\b/.test(ln)) hint = `\nJS 코드 안에서 '${nm[1]}'를 못 찾았어요. 옛 변환기로 바꾼 코드일 수 있어요.\n원본을 위쪽 🔄 JS→FF로 다시 변환해 보세요.`;
+    showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e) + hint);
+  };
 
   let jsLock = false;
   function run(keep) {
@@ -342,7 +347,7 @@ button,select{white-space:nowrap}
     const r = FFScript.compileSafe(code.value);
     if (!r.ok) { showError(r.line, /^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? 'HTML 코드예요. FF Script 문법이 아니에요.\n위쪽 🔄 JS→FF 버튼에 붙여 넣으면 FF Script로 바꿔 줘요.' : r.message); return; }
     clearError();
-    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
+    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; if (!errLine) { status.textContent = '실행 중'; status.className = 'ok'; } }
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
   }
 
