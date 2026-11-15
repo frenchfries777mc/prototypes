@@ -27,9 +27,9 @@ var shots = process.argv[3] || '';
     phase = await page.evaluate(function () { return window.__tl.S ? window.__tl.S.phase : 'none'; });
     if (phase === 'over' || phase === 'win') break;
     if (!seen[phase]) { seen[phase] = 1; await page.waitForTimeout(60); await shot(phase); }
-    if (phase !== 'combat' && phase !== 'reward') await page.waitForSelector('.screen');
+    if (phase !== 'combat' && phase !== 'reward') await page.waitForSelector('.screen,.mapscr');
     if (phase === 'start') await page.click('[data-a=attune] >> nth=' + (steps % 3));
-    else if (phase === 'map') { var n = await page.locator('[data-a=door]').count(); await page.click('[data-a=door] >> nth=' + (steps % n)); }
+    else if (phase === 'map') { var n = await page.locator('[data-a=door]').count(); await page.locator('[data-a=door]').nth(steps % n).dispatchEvent('click'); }
     else if (phase === 'combat') {
       await page.waitForSelector('.combat');
       var info = await page.evaluate(function () {
