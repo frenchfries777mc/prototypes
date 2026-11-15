@@ -23,7 +23,24 @@ main{flex:1;display:grid;grid-template-columns:minmax(320px,42%) 1fr;min-height:
 #gutter{width:44px;padding:14px 0;text-align:right;color:#4b5075;font:14px/22px ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow:hidden;background:#12142200;user-select:none;white-space:pre}
 #gutter div{padding-right:10px}
 #gutter .bad{background:#ff6b8133;color:var(--err)}
-#code{flex:1;resize:none;border:0;outline:0;background:transparent;color:var(--text);padding:14px 14px 14px 4px;font:14px/22px ui-monospace,"SF Mono",Menlo,Consolas,monospace;tab-size:2;white-space:pre;overflow:auto}
+.wrap{flex:1;position:relative;min-width:0}
+#hl,#code{position:absolute;inset:0;margin:0;border:0;padding:14px 14px 14px 4px;font:14px/22px ui-monospace,"SF Mono",Menlo,Consolas,monospace;tab-size:2;white-space:pre;letter-spacing:0}
+#hl{overflow:hidden;pointer-events:none;color:var(--text)}
+#code{resize:none;outline:0;background:transparent;color:transparent;caret-color:#fff;overflow:auto}
+#code::selection{background:#4d8dff55;color:transparent}
+.k{color:#ff9ac1;font-weight:600}.c{color:#7fd6ff}.l{color:#ffd479}.w{color:#b9a3ff}.n{color:#8df0b0}.s{color:#a6e68a}.m{color:#5d6390;font-style:italic}.o{color:#8b90b0}
+#ac{display:none;position:absolute;z-index:5;min-width:150px;max-height:200px;overflow:auto;background:#1d2140;border:1px solid #3a4070;border-radius:8px;padding:4px;box-shadow:0 10px 30px #000a;font:13px/1.2 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+#ac div{padding:5px 10px;border-radius:5px;cursor:pointer;color:var(--text)}
+#ac div.on{background:#3b4a8f}
+#ac small{color:var(--dim);margin-left:10px;font-family:inherit}
+#helpBtn{position:absolute;right:12px;top:10px;z-index:4;padding:5px 11px;font-size:13px;background:#20243dcc;backdrop-filter:blur(4px)}
+#help{display:none;position:absolute;right:12px;top:48px;z-index:4;width:min(380px,calc(100% - 24px));max-height:calc(100% - 64px);overflow:auto;background:#161a33f2;border:1px solid #3a4070;border-radius:12px;padding:6px 14px 14px;box-shadow:0 14px 40px #000b;backdrop-filter:blur(6px)}
+#help h3{margin:14px 0 6px;font-size:13px;color:var(--accent);letter-spacing:.3px}
+#help .row{display:flex;gap:10px;align-items:baseline;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:13px}
+#help .row:hover{background:#2a3060}
+#help .row code{font:12.5px ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:#e8eaf6;white-space:pre;flex:none}
+#help .row span{color:var(--dim);margin-left:auto;text-align:right}
+#help p{margin:8px 0 0;font-size:12px;color:var(--dim);line-height:1.5}
 #err{display:none;margin:0;padding:12px 16px;background:#3a1522;color:#ffc2cc;border-top:1px solid #6b2a3d;font-size:14px;line-height:1.5;white-space:pre-wrap;max-height:34%;overflow:auto}
 #err b{color:#fff}
 .right{display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;min-height:0;background:radial-gradient(circle at 50% 40%,#1a1d33,#0b0c16)}
@@ -43,7 +60,8 @@ button,select{white-space:nowrap}
 </header>
 <main>
   <section class="left">
-    <div class="ed"><div id="gutter"></div><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea></div>
+    <div class="ed"><div id="gutter"></div><div class="wrap"><pre id="hl"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea><div id="ac"></div></div>
+      <button id="helpBtn">📖 명령어</button><div id="help"></div></div>
     <pre id="err"></pre>
   </section>
   <section class="right"><canvas id="game" width="960" height="540"></canvas></section>
@@ -64,6 +82,117 @@ button,select{white-space:nowrap}
   names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
   const custom = document.createElement('option'); custom.value = ''; custom.textContent = '내 코드'; custom.hidden = true; sel.appendChild(custom);
 
+  const L = FFScript.lists, hl = $('hl'), ac = $('ac'), help = $('help');
+  const SETS = {
+    k: new Set(L.statements), c: new Set(L.cmds), l: new Set(L.looks),
+    w: new Set([...L.backs, ...L.colors, ...L.controls, ...L.sounds, ...L.dirs, ...L.musics, ...L.pos, ...L.sides, ...L.words, 'up', 'follow', 'space', 'enter', 'click', 'sec'])
+  };
+  const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const TOKRE = /(\/\/.*|#(?:\s.*)?$)|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?)|(\d+\.?\d*)|([\p{L}_][\p{L}\p{N}_]*)|([^\s\p{L}\p{N}_]+)|(\s+)/gu;
+  function hlLine(line) {
+    let out = '', m, first = true, prev = '';
+    TOKRE.lastIndex = 0;
+    while ((m = TOKRE.exec(line))) {
+      const t = m[0];
+      if (m[1]) out += `<span class="m">${esc(t)}</span>`;
+      else if (m[2]) out += `<span class="s">${esc(t)}</span>`;
+      else if (m[3]) out += `<span class="n">${t}</span>`;
+      else if (m[4]) {
+        let cls = '';
+        if (first && SETS.k.has(t)) cls = 'k';
+        else if ((first || prev === '.') && SETS.c.has(t)) cls = 'c';
+        else if (prev === '.') cls = '';
+        else if (SETS.l.has(t)) cls = 'l';
+        else if (SETS.w.has(t)) cls = 'w';
+        else if (SETS.k.has(t) && /^(make|if|else|elif|score|lives|level)$/.test(t)) cls = 'k';
+        out += cls ? `<span class="${cls}">${t}</span>` : t;
+        first = false;
+      } else if (m[5]) { out += `<span class="o">${esc(t)}</span>`; first = false; }
+      else out += t;
+      if (!m[6]) prev = t;
+    }
+    return out;
+  }
+  function highlight() { hl.innerHTML = code.value.split('\n').map(hlLine).join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; }
+
+  const mctx = document.createElement('canvas').getContext('2d');
+  let acItems = [], acIdx = 0, acWord = '';
+  function varNames() {
+    const set = new Set(), re = /^\s*([\p{L}_][\p{L}\p{N}_]*)\s*(?:=(?!=)|\+=|-=)/gmu; let m;
+    while ((m = re.exec(code.value))) if (!L.statements.includes(m[1])) set.add(m[1]);
+    return [...set];
+  }
+  function candidates(before, word, lineHasIndent) {
+    const t = before.replace(/^\s+/, '');
+    if (/\.$/.test(before)) return L.cmds;
+    if (/(^|\s)make\s+$/.test(before)) return L.looks;
+    if (/(^|\s)from\s+$/.test(before)) return L.sides;
+    if (/(^|\s)at\s+(\S+\s+)?$/.test(before)) return [...L.pos, ...varNames(), ...L.looks];
+    if (/^move\s+$/.test(t)) return L.dirs;
+    if (/^control\s+$/.test(t)) return L.controls;
+    if (/^color\s+$/.test(t)) return L.colors;
+    if (/^look\s+$/.test(t)) return L.looks;
+    if (/^sound\s+$/.test(t)) return L.sounds;
+    if (/^background\s+$/.test(t)) return [...L.backs, ...L.colors];
+    if (/^music\s+$/.test(t)) return L.musics;
+    if (/^level\s+$/.test(t)) return ['up'];
+    if (/^when\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames()];
+    if (/^when\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
+    if (/^when\s+\S+\s+$/.test(t) && !/key\s+$/.test(t)) return ['hits', 'leaves'];
+    if (/\shits\s+$/.test(t)) return [...L.looks, ...varNames()];
+    if (!t || !word || t === word) return [...L.statements, ...L.cmds, ...varNames(), ...L.looks];
+    return [...varNames(), ...L.looks, ...L.builtin];
+  }
+  function closeAc() { ac.style.display = 'none'; acItems = []; }
+  function openAc(auto) {
+    const pos = code.selectionStart, v = code.value;
+    const ls = v.lastIndexOf('\n', pos - 1) + 1, line = v.slice(ls, pos);
+    const wm = line.match(/([\p{L}_][\p{L}\p{N}_]*)$/u), word = wm ? wm[1] : '', before = line.slice(0, line.length - word.length);
+    const specific = /(\.|\s)$/.test(before) && before.trim().length > 0;
+    if (!word && !specific) return closeAc();
+    const cand = [...new Set(candidates(before, word))].filter(c => c.toLowerCase().startsWith(word.toLowerCase()) && c !== word);
+    if (!cand.length) return closeAc();
+    acItems = cand.slice(0, 8); acIdx = 0; acWord = word;
+    ac.innerHTML = acItems.map((c, i) => `<div class="${i ? '' : 'on'}" data-i="${i}">${esc(c)}${SETS.k.has(c) ? '<small>명령</small>' : SETS.l.has(c) ? '<small>모양</small>' : ''}</div>`).join('');
+    const cs = getComputedStyle(code); mctx.font = `${cs.fontSize} ${cs.fontFamily}`;
+    const x = 4 + mctx.measureText(line.slice(0, line.length - word.length)).width - code.scrollLeft;
+    const row = v.slice(0, pos).split('\n').length - 1;
+    ac.style.left = Math.max(4, Math.min(x, code.clientWidth - 170)) + 'px';
+    ac.style.display = 'block';
+    const yBelow = 14 + (row + 1) * 22 - code.scrollTop, h = ac.offsetHeight;
+    ac.style.top = (yBelow + h > code.clientHeight ? Math.max(4, yBelow - 22 - h) : yBelow) + 'px';
+  }
+  function pickAc(i) {
+    const item = acItems[i]; if (item == null) return;
+    const pos = code.selectionStart;
+    code.setSelectionRange(pos - acWord.length, pos);
+    document.execCommand('insertText', false, item + (SETS.k.has(item) && !/^(win|gameover|shake)$/.test(item) ? ' ' : ''));
+    closeAc();
+  }
+  function markAc() { [...ac.children].forEach((d, i) => d.classList.toggle('on', i === acIdx)); }
+  ac.addEventListener('mousedown', e => { e.preventDefault(); const d = e.target.closest('div'); if (d) pickAc(+d.dataset.i); });
+
+  const HELP = [
+    ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea 또는 색'], ['lives 3', '목숨']]],
+    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
+    ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag', '플랫포머용']]],
+    ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', '방향 up down left right'], ['  toward player 150 follow', '대상을 따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', '회전'], ['  bounce', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', '중력'], ['  jump 700', '점프'], ['  solid', '밟을 수 있게'], ['  stop', '']]],
+    ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['when player hits rock', '닿았을 때'], ['when key space', '키를 눌렀을 때'], ['when click', '클릭'], ['when rock leaves', '화면 밖으로 나감']]],
+    ['점수·상태', [['score +10', ''], ['lives -1', ''], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
+    ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "안녕!"', '말풍선'], ['shake', '화면 흔들림'], ['sound coin', 'boom coin shoot hit jump power pop'], ['music chill', 'chill happy action off'], ['label "글자" at center top', '']]],
+    ['조건·변수', [['if score >= 100', 'else, repeat 3 도 있어요'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
+  ];
+  help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
+  $('helpBtn').addEventListener('click', () => { help.style.display = help.style.display === 'block' ? 'none' : 'block'; });
+  help.addEventListener('click', e => {
+    const r = e.target.closest('.row'); if (!r) return;
+    const txt = r.dataset.c.replace(/&quot;/g, '"');
+    code.focus();
+    const pos = code.selectionStart, v = code.value, ls = v.lastIndexOf('\n', pos - 1) + 1;
+    const atLineStart = v.slice(ls, pos).trim() === '' && v.slice(pos).split('\n')[0].trim() === '';
+    document.execCommand('insertText', false, (atLineStart ? '' : '\n') + txt.replace(/^ {0,2}/, atLineStart ? '' : '  ') + '\n');
+  });
+
   const G = new FFRuntime.Engine($('game'));
   let current = null, errLine = 0;
 
@@ -71,7 +200,7 @@ button,select{white-space:nowrap}
     const n = code.value.split('\n').length;
     let h = '';
     for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
-    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop;
+    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
     errLine = line; err.style.display = 'block';
@@ -95,9 +224,19 @@ button,select{white-space:nowrap}
     drawGutter(); store.set('ff-code', code.value); sel.value = '';
     clearTimeout(timer); timer = setTimeout(() => run(true), 350);
   });
-  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; });
+  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
+  code.addEventListener('input', () => openAc());
+  code.addEventListener('blur', () => setTimeout(closeAc, 100));
+  code.addEventListener('click', closeAc);
   code.addEventListener('keydown', e => {
     const v = code.value, s = code.selectionStart, en = code.selectionEnd;
+    if (acItems.length && ac.style.display === 'block') {
+      if (e.key === 'ArrowDown') { e.preventDefault(); acIdx = (acIdx + 1) % acItems.length; markAc(); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); acIdx = (acIdx - 1 + acItems.length) % acItems.length; markAc(); return; }
+      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); pickAc(acIdx); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeAc(); return; }
+    }
+    if (e.key === 'Escape') help.style.display = 'none';
     if (e.key === 'Tab') {
       e.preventDefault();
       document.execCommand('insertText', false, '  ');
