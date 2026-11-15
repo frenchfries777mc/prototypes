@@ -9,6 +9,8 @@ var tick: AudioStreamWAV
 var thump: AudioStreamWAV
 var boom: AudioStreamWAV
 var chime: AudioStreamWAV
+var whiz: AudioStreamWAV
+var steps: Array = []
 var pool3d: Array = []
 var pool2d: Array = []
 var i3 := 0
@@ -25,6 +27,14 @@ func _ready() -> void:
 	thump = _blip(110.0, 0.28, 0.9)
 	chime = _blip(880.0, 0.35, 0.4)
 	boom = _gun(2.4, 2.6, 0.12, 38.0, 1.0)
+	whiz = _whiz()
+	steps = [_step(0.7), _step(1.0), _step(0.85)]
+	var rv := AudioEffectReverb.new()
+	rv.room_size = 0.6
+	rv.damping = 0.55
+	rv.wet = 0.13
+	rv.dry = 1.0
+	AudioServer.add_bus_effect(0, rv)
 	for i in 10:
 		var p := AudioStreamPlayer3D.new()
 		p.max_distance = 170.0
@@ -165,3 +175,50 @@ func boom_at(pos: Vector3) -> void:
 	p.volume_db = 4.0
 	p.pitch_scale = rng.randf_range(0.85, 1.1)
 	p.play()
+
+
+func _whiz() -> AudioStreamWAV:
+	var n := int(0.22 * RATE)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := lerpf(3400.0, 1300.0, t / 0.22)
+		var env := sin(PI * t / 0.22)
+		env = env * env
+		var noise := rng.randf() * 2.0 - 1.0
+		lp += (noise - lp) * 0.55
+		s[i] = (sin(TAU * f * t) * 0.35 + (noise - lp) * 0.5) * env * 0.55
+	return _wav(s)
+
+
+func _step(tone: float) -> AudioStreamWAV:
+	var n := int(0.11 * RATE)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var noise := rng.randf() * 2.0 - 1.0
+		lp += (noise - lp) * (0.18 * tone)
+		s[i] = (lp * exp(-t * 38.0) * 1.6 + sin(TAU * 70.0 * t) * exp(-t * 55.0) * 0.4)
+	return _wav(s)
+
+
+func whiz_at(pos: Vector3) -> void:
+	var p: AudioStreamPlayer3D = pool3d[i3]
+	i3 = (i3 + 1) % pool3d.size()
+	p.stream = whiz
+	p.max_distance = 40.0
+	p.unit_size = 4.0
+	p.global_position = pos
+	p.volume_db = -1.0
+	p.pitch_scale = rng.randf_range(0.85, 1.25)
+	p.play()
+	p.max_distance = 170.0
+	p.unit_size = 9.0
+
+
+func step_sound(speed: float) -> void:
+	play2d(steps[rng.randi() % steps.size()], -15.0 + minf(speed, 7.0) * 0.9, rng.randf_range(0.9, 1.15))

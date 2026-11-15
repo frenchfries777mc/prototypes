@@ -5,49 +5,91 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d10">
 <title>Prototypes</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M9 22V10l7 8 7-8v12' fill='none' stroke='%23e8b04a' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M16 5 27 16 16 27 5 16Z' fill='none' stroke='%23e8b04a' stroke-width='3' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23e8b04a'/%3E%3C/svg%3E">
 <style>
 :root{--bg:#0b0d10;--panel:#14181d;--line:#232a32;--text:#e9edf1;--dim:#8a94a0;--acc:#e8b04a}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
 body{display:flex;flex-direction:column}
 #home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:28px}
-h1{margin:0;font-size:clamp(28px,6vw,44px);letter-spacing:.04em;font-weight:700}
-h1 b{color:var(--acc)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;width:100%;max-width:720px}
-.card{display:flex;flex-direction:column;gap:10px;padding:22px;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;cursor:pointer;text-align:left;font:inherit}
-.card:hover,.card:focus-visible{border-color:var(--acc);outline:none}
-.card h2{margin:0;font-size:22px}
-.card p{margin:0;color:var(--dim);font-size:15px;line-height:1.5}
-.card span{margin-top:auto;color:var(--acc);font-size:14px}
+h1{display:flex;align-items:center;gap:14px;margin:0;font-size:clamp(28px,6vw,44px);letter-spacing:.06em;font-weight:800}
+h1 b{background:linear-gradient(90deg,#f3c869,#e8b04a 50%,#d98b2b);-webkit-background-clip:text;background-clip:text;color:transparent}
+h1 svg{width:1.1em;height:1.1em;flex:none;filter:drop-shadow(0 0 14px #e8b04a66)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;width:100%;max-width:1080px}
+.card{display:flex;flex-direction:column;gap:10px;padding:0 0 18px;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;cursor:pointer;text-align:left;font:inherit}
+.card{--c:var(--acc);transition:transform .2s,border-color .2s,box-shadow .2s}
+.card:nth-child(2){--c:#6fb3ff}
+.card:nth-child(3){--c:#7be0c3}
+.card:nth-child(3){animation-delay:.2s}
+.card:hover,.card:focus-visible{border-color:var(--c);outline:none;transform:translateY(-4px);box-shadow:0 14px 34px -12px var(--c)}
+.card:hover span b{transform:translateX(5px)}
+.card img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#000;border-bottom:1px solid var(--line);transition:transform .25s}
+.card:hover img{transform:scale(1.03)}
+.card .im{overflow:hidden}
+.card h2,.card p,.card span{margin:0 20px}
+.card h2{font-size:22px;margin-top:6px}
+.card p{word-break:keep-all;color:var(--dim);font-size:15px;line-height:1.5}
+.card span{margin-top:auto;color:var(--c);font-size:14px;font-weight:600}
+.card span b{display:inline-block;transition:transform .2s;font-weight:400}
+.tags{display:flex;gap:6px;margin:0 20px}
+.tags i{font-style:normal;font-size:12px;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 35%,var(--line));background:color-mix(in srgb,var(--c) 8%,transparent);border-radius:99px;padding:2px 9px}
+#home{position:relative;overflow:auto;justify-content:safe center;background:radial-gradient(ellipse at 50% 0,#1a212b 0,var(--bg) 60%)}
+#home:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(#ffffff08 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,#ffffff08 1px,transparent 1px) 0 0/44px 44px;-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 0,transparent 70%);mask-image:radial-gradient(ellipse at 50% 30%,#000 0,transparent 70%)}
+#home:after{content:"";position:fixed;left:50%;top:-20%;width:90vmin;height:90vmin;margin-left:-45vmin;pointer-events:none;background:radial-gradient(circle,#e8b04a1c,transparent 65%);animation:glow 9s ease-in-out infinite alternate}
+#home>*{position:relative;z-index:1}
+@keyframes glow{to{transform:translateY(8%) scale(1.15);opacity:.7}}
+@keyframes up{from{opacity:0;transform:translateY(14px)}}
+.card{animation:up .5s both}
+.card:nth-child(2){animation-delay:.1s}
+h1{animation:up .5s both}
+@media(prefers-reduced-motion:reduce){#home:after,.card,h1{animation:none}}
+#load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;background:#000;color:var(--dim);font-size:15px;transition:opacity .3s}
+#load.off{opacity:0;pointer-events:none}
+#load:before{content:"";width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.stage{position:relative;flex:1;display:flex;min-height:0}
+@media(max-width:600px){.bar{gap:6px;padding:4px 8px}.bar button,.bar a{padding:5px 10px;font-size:13px}}
 #view{display:none;flex:1;flex-direction:column;min-height:0}
 body.run #home{display:none}
 body.run #view{display:flex}
-.bar{display:flex;align-items:center;gap:8px;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
+.bar{border-bottom-color:#e8b04a55!important;box-shadow:0 1px 0 #e8b04a22;display:flex;align-items:center;gap:8px;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
 .bar b{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar button,.bar a{font:inherit;font-size:14px;color:var(--text);background:#1c222a;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;text-decoration:none}
 .bar button:hover,.bar a:hover{border-color:var(--acc)}
-iframe{flex:1;width:100%;border:0;background:#000;min-height:0}
+iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </style>
 </head>
 <body>
 <main id="home">
-  <h1>PROTO<b>TYPES</b></h1>
+  <h1><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.5 28.5 16 16 28.5 3.5 16Z" fill="none" stroke="#e8b04a" stroke-width="3.2" stroke-linejoin="round"/><circle cx="16" cy="16" r="3.4" fill="#e8b04a"/></svg><span>PROTO<b>TYPES</b></span></h1>
   <div class="grid">
     <a class="card" href="#ironline">
+      <div class="im"><img src="img/ironline.jpg" alt=""></div>
       <h2>Ironline</h2>
       <p>1인칭 3D 거점 점령전. 3v3 + 봇.</p>
-      <span>실행 →</span>
+      <div class="tags"><i>3D</i><i>멀티플레이</i></div>
+      <span>실행 <b>→</b></span>
     </a>
     <a class="card" href="#ffscript">
+      <div class="im"><img src="img/ffscript.jpg" alt=""></div>
       <h2>FF Script</h2>
       <p>스크립트를 쓰면 바로 게임이 돌아가는 편집기.</p>
-      <span>실행 →</span>
+      <div class="tags"><i>편집기</i><i>게임 제작</i></div>
+      <span>실행 <b>→</b></span>
+    </a>
+    <a class="card" href="#lodestar">
+      <div class="im"><img src="img/lodestar.jpg" alt=""></div>
+      <h2>로드스타</h2>
+      <p>한가운데의 성석을 제단까지 운반하는 5대5 쟁탈전. 레벨도 상점도 없다.</p>
+      <div class="tags"><i>2D</i><i>쟁탈전</i></div>
+      <span>실행 <b>→</b></span>
     </a>
     <a class="card" href="#trilantern">
+      <div class="im"><img src="img/trilantern.jpg" alt=""></div>
       <h2>삼원의 등불</h2>
       <p>불·서리·번개 카드를 엮어 심연을 내려가는 덱 빌딩 로그라이크.</p>
-      <span>실행 →</span>
+      <div class="tags"><i>2D</i><i>덱 빌딩</i></div>
+      <span>실행 <b>→</b></span>
     </a>
   </div>
 </main>
@@ -58,12 +100,16 @@ iframe{flex:1;width:100%;border:0;background:#000;min-height:0}
     <a id="tab" target="_blank" rel="noopener">새 탭</a>
     <button id="fs" type="button">전체화면</button>
   </div>
-  <iframe id="frame" title="" allow="fullscreen; autoplay; gamepad; clipboard-write; clipboard-read"></iframe>
+  <div class="stage">
+    <iframe id="frame" title="" allow="fullscreen; autoplay; gamepad; clipboard-write; clipboard-read"></iframe>
+    <div id="load">불러오는 중…</div>
+  </div>
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},trilantern:{t:'삼원의 등불',u:'trilantern/'}};
-  var frame=document.getElementById('frame'),cur='';
+  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},trilantern:{t:'삼원의 등불',u:'trilantern/'}};
+  var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
+  frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
   var join=new URLSearchParams(location.search).get('join');
   if(join&&!location.hash)location.hash='#ironline';
   function route(){
@@ -72,7 +118,7 @@ iframe{flex:1;width:100%;border:0;background:#000;min-height:0}
     if(cur!==k){
       cur=k;
       var u=a.u+(k==='ironline'&&join?'?join='+encodeURIComponent(join):'');
-      frame.src=u;frame.title=a.t;
+      load.classList.remove('off');frame.src=u;frame.title=a.t;
       document.getElementById('tab').href=u;
     }
     document.getElementById('title').textContent=a.t;
