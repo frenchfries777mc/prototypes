@@ -635,5 +635,218 @@ if not boss.alive
   confetti
   after 1.5 sec
     win
+`,
+  'Ice Cave': `title "Ice Cave"
+background snow
+lives 3
+music happy
+minimap
+
+particle frost
+  color white cyan sky
+  count 24
+  speed 60 220
+  life 0.4 0.9
+  size 2 5
+  gravity 300
+  shape star
+
+map
+  ..............................................................
+  ..............................................................
+  ..........................S...................................
+  ......................V.=====.................A...............
+  ..................A...V.......................................
+  ......................V.....................CCC...............
+  ..........C.C.........V.............XXXXX.........K...........
+  .........IIIII........V.......T...............................
+  ..P......IIIII....E...V.C.C...T..^^.....>>>>>>>...E....C.C..F.
+  #####################WWW######################################
+  ##############################################################
+
+player.jumps 2
+
+if key shift
+  player.dash
+
+if player stomps slime
+  burst frost at slime
+  slime.explode
+  add 20 to score
+
+if player stomps bat
+  burst frost at bat
+  bat.explode
+  add 30 to score
+
+if player hits slime
+  remove 1 from lives
+  player.respawn
+
+if player hits bat
+  remove 1 from lives
+  player.respawn
+
+if player hits spike
+  remove 1 from lives
+  player.respawn
+
+if player hits coin
+  coin.sparkle
+  add 10 to score
+
+if player hits star
+  star.sparkle
+  player.power fast 6
+
+if player hits flag
+  burst frost 60 at player
+  confetti
+  win
+`,
+  'Hive Queen': `title "Hive Queen"
+background forest
+lives 5
+music action
+
+particle honey
+  color gold orange yellow
+  count 30
+  speed 80 260
+  life 0.3 0.8
+  size 3 6
+  gravity 400
+
+particle spark
+  color yellow white
+  rate 30
+  speed 10 40
+  life 0.3 0.6
+  size 1 3
+  gravity -60
+  shape star
+
+map
+  ....................
+  ....................
+  ....................
+  ....................
+  ....====....====....
+  ....................
+  ....................
+  ..T..............T..
+  .P..................
+  ####################
+  ####################
+
+player.jumps 2
+
+queen = make boss at 760 160
+  color gold
+  health 30
+  patrol 120 90
+queen.emit spark
+
+if key x
+  player.shoot queen 800
+
+if key shift
+  player.dash
+
+if shot hits queen
+  shot.remove
+  queen.hurt 1
+  burst honey 8 at shot
+
+every 3 sec
+  if queen.alive
+    if queen.hp > 15
+      queen.summon bee 2
+    else
+      queen.charge player 900
+
+every 2 sec
+  if queen.alive and queen.hp <= 15
+    queen.shoot spread 5 260
+
+if queen.hp <= 15
+  banner "여왕이 화났다!" 1.5 sec
+  queen.color orange
+
+if player stomps bee
+  bee.explode
+  add 10 to score
+
+if shot hits bee
+  shot.remove
+  bee.explode
+  add 10 to score
+
+if player hits bee
+  bee.explode
+  remove 1 from lives
+
+if player hits queen
+  remove 1 from lives
+  player.respawn
+
+if player hits shot
+  shot.remove
+  remove 1 from lives
+
+if not queen.alive
+  burst honey 60 at center
+  confetti
+  after 1.5 sec
+    win
+`,
+  'Duo Dash': `title "Duo Dash"
+background sunset
+music happy
+
+map
+  ................................................................................
+  ................................................................................
+  ...........................C.C.C...................................C.C.C........
+  .........................=========...............C.C.C..........=========.......
+  ..............C.C.C.................................................C...........
+  .............IIIIIIII..........T.........>>>>>>>>>.........T..................F.
+  ..P....C.C...IIIIIIII..C.C.....T...^^^...>>>>>>>>>...C.C...T...XXXXX..C.C..^^...F.
+  ################################################################################
+  ################################################################################
+
+p2 = make hero at player
+  control platformer wasd
+  color red
+player.control platformer arrows
+player.jumps 2
+p2.jumps 2
+camera follow player and p2
+
+if player hits coin
+  coin.sparkle
+  add 1 to player.score
+
+if p2 hits coin
+  coin.sparkle
+  add 1 to p2.score
+
+if player hits spike
+  player.respawn
+
+if p2 hits spike
+  p2.respawn
+
+if player hits flag
+  banner "P1 도착!" 2 sec
+  add 5 to player.score
+  after 1 sec
+    win
+
+if p2 hits flag
+  banner "P2 도착!" 2 sec
+  add 5 to p2.score
+  after 1 sec
+    win
 `
 };
