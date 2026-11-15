@@ -89,6 +89,7 @@ func box(size: Vector3, xf: Transform3D, col: Color, bone: int = 0) -> void:
 ## 프로파일(반지름, y)을 Y 축으로 회전시킨 곡면. 법선은 프로파일 접선에서 구한다.
 func lathe(profile: Array, segs: int, xf: Transform3D, col: Color, bone: int = 0) -> void:
 	segs = maxi(5, int(round(segs * lod)))
+	var nb := xf.basis.inverse().transposed()
 	var rings: Array = []
 	var m := profile.size()
 	for i in m:
@@ -107,7 +108,7 @@ func lathe(profile: Array, segs: int, xf: Transform3D, col: Color, bone: int = 0
 			var sa := sin(ang)
 			var pos := Vector3(p.x * ca, p.y, p.x * sa)
 			var nrm := Vector3(nr2.x * ca, nr2.y, nr2.x * sa)
-			ring.append(_add(xf * pos, xf.basis * nrm, col, bone))
+			ring.append(_add(xf * pos, nb * nrm, col, bone))
 		rings.append(ring)
 	for i in m - 1:
 		var r0: Array = rings[i]
