@@ -764,5 +764,5 @@ function explain(e) {
 function toFunction(code) { return new Function('G', code); }
 
 const lists = { pshapes: PSHAPES, pkeys: PKEYS, powers: POWERS, waves: WAVES, weathers: WEATHERS, statements: STATEMENTS, cmds: Object.keys(CMDS), looks: BUILTIN_LOOKS, backs: BACKS, colors: COLOR_WORDS, controls: CONTROLS, sounds: SOUNDS, dirs: DIRS, musics: MUSICS, pos: POS_WORDS, sides: SIDES, words: WORDS, builtin: BUILTIN };
-global.FFScript = { compile, compileSafe, explain, toFunction, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
+global.FFScript = { compile, compileSafe, explain, toFunction, jsTopNames: code => jsTopDecls(code).names, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
 })(typeof window !== 'undefined' ? window : globalThis);
