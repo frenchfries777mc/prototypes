@@ -10,6 +10,8 @@ var S = null;        // 진행 중인 판
 var sel = -1;        // 고른 손패 위치
 var busy = false;    // 적 차례 등 입력을 막는 동안 true
 var modal = null;    // 열려 있는 창
+var lastCombat = '';  // 마지막으로 시작 연출을 보여 준 전투
+var cast = null;      // 방금 낸 카드의 연출 정보
 var seenUids = {};   // 손패에 이미 보인 카드 (새로 뽑은 카드만 애니메이션)
 var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
 var meta = loadMeta();
@@ -77,7 +79,7 @@ function cardHTML(card, o) {
   return '<div class="' + cls + '"' + attrs + '>' +
     '<div class="cost">' + TL.costOf(card) + '</div>' +
     '<div class="cname">' + esc(TL.cardName(card)) + '</div>' +
-    '<div class="cart">' + d.a + '</div>' +
+    '<div class="cart">' + ART.card(card.id, d.el) + '</div>' +
     '<div class="ctype">' + TL.EL[d.el].icon + ' ' + TL.TYPE_NAME[d.t] + '</div>' +
     '<div class="ctext">' + TL.cardText(card, o.combat ? S : null) + '</div>' +
     (o.tag ? '<div class="tag">' + o.tag + '</div>' : '') +
@@ -124,7 +126,7 @@ function renderTitle() {
   elTop.innerHTML = '';
   var has = !!loadSave();
   screen('title',
-    '<div class="orbs">🔥❄️⚡</div>' +
+    '<div class="orbs">' + ART.logo() + '</div>' +
     '<h1><span>삼원</span><span>의 </span><span>등불</span></h1>' +
     '<p>불·서리·번개 세 원소의 카드를 엮어 심연의 끝까지 내려가는 덱 빌딩 로그라이크.<br>같은 원소를 이으면 <b style="color:#fff">공명</b>, 원소를 바꾸면 <b style="color:#fff">전환</b>.</p>' +
     '<div class="col">' +
@@ -143,7 +145,7 @@ function renderStart() {
     '<div class="row">' + TL.ATTUNE.map(function (a, i) {
       var r = TL.RELICS[a.relic], c = TL.CARDS[a.card];
       return '<button class="pickbox" data-a="attune" data-i="' + i + '" style="--c:var(--' + a.el + ')">' +
-        '<span class="big">' + TL.EL[a.el].icon + '</span><b>' + a.n + '</b><small>' + a.x + '</small>' +
+        '<span class="big lantbig">' + ART.lantern(a.el) + '</span><b>' + a.n + '</b><small>' + a.x + '</small>' +
         '<span class="get">' + r.i + ' <b>' + r.n + '</b> — ' + r.x + '</span>' +
         '<span class="get">' + c.a + ' <b>' + c.n + '</b> — ' + TL.cardText({ id: a.card, up: 0 }, null) + '</span>' +
         '</button>';
@@ -162,13 +164,14 @@ function renderMap() {
     '<p>' + (S.doors.length > 1 ? '갈림길이다. 어느 쪽으로 갈까?' : S.doors[0] === 'boss' ? '길 끝에서 무언가 기다리고 있다.' : '길은 하나뿐이다.') + '</p>' +
     '<div class="row">' + S.doors.map(function (d, i) {
       var D = TL.DOORS[d], name = D.n, desc = D.x, icon = D.i;
-      if (d === 'boss') { var b = TL.ENEMIES[act.boss[0]]; name = b.n; icon = b.i; desc = '이 막의 주인. HP ' + b.hp[0] + '.'; }
+      if (d === 'boss') { var b = TL.ENEMIES[act.boss[0]]; name = b.n; icon = ART.enemy(act.boss[0]); desc = '이 막의 주인. HP ' + b.hp[0] + '.'; }
       return '<button class="pickbox" data-a="door" data-i="' + i + '"><span class="big">' + icon + '</span><b>' + name + '</b><small>' + desc + '</small></button>';
     }).join('') + '</div>');
 }
 
 function renderCombat() {
   var C = S.combat, alive = TL.alive(S);
+  var cKey = S.seed + '/' + S.act + '/' + S.step + '/' + S.fights, fresh = cKey !== lastCombat;
   var selCard = sel >= 0 ? C.hand[sel] : null;
   var needTarget = selCard && TL.CARDS[selCard.id].tg && TL.canPlay(S, sel);
   var playable = false;
@@ -176,9 +179,9 @@ function renderCombat() {
   var en = C.en.map(function (e, i) {
     var d = TL.ENEMIES[e.key], dead = e.hp <= 0;
     var intent = dead ? '' : TL.intentView(S, e).map(function (p) { return '<span class="' + p.k + '">' + p.i + p.t + '</span>'; }).join('');
-    return '<div class="enemy' + (dead ? ' dead' : '') + (needTarget && !dead ? ' targetable' : '') + '" id="e' + i + '" data-a="enemy" data-i="' + i + '">' +
+    return '<div class="enemy' + (dead ? ' dead' : '') + (fresh ? ' enter' : '') + (needTarget && !dead ? ' targetable' : '') + '" id="e' + i + '" data-a="enemy" data-i="' + i + '">' +
       '<div class="intent" title="다음 행동">' + intent + '</div>' +
-      '<div class="eicon">' + d.i + '</div><div class="ename">' + d.n + '</div>' +
+      '<div class="eicon' + (C.kind === 'boss' ? ' boss' : C.kind === 'elite' ? ' elite' : '') + '" style="--bd:-' + (((performance.now() / 1000) + i * 0.9) % 3.2).toFixed(2) + 's">' + ART.enemy(e.key) + '</div><div class="ename">' + d.n + '</div>' +
       '<div class="hpbar' + (e.block > 0 ? ' blk' : '') + '"><i style="width:' + (100 * e.hp / e.maxHp) + '%"></i><span>' + e.hp + '/' + e.maxHp + '</span></div>' +
       '<div class="sts">' + stsHTML(e.st, e.block) + '</div></div>';
   }).join('');
@@ -209,9 +212,9 @@ function renderCombat() {
     : selCard && touch ? '한 번 더 누르면 사용합니다'
     : !playable && n ? '낼 수 있는 카드가 없습니다. 턴을 끝내세요.' : '';
 
-  elMain.innerHTML = '<div class="combat">' +
+  elMain.innerHTML = '<div class="combat act' + S.act + (C.kind === 'boss' ? ' boss' : '') + '" data-chain="' + (C.chain.el || '') + '">' +
     '<div class="enemies">' + en + '</div>' +
-    '<div class="mid"><div class="player" id="p"><div class="pi">🏮</div><div class="pinfo">' +
+    '<div class="mid"><div class="player" id="p"><div class="pi" id="plamp" style="--bd:-' + ((performance.now() / 1000) % 0.9).toFixed(2) + 's">' + ART.lantern(C.chain.el || S.attune || 'n') + '</div><div class="pinfo">' +
       '<div class="hpbar' + (C.block > 0 ? ' blk' : '') + '"><i style="width:' + (100 * S.hp / S.maxHp) + '%"></i><span>' + S.hp + '/' + S.maxHp + '</span></div>' +
       '<div class="sts">' + stsHTML(C.st, C.block, C.pow) + '</div>' + warn +
     '</div></div>' + chainBox + '</div>' +
@@ -223,6 +226,14 @@ function renderCombat() {
       '<button class="endturn' + (!playable && !busy ? ' go' : '') + '" data-a="end"' + (busy ? ' disabled' : '') + '>턴 종료</button>' +
     '</div>' +
     '<div class="hand' + (n >= 5 ? ' many' : '') + '" id="hand" style="--n:' + Math.max(n, 2) + '">' + hand + '</div></div>';
+  if (fresh) {
+    lastCombat = cKey;
+    if (C.kind === 'boss' || C.kind === 'elite') {
+      banner(C.kind === 'boss' ? '보스' : '정예', TL.ENEMIES[C.en[0].key].n, C.kind);
+      FX.flash(C.kind === 'boss' ? '#ff3a3a' : '#ffffff', 0.18, 0.4);
+      FX.shake(C.kind === 'boss' ? 9 : 5, 420);
+    }
+  }
 }
 function renderReward() {
   var R = S.reward, h = '<h2>' + (R.kind === 'boss' ? '막의 주인을 쓰러뜨렸다!' : '승리') + '</h2>';
@@ -312,6 +323,7 @@ function renderEnd() {
 }
 
 function render() {
+  FX.ambient(S ? Math.min(S.act, 2) : 0);
   if (!S) { renderTitle(); return; }
   renderTop();
   switch (S.phase) {
@@ -328,9 +340,72 @@ function render() {
 }
 
 /* ---------- 효과 재생 ---------- */
+function center(el) { var r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+function iconPos(id) {
+  var el = $(id === 'p' ? 'plamp' : id);
+  if (!el) return null;
+  if (id !== 'p') el = el.querySelector('.eicon') || el;
+  return center(el);
+}
+function bigText(txt, x, y, col, size) {
+  var d = document.createElement('div');
+  d.className = 'bigtext'; d.textContent = txt;
+  d.style.cssText = 'left:' + x + 'px;top:' + y + 'px;color:' + col + ';font-size:' + (size || 30) + 'px';
+  elFx.appendChild(d); setTimeout(function () { d.remove(); }, 1100);
+}
+function banner(top, name, kind) {
+  var d = document.createElement('div');
+  d.className = 'banner ' + kind;
+  d.innerHTML = '<small>' + top + '</small><b>' + esc(name) + '</b>';
+  elFx.appendChild(d); setTimeout(function () { d.remove(); }, 1900);
+}
 function playFx() {
   if (!S) return;
-  var list = S.fx.splice(0), count = {};
+  var list = S.fx.splice(0), count = {}, cx = cast; cast = null;
+  var dmg = {}, order = [], resN = 0, shifted = false;
+  list.forEach(function (f) {
+    if (f.t === 'hit' && f.who && f.who !== 'p' && !f.burn) {
+      if (dmg[f.who] === undefined) { dmg[f.who] = 0; order.push(f.who); }
+      dmg[f.who] += f.n;
+    }
+    if (f.t === 'res') resN = f.n;
+    if (f.t === 'shift') shifted = true;
+  });
+
+  /* 카드가 날아가 맞는 연출 */
+  if (cx) {
+    var hex = FX.HEX[cx.el] || FX.HEX.n, me = iconPos('p');
+    var targets = cx.tg ? order : [];
+    var land = function (pos, power) { FX.burst(pos.x, pos.y, cx.el, power); };
+    if (targets.length) {
+      targets.forEach(function (id) {
+        var pos = iconPos(id) || cx.from;
+        FX.shoot(cx.from.x, cx.from.y, pos.x, pos.y, cx.el, function () { land(pos, Math.min(2, 0.7 + dmg[id] / 18)); });
+      });
+    } else if (me) {
+      FX.shoot(cx.from.x, cx.from.y, me.x, me.y, cx.el, function () { land(me, 0.7); });
+    }
+    if (cx.ghost) {
+      var tp = targets.length ? iconPos(targets[0]) : me, g = cx.ghost;
+      if (tp) {
+        requestAnimationFrame(function () {
+          g.style.transition = 'transform .28s cubic-bezier(.5,0,.9,.5), opacity .28s';
+          g.style.transform = 'translate(' + (tp.x - cx.from.x) + 'px,' + (tp.y - cx.from.y) + 'px) scale(.22) rotate(' + (cx.from.x < tp.x ? 14 : -14) + 'deg)';
+          g.style.opacity = '0';
+        });
+      } else g.style.opacity = '0';
+      setTimeout(function () { g.remove(); }, 340);
+    }
+    if (resN >= 2 && me) {
+      FX.resonance(me.x, me.y, cx.el, resN);
+      FX.vignette(hex, Math.min(1, resN / 5));
+      bigText('공명 ×' + (resN - 1), me.x + 40, me.y - 70, hex, 26 + Math.min(resN, 6) * 3);
+      var cb = document.querySelector('.chainbox'); if (cb) bump(cb, 'pulse');
+      if (resN >= 4) FX.shake(Math.min(7, resN), 240);
+    }
+    if (shifted && me) { FX.ring(me.x, me.y, '#ffffff', 8, 64, 0.35, 2.5); bigText('전환!', me.x + 40, me.y - 62, '#ffffff', 24); }
+  }
+
   list.forEach(function (f) {
     if (f.t === 'sfx') { if (SFX[f.s]) SFX[f.s](); return; }
     if (f.t === 'play') { SFX[f.el](); return; }
@@ -340,14 +415,26 @@ function playFx() {
     var el = f.who ? $(f.who) : null;
     if (!el) return;
     if (f.t === 'atk') { bump(el, 'lunge'); return; }
-    if (f.t === 'die') { el.classList.add('dying'); return; }
+    if (f.t === 'die') {
+      el.classList.add('dying');
+      var dp = iconPos(f.who), boss = S.combat ? S.combat.kind === 'boss' : false;
+      if (dp) { FX.burst(dp.x, dp.y, 'x', boss ? 2.4 : 1.2); if (boss) { FX.flash('#ffffff', 0.3, 0.5); FX.shake(10, 500); } }
+      return;
+    }
     var txt = '', cls = f.t;
     if (f.t === 'hit') {
-      if (f.n > 0) { txt = '-' + f.n + (f.burn ? '🔥' : ''); bump(el, 'hurt'); (f.who === 'p' ? SFX.hurt : SFX.hit)(); }
-      else if (f.blocked > 0) { txt = '막음'; cls = 'blocked'; SFX.block(); }
+      if (f.n > 0) {
+        txt = '-' + f.n + (f.burn ? '🔥' : ''); bump(el, 'hurt'); (f.who === 'p' ? SFX.hurt : SFX.hit)();
+        var hp = iconPos(f.who);
+        if (f.who === 'p' && hp) { FX.burst(hp.x, hp.y, 'r', Math.min(2.2, 0.6 + f.n / 14)); FX.shake(Math.min(11, 3 + f.n / 3), 280); FX.vignette('rgba(255,50,50,.95)', Math.min(1, f.n / 18)); }
+        else if (f.burn && hp) FX.burst(hp.x, hp.y, 'f', 0.5);
+      } else if (f.blocked > 0) { txt = '막음'; cls = 'blocked'; SFX.block(); }
       else return;
-    } else if (f.t === 'block') { txt = '+' + f.n + '🛡️'; SFX.block(); }
-    else if (f.t === 'heal') txt = '+' + f.n + '💚';
+    } else if (f.t === 'block') {
+      txt = '+' + f.n + '🛡️'; SFX.block();
+      var bp = iconPos(f.who); if (bp) FX.ring(bp.x, bp.y, '#6ea8ff', 10, 58, 0.35, 3);
+    }
+    else if (f.t === 'heal') { txt = '+' + f.n + '💚'; var gp = iconPos(f.who); if (gp) FX.ring(gp.x, gp.y, '#6ee7a4', 8, 52, 0.4, 3); }
     else if (f.t === 'st') txt = TL.ST[f.st].icon + '+' + f.n;
     else if (f.t === 'say') txt = f.s;
     var k = count[f.who] = (count[f.who] || 0) + 1;
@@ -381,7 +468,17 @@ function act(fn) {
 }
 function tryPlay(i, ti) {
   if (!TL.canPlay(S, i)) { toast('에너지가 부족합니다'); return; }
-  act(function () { return TL.playCard(S, i, ti); });
+  var card = S.combat.hand[i], cel = document.querySelector('#hand .card[data-i="' + i + '"]');
+  cast = null;
+  if (cel) {
+    var r = cel.getBoundingClientRect(), g = cel.cloneNode(true);
+    g.className = g.className.replace(/\b(sel|new|no|res|shift)\b/g, '').replace(/\s+/g, ' ').trim() + ' ghost';
+    g.removeAttribute('data-a'); g.removeAttribute('data-i');
+    g.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px';
+    elFx.appendChild(g);
+    cast = { el: TL.CARDS[card.id].el, tg: !!TL.CARDS[card.id].tg, from: { x: r.left + r.width / 2, y: r.top + r.height / 2 }, ghost: g };
+  }
+  if (!act(function () { return TL.playCard(S, i, ti); }) && cast) { cast.ghost.remove(); cast = null; }
 }
 function clickCard(i) {
   var C = S.combat;

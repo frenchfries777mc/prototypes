@@ -45,7 +45,7 @@ jobs:
           cp -r site/. _site/
           cp -r ironline/build/web/. _site/ironline/
           cp ffscript/index.html _site/ffscript/index.html
-          cp trilantern/index.html trilantern/core.js trilantern/ui.js _site/trilantern/
+          cp trilantern/index.html trilantern/core.js trilantern/art.js trilantern/fx.js trilantern/ui.js _site/trilantern/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
