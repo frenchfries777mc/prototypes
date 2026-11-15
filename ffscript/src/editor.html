@@ -164,6 +164,7 @@ button,select{white-space:nowrap}
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
+  ['FFScript', 'FFRuntime'].forEach(k => { const v = window[k]; if (v) Object.defineProperty(window, k, { get: () => v, set() { }, configurable: false }); });
   (function () {
     const cur = (document.querySelector('meta[name=ff-build]') || {}).content;
     $('staleBtn').addEventListener('click', () => { const u = new URL(location.href); u.searchParams.set('v', Date.now()); location.replace(u.href); });
@@ -174,18 +175,31 @@ button,select{white-space:nowrap}
     }).catch(() => { });
   })();
   const BIG = 400000;
-  function highlight() {
-    if (code.value.length > BIG) { hl.textContent = code.value + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
-    scanDyn();
+  const HLWIN = 30000;
+  let hlWinA = -1, hlWinB = -1, hlRaf = 0;
+  function highlight(scrollOnly) {
+    const v = code.value;
+    if (v.length > BIG) { hl.textContent = v + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    const lines = v.split('\n');
+    let a = 0, b = lines.length;
+    if (v.length > HLWIN) {
+      a = Math.max(0, Math.floor(code.scrollTop / 22) - 40); b = Math.min(lines.length, Math.ceil((code.scrollTop + code.clientHeight) / 22) + 40);
+      while (a > 0 && /^\s/.test(lines[a])) a--;
+      if (scrollOnly && a >= hlWinA && b <= hlWinB && hlWinA >= 0) { hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    }
+    if (!scrollOnly) scanDyn();
+    hlWinA = a; hlWinB = b;
     let raw = null;
-    const out = code.value.split('\n').map(line => {
+    const out = [];
+    for (let i = a; i < b; i++) {
+      const line = lines[i];
       const ind = line.match(/^ */)[0].length;
-      if (raw) { if (!line.trim()) return ''; if (ind > raw.ind) return hlRaw(line, raw.art); raw = null; }
+      if (raw) { if (!line.trim()) { out.push(''); continue; } if (ind > raw.ind) { out.push(hlRaw(line, raw.art)); continue; } raw = null; }
       const t = line.trim().replace(/\s*:$/, '');
       if (/^map(\s+\S+)?$/.test(t)) raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
-      return hlLine(line);
-    });
-    hl.innerHTML = out.join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
+      out.push(hlLine(line));
+    }
+    hl.innerHTML = '\n'.repeat(a) + out.join('\n') + '\n'.repeat(lines.length - b) + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
   }
 
   const mctx = document.createElement('canvas').getContext('2d');
@@ -321,11 +335,15 @@ button,select{white-space:nowrap}
   G.autostart = true;
   let current = null, errLine = 0;
 
+  let gN = -1, gErr = -1;
   function drawGutter() {
-    const n = code.value.split('\n').length;
-    let h = '';
-    if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
-    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
+    let n = 1; for (let i = code.value.indexOf('\n'); i >= 0; i = code.value.indexOf('\n', i + 1)) n++;
+    if (n !== gN || errLine !== gErr) {
+      let h = '';
+      if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+      gutter.innerHTML = h; gN = n; gErr = errLine;
+    }
+    gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
     errLine = line; err.style.display = 'block';
@@ -351,14 +369,18 @@ button,select{white-space:nowrap}
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
   }
 
-  let timer = 0;
+  let timer = 0, saveT = 0;
+  const saveNow = () => { clearTimeout(saveT); saveT = 0; store.set('ff-code', code.value); };
+  const saveCode = () => { if (code.value.length <= HLWIN) { saveNow(); return; } clearTimeout(saveT); saveT = setTimeout(saveNow, 600); };
+  addEventListener('pagehide', () => { if (saveT) saveNow(); });
+  document.addEventListener('visibilitychange', () => { if (saveT) saveNow(); });
   code.addEventListener('input', () => {
-    drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
+    drawGutter(); saveCode(); if (!sel.value.startsWith('my:')) sel.value = '';
     clearTimeout(timer);
     if (code.value.length > BIG) { status.textContent = '코드가 커서 자동 실행은 쉬어요. 다시 시작을 눌러 주세요'; status.className = ''; return; }
-    timer = setTimeout(() => run(true), 350);
+    timer = setTimeout(() => run(true), 350 + Math.min(1500, code.value.length / 100));
   });
-  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
+  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); if (code.value.length > HLWIN && code.value.length <= BIG && !hlRaf) hlRaf = requestAnimationFrame(() => { hlRaf = 0; highlight(true); }); });
   code.addEventListener('input', () => openAc());
   code.addEventListener('blur', () => setTimeout(closeAc, 100));
   code.addEventListener('click', closeAc);
