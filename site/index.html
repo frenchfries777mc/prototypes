@@ -14,7 +14,7 @@ body{display:flex;flex-direction:column}
 #home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:28px}
 h1{margin:0;font-size:clamp(28px,6vw,44px);letter-spacing:.04em;font-weight:700}
 h1 b{color:var(--acc)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;width:100%;max-width:720px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;width:100%;max-width:1080px}
 .card{display:flex;flex-direction:column;gap:10px;padding:0 0 18px;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;cursor:pointer;text-align:left;font:inherit}
 .card:hover,.card:focus-visible{border-color:var(--acc);outline:none}
 .card img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#000;border-bottom:1px solid var(--line);transition:transform .25s}
@@ -61,6 +61,13 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
       <div class="tags"><i>편집기</i><i>게임 제작</i></div>
       <span>실행 →</span>
     </a>
+    <a class="card" href="#lodestar">
+      <div class="im"><img src="img/lodestar.jpg" alt=""></div>
+      <h2>로드스타</h2>
+      <p>큰 맵에서 벌이는 5대5 공성전(MOBA). 영웅 8명, 봇 9명.</p>
+      <div class="tags"><i>2D</i><i>전략</i></div>
+      <span>실행 →</span>
+    </a>
   </div>
 </main>
 <section id="view">
@@ -77,7 +84,7 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'}};
+  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'}};
   var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
   frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
   var join=new URLSearchParams(location.search).get('join');
