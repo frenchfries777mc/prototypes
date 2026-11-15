@@ -43,6 +43,7 @@ var kick := 0.0
 var shake := 0.0
 var bob := 0.0
 var debug_3p := false
+var tp_dist := 3.2
 var quality := 2
 var flash_mat: StandardMaterial3D
 var flash_quad: QuadMesh
@@ -51,6 +52,15 @@ var frame_budget_shots := 0
 var grass_root: Node3D
 var shell_t := 4.0
 var ads_t := 0.0
+var sun_uv := Vector2(0.5, 0.2)
+var vm_flash: MeshInstance3D
+var vm_flash_t := 0.0
+var bolt_t := 0.0
+var step_acc := 0.0
+var spec_id := -1
+var spec_cam := Vector3.ZERO
+var spec_init := false
+var sun_vis := 0.0
 
 
 func setup(s: Sim) -> void:
@@ -89,6 +99,7 @@ func _build_env() -> void:
 	env.fog_light_color = HAZE
 	env.fog_density = 0.0042
 	env.fog_sun_scatter = 0.25
+	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
 	env.adjustment_contrast = 1.06
 	env.adjustment_saturation = 1.08
@@ -113,6 +124,9 @@ func apply_quality(q: int) -> void:
 	quality = q
 	sun.shadow_enabled = q >= 1
 	grass_root.visible = q >= 1
+	fx.fire_lights = q >= 1
+	if fx.motes != null:
+		fx.motes.visible = q >= 1
 	sun.directional_shadow_max_distance = 120.0 if q >= 2 else 80.0
 	var vp := get_viewport()
 	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
@@ -150,8 +164,15 @@ func _build_smoke() -> void:
 		var z: float = c[1]
 		if absf(x) > World.HALF_X - 10.0:
 			continue
-		fx.smoke_column(Vector3(x, w.height_at(x, z) + 0.3, z), 0.8 + 0.4 * (n % 3))
+		var pos := Vector3(x, w.height_at(x, z) + 0.3, z)
+		if n % 2 == 0:
+			fx.fire(pos, 0.9 + 0.3 * (n % 3))
+		else:
+			fx.smoke_column(pos, 0.8 + 0.4 * (n % 3))
 		n += 1
+	for hs in w.houses:
+		fx.fire(Vector3(hs.cx, w.height_at(hs.cx, hs.cz) + 0.5, hs.cz), 1.2)
+	fx.ensure_motes()
 
 
 func _build_units() -> void:
@@ -204,6 +225,11 @@ func _build_camera() -> void:
 	vm = MeshInstance3D.new()
 	vm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	cam.add_child(vm)
+	vm_flash = MeshInstance3D.new()
+	vm_flash.mesh = flash_quad
+	vm_flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	vm_flash.visible = false
+	vm.add_child(vm_flash)
 
 
 func _set_viewmodel(weapon: int) -> void:
@@ -214,6 +240,42 @@ func _set_viewmodel(weapon: int) -> void:
 
 
 ## 프레임마다 호출. alpha = 틱 사이 보간 비율.
+## 사망 후: 처음 몇 초는 나를 쓰러뜨린 사람(킬캠), 이후엔 가까운 아군을 따라간다. 대상이 없으면 false.
+func _pick_spectate(me: Sim.Unit) -> bool:
+	var valid := false
+	if spec_id >= 0 and spec_id < sim.units.size():
+		var cur: Sim.Unit = sim.units[spec_id]
+		valid = cur.alive and cur.id != me.id
+		if valid and me.death_age > 3.2 and cur.team != me.team:
+			valid = false
+	if not valid:
+		var pick := -1
+		if me.killer >= 0 and me.death_age < 3.2 and sim.units[me.killer].alive:
+			pick = me.killer
+		else:
+			var best := 1e12
+			for u in sim.units:
+				if u.alive and u.team == me.team and u.id != me.id:
+					var d: float = u.pos.distance_squared_to(me.pos)
+					if d < best:
+						best = d
+						pick = u.id
+		spec_id = pick
+		spec_init = false
+	return spec_id >= 0
+
+
+func _update_sun() -> void:
+	var to_sun := sun.global_transform.basis.z
+	var far_p := cam.global_position + to_sun * 500.0
+	if cam.is_position_behind(far_p):
+		sun_vis = 0.0
+		return
+	var vs := get_viewport().get_visible_rect().size
+	sun_uv = cam.unproject_position(far_p) / vs
+	sun_vis = smoothstep(1.25, 0.45, (sun_uv - Vector2(0.5, 0.5)).length())
+
+
 func _shells(dt: float, shake_scale: float) -> void:
 	shell_t -= dt
 	if shell_t > 0.0:
@@ -233,8 +295,14 @@ func _shells(dt: float, shake_scale: float) -> void:
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
 	var me: Sim.Unit = sim.units[local_id]
 	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
+	var spectating := false
 	if not me.alive:
 		cp.y = maxf(cp.y - minf(me.death_age * 2.0, 1.2), me.pos.y + 0.35)
+		if me.death_age > 0.9:
+			spectating = _pick_spectate(me)
+	else:
+		spec_id = -1
+		spec_init = false
 	cam_pos = cp
 	# 병사
 	for u in sim.units:
@@ -246,8 +314,22 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
 	shake = maxf(0.0, shake - dt * 3.0)
 	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
-	if debug_3p:
-		cp += cam.basis * Vector3(0.9, 0.5, 3.2)
+	if spectating:
+		var tu: Sim.Unit = sim.units[spec_id]
+		var ty := lerp_angle(tu.prev_yaw, tu.yaw, alpha)
+		var tp: Vector3 = tu.prev_pos.lerp(tu.pos, alpha)
+		var want := tp + Basis(Vector3.UP, ty) * Vector3(0.7, 1.9, 3.6)
+		want.y = maxf(want.y, sim.world.height_at(want.x, want.z) + 0.8)
+		if not spec_init:
+			spec_cam = cp
+			spec_init = true
+		spec_cam = spec_cam.lerp(want, minf(1.0, dt * 4.0))
+		cp = spec_cam
+		cam.position = cp
+		cam.look_at(tp + Vector3(0, 1.35, 0), Vector3.UP)
+		cam_pos = cp
+	if debug_3p and not spectating:
+		cp += cam.basis * Vector3(0.9 * tp_dist / 3.2, 0.5 * tp_dist / 3.2, tp_dist)
 	cam.position = cp
 	ads_t = move_toward(ads_t, 1.0 if (me.alive and me.in_ads) else 0.0, dt * 7.0)
 	cam.fov = lerpf(75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), 52.0, ads_t)
@@ -267,8 +349,30 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		vm.position.y -= 0.1
 		vm.rotation.z = 0.2
 	_shells(dt, 1.0)
+	# 노리쇠 동작 / 총구 섬광 / 발소리
+	bolt_t = maxf(0.0, bolt_t - dt)
+	if bolt_t > 0.0 and me.weapon == 0 and me.alive:
+		var ph := 1.0 - bolt_t / 0.8
+		var bm := sin(clampf((ph - 0.2) / 0.6, 0.0, 1.0) * PI)
+		vm.position.z += bm * 0.045
+		vm.position.y -= bm * 0.02
+		vm.rotation.z += bm * 0.35
+		vm.rotation.x -= bm * 0.06
+	vm_flash_t = maxf(0.0, vm_flash_t - dt)
+	vm_flash.visible = vm_flash_t > 0.0 and me.alive
+	vm_flash.position = Vector3(0.0, 0.02, -1.06 if me.weapon != 1 else -0.58)
+	vm_flash.rotation.z = randf() * TAU
+	vm_flash.scale = Vector3.ONE * randf_range(0.8, 1.3)
+	if me.alive and me.on_ground and me.speed_now > 0.8:
+		step_acc += me.speed_now * dt
+		var stride := 2.1 if me.speed_now < 5.5 else 2.9
+		if step_acc >= stride:
+			step_acc = 0.0
+			sfx.step_sound(me.speed_now)
 	fx.update(dt)
+	fx.follow(cp)
 	sfx.update(dt, cp)
+	_update_sun()
 
 
 func _update_points() -> void:
@@ -310,7 +414,9 @@ func update_attract(alpha: float, dt: float, t: float) -> void:
 	_update_points()
 	_shells(dt, 0.0)
 	fx.update(dt)
+	fx.follow(pos)
 	sfx.update(dt, pos)
+	_update_sun()
 
 
 func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -> void:
@@ -380,11 +486,26 @@ func consume(events: Array, local_id: int) -> void:
 				if e.id == local_id:
 					kick = 1.0
 					shake += 0.35
+					vm_flash_t = 0.045
+					if shooter.weapon == 0:
+						bolt_t = 0.8
+					fx.casing(cam_pos + cam.basis * Vector3(0.12, -0.1, -0.4), cam.basis.x)
 					sfx.own_shot(shooter.weapon)
 					fx.muzzle_light(cam_pos + cam.basis * Vector3(0.2, -0.1, -1.2))
 				else:
 					ugs[e.id].flash_t = 0.06
 					sfx.shot_at(shooter.weapon, e.a, e.a.distance_to(cam_pos))
+					# 총알이 머리 옆을 스치면 휙 소리
+					if e.team != sim.units[local_id].team and local_id >= 0:
+						var seg: Vector3 = e.b - e.a
+						var ln := seg.length()
+						if ln > 1.0:
+							var tt := clampf((cam_pos - e.a).dot(seg) / (ln * ln), 0.0, 1.0)
+							var cp2: Vector3 = e.a + seg * tt
+							var dd := cp2.distance_to(cam_pos)
+							if dd < 3.5 and e.a.distance_to(cam_pos) > 6.0:
+								sfx.whiz_at(cp2)
+								shake += 0.15
 			"hit":
 				if e.a == local_id:
 					sfx.play2d(sfx.tick, -4.0, 1.4 if e.head else 1.0)
