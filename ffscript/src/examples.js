@@ -509,5 +509,131 @@ if answered
   if answer is "열기"
     take "🔑"
     win
+`,
+  'Lake Temple': `title "Lake Temple"
+background forest
+lives 3
+music happy
+minimap
+
+sound coin = play "E6 B6" 0.05 square
+
+map
+  .................................................#..............
+  .................................................#..............
+  .......................................C.CGC.....#..............
+  .....................................L#######....#..............
+  ............S........................L...........#..............
+  ..........====........C.C.C.C.C......L...........D..............
+  .....................................L...........D..............
+  ..P.C.C.........C.C................K.L..E...^^...D..C.C.C...F...
+  ####################WWWWWWWWWWWWWW##############################
+  ####################WWWWWWWWWWWWWW##############################
+  ####################WWWWWWWWWWWWWW##############################
+  ################################################################
+
+player.jumps 2
+
+if key shift
+  player.dash
+
+if key x
+  player.dash
+
+if player hits coin
+  coin.sparkle
+  add 10 to score
+
+if player hits star
+  star.sparkle
+  player.power magnet 8
+
+if player hits gem
+  gem.sparkle
+  give "🔑"
+  talk "열쇠를 찾았다! 문으로 가자."
+
+if player hits door
+  if has("🔑") > 0
+    take "🔑"
+    door.open
+  else
+    player.say "잠겨 있어"
+
+if player hits slime
+  remove 1 from lives
+  player.respawn
+
+if player hits spike
+  remove 1 from lives
+  player.respawn
+
+if player hits flag
+  confetti
+  win
+`,
+  'Lava Boss': `title "Lava Boss"
+background lava
+lives 5
+music action
+
+map
+  ....................
+  ....................
+  ....................
+  ....................
+  ....................
+  ...====......====...
+  ....................
+  ....................
+  ....................
+  .P..................
+  ####################
+
+player.jumps 2
+
+boss = make boss at 720 170
+  health 40
+  patrol up 90 70
+
+if key x
+  player.shoot boss 800
+
+if key shift
+  player.dash
+
+if shot hits boss
+  shot.remove
+  boss.hurt 1
+  burst 8 orange at shot
+
+every 1.5 sec
+  if boss.alive
+    if boss.hp > 20
+      boss.shoot spread 3 260
+    else
+      boss.shoot ring 14 220
+
+if boss.hp <= 20
+  banner "화났다!" 1.5 sec
+  shake 16
+  boss.color red
+
+every 9 sec
+  make star at random 160
+    life 6 sec
+
+if player hits star
+  star.sparkle
+  player.power shield 5
+
+if player hits shot
+  shot.remove
+  remove 1 from lives
+
+if not boss.alive
+  confetti
+  after 1.5 sec
+    win
 `
 };
