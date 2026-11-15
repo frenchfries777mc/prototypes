@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="ff-build" content="/*@BUILD*/">
 <title>FF Script</title>
 <style>
 :root{--bg:#0e0f1a;--panel:#161828;--line:#262a44;--text:#e8eaf6;--dim:#8b90b0;--accent:#6fb3ff;--err:#ff6b81;--ok:#5be3a0}
@@ -16,6 +17,10 @@ select,button{font:inherit;color:var(--text);background:#20243d;border:1px solid
 button:hover,select:hover{border-color:var(--accent)}
 .spacer{flex:1}
 #status{font-size:13px;color:var(--dim)}
+#ver{font-size:11px;color:var(--dim);opacity:.65;margin-left:-4px;white-space:nowrap}
+#stale{background:#2a2250;color:#ffd93d;text-align:center;padding:6px 10px;font-size:13px}
+#stale[hidden]{display:none}
+#stale button{margin-left:8px}
 #status.ok{color:var(--ok)}
 main{flex:1;display:grid;grid-template-columns:minmax(320px,42%) 1fr;min-height:0}
 .left{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
@@ -61,7 +66,7 @@ button,select{white-space:nowrap}
 </head>
 <body>
 <header>
-  <h1>FF <b>Script</b></h1>
+  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">/*@BUILD*/</span>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
   <button id="save" class="ic" title="내 게임으로 저장">💾</button>
@@ -75,6 +80,7 @@ button,select{white-space:nowrap}
   <button id="full" class="ic" title="전체화면">⛶</button>
   <button id="export">HTML로 저장</button>
 </header>
+<div id="stale" hidden>새 버전이 나왔어요. 지금 화면은 옛 버전이라 최신 기능이 안 보일 수 있어요. <button id="staleBtn">새로고침</button></div>
 <main>
   <section class="left">
     <div id="tut"></div>
@@ -158,6 +164,15 @@ button,select{white-space:nowrap}
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
+  (function () {
+    const cur = (document.querySelector('meta[name=ff-build]') || {}).content;
+    $('staleBtn').addEventListener('click', () => { const u = new URL(location.href); u.searchParams.set('v', Date.now()); location.replace(u.href); });
+    if (!cur || !/^https?:$/.test(location.protocol)) return;
+    fetch(location.href.split('#')[0], { cache: 'no-store', headers: { Range: 'bytes=0-2000' } }).then(r => r.text()).then(t => {
+      const m = t.match(/name="ff-build" content="([^"]+)"/);
+      if (m && m[1] !== cur) $('stale').hidden = false;
+    }).catch(() => { });
+  })();
   const BIG = 400000;
   function highlight() {
     if (code.value.length > BIG) { hl.textContent = code.value + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
@@ -325,7 +340,7 @@ button,select{white-space:nowrap}
   function run(keep) {
     if (jsLock && /^\s*JS\b/m.test(code.value)) { G.load(() => { }, false); showError(0, '링크로 받은 코드에 JS가 들어 있어요. 믿을 수 있는 코드면 다시 시작을 눌러 실행하세요.'); return; }
     const r = FFScript.compileSafe(code.value);
-    if (!r.ok) { showError(r.line, r.message + (/^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? '\n\nHTML 코드예요. 위쪽 🔄 JS→FF 버튼으로 바꿔 보세요.' : '')); return; }
+    if (!r.ok) { showError(r.line, /^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? 'HTML 코드예요. FF Script 문법이 아니에요.\n위쪽 🔄 JS→FF 버튼에 붙여 넣으면 FF Script로 바꿔 줘요.' : r.message); return; }
     clearError();
     try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
