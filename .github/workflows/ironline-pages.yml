@@ -1,0 +1,51 @@
+name: Ironline web build and deploy
+
+# main 에 ironline 이 반영되면 웹 빌드를 만들어 GitHub Pages 로 올린다.
+# 수동 실행(workflow_dispatch)도 가능. 처음 한 번 Settings → Pages → Source 를 "GitHub Actions" 로 바꿔야 한다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ironline/**"
+      - ".github/workflows/ironline-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install export templates
+        run: |
+          mkdir -v -p ~/.local/share/godot/export_templates/
+          mv /root/.local/share/godot/export_templates/4.3.stable ~/.local/share/godot/export_templates/4.3.stable
+      - name: Import and export Web build
+        working-directory: ironline
+        run: |
+          mkdir -p build/web
+          godot --headless --import || true
+          godot --headless --export-release Web build/web/index.html
+          ls -la build/web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ironline/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

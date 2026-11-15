@@ -57,6 +57,7 @@ class Unit:
 	var in_fire := false
 	var in_reload := false
 	var in_sprint := false
+	var in_ads := false
 	# 봇 상태
 	var role := 0  # 0 돌격 1 방어
 	var target := -1
@@ -98,6 +99,19 @@ var _grid_t := 0.0
 func setup(seed_v: int, per_team: int) -> void:
 	rng.seed = seed_v
 	world = World.new(seed_v)
+	reset(per_team)
+
+
+## 월드는 그대로 두고 유닛·거점·병력·시간을 처음 상태로 되돌린다(메뉴 배경 → 본 게임 전환용).
+func reset(per_team: int) -> void:
+	tickets = [START_TICKETS, START_TICKETS]
+	time = 0.0
+	winner = -1
+	win_reason = ""
+	events.clear()
+	tick_count = 0
+	_grid.clear()
+	_grid_t = 0.0
 	pts.clear()
 	for i in NPOINTS:
 		var p := Pt.new()
@@ -149,8 +163,23 @@ func claim_slot(id: int, loadout: int = 0) -> void:
 	u.label = "P%d" % id
 
 
+## 슬롯을 다시 봇에게 돌려준다(접속 종료).
+func release_slot(id: int) -> void:
+	var u: Unit = units[id]
+	u.is_bot = true
+	u.in_move = Vector2.ZERO
+	u.in_fire = false
+	u.label = "%s%d" % ["A" if u.team == 0 else "B", u.id]
+
+
+## 클라이언트 예측: 서버와 같은 이동 함수를 로컬 유닛에만 적용한다.
+func predict_local(u: Unit, dt: float) -> void:
+	u.fire_cd = maxf(0.0, u.fire_cd - dt)
+	_integrate(u, dt)
+
+
 func set_input(id: int, move: Vector2, yaw: float, pitch: float, fire: bool, jump: bool,
-		sprint: bool, reload: bool) -> void:
+		sprint: bool, reload: bool, ads: bool = false) -> void:
 	var u: Unit = units[id]
 	if u.is_bot:
 		return
@@ -160,6 +189,7 @@ func set_input(id: int, move: Vector2, yaw: float, pitch: float, fire: bool, jum
 	u.in_fire = fire
 	u.in_jump = jump
 	u.in_sprint = sprint
+	u.in_ads = ads
 	if reload:
 		u.in_reload = true
 
@@ -235,6 +265,8 @@ func _integrate(u: Unit, dt: float) -> void:
 	var sp: float = u.bot_speed if u.is_bot else (SPRINT if (u.in_sprint and u.in_move.y > 0.5 and not u.in_fire) else WALK)
 	if u.reload_t > 0.0 and not u.is_bot:
 		sp *= 0.85
+	if u.in_ads and not u.is_bot:
+		sp *= 0.62
 	var wish := Vector3(u.in_move.x, 0.0, -u.in_move.y)
 	if wish.length() > 1.0:
 		wish = wish.normalized()
@@ -295,7 +327,7 @@ func _try_fire(u: Unit) -> void:
 		return
 	u.ammo -= 1
 	u.fire_cd = w.cd
-	var spread: float = w.spread * (1.0 + u.speed_now * 0.12)
+	var spread: float = w.spread * (1.0 + u.speed_now * 0.12) * (0.3 if u.in_ads else 1.0)
 	var dir := _aim_dir(u.yaw, u.pitch)
 	dir = (dir + Vector3(rng.randfn(0.0, spread), rng.randfn(0.0, spread), rng.randfn(0.0, spread))).normalized()
 	var origin := u.pos + Vector3(0.0, EYE, 0.0)
