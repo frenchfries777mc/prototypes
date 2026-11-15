@@ -1,21 +1,21 @@
 extends Node
-## 진입점: 시뮬레이션 + 뷰 + HUD 를 조립하고 입력을 모은다.
-## 3D 는 640x360 SubViewport 에 그린 뒤 정수배에 가깝게 확대(NEAREST)해서 도트 느낌을 낸다.
+## 진입점: 시뮬레이션 + 뷰 + HUD + 후처리를 조립하고 입력을 모은다.
+## 렌더 품질 URL 인자: ?q=0|1|2 (그림자·MSAA)  ?scale=0.5~1.0 (3D 렌더 배율)
 
-const RES := Vector2i(640, 360)
 const SENS := 0.0022
 
 var sim: Sim
 var view: View
 var hud: Hud
-var sub: SubViewport
+var post: ColorRect
 var local_id := 0
 var look_yaw := 0.0
 var look_pitch := 0.0
 var acc := 0.0
 var was_alive := false
 var reload_edge := false
-var cfg := {"bots": 30, "seed": 20260101, "team": 0, "auto": false, "tp": false, "perf": false, "mm": false, "nomouse": false}
+var cfg := {"bots": 30, "seed": 20260101, "team": 0, "auto": false, "tp": false, "perf": false,
+	"nomouse": false, "q": 2, "scale": 1.0}
 var perf_acc := 0.0
 var perf_steps := 0
 var perf_t := 0.0
@@ -27,27 +27,28 @@ func _ready() -> void:
 	sim.setup(cfg.seed, cfg.bots)
 	local_id = 0 if cfg.team == 0 else Sim.HUMANS_PER_TEAM
 	sim.claim_slot(local_id, 0)
-	sub = SubViewport.new()
-	sub.size = RES
-	sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	sub.msaa_3d = Viewport.MSAA_DISABLED
-	add_child(sub)
+	get_viewport().scaling_3d_scale = clampf(cfg.scale, 0.4, 1.0)
 	view = View.new()
-	sub.add_child(view)
 	view.debug_3p = cfg.tp
-	view.use_mm = cfg.mm
+	add_child(view)
 	view.setup(sim)
+	view.apply_quality(cfg.q)
+	var pl := CanvasLayer.new()
+	pl.layer = 1
+	add_child(pl)
+	post = ColorRect.new()
+	post.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	post.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var pm := ShaderMaterial.new()
+	pm.shader = load("res://shaders/post.gdshader")
+	post.material = pm
+	pl.add_child(post)
+	var hl := CanvasLayer.new()
+	hl.layer = 2
+	add_child(hl)
 	hud = Hud.new()
-	sub.add_child(hud)
+	hl.add_child(hud)
 	hud.setup(sim, local_id)
-	var tr := TextureRect.new()
-	tr.texture = sub.get_texture()
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
-	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(tr)
 	if cfg.auto:
 		_capture(true)
 
@@ -69,8 +70,9 @@ func _read_config() -> void:
 			"auto": cfg.auto = kv[1] == "1"
 			"tp": cfg.tp = kv[1] == "1"
 			"perf": cfg.perf = kv[1] == "1"
-			"mm": cfg.mm = kv[1] == "1"
 			"nomouse": cfg.nomouse = kv[1] == "1"
+			"q": cfg.q = clampi(int(kv[1]), 0, 2)
+			"scale": cfg.scale = float(kv[1])
 
 
 func _capture(on: bool) -> void:
@@ -106,6 +108,7 @@ func _process(dt: float) -> void:
 		look_pitch = 0.0
 	was_alive = me.alive
 	hud.show_score = Input.is_key_pressed(KEY_TAB)
+	hud.look_yaw = look_yaw
 	var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	hud.captured = captured
 	acc += dt
@@ -135,6 +138,9 @@ func _process(dt: float) -> void:
 	hud.consume(sim.events)
 	sim.events.clear()
 	view.update(acc / Sim.TICK, local_id, look_yaw, look_pitch, dt)
+	var pm: ShaderMaterial = post.material
+	pm.set_shader_parameter("hurt", clampf(hud.hurt_t / 0.6, 0.0, 1.0))
+	pm.set_shader_parameter("low_hp", clampf((45.0 - me.hp) / 45.0, 0.0, 1.0) if me.alive else 0.0)
 	perf_t += dt
 	if cfg.perf and perf_t >= 3.0:
 		print("PERF sim_avg_ms=%.2f steps=%d units=%d alive=%d fps=%d" % [perf_acc / maxf(1.0, perf_steps), perf_steps, sim.units.size(), sim.team_alive(0) + sim.team_alive(1), Engine.get_frames_per_second()])

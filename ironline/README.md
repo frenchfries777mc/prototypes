@@ -1,8 +1,8 @@
 # Ironline (가제)
 
 3v3 플레이어 + 양 팀 봇(총 50~100명)이 싸우는 **1인칭 거점 점령전**. 발칸 전쟁~1차 대전 무렵을 모티브로 한 가상 전선이 배경이고,
-캐릭터와 무기, 지형을 전부 복셀로 만들어 저해상도(640×360)로 그린 뒤 확대하는 **3D 픽셀** 룩이다.
-Godot 4.3(GDScript)으로 만들고 웹(WebAssembly)으로 내보내 브라우저에서 바로 실행한다.
+실시간 햇빛·그림자, 절차적 하늘과 지형 셰이더, 스키닝 애니메이션 병사, 예광탄·먼지·연기 이펙트, 절차적 사운드를 갖춘 풀 3D다.
+외부 모델·텍스처·음원 파일 없이 전부 코드로 만든다. Godot 4.3(GDScript)으로 만들고 웹(WebAssembly)으로 내보내 브라우저에서 바로 실행한다.
 
 ## 규칙
 
@@ -17,7 +17,7 @@ Godot 4.3(GDScript)으로 만들고 웹(WebAssembly)으로 내보내 브라우�
 
 WASD 이동 · Shift 달리기 · Space 점프 · 좌클릭 사격 · R 장전 · 1/2/3 무기 선택(다음 재투입부터) · Tab 점수판 · Esc 마우스 해제
 
-URL 인자: `?bots=30`(팀당 인원 3~50) `&seed=1` `&team=b` `&perf=1`(성능 로그) `&tp=1`(3인칭 디버그)
+URL 인자: `?bots=30`(팀당 인원 3~50) `&seed=1` `&team=b` `&q=0|1|2`(그래픽 품질: 그림자·MSAA) `&scale=0.5~1`(3D 렌더 배율) `&perf=1`(성능 로그) `&tp=1`(3인칭 디버그)
 
 ## 실행/빌드
 
@@ -39,10 +39,14 @@ GODOT=/path/to/godot ./tools/run_tests.sh 50 600 1
 ```
 scripts/Sim.gd         권위 시뮬레이션(30Hz). 노드·렌더 비의존 → 헤드리스 테스트, 방장 브라우저에서만 실행
 scripts/World.gd       시드 기반 지형·소품·충돌(물리 엔진 없이 높이 격자 + 직육면체)
-scripts/VoxelModel.gd  복셀 메시 생성기(보이는 면만, 면 음영을 정점 색에 구움)
-scripts/Models.gd      병사·1인칭 총·깃발 복셀 모델
-scripts/View.gd        시뮬레이션 → 3D 장면
-scripts/Hud.gd         도트 글꼴 HUD
+scripts/Geo.gd         절차적 메시 조립기(상자·곡면·캡슐, 스키닝 가중치, LOD)
+scripts/Rig.gd         병사 모델링·스켈레톤·걷기/조준/사망 애니메이션, 무기 3종, 1인칭 총·팔
+scripts/WorldGfx.gd    지형 메시, 청크 단위 소품(폐허·모래주머니·상자·나무·철조망), 거점 깃발
+scripts/Fx.gd          예광탄, 총구 섬광, 피탄 먼지·피, 전장 연기
+scripts/Sfx.gd         절차적 총성·포성·바람·알림음
+scripts/View.gd        시뮬레이션 → 3D 장면(조명·환경·카메라)
+scripts/Hud.gd         해상도 독립 HUD
+shaders/               지형·소품·하늘·거점 표시·빛기둥·후처리
 scripts/Main.gd        조립, 입력, 고정 틱 + 보간
 ```
 
@@ -50,4 +54,4 @@ scripts/Main.gd        조립, 입력, 고정 틱 + 보간
 
 ## 라이선스
 
-글꼴 Galmuri11 은 SIL OFL 1.1 (`assets/fonts/OFL.txt`). 코드는 처음부터 새로 작성했고 다른 게임의 코드를 포함하지 않는다.
+글꼴 Gothic A1(한글 2350자 + 라틴 서브셋)은 SIL OFL 1.1 (`assets/fonts/OFL.txt`). 코드는 처음부터 새로 작성했고 다른 게임의 코드를 포함하지 않는다.
