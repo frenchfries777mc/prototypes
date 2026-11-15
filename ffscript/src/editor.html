@@ -136,10 +136,14 @@ button,select{white-space:nowrap}
     if (/^background\s+$/.test(t)) return [...L.backs, ...L.colors];
     if (/^music\s+$/.test(t)) return L.musics;
     if (/^level\s+$/.test(t)) return ['up'];
-    if (/^when\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames()];
-    if (/^when\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
-    if (/^when\s+\S+\s+$/.test(t) && !/key\s+$/.test(t)) return ['hits', 'leaves'];
-    if (/\shits\s+$/.test(t)) return [...L.looks, ...varNames()];
+    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames(), ...L.builtin];
+    if (/^(if|when)\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
+    if (/^(if|when)\s+(?!key\b)[\p{L}_][\p{L}\p{N}_]*\s+$/u.test(t)) return ['hits', 'touches', 'leaves'];
+    if (/\s(hits|touches)\s+$/.test(t)) return [...L.looks, ...varNames()];
+    if (/^set\s+\S+\s+$/.test(t)) return ['to'];
+    if (/^(add|remove)\s+\S+\s+$/.test(t)) return [/^add/.test(t) ? 'to' : 'from'];
+    if (/^(add|remove)\s+\S+\s+(to|from)\s+$/.test(t)) return ['score', 'lives', ...varNames()];
+    if (/^set\s+$/.test(t)) return ['score', 'lives', ...varNames()];
     if (!t || !word || t === word) return [...L.statements, ...L.cmds, ...varNames(), ...L.looks];
     return [...varNames(), ...L.looks, ...L.builtin];
   }
@@ -174,13 +178,13 @@ button,select{white-space:nowrap}
 
   const HELP = [
     ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea 또는 색'], ['lives 3', '목숨']]],
-    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
+    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
     ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag', '플랫포머용']]],
     ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', '방향 up down left right'], ['  toward player 150 follow', '대상을 따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', '회전'], ['  bounce', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', '중력'], ['  jump 700', '점프'], ['  solid', '밟을 수 있게'], ['  stop', '']]],
-    ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['when player hits rock', '닿았을 때'], ['when key space', '키를 눌렀을 때'], ['when click', '클릭'], ['when rock leaves', '화면 밖으로 나감']]],
-    ['점수·상태', [['score +10', ''], ['lives -1', ''], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
+    ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['if player hits rock', '닿았을 때'], ['if key space', '키를 눌렀을 때'], ['if click', '클릭'], ['if rock leaves', '화면 밖으로 나감'], ['if score >= 100', '조건이 처음 참이 될 때 한 번'], ['loop 5 times', '반복']]],
+    ['점수·상태', [['add 10 to score', 'score +10 과 같아요'], ['remove 1 from lives', 'lives -1 과 같아요'], ['set score to 0', 'x = 0 과 같아요'], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
     ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "안녕!"', '말풍선'], ['shake', '화면 흔들림'], ['sound coin', 'boom coin shoot hit jump power pop'], ['music chill', 'chill happy action off'], ['label "글자" at center top', '']]],
-    ['조건·변수', [['if score >= 100', 'else, repeat 3 도 있어요'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
+    ['조건·변수', [['if x > 3', '다른 블록 안에서는 보통 조건문 (else 가능)'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
   ];
   help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
   $('helpBtn').addEventListener('click', () => { help.style.display = help.style.display === 'block' ? 'none' : 'block'; });

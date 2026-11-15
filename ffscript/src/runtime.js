@@ -515,7 +515,7 @@ function Engine(canvas) {
   }
 
   function reset() {
-    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = [];
+    G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = []; G.conds = [];
     G.contacts = new Set(); G.time = 0; G.score = 0; G.lives = null; G.titleText = ''; G.bg = 'space'; G.bgColor = null;
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
     G.level = 1; G.showLevel = false; G.levelBanner = 0; G.musicName = null; G.newBest = false;
@@ -568,6 +568,7 @@ function Engine(canvas) {
   G.onHit = (a, b, fn) => { G.touches.push({ a, b, fn }); };
   G.onKey = (k, fn) => { G.keyEvents.push({ k, fn }); };
   G.onLeave = (n, fn) => { G.leaves.push({ n, fn }); };
+  G.onCond = (cond, fn) => { G.conds.push({ cond, fn, prev: false }); };
 
   G.particle = p => { p.max = p.life; if (G.parts.length < 1500) G.parts.push(p); };
   G.floatText = (text, x, y, col, big) => { G.texts.push({ text: String(text), x, y, col: col || '#fff', life: 1, big }); };
@@ -647,6 +648,12 @@ function Engine(canvas) {
   function update(dt) {
     G.time += dt;
     for (const ev of G.always) if (!ownerDead(ev)) run(ev.fn);
+    for (const c of G.conds) {
+      let v = false;
+      run(() => { v = !!c.cond(); });
+      if (v && !c.prev) run(c.fn);
+      c.prev = v;
+    }
     for (const tm of G.timers) {
       if (tm.dead) continue;
       if (ownerDead(tm)) { tm.dead = true; continue; }
