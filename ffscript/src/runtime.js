@@ -883,7 +883,7 @@ class Obj {
     this.maxHp = 1; this.alpha = 1; this.glowC = null; this.trailC = null; this.wrap = false; this.stay = false;
     this.lifeLeft = 0; this.flipX = false; this.patrol = null; this.wander = 0; this.wanderT = 0; this.bounceK = 1; this.full = !!L.full; this.chase = null;
     this.maxJumps = 1; this.jumpsLeft = 0; this.face = 1; this.dashT = 0; this.dashCd = 0; this.powers = null; this.inWater = false; this.keyset = null;
-    this.score = 0; this.boostT = 0; this.chg = null; this.emitP = null; this.emitAcc = 0; this.stompT = 0;
+    this.score = 0; this.boostT = 0; this.chg = null; this.emitP = null; this.emitAcc = 0; this.stompT = 0; this.phased = false; this.dangle = null;
     if (L.init) L.init(this);
   }
   get r() { return this.size * this.L.hit; }
@@ -971,11 +971,13 @@ class Obj {
   }
   power(kind, sec) {
     sec = sec == null ? 5 : Math.max(0.1, +sec || 0);
+    if (kind === 'ghost') this.G.burst(10, 'white', [this]);
     if (!this.powers) this.powers = {};
     if (!this.powers[kind]) {
       if (kind === 'fast') this.speed *= 1.6;
       else if (kind === 'jump') this.jumpV *= 1.35;
       else if (kind === 'big' || kind === 'small') this.resize(kind === 'big' ? 1.5 : 0.6);
+      else if (kind === 'ghost') { this.ghostOld = this.phased; this.phased = true; this.alpha = 0.5; }
     }
     this.powers[kind] = { t: sec, max: sec };
     Sfx.play('power'); this.pop = 0.8; this.G.burst(14, kind === 'shield' ? 'cyan' : 'gold', [this]);
@@ -987,6 +989,7 @@ class Obj {
     if (kind === 'fast') this.speed /= 1.6;
     else if (kind === 'jump') this.jumpV /= 1.35;
     else if (kind === 'big' || kind === 'small') this.resize(kind === 'big' ? 1 / 1.5 : 1 / 0.6);
+    else if (kind === 'ghost') { this.phased = !!this.ghostOld; this.alpha = this.phased ? 0.55 : 1; }
     if (!Object.keys(this.powers).length) this.powers = null;
     this.G.sparkBits(this, 8); return this;
   }
@@ -1020,6 +1023,8 @@ class Obj {
   emit(name) { this.emitP = name; this.emitAcc = 0; return this; }
   resize(f) { const old = this.size; this.size *= f; if (this.full) this.ph = this.size; if (this.gravity && this.onGround) this.y -= (this.size - old) / 2; }
   setWander(sp) { this.wander = sp == null ? 80 : sp; return this; }
+  setPhase(on) { this.phased = on !== false; if (!this.phased && !this.powers) this.alpha = 1; if (this.phased) this.alpha = Math.min(this.alpha, 0.55); return this; }
+  setDangle(len, sp) { this.dangle = { x0: this.x, y0: this.y, len: len == null ? 110 : Math.max(20, +len || 0), sp: sp == null ? 260 : Math.max(40, +sp || 0), t: rnd(0, 6), drop: 0 }; this.gravity = 0; this.vx = this.vy = 0; return this; }
   setColor(c) { this.color = color(c); return this; }
   spin(v) { this.spinV = v; return this; }
   setBounce(k) { this.bounce = true; this.bounceK = k == null ? 1 : k; return this; }
@@ -1053,7 +1058,7 @@ class Group {
   Object.defineProperty(Group.prototype, p, { get() { const l = this.list; return l.length ? l[0][p] : 0; }, set(v) { this.list.forEach(o => { o[p] = v; }); } });
 });
 ['move', 'toward', 'stop', 'control', 'setSpeed', 'setSize', 'setColor', 'spin', 'setBounce', 'setLook', 'setGravity', 'setSolid', 'jump', 'explode', 'sparkle', 'remove', 'say',
-  'setHealth', 'hurt', 'heal', 'setAlpha', 'hide', 'show', 'setGlow', 'setTrail', 'setWrap', 'setStay', 'setLife', 'flip', 'setPatrol', 'setWander', 'setChase', 'setFlee', 'shoot', 'respawn', 'setJumps', 'dash', 'open', 'power', 'charge', 'summon', 'emit']
+  'setHealth', 'hurt', 'heal', 'setAlpha', 'hide', 'show', 'setGlow', 'setTrail', 'setWrap', 'setStay', 'setLife', 'flip', 'setPatrol', 'setWander', 'setChase', 'setFlee', 'shoot', 'respawn', 'setJumps', 'dash', 'open', 'power', 'charge', 'summon', 'emit', 'setPhase', 'setDangle']
   .forEach(m => { Group.prototype[m] = function (...a) { this.list.forEach(o => o[m](...a)); return this; }; });
 
 /* ---------- engine ---------- */
@@ -1083,7 +1088,7 @@ function Engine(canvas) {
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
     G.level = 1; G.showLevel = false; G.bannerT = 0; G.bannerText = ''; G.paused = false; G.hintT = 0; G.musicName = null; G.newBest = false;
     G.scenes = Object.create(null); G.firstScene = null; G.sceneName = ''; G.inScene = false; G.pendingScene = null; G.fadeOut = 0; G.fadeIn = 0;
-    G.talkQ = []; G.talkCur = null; G.talkEnds = []; G.cam = { x: 0, y: 0 }; G.camTarget = null; G.WW = W; G.WH = H; G.weather = null; G.wparts = []; G.hasWalls = false; G.mapSc = false; G.camSc = false;
+    G.talkQ = []; G.talkCur = null; G.talkEnds = []; G.cam = { x: 0, y: 0 }; G.camTarget = null; G.split = false; G.cams = null; G.wind = null; G.WW = W; G.WH = H; G.weather = null; G.wparts = []; G.hasWalls = false; G.mapSc = false; G.camSc = false;
     G.answer = ''; G.answerEvents = []; G.cdOn = false; G.cdT = 0; G.cdEnds = []; G.items = [];
     G.mini = false; G.hasWater = false; G.waterList = []; Sfx.custom = Object.create(null);
     G.stomps = []; G.pdefs = Object.create(null); G.pScore = false; G.hasFall = false; G.fallList = [];
@@ -1202,7 +1207,7 @@ function Engine(canvas) {
     G.keyEvents = G.keyEvents.filter(keep); G.leaves = G.leaves.filter(keep); G.conds = G.conds.filter(keep); G.labels = G.labels.filter(keep); G.talkEnds = G.talkEnds.filter(keep);
     G.parts = []; G.texts = []; G.talkQ = []; G.talkCur = null; G.contacts = new Set(); G.bannerT = 0;
     G.answerEvents = G.answerEvents.filter(keep); G.cdEnds = G.cdEnds.filter(keep); G.stomps = G.stomps.filter(keep); if (G.cdSc) G.cdOn = false;
-    if (G.camTarget && (G.camSc || !G.camTarget.alive)) G.camTarget = null;
+    if (G.camTarget && (G.camSc || !G.camTarget.alive)) { G.camTarget = null; G.split = false; }
     if (G.mapSc) { G.WW = W; G.WH = H; G.hasWalls = G.objs.some(o => o.full && o.solid); }
     if (!G.camTarget) G.cam.x = G.cam.y = 0;
     G.sceneName = name; G.inScene = true; G.pendingScene = null;
@@ -1210,8 +1215,8 @@ function Engine(canvas) {
   }
 
   const varKey = n => 'ffscript-var:' + (G.titleText || '') + ':' + n;
-  G.saveVar = (n, v) => { if (v == null || (typeof v === 'object')) return; try { global.localStorage.setItem(varKey(n), JSON.stringify(v)); } catch (e) { } };
-  G.loadVar = (n, cur) => { try { const s = global.localStorage.getItem(varKey(n)); if (s != null) { const v = JSON.parse(s); if (v == null || typeof v !== 'object') return v; } } catch (e) { } return cur; };
+  G.saveVar = (n, v) => { if (v == null || (typeof v === 'object' && !(Array.isArray(v) && v.length <= 500 && v.every(x => typeof x === 'number' || typeof x === 'string' || typeof x === 'boolean')))) return; try { global.localStorage.setItem(varKey(n), JSON.stringify(v)); } catch (e) { } };
+  G.loadVar = (n, cur) => { try { const s = global.localStorage.getItem(varKey(n)); if (s != null) { const v = JSON.parse(s); if (v == null || typeof v !== 'object' || (Array.isArray(v) && Array.isArray(cur) && v.every(x => typeof x !== 'object' || x === null))) return v; } } catch (e) { } return cur; };
   G.forgetVar = n => { try { global.localStorage.removeItem(varKey(n)); } catch (e) { } };
 
   G.talk = (name, text) => { G.talkQ.push({ name: name == null ? '' : String(name), text: String(text) }); if (!G.talkCur) nextTalk(); };
@@ -1237,15 +1242,17 @@ function Engine(canvas) {
   }
 
   const one = o => o && o.list ? o.list[0] : o;
-  G.camFollow = (o, o2) => {
-    o = one(o); o2 = one(o2);
+  G.camFollow = (o, o2, split) => {
+    o = one(o); o2 = one(o2); G.split = false;
     if (o && o2 && typeof o === 'object' && typeof o2 === 'object' && o !== o2) {
       const pair = [o, o2], live = () => pair.filter(p => p.alive);
+      if (split) { G.split = true; G.cams = [{ x: 0, y: 0 }, { x: 0, y: 0 }]; }
       G.camTarget = { pair, get alive() { return live().length > 0; }, get x() { const l = live(); return l.reduce((a, p) => a + p.x, 0) / (l.length || 1); }, get y() { const l = live(); return l.reduce((a, p) => a + p.y, 0) / (l.length || 1); } };
     } else G.camTarget = o && typeof o === 'object' ? o : null;
     G.camSc = G.inScene; if (G.camTarget) camStep(1);
   };
   function keepPair() {
+    if (G.split) return;
     const ps = G.camTarget && G.camTarget.pair; if (!ps || !ps[0].alive || !ps[1].alive) return;
     const [a, b] = ps;
     for (const [ax, lim] of [['x', W - 90], ['y', H - 90]]) {
@@ -1260,6 +1267,11 @@ function Engine(canvas) {
     if (o && o.alive) {
       const tx = clamp(o.x - W / 2, 0, Math.max(0, G.WW - W)), ty = clamp(o.y - H / 2, 0, Math.max(0, G.WH - H));
       G.cam.x = lerp(G.cam.x, tx, k); G.cam.y = lerp(G.cam.y, ty, k);
+      if (G.split && o.pair) o.pair.forEach((p, i) => {
+        if (!p.alive) return;
+        const c = G.cams[i], hw = W / 2;
+        c.x = lerp(c.x, clamp(p.x - hw / 2, 0, Math.max(0, G.WW - hw)), k); c.y = lerp(c.y, clamp(p.y - H / 2, 0, Math.max(0, G.WH - H)), k);
+      });
     }
   }
   G.tone = (f0, f1, dur, wave) => Sfx.tone(Sfx.wave(wave), Math.max(20, +f0 || 440), Math.max(20, f1 == null ? (+f0 || 440) : +f1), clamp(dur == null ? 0.2 : +dur, 0.02, 4), 0.16);
@@ -1269,6 +1281,7 @@ function Engine(canvas) {
   };
   G.defSound = (name, fn) => { Sfx.custom[name] = fn; };
   G.setMinimap = on => { G.mini = !!on; };
+  G.setWind = (dir, sp) => { if (!dir) { G.wind = null; return; } sp = sp == null ? 150 : clamp(+sp || 0, 0, 900); G.wind = { x: dir === 'left' ? -sp : dir === 'right' ? sp : 0, y: dir === 'up' ? -sp : dir === 'down' ? sp : 0, acc: 0 }; };
   G.usePScore = () => { G.pScore = true; };
   G.defParticle = (name, spec) => { G.pdefs[name] = spec; };
   const pick = (a, d) => { if (!a || !a.length) return d; const x = +a[0], y = a.length > 1 ? +a[1] : x; return isFinite(x) && isFinite(y) ? rnd(Math.min(x, y), Math.max(x, y)) : d; };
@@ -1300,7 +1313,12 @@ function Engine(canvas) {
   G.shake = n => { G.shakeAmt = Math.max(G.shakeAmt, n == null ? 10 : n); };
   G.sound = n => Sfx.play(n);
   G.banner = (text, sec) => { G.bannerText = String(text); G.bannerDur = G.bannerT = sec || 2; };
-  G.choose = (...a) => a[Math.floor(Math.random() * a.length)];
+  G.choose = (...a) => { if (a.length === 1 && Array.isArray(a[0])) a = a[0]; return a[Math.floor(Math.random() * a.length)]; };
+  G.len = a => a == null ? 0 : a.length || 0;
+  G.contains = (a, x) => a != null && typeof a.includes === 'function' && a.includes(x);
+  G.last = a => a && a.length ? a[a.length - 1] : null;
+  G.shuffle = a => { const r = Array.from(a || []); for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
+  G.sorted = a => { const r = Array.from(a || []); return r.sort(r.every(v => typeof v === 'number') ? (x, y) => x - y : (x, y) => String(x).localeCompare(String(y))); };
   G.chance = p => Math.random() * 100 < p;
   G.dist = (a, b) => { const A = a === 'mouse' ? G.mouse : a, B = b === 'mouse' ? G.mouse : b; return Math.hypot((A.x || 0) - (B.x || 0), (A.y || 0) - (B.y || 0)); };
   G.flashScreen = c => { G.flashA = 0.45; G.flashC = color(c || 'white'); };
@@ -1513,12 +1531,19 @@ function Engine(canvas) {
           } else if (o.chasing) { o.chasing = false; if (!o.patrol && !o.wander) { o.vx = 0; if (!o.gravity) o.vy = 0; } }
         }
       }
+      if (o.dangle && !o.chg) {
+        const d = o.dangle; d.t += dt;
+        const pl = G.objs.find(p => p.alive && p.ctrl && Math.abs(p.x - d.x0) < o.size * 0.9 && p.y > o.y - o.size && p.y < d.y0 + d.len + o.size);
+        const goal = pl ? Math.min(pl.y - o.size * 0.2, d.y0 + d.len) : d.y0 + d.len * (0.3 + 0.3 * Math.sin(d.t * 1.5)), sp = pl ? d.sp : d.sp * 0.3;
+        o.y += clamp(goal - o.y, -sp * dt, sp * dt); o.x = d.x0 + Math.sin(d.t * 1.1) * 3; o.vx = o.vy = 0;
+      }
       if (o.gravity && !o.climbing && !(o.dashT > 0)) o.vy += o.gravity * dt * (o.inWater ? 0.22 : 1);
       if (o.inWater && o.gravity) { o.vy *= Math.exp(-2.5 * dt); o.vy = clamp(o.vy, -560, 170); }
       if (o.dashT > 0 && o.gravity) o.vy = 0;
       if (o.standing && o.standing.alive) { const st = o.standing; o.x += (st.vx + (st.lookName === 'belt' ? (st.flipX ? -1 : 1) * st.speed : 0)) * dt; o.y += st.vy * dt; }
       const py = o.y, wk = o.inWater && !(o.dashT > 0) ? 0.6 : 1;
       o.x += o.vx * dt * wk; o.y += o.vy * dt * (o.gravity ? 1 : wk);
+      if (G.wind && !o.solid && !o.full && (o.ctrl || o.gravity)) { o.x += G.wind.x * dt; if (!o.gravity) o.y += G.wind.y * dt; }
       o.angle += o.spinV * Math.PI / 180 * dt;
       if (o.L.update) o.L.update(o, G, dt);
       const WW = G.WW, WH = G.WH;
@@ -1644,7 +1669,7 @@ function Engine(canvas) {
     const r = o.size / 2, hw = r * 0.62;
     o.onGround = false;
     for (const p of G.objs) {
-      if (!p.full || !p.solid || !p.alive || p === o) continue;
+      if (o.phased || !p.full || !p.solid || !p.alive || p === o) continue;
       const hx = p.size / 2, hy = p.ph / 2, dx = o.x - p.x, dy = o.y - p.y;
       const ox = hw + hx - Math.abs(dx), oy = r + hy - Math.abs(dy);
       if (ox <= 0 || oy <= 0) continue;
@@ -1661,7 +1686,7 @@ function Engine(canvas) {
     if (o.vy >= 0 && !o.onGround && !(o.climbing && o.vy > 0)) {
       const pb = py + r, nb = o.y + r;
       for (const p of G.objs) {
-        if (!p.solid || p.full || !p.alive || p === o) continue;
+        if (o.phased || !p.solid || p.full || !p.alive || p === o) continue;
         const top = p.y - p.ph / 2;
         if (pb <= top + 8 && nb >= top && Math.abs(o.x - p.x) < p.size / 2 + r * 0.45) {
           o.y = top - r;
@@ -1678,7 +1703,7 @@ function Engine(canvas) {
     const h = o.size * 0.36;
     let hitX = false, hitY = false;
     for (const p of G.objs) {
-      if (!p.full || !p.solid || !p.alive || p === o) continue;
+      if (o.phased || !p.full || !p.solid || !p.alive || p === o) continue;
       const hx = p.size / 2, hy = p.ph / 2, dx = o.x - p.x, dy = o.y - p.y;
       const ox = h + hx - Math.abs(dx), oy = h + hy - Math.abs(dy);
       if (ox <= 0 || oy <= 0) continue;
