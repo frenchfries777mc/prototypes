@@ -683,7 +683,7 @@ func _bot_ai(u: Unit, dt: float) -> void:
 		elif dist < 12.0:
 			fwd = -0.5
 		u.in_move = Vector2(u.strafe * 0.7, fwd)
-		u.bot_speed = 2.6
+		u.bot_speed = WALK
 		if u.fire_cd <= 0.0 and u.reload_t <= 0.0:
 			if u.ammo <= 0:
 				_start_reload(u)
@@ -721,7 +721,8 @@ func _bot_nav(u: Unit, dt: float) -> void:
 					break
 	u.yaw = _turn(u.yaw, hd, 8.0 * dt)
 	u.in_move = Vector2(0.0, 1.0)
-	u.bot_speed = 6.0 if dist > 40.0 else 4.6
+	# 플레이어와 같은 속도: 멀리 이동할 땐 달리기, 가까워지면 걷기
+	u.bot_speed = SPRINT if dist > 25.0 else WALK
 
 
 func _bot_fire(u: Unit, tgt: Unit, dist: float) -> void:
