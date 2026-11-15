@@ -92,10 +92,12 @@ static func props(w: World) -> Node3D:
 			3: _timber(g, mn, mx)
 			5: _barrel(g, mn, mx, rng)
 			6: _tent(g, mn, mx, rng)
+			7: _fieldgun(g, mn, mx, rng)
 			_: _timber(g, mn, mx)
 	_trees(chunks, w, rng)
 	_wire(chunks, w, rng)
 	_decor(chunks, w, rng)
+	_foliage(chunks, w, rng)
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/props.gdshader")
 	var root := Node3D.new()
@@ -462,3 +464,88 @@ static func _tuft(d: Dictionary, c: Vector3, rng: RandomNumberGenerator, mask: f
 		d.i.append(i0)
 		d.i.append(i0 + 1)
 		d.i.append(i0 + 2)
+
+
+static func _fieldgun(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
+	var c := (mn + mx) * 0.5
+	var base_y := mn.y + 0.35
+	var olive := Color(0.16, 0.17, 0.09, 5.0 / 8.0)
+	var steel := Color(0.09, 0.09, 0.09, 5.0 / 8.0)
+	var wood := Color(0.22, 0.15, 0.08, 3.0 / 8.0)
+	var ax := Vector3(c.x, base_y, c.z)
+	# 바퀴(차축 Y→X 방향으로 눕힌 원통) + 바퀴살
+	for sz in [-1.0, 1.0]:
+		var wc := ax + Vector3(0.0, 0.62, sz * 0.78)
+		var wb := Basis(Vector3(0, 0, 1), PI * 0.5)
+		g.cone(0.62, 0.62, 0.09, Transform3D(wb, wc + Vector3(0.045, 0, 0)), wood, 0, 16, true)
+		g.cone(0.64, 0.64, 0.035, Transform3D(wb, wc + Vector3(0.1, 0, 0)), steel, 0, 16, false)
+		g.cone(0.12, 0.12, 0.2, Transform3D(wb, wc + Vector3(0.1, 0, 0)), steel, 0, 10, true)
+		for k in 6:
+			var a := TAU * k / 6.0
+			g.rod(wc + Vector3(0.0, 0.0, 0.0), wc + Vector3(0.0, cos(a) * 0.6, sin(a) * 0.6), 0.03, 0.03, wood, 0, 5)
+	g.rod(ax + Vector3(0.0, 0.62, -0.78), ax + Vector3(0.0, 0.62, 0.78), 0.05, 0.05, steel, 0, 8)
+	# 포신(약간 올려 세움)과 포미, 방패
+	var tilt := Basis(Vector3(0, 0, 1), deg_to_rad(11))
+	var bpos := ax + Vector3(0.0, 1.0, 0.0)
+	var bb := tilt * Basis(Vector3(0, 0, 1), -PI * 0.5)
+	g.cone(0.15, 0.1, 2.3, Transform3D(bb, bpos + Vector3(-0.6, 0.0, 0.0)), olive, 0, 14, true)
+	g.cone(0.105, 0.105, 0.35, Transform3D(bb, bpos + Vector3(1.4, 0.18, 0.0)), steel, 0, 12, true)
+	g.sphere(0.17, Transform3D(Basis.IDENTITY, bpos + Vector3(-0.72, -0.15, 0.0)), olive, 0)
+	g.box(Vector3(0.05, 0.95, 1.5), Transform3D(Basis(Vector3(0, 0, 1), deg_to_rad(-6)), bpos + Vector3(0.12, 0.12, 0.0)), olive)
+	g.box(Vector3(0.7, 0.03, 0.5), Transform3D(Basis.IDENTITY, bpos + Vector3(-0.05, -0.28, 0.0)), steel)
+	# 포가 꼬리
+	g.rod(bpos + Vector3(-0.75, -0.4, 0.0), ax + Vector3(-1.9, 0.05, 0.35), 0.06, 0.05, olive, 0, 6)
+	g.rod(bpos + Vector3(-0.75, -0.4, 0.0), ax + Vector3(-1.9, 0.05, -0.35), 0.06, 0.05, olive, 0, 6)
+
+
+static func _foliage(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -> void:
+	var leaf_kind := 7.0 / 8.0
+	var bark := Color(0.2, 0.15, 0.11, 4.0 / 8.0)
+	# 살아 있는 나무: 맵 가장자리 중심
+	var placed := 0
+	var tries := 0
+	while placed < 26 and tries < 500:
+		tries += 1
+		var x := rng.randf_range(-215.0, 215.0)
+		var z := rng.randf_range(-135.0, 135.0)
+		var inside := absf(x) < World.HALF_X - 8.0 and absf(z) < World.HALF_Z - 8.0
+		if inside:
+			continue
+		var y := w.height_at(x, z)
+		var g := _g(chunks, Vector3(x, y, z))
+		var h := rng.randf_range(5.0, 8.5)
+		var base := Vector3(x, y - 0.3, z)
+		var top := base + Vector3(rng.randf_range(-0.4, 0.4), h, rng.randf_range(-0.4, 0.4))
+		g.rod(base, top, 0.42, 0.18, bark, 0, 8)
+		var crown := top + Vector3(0, 0.6, 0)
+		var n := rng.randi_range(5, 8)
+		for k in n:
+			var o := Vector3(rng.randf_range(-1.8, 1.8), rng.randf_range(-0.6, 1.5), rng.randf_range(-1.8, 1.8))
+			var r := rng.randf_range(1.2, 2.2)
+			var gcol := Color(0.13 + rng.randf() * 0.07, 0.22 + rng.randf() * 0.1, 0.07 + rng.randf() * 0.04, leaf_kind)
+			g.sphere(r, Transform3D(Basis.IDENTITY, crown + o), gcol, 0, Vector3(1.0, 0.8, 1.0), 4, 7)
+		placed += 1
+	# 덤불: 필드 곳곳
+	var bushes := 0
+	tries = 0
+	while bushes < 90 and tries < 900:
+		tries += 1
+		var x := rng.randf_range(-190.0, 190.0)
+		var z := rng.randf_range(-105.0, 105.0)
+		if w._near_point(x, z, World.POINT_R + 3.0) or w.height_at(x, z) < -0.3:
+			continue
+		var skip := false
+		for tx in World.TRENCH_X:
+			if absf(x - w.trench_center(tx, z)) < 5.0:
+				skip = true
+		if skip or w.inside_box(Vector3(x, w.height_at(x, z) + 0.3, z)):
+			continue
+		var y := w.height_at(x, z)
+		var g := _g(chunks, Vector3(x, y, z))
+		var n := rng.randi_range(3, 5)
+		for k in n:
+			var o := Vector3(rng.randf_range(-0.7, 0.7), 0.0, rng.randf_range(-0.7, 0.7))
+			var r := rng.randf_range(0.35, 0.7)
+			var gcol := Color(0.15 + rng.randf() * 0.08, 0.23 + rng.randf() * 0.09, 0.07 + rng.randf() * 0.03, leaf_kind)
+			g.sphere(r, Transform3D(Basis.IDENTITY, Vector3(x, y + r * 0.45, z) + o), gcol, 0, Vector3(1.0, 0.7, 1.0), 4, 7)
+		bushes += 1

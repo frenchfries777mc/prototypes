@@ -123,76 +123,103 @@ static func soldier_mesh(team: int, weapon: int, low: bool = false) -> ArrayMesh
 	var mg := Geo.new()
 	cg.skinned = true
 	mg.skinned = true
-	var I := Transform3D.IDENTITY
 	var coat: Color = p.coat
 	var coat2: Color = p.coat2
 	var pants: Color = p.pants
-	# --- 다리
+	var mark: Color = p.mark
+	var glove := Color(0.10, 0.065, 0.04)
+	var fine := not low
+	var X := func(pos: Vector3) -> Transform3D: return Transform3D(Basis.IDENTITY, pos)
+	var SC := func(pos: Vector3, sc: Vector3) -> Transform3D: return Transform3D(Basis.from_scale(sc), pos)
+	# --- 다리 / 각반 / 군화
 	for side in [1.0, -1.0]:
 		var th: int = THR if side > 0 else THL
 		var sh: int = SHR if side > 0 else SHL
 		var ft: int = FTR if side > 0 else FTL
 		var x: float = 0.10 * side
-		cg.limb(Vector3(x, 0.92, 0), Vector3(x, 0.50, 0.0), 0.088, 0.066, pants, th)
+		cg.limb(Vector3(x, 0.92, 0), Vector3(x, 0.50, 0.0), 0.090, 0.066, pants, th)
 		cg.limb(Vector3(x, 0.50, 0.0), Vector3(x, 0.14, 0.0), 0.064, 0.05, pants, sh)
-		# 각반(puttee)
-		for k in 5:
-			var y := 0.17 + 0.062 * k
-			cg.cone(0.057 - 0.0016 * k, 0.057 - 0.0016 * k, 0.045, Transform3D(Basis.IDENTITY, Vector3(x, y, 0)), p.wrap, sh, 10, false)
-		# 군화
-		cg.prism(Vector2(0.115, 0.30), Vector2(0.10, 0.25), 0.085, Transform3D(Basis.IDENTITY, Vector3(x, 0.0, -0.045)), LEATHER * 0.8, ft)
-		cg.prism(Vector2(0.10, 0.12), Vector2(0.085, 0.10), 0.09, Transform3D(Basis.IDENTITY, Vector3(x, 0.04, 0.025)), LEATHER, ft)
-		mg.box(Vector3(0.12, 0.018, 0.31), Geo.xf_at(Vector3(x, 0.009, -0.045)), Color(0.04, 0.035, 0.03), ft)
-	# --- 골반, 외투 자락, 허리띠
-	cg.prism(Vector2(0.34, 0.21), Vector2(0.33, 0.20), 0.14, Geo.xf_at(Vector3(0, 0.84, 0)), pants, HIPS)
-	cg.prism(Vector2(0.42, 0.28), Vector2(0.35, 0.215), 0.31, Geo.xf_at(Vector3(0, 0.62, 0)), coat2, HIPS)
-	cg.box(Vector3(0.355, 0.05, 0.225), Geo.xf_at(Vector3(0, 0.985, 0)), LEATHER, SPINE)
-	mg.box(Vector3(0.05, 0.04, 0.012), Geo.xf_at(Vector3(0, 0.985, -0.115)), BRASS, SPINE)
+		cg.sphere(0.07, X.call(Vector3(x, 0.5, 0.0)), pants, sh)
+		var wraps := 6 if fine else 3
+		for k in wraps:
+			var y := 0.17 + (0.36 / wraps) * k
+			cg.cone(0.058 - 0.0016 * k, 0.058 - 0.0016 * k, 0.36 / wraps * 1.05, X.call(Vector3(x, y, 0)), p.wrap * (0.95 + 0.1 * (k % 2)), sh, 10, false)
+		cg.prism(Vector2(0.115, 0.30), Vector2(0.10, 0.24), 0.085, Transform3D(Basis.IDENTITY, Vector3(x, 0.0, -0.045)), LEATHER * 0.8, ft)
+		cg.sphere(0.058, X.call(Vector3(x, 0.05, -0.17)), LEATHER * 0.75, ft, Vector3(1.0, 0.75, 1.1), 4, 8)
+		cg.prism(Vector2(0.10, 0.12), Vector2(0.085, 0.10), 0.095, Transform3D(Basis.IDENTITY, Vector3(x, 0.04, 0.025)), LEATHER, ft)
+		mg.box(Vector3(0.12, 0.018, 0.33), Geo.xf_at(Vector3(x, 0.009, -0.05)), Color(0.04, 0.035, 0.03), ft)
+	# --- 외투 자락 / 골반 / 허리띠 (매끈한 타원 단면)
+	var skirt := [Vector2(0.0, 0.60), Vector2(0.235, 0.60), Vector2(0.252, 0.66), Vector2(0.238, 0.78), Vector2(0.200, 0.92), Vector2(0.168, 1.0)]
+	cg.lathe(skirt, 16, SC.call(Vector3.ZERO, Vector3(1.0, 1.0, 0.66)), coat2, HIPS)
+	cg.cone(0.175, 0.178, 0.055, SC.call(Vector3(0, 0.96, 0), Vector3(1.0, 1.0, 0.66)), LEATHER, SPINE, 16, false)
+	mg.box(Vector3(0.05, 0.042, 0.014), Geo.xf_at(Vector3(0, 0.985, -0.122)), BRASS, SPINE)
 	# --- 몸통
-	cg.prism(Vector2(0.335, 0.205), Vector2(0.37, 0.215), 0.22, Geo.xf_at(Vector3(0, 1.01, 0)), coat, SPINE)
-	cg.prism(Vector2(0.37, 0.215), Vector2(0.43, 0.235), 0.27, Geo.xf_at(Vector3(0, 1.22, 0)), coat, CHEST)
-	cg.prism(Vector2(0.43, 0.235), Vector2(0.20, 0.17), 0.045, Geo.xf_at(Vector3(0, 1.49, 0)), coat, CHEST)
-	cg.cone(0.075, 0.062, 0.05, Geo.xf_at(Vector3(0, 1.50, 0)), coat2, CHEST, 12, false)
-	# 단추 줄과 주머니
-	for k in 5:
-		mg.sphere(0.008, Geo.xf_at(Vector3(0, 1.08 + 0.095 * k, -0.114 - 0.002 * k)), BRASS, CHEST, Vector3.ONE, 4, 6)
-	cg.box(Vector3(0.085, 0.09, 0.025), Geo.xf_at(Vector3(0.11, 1.20, -0.118)), coat2 * 0.85, CHEST)
-	cg.box(Vector3(0.085, 0.09, 0.025), Geo.xf_at(Vector3(-0.11, 1.20, -0.118)), coat2 * 0.85, CHEST)
-	# 탄띠(어깨에서 허리로 사선)와 탄약 주머니
+	var lower := [Vector2(0.0, 1.0), Vector2(0.15, 1.0), Vector2(0.165, 1.07), Vector2(0.186, 1.18), Vector2(0.205, 1.22)]
+	var upper := [Vector2(0.205, 1.22), Vector2(0.216, 1.30), Vector2(0.224, 1.38), Vector2(0.208, 1.45), Vector2(0.135, 1.49), Vector2(0.075, 1.505), Vector2(0.0, 1.51)]
+	cg.lathe(lower, 16, SC.call(Vector3.ZERO, Vector3(1.0, 1.0, 0.64)), coat, SPINE)
+	cg.lathe(upper, 16, SC.call(Vector3.ZERO, Vector3(1.0, 1.0, 0.64)), coat, CHEST)
+	cg.cone(0.085, 0.066, 0.055, X.call(Vector3(0, 1.485, 0)), coat2, CHEST, 12, false)
+	if fine:
+		for k in 5:
+			mg.sphere(0.0085, X.call(Vector3(0, 1.08 + 0.095 * k, -0.137 - 0.003 * k)), BRASS, CHEST, Vector3.ONE, 4, 6)
+		for sx in [1.0, -1.0]:
+			cg.box(Vector3(0.09, 0.09, 0.028), X.call(Vector3(0.105 * sx, 1.20, -0.13)), coat2 * 0.85, CHEST)
+			cg.box(Vector3(0.088, 0.018, 0.03), X.call(Vector3(0.105 * sx, 1.245, -0.13)), coat2 * 0.7, CHEST)
+			cg.box(Vector3(0.07, 0.014, 0.05), X.call(Vector3(0.18 * sx, 1.47, 0.0)), LEATHER, CHEST)
+			mg.box(Vector3(0.022, 0.014, 0.01), X.call(Vector3(0.05 * sx, 1.485, -0.07)), mark, CHEST)
+	# 탄띠와 탄약 주머니
 	var band_basis := Basis(Vector3(0, 0, 1), deg_to_rad(38))
-	cg.box(Vector3(0.055, 0.56, 0.014), Transform3D(band_basis, Vector3(0.0, 1.27, -0.122)), LEATHER, CHEST)
+	cg.box(Vector3(0.055, 0.56, 0.014), Transform3D(band_basis, Vector3(0.0, 1.27, -0.146)), LEATHER, CHEST)
 	for k in 3:
-		cg.box(Vector3(0.062, 0.07, 0.04), Geo.xf_at(Vector3(-0.07 + 0.07 * k, 1.04, -0.13)), LEATHER * 1.1, SPINE)
-	# --- 배낭, 담요 말이, 수통
-	cg.box(Vector3(0.30, 0.34, 0.13), Geo.xf_at(Vector3(0, 1.26, 0.18)), LEATHER * 1.25, CHEST)
-	cg.rod(Vector3(-0.19, 1.47, 0.18), Vector3(0.19, 1.47, 0.18), 0.062, 0.062, coat2 * 1.3, CHEST, 10)
-	cg.cone(0.045, 0.045, 0.1, Geo.xf_at(Vector3(-0.17, 0.97, 0.13)), coat2 * 0.8, SPINE, 10, true)
+		cg.box(Vector3(0.062, 0.075, 0.042), X.call(Vector3(-0.07 + 0.07 * k, 1.04, -0.155)), LEATHER * 1.1, SPINE)
+		if fine:
+			cg.box(Vector3(0.064, 0.016, 0.044), X.call(Vector3(-0.07 + 0.07 * k, 1.075, -0.155)), LEATHER * 0.8, SPINE)
+	# --- 배낭 / 장구류
+	cg.box(Vector3(0.30, 0.34, 0.13), X.call(Vector3(0, 1.26, 0.2)), LEATHER * 1.25, CHEST)
+	cg.rod(Vector3(-0.19, 1.47, 0.2), Vector3(0.19, 1.47, 0.2), 0.062, 0.062, coat2 * 1.3, CHEST, 10)
+	cg.cone(0.045, 0.045, 0.1, X.call(Vector3(-0.17, 0.97, 0.15)), coat2 * 0.8, SPINE, 10, true)
+	if fine:
+		mg.cone(0.065, 0.065, 0.045, X.call(Vector3(0.06, 1.44, 0.2)), STEEL * 2.0, CHEST, 10, true)
+		cg.rod(Vector3(-0.16, 1.1, 0.27), Vector3(-0.16, 1.42, 0.27), 0.014, 0.014, WOOD, CHEST, 6)
+		mg.box(Vector3(0.1, 0.012, 0.11), X.call(Vector3(-0.16, 1.1, 0.27)), STEEL, CHEST)
+		mg.rod(Vector3(0.20, 0.98, 0.0), Vector3(0.22, 0.62, -0.02), 0.012, 0.012, STEEL, HIPS, 5)
 	# --- 머리
-	cg.cone(0.045, 0.04, 0.1, Geo.xf_at(Vector3(0, 1.50, 0)), SKIN * 0.95, HEAD, 10, false)
-	cg.sphere(0.103, Geo.xf_at(Vector3(0, 1.655, 0.0)), SKIN, HEAD, Vector3(0.92, 1.1, 1.0), 9, 14)
-	cg.box(Vector3(0.024, 0.045, 0.034), Geo.xf_at(Vector3(0, 1.645, -0.105)), SKIN * 0.95, HEAD)
+	cg.cone(0.045, 0.04, 0.1, X.call(Vector3(0, 1.50, 0)), SKIN * 0.9, HEAD, 10, false)
+	cg.sphere(0.097, SC.call(Vector3(0, 1.665, 0.0), Vector3(0.9, 1.12, 1.0)), SKIN, HEAD, Vector3.ONE, 9, 14)
+	cg.sphere(0.075, SC.call(Vector3(0, 1.625, -0.02), Vector3(0.95, 0.85, 1.0)), SKIN * 0.97, HEAD, Vector3.ONE, 6, 10)
+	cg.sphere(0.103, SC.call(Vector3(0, 1.66, 0.025), Vector3(0.94, 1.1, 0.95)), Color(0.04, 0.025, 0.015), HEAD, Vector3.ONE, 6, 10)
+	cg.sphere(0.017, SC.call(Vector3(0, 1.648, -0.098), Vector3(0.8, 1.2, 1.5)), SKIN * 1.05, HEAD, Vector3.ONE, 4, 8)
+	cg.box(Vector3(0.016, 0.04, 0.026), X.call(Vector3(0, 1.66, -0.092)), SKIN * 1.0, HEAD)
 	for sx in [1.0, -1.0]:
-		cg.sphere(0.017, Geo.xf_at(Vector3(0.095 * sx, 1.655, 0.0)), SKIN * 0.9, HEAD, Vector3(0.5, 1.2, 0.9), 5, 8)
-		cg.box(Vector3(0.026, 0.012, 0.012), Geo.xf_at(Vector3(0.04 * sx, 1.685, -0.097)), Color(0.02, 0.015, 0.012), HEAD)
-		cg.box(Vector3(0.034, 0.008, 0.012), Geo.xf_at(Vector3(0.042 * sx, 1.705, -0.095)), Color(0.07, 0.04, 0.02), HEAD)
-	cg.box(Vector3(0.07, 0.016, 0.02), Geo.xf_at(Vector3(0, 1.617, -0.098)), Color(0.07, 0.04, 0.02), HEAD)
+		cg.sphere(0.017, SC.call(Vector3(0.092 * sx, 1.655, 0.002), Vector3(0.45, 1.2, 0.85)), SKIN * 0.9, HEAD, Vector3.ONE, 4, 8)
+		cg.sphere(0.0155, SC.call(Vector3(0.038 * sx, 1.683, -0.083), Vector3(1.1, 0.75, 0.55)), Color(0.55, 0.52, 0.48), HEAD, Vector3.ONE, 4, 8)
+		cg.sphere(0.0085, X.call(Vector3(0.038 * sx, 1.683, -0.0925)), Color(0.02, 0.015, 0.012), HEAD, Vector3.ONE, 4, 6)
+		cg.box(Vector3(0.036, 0.009, 0.014), X.call(Vector3(0.04 * sx, 1.704, -0.09)), Color(0.07, 0.04, 0.02), HEAD)
+		cg.sphere(0.024, SC.call(Vector3(0.05 * sx, 1.612, -0.07), Vector3(1.0, 0.7, 0.9)), SKIN * 0.88, HEAD, Vector3.ONE, 4, 8)
+	cg.box(Vector3(0.05, 0.007, 0.012), X.call(Vector3(0, 1.607, -0.093)), Color(0.28, 0.1, 0.08), HEAD)
+	cg.box(Vector3(0.072, 0.017, 0.022), X.call(Vector3(0, 1.625, -0.093)), Color(0.07, 0.04, 0.02), HEAD)
 	if team == 0:
-		# 철모: 돔 + 챙
-		var prof := [Vector2(0.0, 0.135), Vector2(0.06, 0.131), Vector2(0.10, 0.112), Vector2(0.123, 0.08),
-			Vector2(0.128, 0.04), Vector2(0.165, 0.03), Vector2(0.168, 0.022), Vector2(0.118, 0.026)]
+		var prof := [Vector2(0.0, 0.14), Vector2(0.065, 0.136), Vector2(0.105, 0.115), Vector2(0.126, 0.082), Vector2(0.131, 0.04), Vector2(0.168, 0.026), Vector2(0.172, 0.018), Vector2(0.12, 0.022)]
 		prof.reverse()
-		cg.lathe(prof, 16, Geo.xf_at(Vector3(0, 1.62, 0)), p.helmet, HEAD)
-		cg.box(Vector3(0.02, 0.014, 0.025), Geo.xf_at(Vector3(0, 1.738, -0.12)), p.mark, HEAD)
-		cg.box(Vector3(0.012, 0.09, 0.006), Geo.xf_at(Vector3(0.1, 1.58, -0.04)), LEATHER, HEAD)
-		cg.box(Vector3(0.012, 0.09, 0.006), Geo.xf_at(Vector3(-0.1, 1.58, -0.04)), LEATHER, HEAD)
+		cg.lathe(prof, 18, X.call(Vector3(0, 1.625, 0)), p.helmet, HEAD)
+		cg.rod(Vector3(0, 1.755, 0.14), Vector3(0, 1.778, -0.02), 0.01, 0.014, p.helmet * 0.8, HEAD, 6)
+		cg.rod(Vector3(0, 1.778, -0.02), Vector3(0, 1.74, -0.125), 0.014, 0.01, p.helmet * 0.8, HEAD, 6)
+		mg.box(Vector3(0.026, 0.02, 0.012), X.call(Vector3(0, 1.725, -0.136)), mark, HEAD)
+		if fine:
+			for sx in [1.0, -1.0]:
+				mg.sphere(0.01, X.call(Vector3(0.115 * sx, 1.68, 0.0)), BRASS, HEAD, Vector3.ONE, 3, 6)
+				cg.box(Vector3(0.012, 0.1, 0.006), X.call(Vector3(0.1 * sx, 1.585, -0.035)), LEATHER, HEAD)
+			cg.box(Vector3(0.12, 0.008, 0.02), X.call(Vector3(0, 1.545, -0.07)), LEATHER, HEAD)
 	else:
-		# 챙 있는 군모
-		cg.cone(0.118, 0.122, 0.07, Geo.xf_at(Vector3(0, 1.655, 0)), p.helmet, HEAD, 16, false)
-		var prof2 := [Vector2(0.0, 0.14), Vector2(0.07, 0.138), Vector2(0.13, 0.12), Vector2(0.135, 0.07), Vector2(0.12, 0.0)]
+		cg.cone(0.118, 0.122, 0.07, X.call(Vector3(0, 1.66, 0)), p.helmet, HEAD, 18, false)
+		var prof2 := [Vector2(0.0, 0.145), Vector2(0.07, 0.143), Vector2(0.13, 0.124), Vector2(0.138, 0.072), Vector2(0.123, 0.0)]
 		prof2.reverse()
-		cg.lathe(prof2, 16, Geo.xf_at(Vector3(0, 1.655, 0)), p.helmet * 1.05, HEAD)
-		cg.prism(Vector2(0.17, 0.09), Vector2(0.15, 0.08), 0.014, Geo.xf_at(Vector3(0, 1.648, -0.13)), LEATHER, HEAD)
-		cg.box(Vector3(0.126, 0.02, 0.012), Geo.xf_at(Vector3(0, 1.712, -0.12)), p.mark, HEAD)
+		cg.lathe(prof2, 18, X.call(Vector3(0, 1.66, 0)), p.helmet * 1.05, HEAD)
+		cg.prism(Vector2(0.17, 0.095), Vector2(0.15, 0.08), 0.014, X.call(Vector3(0, 1.652, -0.135)), LEATHER, HEAD)
+		mg.cone(0.02, 0.02, 0.006, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 1.725, -0.136)), mark, HEAD, 10, true)
+		cg.box(Vector3(0.126, 0.02, 0.012), X.call(Vector3(0, 1.715, -0.124)), p.mark * 0.55, HEAD)
+		if fine:
+			cg.box(Vector3(0.12, 0.008, 0.02), X.call(Vector3(0, 1.64, -0.1)), LEATHER, HEAD)
 	# --- 팔과 총 (총을 든 자세로 모델링)
 	var rifle_xf := Transform3D(Basis(Vector3.UP, deg_to_rad(-2)), Vector3(0.10, 1.335, -0.20))
 	var s_r := Vector3(0.21, 1.43, 0.0)
@@ -201,14 +228,21 @@ static func soldier_mesh(team: int, weapon: int, low: bool = false) -> ArrayMesh
 	var s_l := Vector3(-0.21, 1.43, 0.0)
 	var e_l := GLOBAL[LAL] as Vector3
 	var h_l := rifle_xf * Vector3(0.0, -0.045, -0.47)
-	cg.sphere(0.062, Geo.xf_at(s_r), coat, UAR)
-	cg.limb(s_r, e_r, 0.056, 0.048, coat, UAR)
+	cg.sphere(0.064, X.call(s_r), coat, UAR)
+	cg.limb(s_r, e_r, 0.057, 0.048, coat, UAR)
+	cg.sphere(0.05, X.call(e_r), coat, LAR)
 	cg.limb(e_r, h_r, 0.047, 0.04, coat, LAR)
-	cg.sphere(0.04, Geo.xf_at(h_r), SKIN, LAR)
-	cg.sphere(0.062, Geo.xf_at(s_l), coat, UAL)
-	cg.limb(s_l, e_l, 0.056, 0.048, coat, UAL)
+	cg.sphere(0.042, SC.call(h_r, Vector3(1.0, 0.9, 1.3)), glove, LAR)
+	cg.sphere(0.064, X.call(s_l), coat, UAL)
+	cg.limb(s_l, e_l, 0.057, 0.048, coat, UAL)
+	cg.sphere(0.05, X.call(e_l), coat, LAL)
 	cg.limb(e_l, h_l, 0.047, 0.04, coat, LAL)
-	cg.sphere(0.04, Geo.xf_at(h_l), SKIN, LAL)
+	cg.sphere(0.042, SC.call(h_l, Vector3(1.0, 0.9, 1.3)), glove, LAL)
+	# 소매 끝단과 팀 완장(멀리서도 팀 식별)
+	cg.cone(0.05, 0.05, 0.03, Transform3D(cg._basis_y(h_r - e_r), h_r - (h_r - e_r).normalized() * 0.09), coat2 * 0.8, LAR, 10, false)
+	cg.cone(0.05, 0.05, 0.03, Transform3D(cg._basis_y(h_l - e_l), h_l - (h_l - e_l).normalized() * 0.09), coat2 * 0.8, LAL, 10, false)
+	var arm_dir := (e_l - s_l).normalized()
+	cg.cone(0.064, 0.064, 0.07, Transform3D(cg._basis_y(arm_dir), s_l + arm_dir * 0.11), mark * 0.9, UAL, 12, false)
 	_weapon(cg, mg, weapon, rifle_xf, CHEST)
 	var mesh := ArrayMesh.new()
 	cg.commit_to(mesh, Geo.mat_cloth_shader())
