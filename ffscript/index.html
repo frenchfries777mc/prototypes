@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="ff-build" content="11-15 18:00">
+<meta name="ff-build" content="11-15 18:27">
 <title>FF Script</title>
 <style>
 :root{--bg:#0e0f1a;--panel:#161828;--line:#262a44;--text:#e8eaf6;--dim:#8b90b0;--accent:#6fb3ff;--err:#ff6b81;--ok:#5be3a0}
@@ -66,7 +66,7 @@ button,select{white-space:nowrap}
 </head>
 <body>
 <header>
-  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">11-15 18:00</span>
+  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">11-15 18:27</span>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
   <button id="save" class="ic" title="내 게임으로 저장">💾</button>
@@ -2577,6 +2577,7 @@ function jsSource(nd) {
     code = rest.slice(1, -1).replace(/\\([\s\S])/g, '$1');
   }
   try { new Function(code); } catch (e) { fail(n, 'JS 코드에 문법 오류가 있어요: ' + e.message); }
+  if (/\b(?:global|window|globalThis|self)\s*(?:\.\s*(?:FFRuntime|FFScript)|\[\s*['"](?:FFRuntime|FFScript)['"]\s*\])\s*=(?!=)/.test(code)) fail(n, '이 JS는 FF Script 편집기 자체를 다시 만들려고 해요. 그대로 실행하면 편집기가 멈춰서 막았어요.\nFF Script 편집기 같은 큰 HTML 앱은 변환하지 말고 HTML 파일 그대로 쓰세요.');
   return code;
 }
 function skipLit(code, i, prev) {
@@ -3853,8 +3854,6 @@ function renameClashes(code) {
   if (!hit.length) return code;
   const all = new Set(toks.filter(t => t.type === 'id').map(t => t.t));
   const to = Object.create(null); for (const n of hit) { let m = n + '_'; while (all.has(m)) m += '_'; to[n] = m; }
-  let out = '', last = 0;
-  const names = Object.keys(to), reN = names.length ? new RegExp('(?<![\\p{L}\\p{N}_$.])(' + names.map(n => n.replace(/[$]/g, '\\$')).join('|') + ')(?![\\p{L}\\p{N}_$])', 'gu') : null;
   const fixTpl = txt => {
     let r = '', k = 0;
     while (k < txt.length) {
@@ -3862,19 +3861,24 @@ function renameClashes(code) {
       if (txt[k] === '$' && txt[k + 1] === '{') {
         let d = 1, e = k + 2;
         while (e < txt.length && d) { if (txt[e] === '{') d++; else if (txt[e] === '}') d--; e++; }
-        r += '${' + fixTpl(txt.slice(k + 2, e - 1)).replace(reN, m => to[m]) + '}'; k = e; continue;
+        r += '${' + rn(txt.slice(k + 2, e - 1)) + '}'; k = e; continue;
       }
       r += txt[k++];
     }
     return r;
   };
-  toks.forEach((t, i) => {
-    if (t.type === 'tpl' && reN && t.t.includes('${')) { out += code.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
-    if (t.type !== 'id' || !to[t.t] || isP(toks[i - 1], '.') || isP(toks[i - 1], '?.')) return;
-    if (isP(toks[i + 1], ':') && (isP(toks[i - 1], '{') || isP(toks[i - 1], ','))) return;
-    out += code.slice(last, t.s) + to[t.t]; last = t.e;
-  });
-  return out + code.slice(last);
+  function rn(text, tk) {
+    if (!tk) { try { tk = tokenize(text); } catch (e) { return text; } }
+    let out = '', last = 0;
+    tk.forEach((t, i) => {
+      if (t.type === 'tpl' && t.t.includes('${')) { out += text.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
+      if (t.type !== 'id' || !to[t.t] || isP(tk[i - 1], '.') || isP(tk[i - 1], '?.')) return;
+      if (isP(tk[i + 1], ':') && (isP(tk[i - 1], '{') || isP(tk[i - 1], ','))) return;
+      out += text.slice(last, t.s) + to[t.t]; last = t.e;
+    });
+    return out + text.slice(last);
+  }
+  return rn(code, toks);
 }
 
 const MAXSIZE = 3 * 1024 * 1024;
@@ -6506,6 +6510,7 @@ function jsSource(nd) {
     code = rest.slice(1, -1).replace(/\\([\s\S])/g, '$1');
   }
   try { new Function(code); } catch (e) { fail(n, 'JS 코드에 문법 오류가 있어요: ' + e.message); }
+  if (/\b(?:global|window|globalThis|self)\s*(?:\.\s*(?:FFRuntime|FFScript)|\[\s*['"](?:FFRuntime|FFScript)['"]\s*\])\s*=(?!=)/.test(code)) fail(n, '이 JS는 FF Script 편집기 자체를 다시 만들려고 해요. 그대로 실행하면 편집기가 멈춰서 막았어요.\nFF Script 편집기 같은 큰 HTML 앱은 변환하지 말고 HTML 파일 그대로 쓰세요.');
   return code;
 }
 function skipLit(code, i, prev) {
@@ -7782,8 +7787,6 @@ function renameClashes(code) {
   if (!hit.length) return code;
   const all = new Set(toks.filter(t => t.type === 'id').map(t => t.t));
   const to = Object.create(null); for (const n of hit) { let m = n + '_'; while (all.has(m)) m += '_'; to[n] = m; }
-  let out = '', last = 0;
-  const names = Object.keys(to), reN = names.length ? new RegExp('(?<![\\p{L}\\p{N}_$.])(' + names.map(n => n.replace(/[$]/g, '\\$')).join('|') + ')(?![\\p{L}\\p{N}_$])', 'gu') : null;
   const fixTpl = txt => {
     let r = '', k = 0;
     while (k < txt.length) {
@@ -7791,19 +7794,24 @@ function renameClashes(code) {
       if (txt[k] === '$' && txt[k + 1] === '{') {
         let d = 1, e = k + 2;
         while (e < txt.length && d) { if (txt[e] === '{') d++; else if (txt[e] === '}') d--; e++; }
-        r += '${' + fixTpl(txt.slice(k + 2, e - 1)).replace(reN, m => to[m]) + '}'; k = e; continue;
+        r += '${' + rn(txt.slice(k + 2, e - 1)) + '}'; k = e; continue;
       }
       r += txt[k++];
     }
     return r;
   };
-  toks.forEach((t, i) => {
-    if (t.type === 'tpl' && reN && t.t.includes('${')) { out += code.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
-    if (t.type !== 'id' || !to[t.t] || isP(toks[i - 1], '.') || isP(toks[i - 1], '?.')) return;
-    if (isP(toks[i + 1], ':') && (isP(toks[i - 1], '{') || isP(toks[i - 1], ','))) return;
-    out += code.slice(last, t.s) + to[t.t]; last = t.e;
-  });
-  return out + code.slice(last);
+  function rn(text, tk) {
+    if (!tk) { try { tk = tokenize(text); } catch (e) { return text; } }
+    let out = '', last = 0;
+    tk.forEach((t, i) => {
+      if (t.type === 'tpl' && t.t.includes('${')) { out += text.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
+      if (t.type !== 'id' || !to[t.t] || isP(tk[i - 1], '.') || isP(tk[i - 1], '?.')) return;
+      if (isP(tk[i + 1], ':') && (isP(tk[i - 1], '{') || isP(tk[i - 1], ','))) return;
+      out += text.slice(last, t.s) + to[t.t]; last = t.e;
+    });
+    return out + text.slice(last);
+  }
+  return rn(code, toks);
 }
 
 const MAXSIZE = 3 * 1024 * 1024;
@@ -9054,6 +9062,7 @@ if p2 hits flag
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
+  ['FFScript', 'FFRuntime'].forEach(k => { const v = window[k]; if (v) Object.defineProperty(window, k, { get: () => v, set() { }, configurable: false }); });
   (function () {
     const cur = (document.querySelector('meta[name=ff-build]') || {}).content;
     $('staleBtn').addEventListener('click', () => { const u = new URL(location.href); u.searchParams.set('v', Date.now()); location.replace(u.href); });
@@ -9064,18 +9073,31 @@ if p2 hits flag
     }).catch(() => { });
   })();
   const BIG = 400000;
-  function highlight() {
-    if (code.value.length > BIG) { hl.textContent = code.value + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
-    scanDyn();
+  const HLWIN = 30000;
+  let hlWinA = -1, hlWinB = -1, hlRaf = 0;
+  function highlight(scrollOnly) {
+    const v = code.value;
+    if (v.length > BIG) { hl.textContent = v + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    const lines = v.split('\n');
+    let a = 0, b = lines.length;
+    if (v.length > HLWIN) {
+      a = Math.max(0, Math.floor(code.scrollTop / 22) - 40); b = Math.min(lines.length, Math.ceil((code.scrollTop + code.clientHeight) / 22) + 40);
+      while (a > 0 && /^\s/.test(lines[a])) a--;
+      if (scrollOnly && a >= hlWinA && b <= hlWinB && hlWinA >= 0) { hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    }
+    if (!scrollOnly) scanDyn();
+    hlWinA = a; hlWinB = b;
     let raw = null;
-    const out = code.value.split('\n').map(line => {
+    const out = [];
+    for (let i = a; i < b; i++) {
+      const line = lines[i];
       const ind = line.match(/^ */)[0].length;
-      if (raw) { if (!line.trim()) return ''; if (ind > raw.ind) return hlRaw(line, raw.art); raw = null; }
+      if (raw) { if (!line.trim()) { out.push(''); continue; } if (ind > raw.ind) { out.push(hlRaw(line, raw.art)); continue; } raw = null; }
       const t = line.trim().replace(/\s*:$/, '');
       if (/^map(\s+\S+)?$/.test(t)) raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
-      return hlLine(line);
-    });
-    hl.innerHTML = out.join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
+      out.push(hlLine(line));
+    }
+    hl.innerHTML = '\n'.repeat(a) + out.join('\n') + '\n'.repeat(lines.length - b) + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
   }
 
   const mctx = document.createElement('canvas').getContext('2d');
@@ -9211,11 +9233,15 @@ if p2 hits flag
   G.autostart = true;
   let current = null, errLine = 0;
 
+  let gN = -1, gErr = -1;
   function drawGutter() {
-    const n = code.value.split('\n').length;
-    let h = '';
-    if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
-    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
+    let n = 1; for (let i = code.value.indexOf('\n'); i >= 0; i = code.value.indexOf('\n', i + 1)) n++;
+    if (n !== gN || errLine !== gErr) {
+      let h = '';
+      if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+      gutter.innerHTML = h; gN = n; gErr = errLine;
+    }
+    gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
     errLine = line; err.style.display = 'block';
@@ -9241,14 +9267,18 @@ if p2 hits flag
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
   }
 
-  let timer = 0;
+  let timer = 0, saveT = 0;
+  const saveNow = () => { clearTimeout(saveT); saveT = 0; store.set('ff-code', code.value); };
+  const saveCode = () => { if (code.value.length <= HLWIN) { saveNow(); return; } clearTimeout(saveT); saveT = setTimeout(saveNow, 600); };
+  addEventListener('pagehide', () => { if (saveT) saveNow(); });
+  document.addEventListener('visibilitychange', () => { if (saveT) saveNow(); });
   code.addEventListener('input', () => {
-    drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
+    drawGutter(); saveCode(); if (!sel.value.startsWith('my:')) sel.value = '';
     clearTimeout(timer);
     if (code.value.length > BIG) { status.textContent = '코드가 커서 자동 실행은 쉬어요. 다시 시작을 눌러 주세요'; status.className = ''; return; }
-    timer = setTimeout(() => run(true), 350);
+    timer = setTimeout(() => run(true), 350 + Math.min(1500, code.value.length / 100));
   });
-  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
+  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); if (code.value.length > HLWIN && code.value.length <= BIG && !hlRaf) hlRaf = requestAnimationFrame(() => { hlRaf = 0; highlight(true); }); });
   code.addEventListener('input', () => openAc());
   code.addEventListener('blur', () => setTimeout(closeAc, 100));
   code.addEventListener('click', closeAc);
