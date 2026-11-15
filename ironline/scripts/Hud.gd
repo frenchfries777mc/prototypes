@@ -271,8 +271,8 @@ func _draw_crosshair(W: float, H: float, me: Sim.Unit) -> void:
 		col = Color(1.0, 0.3, 0.22)
 	elif hit_t > 0.0:
 		col = Color(1.0, 0.9, 0.35)
-	var gap := (5.0 + me.speed_now * 1.3 + (4.0 if me.fire_cd > 0.05 else 0.0)) * u
-	var ln := 9.0 * u
+	var gap := (5.0 + me.speed_now * 1.3 + (4.0 if me.fire_cd > 0.05 else 0.0)) * u * (0.45 if me.in_ads else 1.0)
+	var ln := (9.0 if not me.in_ads else 6.0) * u
 	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
 		draw_line(c + d * gap, c + d * (gap + ln), Color(0, 0, 0, 0.6), 4.0 * u)
 		draw_line(c + d * gap, c + d * (gap + ln), col, 2.0 * u)
@@ -399,4 +399,4 @@ func _draw_pause(W: float, H: float) -> void:
 	var r := Rect2((W - 260 * u) * 0.5, H * 0.34 + 70 * u, 260 * u, 46 * u)
 	_panel(r, Color(0.25, 0.42, 0.75, 0.9), 10.0)
 	_t(r.position + Vector2(0, 30 * u), "클릭해서 플레이", 18, WHITE, true, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
-	_t(Vector2(0, H * 0.34 + 150 * u), "WASD 이동   Shift 달리기   Space 점프   좌클릭 사격   R 장전   Tab 점수   Esc 마우스 해제", 13, Color(1, 1, 1, 0.55), false, HORIZONTAL_ALIGNMENT_CENTER, W)
+	_t(Vector2(0, H * 0.34 + 150 * u), "WASD 이동   Shift 달리기   Space 점프   좌클릭 사격   우클릭 조준   R 장전   Tab 점수   Esc 마우스 해제", 13, Color(1, 1, 1, 0.55), false, HORIZONTAL_ALIGNMENT_CENTER, W)

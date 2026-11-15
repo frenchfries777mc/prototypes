@@ -218,3 +218,12 @@ static func mat_gear() -> StandardMaterial3D:
 	m.roughness = 0.42
 	m.metallic = 0.55
 	return m
+
+
+static var _cloth_sm: ShaderMaterial = null
+
+static func mat_cloth_shader() -> ShaderMaterial:
+	if _cloth_sm == null:
+		_cloth_sm = ShaderMaterial.new()
+		_cloth_sm.shader = load("res://shaders/cloth.gdshader")
+	return _cloth_sm

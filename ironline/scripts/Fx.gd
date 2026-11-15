@@ -8,6 +8,7 @@ var _soft: Texture2D
 var _pools := {}
 var _next := {}
 var flash_light: OmniLight3D
+var blast_light: OmniLight3D
 
 
 func _ready() -> void:
@@ -26,6 +27,8 @@ func _ready() -> void:
 	_make_pool("wall", 14, 10, Color(0.62, 0.6, 0.56, 0.7), 0.7, 1.5, 3.5, 0.8, Vector3(0, -2.0, 0), 0.8)
 	_make_pool("blood", 10, 8, Color(0.55, 0.04, 0.03, 0.95), 0.5, 1.0, 3.2, 0.34, Vector3(0, -9.0, 0), 0.6)
 	_make_pool("flash", 6, 5, Color(1.0, 0.85, 0.5, 0.95), 0.1, 0.5, 1.5, 0.7, Vector3.ZERO, 0.8)
+	_make_pool("blast", 4, 30, Color(0.26, 0.20, 0.14, 0.9), 2.4, 7.0, 13.0, 2.2, Vector3(0, -7.0, 0), 0.7)
+	_make_pool("blastsmoke", 4, 18, Color(0.2, 0.19, 0.18, 0.7), 5.0, 1.5, 3.5, 4.0, Vector3(0.3, 0.6, 0), 0.4)
 	var mi := MeshInstance3D.new()
 	mi.mesh = tracer_im
 	mi.custom_aabb = AABB(Vector3(-400, -40, -300), Vector3(800, 160, 600))
@@ -44,6 +47,12 @@ func _ready() -> void:
 	flash_light.light_energy = 0.0
 	flash_light.shadow_enabled = false
 	add_child(flash_light)
+	blast_light = OmniLight3D.new()
+	blast_light.light_color = Color(1.0, 0.7, 0.4)
+	blast_light.omni_range = 60.0
+	blast_light.light_energy = 0.0
+	blast_light.shadow_enabled = false
+	add_child(blast_light)
 
 
 func _make_pool(key: String, count: int, amount: int, col: Color, life: float, v0: float, v1: float,
@@ -151,6 +160,15 @@ func add_tracer(a: Vector3, b: Vector3, team: int) -> void:
 		tracers.pop_front()
 
 
+func blast(pos: Vector3) -> void:
+	burst("blast", pos + Vector3(0, 0.3, 0), Vector3.UP)
+	burst("blastsmoke", pos + Vector3(0, 0.6, 0), Vector3.UP)
+	burst("dust", pos + Vector3(0, 0.3, 0), Vector3.UP)
+	burst("wall", pos + Vector3(0, 0.3, 0), Vector3.UP)
+	blast_light.position = pos + Vector3(0, 3.0, 0)
+	blast_light.light_energy = 9.0
+
+
 func muzzle_light(pos: Vector3) -> void:
 	flash_light.position = pos
 	flash_light.light_energy = 3.5
@@ -158,6 +176,7 @@ func muzzle_light(pos: Vector3) -> void:
 
 func update(dt: float) -> void:
 	flash_light.light_energy = maxf(0.0, flash_light.light_energy - dt * 70.0)
+	blast_light.light_energy = maxf(0.0, blast_light.light_energy - dt * 18.0)
 	tracer_im.clear_surfaces()
 	var i := tracers.size() - 1
 	while i >= 0:
