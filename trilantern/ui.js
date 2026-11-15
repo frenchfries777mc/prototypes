@@ -459,14 +459,26 @@ var HELP =
   '<h3>요령</h3><p>카드를 무조건 집지 마세요. 덱이 얇고 한두 원소에 집중할수록 공명이 잘 이어집니다. 모닥불에서는 HP가 넉넉하면 강화가 이득입니다.</p>' +
   '</div>';
 
+/* 브라우저 confirm() 은 막혀 있는 환경이 있어서 확인 창을 직접 띄운다 */
+var pending = null;
+function ask(msg, yes) {
+  pending = yes;
+  openModal('확인', '<p style="margin:0 0 16px;text-align:center;line-height:1.6">' + msg + '</p><div class="col" style="margin:0 auto">' +
+    '<button class="btn pri" data-a="yes">예</button><button class="btn" data-a="close">아니요</button></div>');
+}
+function startNew() {
+  S = TL.newRun((Date.now() ^ (Math.random() * 0x7fffffff)) | 0); sel = -1; busy = false; seenUids = {};
+  closeModal(); render(); save();
+  if (!meta.helped) { meta.helped = true; saveMeta(); openModal('놀이법', HELP); }
+}
+
 /* ---------- 입력 ---------- */
 var ACT = {
   'new': function () {
-    if (((S && S.phase !== 'over' && S.phase !== 'win') || (!S && loadSave())) && !confirm('진행 중인 모험을 버리고 새로 시작할까요?')) return;
-    S = TL.newRun((Date.now() ^ (Math.random() * 0x7fffffff)) | 0); sel = -1; busy = false; seenUids = {};
-    closeModal(); render(); save();
-    if (!meta.helped) { meta.helped = true; saveMeta(); openModal('놀이법', HELP); }
+    if ((S && S.phase !== 'over' && S.phase !== 'win') || (!S && loadSave())) ask('진행 중인 모험을 버리고 새로 시작할까요?', startNew);
+    else startNew();
   },
+  yes: function () { var f = pending; pending = null; closeModal(); if (f) f(); },
   'continue': function () { S = loadSave(); sel = -1; busy = false; seenUids = {}; render(); },
   title: function () { S = null; closeModal(); render(); },
   help: function () { openModal('놀이법', HELP); },
@@ -492,8 +504,7 @@ var ACT = {
       '<button class="btn" data-a="abandon">이 모험 포기</button></div>');
   },
   abandon: function () {
-    if (!confirm('정말 이 모험을 포기할까요?')) return;
-    store(SAVE, null); S = null; closeModal(); render();
+    ask('정말 이 모험을 포기할까요?', function () { store(SAVE, null); S = null; render(); });
   },
   bossrelic: function (d) { act(function () { return TL.takeBossRelic(S, +d.i); }); SFX.coin(); },
   take: function (d) { act(function () { return TL.takeCard(S, +d.i); }); },
