@@ -172,5 +172,124 @@ if basket hits bomb
 
 if apple leaves
   lives -1
+`,
+  'Tile Adventure': `title "Tile Adventure"
+background sunset
+lives 3
+music happy
+set gems to 0
+
+map
+  ....................
+  ....................
+  ..................F.
+  ................####
+  .............G......
+  ...........###......
+  .....C..............
+  ....###.......C.....
+  .P......^.....^..S..
+  ####################
+  ####################
+
+if player hits spike
+  remove 1 from lives
+  player.x = 70
+  player.y = 380
+  player.vy = 0
+  flash red
+
+if player hits coin
+  coin.sparkle
+  add 10 to score
+
+if player hits gem
+  gem.sparkle
+  add 1 to gems
+  add 50 to score
+
+if player hits star
+  star.sparkle
+  add 25 to score
+  banner "BONUS!" 1 sec
+
+if player hits flag
+  banner "GOAL!"
+  confetti
+  win
+
+label "Gems: {gems}" at left 110
+`,
+  'Boss Fight': `title "Boss Fight"
+background grid
+lives 3
+music action
+
+player = make ship at center bottom
+  control arrows
+  speed 440
+
+boss = make ghost at center 130
+  size 120
+  health 20
+  patrol 300 120
+
+label "BOSS {boss.hp}" at center top
+
+if key space
+  make bullet at player
+    move up 800
+
+if bullet hits boss
+  bullet.remove
+  boss.hurt 1
+  burst 6 cyan at bullet
+
+every 1.2 sec
+  make bomb at boss
+    toward player 220
+
+if player hits bomb
+  bomb.explode
+  remove 1 from lives
+
+if boss.hp <= 0
+  banner "YOU WIN!"
+  confetti
+  win
+`,
+  'Pixel Pets': `title "Pixel Pets"
+background forest
+music chill
+
+art cat orange
+  ##.....##
+  ###...###
+  #########
+  ##k###k##
+  #########
+  ####m####
+  .#######.
+
+art frog green
+  .##....##.
+  #w#....#w#
+  .########.
+  ##########
+  #.######.#
+  ..#....#..
+
+label "Pets: {count(cat) + count(frog)}" at center top
+
+if click
+  make cat at mouse
+    wander 90
+    life 25 sec
+
+if key space
+  make frog at mouse
+    wander 70
+    life 25 sec
+    glow
 `
 };
