@@ -195,8 +195,18 @@ var MAP = (function () {
     return out;
   }
 
+  /* 점령 지점: 위·아래 공격로 길에 3곳씩, 한가운데 '심장' 1곳. 양 끝 둘은 시작할 때 각 팀 것이다 */
+  var nodes = [];
+  ['top', 'bot'].forEach(function (k) {
+    [0.27, 0.5, 0.73].forEach(function (f) {
+      var p = laneAt(lanes[k], lanes[k].len * f);
+      nodes.push({ x: p.x, y: p.y, lane: k, heart: false, start: f < 0.4 ? 0 : f > 0.6 ? 1 : -1 });
+    });
+  });
+  nodes.push({ x: W / 2, y: H / 2, lane: 'mid', heart: true, start: -1 });
+
   return {
-    W: W, H: H, CELL: CELL, GW: GW, GH: GH, grid: grid, shapes: shapes, lanes: lanes, river: river,
+    nodes: nodes, W: W, H: H, CELL: CELL, GW: GW, GH: GH, grid: grid, shapes: shapes, lanes: lanes, river: river,
     BASE: BASE, FOUNT: FOUNT, CORE: CORE, camps: camps, bosses: bosses,
     laneAt: laneAt, laneProj: laneProj, isWalk: isWalk, los: los, findPath: findPath, nearestWalk: nearestWalk
   };

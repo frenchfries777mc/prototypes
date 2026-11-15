@@ -11,9 +11,9 @@ for (let g = 0; g < N; g++) {
   const t0 = Date.now(); let maxU = 0;
   while (!api.G.over && api.G.t < 60 * 60) { api.tick(1 / 30); api.G.events.length = 0; maxU = Math.max(maxU, api.G.units.length); }
   const G = api.G;
-  const tw = [0, 0]; G.towers.forEach(t => tw[t.team]++);
-  console.log(`game ${g}: ${G.over ? 'winner ' + G.over.winner : 'NO RESULT'} at ${(G.t / 60).toFixed(1)}m, kills ${G.kills}, towers left ${tw}, maxUnits ${maxU}, ${(Date.now() - t0)}ms`);
-  console.log('  ' + G.heroes.map(h => `${h.team}${h.role}:${h.defId} L${h.level} ${h.kills}/${h.deaths}/${h.assists} cs${h.cs} g${Math.round(h.earned)}`).join(' | '));
+  const nodes = [0, 0]; G.nodes.forEach(n => { if (n.owner >= 0) nodes[n.owner]++; });
+  console.log(`game ${g}: ${G.over ? 'winner ' + G.over.winner : 'NO RESULT'} at ${(G.t / 60).toFixed(1)}m, kills ${G.kills}, charge ${G.charge.map(Math.round)} nodes ${nodes}, maxUnits ${maxU}, ${(Date.now() - t0)}ms`);
+  console.log('  ' + G.heroes.map(h => `${h.team}${h.role}:${h.defId} L${h.level} ${h.kills}/${h.deaths}/${h.assists} cs${h.cs} cap${h.caps}`).join(' | '));
   if (!G.over) fail++;
   for (const u of G.units) if (!isFinite(u.x) || !isFinite(u.hp)) { console.log('NaN unit', u.type); fail++; break; }
 }

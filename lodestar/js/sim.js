@@ -13,8 +13,8 @@ function ftext(u, txt, color) {
   if (G.texts.length < 80) G.texts.push({ x: u.x + (rnd() - 0.5) * 40, y: u.y - u.r - 20, txt: txt, color: color, t: 0 });
 }
 
-var TOWER_F = { 1: 0.38, 2: 0.24, 3: 0.10 };
-var TOWER_HP = [0, 2600, 3000, 3400], TOWER_AD = [0, 150, 170, 190];
+/* 점령전: 점령 속도(영웅 1명 기준 초당), 승리에 필요한 충전량, 지점 하나의 초당 충전량 */
+var NODE_RATE = 12, WIN_CHARGE = 1000, NODE_INCOME = 0.3;
 var FOUNT_R = 650;
 
 function mkUnit(type, team, x, y, o) {
@@ -60,8 +60,8 @@ function mkHero(defId, team, isPlayer, slot, role) {
   var d = HEROES[defId], sp = spawnPos(team, slot);
   var h = mkUnit('hero', team, sp.x, sp.y, {
     r: 42, def: d, defId: defId, name: d.name, isPlayer: isPlayer, slot: slot, role: role, ranged: !d.melee,
-    level: 1, xp: 0, gold: 500, items: [], ranks: [0, 0, 0, 0], cds: [0, 0, 0, 0], points: 1,
-    mp: 0, maxMp: 0, kills: 0, deaths: 0, assists: 0, cs: 0, dmgDealt: 0, earned: 500,
+    level: 1, xp: 0, relicPicks: 0, relicOffer: null, caps: 0, items: [], ranks: [0, 0, 0, 0], cds: [0, 0, 0, 0], points: 1,
+    mp: 0, maxMp: 0, kills: 0, deaths: 0, assists: 0, cs: 0, dmgDealt: 0,
     respawnT: 0, order: null, path: null, dash: null, recallT: 0, sight: 1250, hitBy: {},
     empower: 0, gx: 0, gy: 0, repT: 0, aggroT: -99, aggroVictim: null, ai: null, bLs: 0, haste: 0, bAp: 0,
     hpr: 0, mpr: 0, color: d.color
@@ -83,26 +83,14 @@ function newGame(opt) {
   opt = opt || {};
   UID = 1; _seed = (opt.seed || (Date.now() & 0x7fffffff)) | 0;
   G = {
-    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], camps: [], towers: [], cores: [],
-    kills: [0, 0], over: null, waveN: 0, waveT: 12, visT: 0, stratT: 1, groupLane: [null, null], focus: [0, 0], bossPlan: [null, null], behind: [false, false],
-    player: null, diff: opt.diff === undefined ? 1 : opt.diff, playerLane: 'mid', plCand: 'mid', plCandT: 0
+    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], camps: [], nodes: [], charge: [0, 0],
+    kills: [0, 0], over: null, visT: 0, stratT: 1, focus: [0, 0], bossPlan: [null, null], behind: [false, false],
+    player: null, diff: opt.diff === undefined ? 1 : opt.diff
   };
-  for (var T = 0; T < 2; T++) {
-    var c = mkUnit('core', T, MAP.CORE[T].x, MAP.CORE[T].y, { r: 130, maxHp: 5000, bArmor: 45, invuln: true, sight: 1300, name: '로드스톤', fixed: true, lane: 'mid' });
-    G.cores[T] = c;
-    LANES.forEach(function (ln, li) {
-      var L = MAP.lanes[ln];
-      for (var tier = 1; tier <= 3; tier++) {
-        var s = T === 0 ? TOWER_F[tier] * L.len : (1 - TOWER_F[tier]) * L.len, p = MAP.laneAt(L, s);
-        var sd = (li === 2 ? -1 : 1) * 150;
-        var tw = mkUnit('tower', T, p.x - p.uy * sd, p.y + p.ux * sd, {
-          r: 75, tier: tier, lane: ln, maxHp: TOWER_HP[tier], bAd: TOWER_AD[tier], bAs: 0.85, range: 780, bArmor: 40,
-          invuln: tier > 1, sight: 1300, ranged: true, fixed: true, ramp: 0, pressured: false, name: '포탑', laneS: s
-        });
-        G.towers.push(tw);
-      }
-    });
-  }
+  MAP.nodes.forEach(function (n, i) {
+    G.nodes.push({ i: i, x: n.x, y: n.y, r: n.heart ? 380 : 300, lane: n.lane, heart: n.heart, c: n.start === 0 ? 100 : n.start === 1 ? -100 : 0,
+      owner: n.start, present: [0, 0], contested: false, name: NODE_NAMES[i] });
+  });
   MAP.camps.forEach(function (c) { G.camps.push({ x: c.x, y: c.y, type: c.type, side: c.side, units: [], alive: 0, respawnT: 40, target: null }); });
   MAP.bosses.forEach(function (b) { G.camps.push({ x: b.x, y: b.y, type: b.type, side: 2, boss: true, units: [], alive: 0, respawnT: 300, target: null }); });
 
@@ -153,7 +141,6 @@ function updStatus(u, dt) {
 
 /* ───────── 피해와 처치 ───────── */
 function gainMul(h) { return (h.team === 1 && G.player) ? DIFFS[G.diff].gain : 1; }
-function give(h, g) { g *= gainMul(h); h.gold += g; h.earned += g; if (h.isPlayer && g >= 10) ftext(h, '+' + Math.round(g), '#ffd76a'); }
 function xpNeed(l) { return 160 + 110 * l; }
 function gainXp(h, x) {
   if (h.level >= MAX_LEVEL) return;
@@ -164,6 +151,10 @@ function gainXp(h, x) {
   h.xp += x * gainMul(h) * catchUp;
   while (h.level < MAX_LEVEL && h.xp >= xpNeed(h.level)) {
     h.xp -= xpNeed(h.level); h.level++; h.points++; recalc(h);
+    if (h.level % 2 === 0 && h.level <= 12 && h.items.length + h.relicPicks < 6) {
+      h.relicPicks++; if (!h.relicOffer) h.relicOffer = rollRelics(h);
+      if (h.isPlayer) ev('relic');
+    }
     fx({ type: 'ring', x: h.x, y: h.y, r: 120, dur: 0.6, color: '#ffe9a8', follow: h });
     if (h.isPlayer) ev('level', { level: h.level });
   }
@@ -180,13 +171,6 @@ function damage(src, tgt, amt, kind) {
   var a = amt;
   if (src) a *= src.dmgMul || 1;
   if (kind !== 'true') a *= 100 / (100 + Math.max(0, tgt.armor));
-  var struct = tgt.type === 'tower' || tgt.type === 'core';
-  if (src && src.type === 'minion') {
-    if (tgt.type === 'hero') a *= 0.6;
-    else if (struct) a *= src.siege ? 1.3 : 0.6;
-  }
-  if (struct && !tgt.pressured) a *= 0.35;
-  if (src && src.type === 'tower' && tgt.type === 'minion') a *= tgt.siege ? 0.7 : 1.6;
   var dealt = a;
   if (tgt.shield > 0) {
     for (var i = 0; i < tgt.buffs.length && a > 0; i++) {
@@ -201,7 +185,7 @@ function damage(src, tgt, amt, kind) {
     if (src.type === 'hero') {
       if (tgt.type === 'hero') { tgt.hitBy[src.id] = G.t; src.aggroT = G.t; src.aggroVictim = tgt; src.dmgDealt += dealt; }
       else if (tgt.type === 'monster' && !tgt.camp.target) tgt.camp.target = src;
-      if (kind === 'basic' && src.ls > 0 && !src.dead && !struct) healUnit(src, dealt * src.ls);
+      if (kind === 'basic' && src.ls > 0 && !src.dead) healUnit(src, dealt * src.ls);
     }
     if (G.player && (src === G.player || tgt === G.player) && dealt >= 4) {
       ftext(tgt, String(Math.round(dealt)), tgt === G.player ? '#ff7b7b' : (kind === 'skill' ? '#ffd27a' : '#ffffff'));
@@ -224,50 +208,26 @@ function shareXp(team, x, y, xp, killer) {
   for (var i = 0; i < n; i++) gainXp(hs[i], each);
 }
 
-function refreshInvuln() {
-  for (var T = 0; T < 2; T++) {
-    var open = false;
-    LANES.forEach(function (ln) {
-      var low = 9;
-      G.towers.forEach(function (t) { if (!t.dead && t.team === T && t.lane === ln && t.tier < low) low = t.tier; });
-      if (low === 9) open = true;
-      G.towers.forEach(function (t) { if (!t.dead && t.team === T && t.lane === ln) t.invuln = t.tier !== low; });
-    });
-    G.cores[T].invuln = !open;
-  }
-}
-
 function kill(src, v) {
   if (v.dead) return;
   var killer = src && src.type === 'hero' ? src : null;
   if (v.type === 'hero') return killHero(src, v);
   v.dead = true;
-  fx({ type: 'burst', x: v.x, y: v.y, r: v.r * 2.2, dur: 0.35, color: v.type === 'minion' ? (v.team ? '#ff8c7a' : '#7fe6dc') : '#d9c7a0' });
-  if (v.type === 'minion') {
-    if (killer) { give(killer, v.gold); killer.cs++; }
-    shareXp(1 - v.team, v.x, v.y, v.xp, killer);
-  } else if (v.type === 'monster') {
-    var c = v.camp; c.alive--;
-    if (killer) { give(killer, v.gold); killer.cs++; shareXp(killer.team, v.x, v.y, v.xp, killer); }
-    if (c.alive <= 0) { c.respawnT = c.boss ? 300 : 80; c.target = null; }
-    var team = killer ? killer.team : (src && src.team < 2 ? src.team : -1);
-    if (v.boss && team >= 0) {
-      G.heroes.forEach(function (h) {
-        if (h.team !== team) return;
-        if (v.boss === 'titan') { give(h, 200); if (!h.dead) addBuff(h, { id: 'titan', t: 150, dmgMul: 0.15, regen: 25, titan: true }); }
-        else give(h, 380);
-      });
-      ev('boss', { team: team, boss: v.boss });
-    }
-  } else if (v.type === 'tower') {
-    G.heroes.forEach(function (h) { if (h.team !== v.team) give(h, 130 + (h === killer ? 100 : 0)); });
-    refreshInvuln();
-    fx({ type: 'burst', x: v.x, y: v.y, r: 320, dur: 0.8, color: '#ffd9a0' });
-    ev('tower', { team: v.team, lane: v.lane, tier: v.tier });
-  } else if (v.type === 'core') {
-    G.over = { winner: 1 - v.team, t: G.t };
-    fx({ type: 'burst', x: v.x, y: v.y, r: 700, dur: 1.6, color: '#ffffff' });
-    ev('over', { winner: 1 - v.team });
+  fx({ type: 'burst', x: v.x, y: v.y, r: v.r * 2.2, dur: 0.35, color: '#d9c7a0' });
+  if (v.type !== 'monster') return;
+  var c = v.camp; c.alive--;
+  if (killer) { killer.cs++; shareXp(killer.team, v.x, v.y, v.xp, killer); }
+  if (c.alive <= 0) { c.respawnT = c.boss ? 240 : 70; c.target = null; }
+  var team = killer ? killer.team : (src && src.team < 2 ? src.team : -1);
+  if (v.boss && team >= 0) {
+    /* 보스: 태고의 거신은 충전량 +40 과 피해 증가, 황금 골렘은 충전량 +70 과 체력 회복 */
+    G.charge[team] += v.boss === 'titan' ? 40 : 70;
+    G.heroes.forEach(function (h) {
+      if (h.team !== team || h.dead) return;
+      if (v.boss === 'titan') addBuff(h, { id: 'titan', t: 150, dmgMul: 0.15, regen: 25, titan: true });
+      else { healUnit(h, h.maxHp * 0.35); h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.35); }
+    });
+    ev('boss', { team: team, boss: v.boss });
   }
 }
 
@@ -287,8 +247,10 @@ function killHero(src, v) {
   /* 현상금: 연속으로 처치한 영웅은 비싸고, 연속으로 죽은 영웅은 싸다 */
   var vs = v.streak || 0, vd = v.dStreak || 0;
   v.streak = 0; v.dStreak = vd + 1;
-  if (killer) { killer.kills++; killer.streak = (killer.streak || 0) + 1; killer.dStreak = 0; give(killer, 300 + Math.min(400, 60 * vs) - Math.min(150, 30 * vd)); }
-  ass.forEach(function (a) { if (a !== killer) { a.assists++; give(a, 120); } });
+  if (killer) { killer.kills++; killer.streak = (killer.streak || 0) + 1; killer.dStreak = 0; }
+  ass.forEach(function (a) { if (a !== killer) a.assists++; });
+  /* 처치하면 충전량 +10. 연속 처치한 영웅은 더 크고, 연속으로 죽은 영웅은 작다 */
+  G.charge[1 - v.team] += Math.max(4, 10 + Math.min(10, 2 * vs) - Math.min(5, vd));
   var xp = (140 + 22 * v.level) / (sharers.length > 1 ? sharers.length * 0.7 : 1);
   sharers.forEach(function (h) { gainXp(h, xp); });
   v.hitBy = {};
@@ -300,7 +262,7 @@ function respawn(h) {
   var sp = spawnPos(h.team, h.slot);
   h.dead = false; h.x = sp.x; h.y = sp.y; h.hp = h.maxHp; h.mp = h.maxMp; h.order = null; h.path = null;
   h.face = h.team ? Math.PI : 0; h.lastDmgT = -99;
-  if (h.ai) h.ai.mode = 'lane';
+  if (h.ai) h.ai.mode = 'node';
   if (h.isPlayer) ev('respawn');
 }
 
@@ -341,8 +303,8 @@ function tryAttack(u, t) {
   if (u.stealth) breakStealth(u);
   u.swingMax = u.type === 'hero' ? Math.min(0.34, 0.75 / u.as) : 0.2; u.swing = u.swingMax; u.atkN = (u.atkN || 0) + 1;
   if (u.ranged) {
-    G.proj.push({ homing: true, x: u.x, y: u.y, target: t, speed: u.type === 'tower' ? 1500 : 1350, dmg: dmg, src: u, team: u.team,
-      color: u.type === 'hero' ? u.color : (u.team === 0 ? '#7fe6dc' : u.team === 1 ? '#ff8c7a' : '#cfc3ff'), big: u.type === 'tower' });
+    G.proj.push({ homing: true, x: u.x, y: u.y, target: t, speed: 1350, dmg: dmg, src: u, team: u.team,
+      color: u.type === 'hero' ? u.color : (u.team === 0 ? '#7fe6dc' : u.team === 1 ? '#ff8c7a' : '#cfc3ff') });
   } else {
     damage(u, t, dmg, 'basic');
     fx({ type: 'slash', x: t.x, y: t.y, r: 34, dur: 0.16, color: '#ffffff', a: u.face });
@@ -405,7 +367,7 @@ function applyHit(src, t, sk, rk, dmg) {
   if (sk.stun) { t.stunT = Math.max(t.stunT, val(sk.stun, rk) * cc); t.dash = null; t.recallT = 0; }
   if (sk.root) { t.rootT = Math.max(t.rootT, sk.root * cc); t.dash = null; }
 }
-function hittable(u, team) { return !u.dead && u.team !== team && u.type !== 'tower' && u.type !== 'core'; }
+function hittable(u, team) { return !u.dead && u.team !== team; }
 function hitCircle(src, x, y, R, sk, rk, dmg, skip) {
   for (var i = 0; i < G.units.length; i++) {
     var u = G.units[i];
@@ -498,16 +460,21 @@ function cmdAMove(h, x, y) { h.order = { type: 'amove', x: x, y: y }; h.recallT 
 function cmdStop(h) { h.order = null; h.path = null; h.recallT = 0; }
 function startRecall(h) { if (h.dead || h.dash || h.stunT > 0) return; h.order = null; h.path = null; h.recallT = 6; }
 
-function buyItem(h, id) {
-  var I = ITEMS[id];
-  if (!I || h.items.length >= 6 || h.gold < I.cost || !(h.dead || inFountain(h))) return false;
-  if (I.unique && h.items.indexOf(id) >= 0) return false;
-  h.gold -= I.cost; h.items.push(id); recalc(h); return true;
+/* 유물: 짝수 레벨(2~12)마다 세 개 중 하나를 고른다. 같은 유물은 두 번 못 고른다 */
+function rollRelics(h) {
+  var pool = ITEM_IDS.filter(function (id) { return h.items.indexOf(id) < 0; });
+  var fav = (BUILDS[h.def.cls] || []).filter(function (id) { return h.items.indexOf(id) < 0; });
+  var out = [];
+  if (fav.length) out.push(fav[(rnd() * Math.min(3, fav.length)) | 0]);
+  while (out.length < 3 && pool.length) { var id = pool[(rnd() * pool.length) | 0]; if (out.indexOf(id) < 0) out.push(id); }
+  return out;
 }
-function sellItem(h, idx) {
-  if (idx < 0 || idx >= h.items.length || !(h.dead || inFountain(h))) return false;
-  var I = ITEMS[h.items[idx]];
-  h.gold += Math.round(I.cost * SELL_RATE); h.items.splice(idx, 1); recalc(h); return true;
+function pickRelic(h, idx) {
+  if (!h.relicOffer || h.relicPicks <= 0 || h.items.length >= 6) return false;
+  var id = h.relicOffer[idx]; if (!id) return false;
+  h.items.push(id); h.relicPicks--; recalc(h);
+  h.relicOffer = h.relicPicks > 0 && h.items.length < 6 ? rollRelics(h) : null;
+  return true;
 }
 
 /* 마우스 커서 가까이에 있는, 사거리 안의 적을 고른다. 영웅을 우선한다 */
@@ -528,7 +495,7 @@ function chase(h, t, dt) {
 function updHero(h, dt) {
   if (h.dead) { h.respawnT -= dt; if (h.respawnT <= 0) respawn(h); return; }
   for (var i = 0; i < 4; i++) if (h.cds[i] > 0) h.cds[i] -= dt;
-  h.gold += 2 * dt * gainMul(h); h.earned += 2 * dt * gainMul(h);
+  gainXp(h, 6 * dt);
   var reg = h.hpr + (h.regenB || 0);
   if (inFountain(h)) { reg += h.maxHp * 0.14; h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.14 * dt); }
   if (h.hp < h.maxHp) h.hp = Math.min(h.maxHp, h.hp + reg * dt);
@@ -578,90 +545,6 @@ function updHero(h, dt) {
   }
 }
 
-/* ───────── 병사 ───────── */
-function spawnWave() {
-  G.waveN++;
-  var min = G.t / 60, hpM = 1 + 0.045 * min, adM = 1 + 0.035 * min;
-  for (var T = 0; T < 2; T++) LANES.forEach(function (ln) {
-    var L = MAP.lanes[ln], dir = T === 0 ? 1 : -1, s0 = T === 0 ? 330 : L.len - 330;
-    var list = ['melee', 'melee', 'melee', 'ranged', 'ranged', 'ranged'];
-    if (G.waveN % 3 === 0) list.push('siege');
-    if (min > 18) list.unshift('melee');
-    var open = true;
-    G.towers.forEach(function (t) { if (!t.dead && t.team !== T && t.lane === ln) open = false; });
-    if (open) list.push('siege');
-    list.forEach(function (k, i) {
-      var d = MINION[k], p = MAP.laneAt(L, s0 - dir * i * 55), off = (rnd() - 0.5) * 180;
-      mkUnit('minion', T, p.x - p.uy * off * 0.5, p.y + p.ux * off * 0.5, {
-        r: d.r, maxHp: Math.round(d.hp * hpM), bAd: d.ad * adM, bAs: d.as, bMs: d.ms, range: d.range, ranged: !!d.ranged, siege: !!d.siege,
-        mtype: k, lane: ln, dir: dir, off: off, gold: d.gold + Math.floor(min * 0.4), xp: d.xp * (1 + 0.03 * min), sight: 900
-      });
-    });
-  });
-}
-function updMinion(m, dt) {
-  if (m.stunT > 0) return;
-  var L = MAP.lanes[m.lane];
-  m.thinkT -= dt;
-  if (m.thinkT <= 0) {
-    m.thinkT = 0.3 + rnd() * 0.1;
-    var best = null, bd = 1e9;
-    for (var i = 0; i < G.units.length; i++) {
-      var u = G.units[i];
-      if (u.dead || u.team === m.team || u.team === 2 || u.invuln || !u.vis[m.team]) continue;
-      var st = u.type === 'tower' || u.type === 'core';
-      var d = dist(m, u) - u.r;
-      if (d > (st ? m.range + 90 : 600)) continue;
-      var sc = d + (u.type === 'hero' ? 160 : 0) + (st ? 250 : 0);
-      if (sc < bd) { bd = sc; best = u; }
-    }
-    m.target = best;
-    m.offLane = MAP.laneProj(L, m.x, m.y);
-    if (best && m.offLane.d > 430 && best.type === 'hero') m.target = null;
-  }
-  var t = m.target;
-  if (t && !t.dead && !t.invuln) {
-    if (inRange(m, t)) tryAttack(m, t); else stepTo(m, t.x, t.y, dt);
-    return;
-  }
-  var pr = m.offLane || MAP.laneProj(L, m.x, m.y), g = MAP.laneAt(L, pr.s + m.dir * 280);
-  stepTo(m, g.x - g.uy * m.off * 0.5, g.y + g.ux * m.off * 0.5, dt);
-  if (m.offLane) m.offLane.s += m.dir * m.ms * dt;
-}
-
-/* ───────── 포탑 ───────── */
-function updTower(t, dt) {
-  t.thinkT -= dt;
-  if (t.thinkT <= 0) {
-    t.thinkT = 0.25;
-    var tg = t.target, press = false, bestM = null, bm = 1e9, bestH = null, bh = 1e9, agg = null;
-    for (var i = 0; i < G.units.length; i++) {
-      var u = G.units[i];
-      if (u.dead || u.team === t.team || u.team === 2) continue;
-      var d = dist(t, u) - u.r;
-      if (u.type === 'minion' && d < 950) press = true;
-      if (d > t.range || (u.stealth && d > 300)) continue;
-      if (u.type === 'minion') { if (d < bm) { bm = d; bestM = u; } }
-      else if (u.type === 'hero') {
-        if (d < bh) { bh = d; bestH = u; }
-        if (G.t - u.aggroT < 2 && u.aggroVictim && u.aggroVictim.team === t.team && !u.aggroVictim.dead) agg = u;
-      }
-    }
-    t.pressured = press;
-    if (tg && (tg.dead || dist(t, tg) - tg.r > t.range || (tg.stealth && dist(t, tg) > 300))) tg = null;
-    if (agg && (!tg || tg.type !== 'hero')) tg = agg;
-    if (!tg) tg = bestM || bestH;
-    if (tg !== t.target) { t.target = tg; t.ramp = 0; }
-  }
-  if (t.type === 'core') return;
-  var x = t.target;
-  if (x && !x.dead && t.atkCd <= 0) {
-    t.atkCd = 1 / t.as;
-    G.proj.push({ homing: true, x: t.x, y: t.y - 60, target: x, speed: 1500, dmg: t.ad * (1 + (x.type === 'hero' ? 0.3 * t.ramp : 0)), src: t, team: t.team, color: t.team ? '#ff8c7a' : '#7fe6dc', big: true });
-    if (x.type === 'hero') t.ramp = Math.min(4, t.ramp + 1);
-  }
-}
-
 /* ───────── 정글 ───────── */
 function spawnCamp(c) {
   var list = c.boss ? [c.type] : CAMP_TYPES[c.type], min = G.t / 60, sc = 1 + 0.03 * min;
@@ -670,7 +553,7 @@ function spawnCamp(c) {
     var d = MONSTER[k], a = i * 2.2 + 0.6, rr = list.length > 1 ? 85 : 0;
     var m = mkUnit('monster', 2, c.x + Math.cos(a) * rr, c.y + Math.sin(a) * rr, {
       r: d.r, maxHp: Math.round(d.hp * sc), bAd: d.ad * sc, bAs: d.as, bMs: 310, range: d.range, bArmor: d.armor || 0, ranged: !!d.ranged,
-      mtype: k, camp: c, boss: d.boss || null, gold: d.gold, xp: d.xp, name: d.name, sight: 0
+      mtype: k, camp: c, boss: d.boss || null, xp: d.xp, name: d.name, sight: 0
     });
     m.hx = m.x; m.hy = m.y;
     c.units.push(m);
@@ -760,8 +643,19 @@ function updVision() {
       if (v.team === T || v.vis[T] || v.dead) continue;
       var dx = v.x - s.x, dy = v.y - s.y, d2 = dx * dx + dy * dy;
       if (d2 > s2) continue;
-      if (v.stealth && d2 > (s.type === 'tower' ? 640000 : 78400)) continue;
+      if (v.stealth && d2 > 78400) continue;
       v.vis[T] = true;
+    }
+  }
+  /* 내 지점은 주변 1000 범위를 밝혀 준다 */
+  for (i = 0; i < G.nodes.length; i++) {
+    var nd = G.nodes[i]; if (nd.owner < 0) continue;
+    for (j = 0; j < n; j++) {
+      var w = us[j];
+      if (w.team === nd.owner || w.vis[nd.owner] || w.dead) continue;
+      var ex = w.x - nd.x, ey = w.y - nd.y, e2 = ex * ex + ey * ey;
+      if (e2 > 1000000 || (w.stealth && e2 > 78400)) continue;
+      w.vis[nd.owner] = true;
     }
   }
 }
@@ -790,27 +684,51 @@ function separate() {
 }
 function nudge(u, dx, dy) { if (MAP.isWalk(u.x + dx, u.y + dy)) { u.x += dx; u.y += dy; } }
 
+/* ───────── 점령 지점 ───────── */
+function nodeProg(n, T) { return T === 0 ? n.c : -n.c; }
+function updNodes(dt) {
+  for (var i = 0; i < G.nodes.length; i++) {
+    var n = G.nodes[i], cnt = [0, 0], here = [[], []];
+    for (var k = 0; k < G.heroes.length; k++) {
+      var h = G.heroes[k];
+      if (!h.dead && Math.hypot(h.x - n.x, h.y - n.y) < n.r) { cnt[h.team]++; here[h.team].push(h); }
+    }
+    n.present = cnt; n.contested = cnt[0] > 0 && cnt[1] > 0;
+    var T = n.contested ? -1 : cnt[0] > 0 ? 0 : cnt[1] > 0 ? 1 : -1;
+    if (T >= 0) {
+      var rate = (NODE_RATE + 6 * (cnt[T] - 1)) * dt * (n.heart ? 0.7 : 1);
+      n.c = Math.max(-100, Math.min(100, n.c + (T === 0 ? rate : -rate)));
+    }
+    var prev = n.owner;
+    if (n.owner === 0 && n.c <= 0) n.owner = -1;
+    if (n.owner === 1 && n.c >= 0) n.owner = -1;
+    if (n.owner !== 0 && n.c >= 100) n.owner = 0;
+    if (n.owner !== 1 && n.c <= -100) n.owner = 1;
+    if (n.owner !== prev) {
+      ev('node', { i: n.i, owner: n.owner, prev: prev });
+      fx({ type: 'ring', x: n.x, y: n.y, r: n.r, dur: 0.9, color: n.owner === 0 ? '#4fe0d2' : n.owner === 1 ? '#ff6b5e' : '#cfd8dc', fill: true });
+      if (n.owner >= 0) here[n.owner].forEach(function (h) { h.caps++; gainXp(h, n.heart ? 90 : 60); });
+    }
+    if (n.owner >= 0) {
+      G.charge[n.owner] += (n.heart ? 2 : 1) * NODE_INCOME * dt;
+      /* 내 지점 안에 있으면 천천히 회복한다 */
+      here[n.owner].forEach(function (h) { h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.025 * dt); h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.02 * dt); });
+    }
+  }
+  for (var t = 0; t < 2; t++) {
+    if (G.charge[t] >= WIN_CHARGE && !G.over) { G.charge[t] = WIN_CHARGE; G.over = { winner: t, t: G.t }; ev('over', { winner: t }); }
+  }
+}
+
 /* ───────── 팀 단위 판단 (3초마다) ───────── */
 function strategy() {
   var lv = [0, 0];
   G.heroes.forEach(function (h) { lv[h.team] += h.level; });
   for (var B = 0; B < 2; B++) {
-    var gap = lv[1 - B] - lv[B], kg = G.kills[1 - B] - G.kills[B];
-    G.behind[B] = (kg >= 6 && gap >= 4) || gap >= 7;
+    var gap = lv[1 - B] - lv[B], kg = G.kills[1 - B] - G.kills[B], cg = G.charge[1 - B] - G.charge[B];
+    G.behind[B] = (kg >= 6 && gap >= 4) || gap >= 7 || cg >= 200;
   }
   for (var T = 0; T < 2; T++) {
-    /* 공격받는 건물 방어 */
-    var structs = G.towers.concat([G.cores[T]]);
-    structs.forEach(function (s) {
-      if (s.dead || s.team !== T || G.t - s.lastDmgT > 4) return;
-      var need = s.type === 'core' ? 4 : s.tier === 3 ? 3 : s.tier === 2 ? 2 : 1;
-      var bots = G.heroes.filter(function (h) { return h.team === T && h.ai && !h.dead && h.ai.mode !== 'retreat'; });
-      bots.sort(function (a, b) { return dist(a, s) - dist(b, s); });
-      for (var i = 0; i < bots.length && i < need; i++) {
-        if (dist(bots[i], s) > 5200) break;
-        bots[i].ai.defend = s; bots[i].ai.defendT = G.t + 9;
-      }
-    });
     /* 집중 공격 대상: 체력이 낮고 몸이 약하고 아군이 가까이 있는 적 영웅 */
     var fb = null, fs = -1e9, cx = 0, cy = 0, cn = 0;
     G.heroes.forEach(function (a) { if (a.team === T && !a.dead) { cx += a.x; cy += a.y; cn++; } });
@@ -827,7 +745,7 @@ function strategy() {
     G.focus[T] = fb ? fb.id : 0;
     /* 보스: 셋 이상이 건강하게 가까이 있으면 함께 잡으러 간다 */
     G.bossPlan[T] = null;
-    if (G.t > 330 && cn && !G.behind[T]) {
+    if (G.t > 270 && cn && !G.behind[T]) {
       var boss = null, bd = 1e9;
       G.camps.forEach(function (cp) { if (cp.boss && cp.alive > 0) { var d2 = Math.hypot(cp.x - cx, cp.y - cy); if (d2 < bd) { bd = d2; boss = cp; } } });
       if (boss) {
@@ -835,30 +753,7 @@ function strategy() {
         if (sq.length >= 3) G.bossPlan[T] = boss;
       }
     }
-    /* 중반부터 한 공격로로 뭉친다 */
-    if (G.t > 540) {
-      var best = null, bn = 9;
-      ['mid', 'top', 'bot'].forEach(function (ln) {
-        var n = 0; G.towers.forEach(function (t) { if (!t.dead && (G.behind[T] ? t.team === T : t.team !== T) && t.lane === ln) n++; });
-        if (n < bn) { bn = n; best = ln; }
-      });
-      if (G.groupLane[T] !== best && (!G.groupLane[T] || G.t - (G.groupSet || 0) > 45)) { G.groupLane[T] = best; G.groupSet = G.t; }
-    }
-  }
-  /* 플레이어가 선 공격로를 비워 두지 않도록 아군 봇 재배치 */
-  var p = G.player;
-  if (p && !p.dead && dist(p, MAP.FOUNT[0]) > 2200) {
-    var bl = null, bd = 480;
-    LANES.forEach(function (ln) { var d = MAP.laneProj(MAP.lanes[ln], p.x, p.y).d; if (d < bd) { bd = d; bl = ln; } });
-    if (bl) {
-      if (bl === G.plCand) G.plCandT += 3; else { G.plCand = bl; G.plCandT = 0; }
-      if (G.plCandT >= 18 && bl !== G.playerLane) {
-        G.playerLane = bl;
-        var want = bl === 'mid' ? ['top', 'bot', 'bot'] : bl === 'top' ? ['mid', 'bot', 'bot'] : ['top', 'mid', 'bot'];
-        var k = 0;
-        G.heroes.forEach(function (h) { if (h.team === 0 && h.ai && h.ai.role !== 'jungle') h.ai.lane = want[k++] || 'mid'; });
-      }
-    }
+    aiAssignNodes(T);
   }
 }
 
@@ -866,31 +761,26 @@ function strategy() {
 function tick(dt) {
   if (G.over) { ageFx(dt); return; }
   G.t += dt;
-  G.waveT -= dt; if (G.waveT <= 0) { G.waveT += 30; spawnWave(); }
   for (var c = 0; c < G.camps.length; c++) { var cp = G.camps[c]; if (cp.alive <= 0) { cp.respawnT -= dt; if (cp.respawnT <= 0) spawnCamp(cp); } }
   G.visT -= dt; if (G.visT <= 0) { G.visT = 0.15; updVision(); }
   G.stratT -= dt; if (G.stratT <= 0) { G.stratT = 3; strategy(); }
-  var us = G.units, n = us.length;
-  for (var i = 0; i < n; i++) {
+  var us = G.units, n = us.length, i;
+  for (i = 0; i < n; i++) {
     var u = us[i];
     if (u.dead && u.type !== 'hero') continue;
     u.px = u.x; u.py = u.y;
     if (!u.dead) { updStatus(u, dt); u.atkCd -= dt; }
-    switch (u.type) {
-      case 'hero': if (u.ai) aiUpdate(u, dt); updHero(u, dt); break;
-      case 'minion': updMinion(u, dt); break;
-      case 'monster': updMonster(u, dt); break;
-      case 'tower': case 'core': updTower(u, dt); break;
-    }
+    if (u.type === 'hero') { if (u.ai) aiUpdate(u, dt); updHero(u, dt); }
+    else if (u.type === 'monster') updMonster(u, dt);
     if (G.over) break;
   }
+  updNodes(dt);
   separate();
   for (i = 0; i < us.length; i++) { var w = us[i]; w.vx = (w.x - w.px) / dt; w.vy = (w.y - w.py) / dt; }
   updProj(dt); updZones(dt); ageFx(dt);
   var alive = [];
   for (i = 0; i < G.units.length; i++) { var q = G.units[i]; if (!q.dead || q.type === 'hero') alive.push(q); }
   G.units = alive;
-  if (G.towers.some(function (t) { return t.dead; })) G.towers = G.towers.filter(function (t) { return !t.dead; });
 }
 function ageFx(dt) {
   var i;

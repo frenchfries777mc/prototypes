@@ -57,8 +57,10 @@
     ['마우스', '커서 쪽을 바라봅니다. 왼쪽 버튼을 누르고 있으면 커서에 가장 가까운 적을 공격하고, 가만히 서 있으면 알아서 공격합니다.'],
     ['<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd>', '스킬. 누르고 있으면 조준, 떼면 커서 쪽으로 시전합니다. 아직 안 배운 스킬은 키를 누르면 레벨 업.'],
     ['<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd>', '각각 Q E R F 스킬 레벨 업. 궁극기(F)는 6·11·15레벨에 배웁니다.'],
+    ['<kbd>Z</kbd> <kbd>X</kbd> <kbd>C</kbd>', '유물 고르기. 짝수 레벨(2~12)마다 세 개 중 하나를 고릅니다. 위쪽에 선택 창이 뜹니다.'],
     ['<kbd>B</kbd>', '귀환. 6초 동안 가만히 있으면 우물로 돌아가 회복합니다. 움직이거나 맞으면 취소됩니다.'],
-    ['<kbd>P</kbd> · <kbd>Tab</kbd> · <kbd>M</kbd>', '상점(우물에 있거나 쓰러졌을 때만) · 전적 · 소리 켜고 끄기.'],
+    ['<kbd>Tab</kbd> · <kbd>M</kbd>', '전적 · 소리 켜고 끄기.'],
+    ['점령', '지점 반경 안에 서 있으면 점령됩니다. 내 지점은 초당 충전량이 오르고 안에서 천천히 회복하며, 주변을 밝혀 줍니다. 처치와 보스도 충전량을 올립니다.'],
     ['터치', '왼쪽 화면을 누른 채 끌면 이동, 오른쪽 아래 공격 버튼을 누르고 있으면 공격, 스킬은 아래 버튼을 누릅니다.']
   ];
   function fillKeys(dl) { dl.innerHTML = KEYHELP.map(function (k) { return '<dt>' + k[0] + '</dt><dd>' + k[1] + '</dd>'; }).join(''); }
@@ -92,7 +94,7 @@
   }
 
   /* ── HUD 구성 ── */
-  var skEls = [];
+  var skEls = [], pipEls = [];
   function buildHud() {
     var box = $('skills'); box.innerHTML = ''; skEls = [];
     P.def.skills.forEach(function (sk, i) {
@@ -114,7 +116,9 @@
     Spr.portrait($('pcv'), P.defId);
     var it = $('items'); it.innerHTML = '';
     for (var k = 0; k < 6; k++) { var s = el('div', 'slot'); s.id = 'slot-' + k; it.appendChild(s); }
-    cache = {};
+    cache = {}; relicSig = '';
+    var pp = $('pips'); pp.innerHTML = ''; pipEls = [];
+    [0, 3, 1, 6, 4, 2, 5].forEach(function (ix) { var e = el('i', 'pip'); e.title = NODE_NAMES[ix]; pp.appendChild(e); pipEls[ix] = { e: e, k: null }; });
   }
   function showTip(i) {
     var sk = P.def.skills[i], rk = P.ranks[i], t = $('tip');
@@ -129,9 +133,10 @@
     P = G.player;
     R.cam.x = P.x + 300; R.cam.y = P.y; aim = null; keys = {}; stick.x = stick.y = 0; stickId = null; touchAtk = false;
     $('menu').hidden = true; $('end').hidden = true; $('hud').hidden = false;
-    $('shop').hidden = true; $('score').hidden = true; $('help').hidden = true; $('dead').hidden = true; $('feed').innerHTML = '';
+    $('score').hidden = true; $('help').hidden = true; $('dead').hidden = true; $('feed').innerHTML = '';
     buildHud(); R.resize(); state = 'play';
-    announce(touchMode ? '왼쪽을 끌어 이동 · 공격 버튼으로 싸우세요' : 'WASD 이동 · 마우스로 조준 · 왼쪽 버튼 공격', 'g', 5);
+    announce('점령 지점을 차지해 충전량 1000을 먼저 채우세요', 'g', 5);
+    setTimeout(function () { if (state === 'play') announce(touchMode ? '왼쪽을 끌어 이동 · 공격 버튼으로 싸우세요' : 'WASD 이동 · 마우스로 조준 · 왼쪽 버튼 공격', 'g', 4); }, 5400);
   }
 
   /* ── 알림 ── */
@@ -151,12 +156,19 @@
       switch (e.k) {
         case 'kill': {
           var v = heroById(e.victim), k = heroById(e.killer);
-          feed((k ? hname(k) : (e.by === 'tower' ? '포탑' : '병사')) + ' → ' + hname(v), v.team === 0 ? 'e' : 'a');
+          feed((k ? hname(k) : '정글') + ' → ' + hname(v), v.team === 0 ? 'e' : 'a');
           if (k === P) { announce(v.name + ' 처치', 'a', 2.2); sfx('kill'); }
           else if (v === P) { sfx('death'); }
           break;
         }
-        case 'tower': announce(e.team === 0 ? '아군 포탑이 무너졌습니다' : '적 포탑 파괴', e.team === 0 ? 'e' : 'a', 3); sfx('tower'); break;
+        case 'node': {
+          var nm = NODE_NAMES[e.i];
+          if (e.owner === 0) { announce(nm + ' 점령', 'a', 2.6); feed(nm + ' 아군 점령', 'a'); sfx('level'); }
+          else if (e.owner === 1) { announce(e.prev === 0 ? nm + '을(를) 빼앗겼습니다' : '적이 ' + nm + ' 점령', 'e', 2.6); feed(nm + ' 적 점령', 'e'); sfx('tower'); }
+          else feed(nm + ' 중립', '');
+          break;
+        }
+        case 'relic': feed('유물을 고를 수 있습니다 (Z X C)', 'a'); break;
         case 'boss': announce((e.team === 0 ? '아군이 ' : '적군이 ') + (e.boss === 'titan' ? '태고의 거신을 쓰러뜨렸습니다' : '황금 골렘을 쓰러뜨렸습니다'), e.team === 0 ? 'a' : 'e', 4); sfx('tower'); break;
         case 'bossSpawn': if (G.t - bossAnn > 5) { bossAnn = G.t; announce('강에 태고의 거신과 황금 골렘이 나타났습니다', 'g', 4); } break;
         case 'level': sfx('level'); break;
@@ -169,59 +181,56 @@
   }
   function scoreRows(showItems) {
     var hs = G.heroes.slice().sort(function (a, b) { return a.team - b.team || b.kills - a.kills; });
-    return '<tr><th>영웅</th><th>레벨</th><th>처치</th><th>사망</th><th>도움</th><th>병사</th><th>골드</th>' + (showItems ? '<th>장비</th>' : '<th>영웅 피해</th>') + '</tr>' +
+    return '<tr><th>영웅</th><th>레벨</th><th>처치</th><th>사망</th><th>도움</th><th>정글</th><th>점령</th>' + (showItems ? '<th>장비</th>' : '<th>영웅 피해</th>') + '</tr>' +
       hs.map(function (h) {
         return '<tr class="' + (h.team === 0 ? 'a' : 'e') + (h === P ? ' me' : '') + (h.dead ? ' dead' : '') + '"><td><span class="dot" style="background:' + h.color + '"></span>' + h.name +
           (h.dead && !G.over ? ' (' + Math.ceil(h.respawnT) + ')' : '') + '</td><td>' + h.level + '</td><td>' + h.kills + '</td><td>' + h.deaths + '</td><td>' + h.assists + '</td><td>' + h.cs +
-          '</td><td>' + Math.round(h.earned) + '</td><td>' + (showItems ? h.items.map(function (id) { return ITEMS[id].g; }).join(' ') : Math.round(h.dmgDealt)) + '</td></tr>';
+          '</td><td>' + h.caps + '</td><td>' + (showItems ? h.items.map(function (id) { return ITEMS[id].g; }).join(' ') : Math.round(h.dmgDealt)) + '</td></tr>';
       }).join('');
   }
   function endGame(w) {
     state = 'end'; aim = null;
     var win = w === 0;
     $('endTitle').textContent = win ? '승리' : '패배'; $('endTitle').className = win ? 'win' : 'lose';
-    $('endSub').textContent = (win ? '적 로드스톤을 부쉈습니다.' : '아군 로드스톤이 부서졌습니다.') + ' 경기 시간 ' + clock(G.t) + ' · 처치 ' + G.kills[0] + ' 대 ' + G.kills[1];
+    $('endSub').textContent = (win ? '적보다 먼저 충전량 1000을 채웠습니다.' : '적이 먼저 충전량 1000을 채웠습니다.') + ' 충전 ' + Math.round(G.charge[0]) + ' 대 ' + Math.round(G.charge[1]) + ' · 경기 시간 ' + clock(G.t) + ' · 처치 ' + G.kills[0] + ' 대 ' + G.kills[1];
     $('endT').innerHTML = scoreRows(false);
-    setTimeout(function () { $('end').hidden = false; $('shop').hidden = true; $('score').hidden = true; }, 1600);
+    setTimeout(function () { $('end').hidden = false; $('score').hidden = true; $('relic').hidden = true; }, 1600);
     sfx(win ? 'win' : 'lose');
   }
   function clock(t) { var m = Math.floor(t / 60), s = Math.floor(t % 60); return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
 
-  /* ── 상점 ── */
-  function openShop(on) { $('shop').hidden = !on; sellArm = -1; if (on) { $('score').hidden = true; $('help').hidden = true; drawShop(true); } }
-  function drawShop(force) {
-    var can = P.dead || inFountain(P), sig = can + '|' + Math.floor(P.gold / 10) + '|' + P.items.join(',') + '|' + sellArm;
-    if (!force && cache.shop === sig) return; cache.shop = sig;
-    $('shopGold').textContent = Math.floor(P.gold) + ' 골드';
-    var n = $('shopNote'); n.textContent = can ? '장비는 여섯 개까지 가질 수 있습니다.' : '우물로 돌아가야 살 수 있습니다. B 키로 귀환하세요.'; cls(n, 'warn', !can);
-    var g = $('shopGrid'); g.innerHTML = '';
-    ITEM_IDS.forEach(function (id) {
-      var I = ITEMS[id], b = el('button', 'it', '<span class="g">' + I.g + '</span><b>' + I.name + '<em>' + I.cost + '</em></b><small>' + I.d + '</small>');
-      b.type = 'button'; b.id = 'buy-' + id;
-      b.disabled = !can || P.gold < I.cost || P.items.length >= 6 || (I.unique && P.items.indexOf(id) >= 0);
-      b.onclick = function () { if (buyItem(P, id)) { sfx('buy'); drawShop(true); } else sfx('err'); };
-      g.appendChild(b);
+  /* ── 유물 선택 ── */
+  var relicSig = '';
+  function drawRelic() {
+    var on = P && !P.dead && P.relicPicks > 0 && P.relicOffer && state === 'play';
+    var sig = on ? P.relicOffer.join(',') + P.relicPicks : '';
+    if (sig === relicSig) return; relicSig = sig;
+    $('relic').hidden = !on; if (!on) return;
+    var box = $('relicOpts'); box.innerHTML = '';
+    P.relicOffer.forEach(function (id, i) {
+      var I = ITEMS[id], b = el('button', 'it', '<span class="g">' + I.g + '</span><b>' + I.name + '<em><kbd>' + 'ZXC'.charAt(i) + '</kbd></em></b><small>' + I.d + '</small>');
+      b.type = 'button'; b.id = 'relic-' + i; b.onclick = function () { choose(i); };
+      box.appendChild(b);
     });
-    var inv = $('shopInv'); inv.innerHTML = '';
-    for (var k = 0; k < 6; k++) (function (k) {
-      if (k >= P.items.length) { inv.appendChild(el('i')); return; }
-      var I = ITEMS[P.items[k]], b = el('button', sellArm === k ? 'sell' : '', sellArm === k ? '판매<br>+' + Math.round(I.cost * SELL_RATE) : I.g);
-      b.type = 'button'; b.id = 'sell-' + k; b.title = I.name + ' — ' + I.d; b.disabled = !can;
-      b.onclick = function () { if (sellArm === k) { sellItem(P, k); sellArm = -1; sfx('buy'); } else sellArm = k; drawShop(true); };
-      inv.appendChild(b);
-    })(k);
   }
+  function choose(i) { if (P && pickRelic(P, i)) { sfx('buy'); relicSig = ''; cache.items = null; } else sfx('err'); }
 
   /* ── HUD 갱신 ── */
   function updHud(dt) {
     if (annT > 0) { annT -= dt; if (annT <= 0) $('announce').className = ''; }
-    set('clock', clock(G.t)); set('ka', G.kills[0]); set('kb', G.kills[1]);
-    var ta = 0, tb = 0; for (var i = 0; i < G.towers.length; i++) { if (G.towers[i].team === 0) ta++; else tb++; }
-    set('towA', '포탑 ' + ta); set('towB', '포탑 ' + tb);
+    var i;
+    set('clock', clock(G.t));
+    set('ka', Math.floor(G.charge[0])); set('kb', Math.floor(G.charge[1]));
+    set('kda', '처치 ' + G.kills[0]); set('kdb', '처치 ' + G.kills[1]);
+    setW('chA', G.charge[0] / WIN_CHARGE); setW('chB', G.charge[1] / WIN_CHARGE);
+    for (var ni = 0; ni < G.nodes.length; ni++) {
+      var pe = pipEls[ni], nn = G.nodes[ni], pk = nn.owner < 0 ? '' : nn.owner === 0 ? 'a' : 'e', pk2 = pk + (nn.contested ? 'c' : '');
+      if (pe.k !== pk2) { pe.k = pk2; pe.e.className = 'pip' + (nn.heart ? ' heart' : '') + (pk ? ' ' + pk : '') + (nn.contested ? ' c' : ''); }
+    }
     setW('hpf', P.hp / P.maxHp); set('hpt', Math.ceil(P.hp) + ' / ' + Math.round(P.maxHp));
     setW('mpf', P.mp / P.maxMp); set('mpt', Math.floor(P.mp) + ' / ' + Math.round(P.maxMp));
     setW('xpf', P.level >= MAX_LEVEL ? 1 : P.xp / xpNeed(P.level));
-    set('plevel', P.level); set('gold', Math.floor(P.gold));
+    set('plevel', P.level);
     var st = '<span>공격력</span><b>' + Math.round(P.ad) + '</b><span>주문력</span><b>' + Math.round(P.ap) + '</b><span>방어력</span><b>' + Math.round(P.armor) +
       '</b><span>이동</span><b>' + Math.round(P.ms) + '</b><span>처치</span><b>' + P.kills + '/' + P.deaths + '/' + P.assists + '</b>';
     if (cache.stats !== st) { cache.stats = st; $('stats').innerHTML = st; }
@@ -242,11 +251,9 @@
       cache.items = isig;
       for (i = 0; i < 6; i++) { var sl = $('slot-' + i), I = ITEMS[P.items[i]]; sl.textContent = I ? I.g : ''; sl.title = I ? I.name + ' — ' + I.d : ''; cls(sl, 'fill', !!I); }
     }
-    var canBuy = (P.dead || inFountain(P)) && P.items.length < 6 && ITEM_IDS.some(function (id) { return ITEMS[id].cost <= P.gold && ITEMS[id].cost >= 400; });
-    cls($('shopBtn'), 'can', canBuy);
+    drawRelic();
     $('dead').hidden = !P.dead || state !== 'play';
     if (P.dead) set('deadT', '부활까지 ' + Math.ceil(P.respawnT) + '초');
-    if (!$('shop').hidden) drawShop(false);
     if (!$('score').hidden) { var sg = Math.floor(G.t * 2); if (cache.sc !== sg) { cache.sc = sg; $('scoreT').innerHTML = scoreRows(true); } }
   }
 
@@ -276,7 +283,7 @@
     } else if (sk.ai !== 'gap') {
       for (k = 0; k < G.units.length; k++) {
         u = G.units[k];
-        if (u.dead || u.team === 0 || !u.vis[0] || u.type === 'tower' || u.type === 'core') continue;
+        if (u.dead || u.team === 0 || !u.vis[0]) continue;
         d = dist(P, u); if (d > reach) continue;
         d -= u.type === 'hero' ? 2000 : 0; if (u.team === 2 && !u.camp.target) d += 3000;
         if (d < bs) { bs = d; best = u; }
@@ -336,9 +343,7 @@
   atk.addEventListener('pointerdown', function (e) { setTouch(); touchAtk = true; try { atk.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { atk.addEventListener(n, function () { touchAtk = false; }); });
 
-  function toggle(id) { var e = $(id), on = e.hidden; ['shop', 'score', 'help'].forEach(function (k) { $(k).hidden = true; }); if (id === 'shop') openShop(on); else e.hidden = !on; if (on && id === 'score') { cache.sc = -1; } }
-  $('shopBtn').onclick = function () { toggle('shop'); };
-  $('shopX').onclick = function () { openShop(false); };
+  function toggle(id) { var e = $(id), on = e.hidden; ['score', 'help'].forEach(function (k) { $(k).hidden = true; }); e.hidden = !on; if (on && id === 'score') { cache.sc = -1; } }
   $('scoreBtn').onclick = function () { toggle('score'); };
   $('scoreX').onclick = function () { $('score').hidden = true; };
   $('helpBtn').onclick = function () { toggle('help'); };
@@ -351,7 +356,7 @@
     if (state !== 'play' || !P) { if (state === 'menu' && c === 'Enter') startGame(); return; }
     audioOn();
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (c === 'Tab') { e.preventDefault(); if (!e.repeat) { $('score').hidden = false; $('shop').hidden = true; cache.sc = -1; } return; }
+    if (c === 'Tab') { e.preventDefault(); if (!e.repeat) { $('score').hidden = false; cache.sc = -1; } return; }
     if (c in MOVEKEYS) { keys[c] = true; e.preventDefault(); return; }
     if (c in CODES) {
       e.preventDefault();
@@ -366,9 +371,11 @@
     if (e.repeat) return;
     switch (c) {
       case 'KeyB': if (!P.dead) startRecall(P); break;
-      case 'KeyP': toggle('shop'); break;
+      case 'KeyZ': choose(0); break;
+      case 'KeyX': choose(1); break;
+      case 'KeyC': choose(2); break;
       case 'KeyM': $('muteBtn').onclick(); break;
-      case 'Escape': aim = null; ['shop', 'score', 'help'].forEach(function (k) { $(k).hidden = true; }); break;
+      case 'Escape': aim = null; ['score', 'help'].forEach(function (k) { $(k).hidden = true; }); break;
     }
   });
   window.addEventListener('keyup', function (e) {
