@@ -33,6 +33,12 @@ main{flex:1;display:grid;grid-template-columns:minmax(320px,42%) 1fr;min-height:
 #ac div{padding:5px 10px;border-radius:5px;cursor:pointer;color:var(--text)}
 #ac div.on{background:#3b4a8f}
 #ac small{color:var(--dim);margin-left:10px;font-family:inherit}
+canvas:fullscreen{max-width:none;width:100vw;height:100vh;border-radius:0;box-shadow:none;object-fit:contain}
+header button.ic{padding:7px 10px}
+#tut{display:none;padding:12px 16px;background:#1b2144;border-bottom:1px solid #343c78;font-size:14px;line-height:1.55}
+#tut b{color:#ffe680}
+#tut .tb{display:flex;gap:8px;margin-top:10px;align-items:center}
+#tut .tb span{margin-left:auto;color:var(--dim);font-size:12px}
 #helpBtn{position:absolute;right:12px;top:10px;z-index:4;padding:5px 11px;font-size:13px;background:#20243dcc;backdrop-filter:blur(4px)}
 #help{display:none;position:absolute;right:12px;top:48px;z-index:4;width:min(380px,calc(100% - 24px));max-height:calc(100% - 64px);overflow:auto;background:#161a33f2;border:1px solid #3a4070;border-radius:12px;padding:6px 14px 14px;box-shadow:0 14px 40px #000b;backdrop-filter:blur(6px)}
 #help h3{margin:14px 0 6px;font-size:13px;color:var(--accent);letter-spacing:.3px}
@@ -54,12 +60,17 @@ button,select{white-space:nowrap}
   <h1>FF <b>Script</b></h1>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
+  <button id="tutBtn">🎓 튜토리얼</button>
   <span class="spacer"></span>
   <span id="status"></span>
+  <button id="share" class="ic" title="코드가 담긴 링크 복사">🔗</button>
+  <button id="shot" class="ic" title="스크린샷 저장">📷</button>
+  <button id="full" class="ic" title="전체화면">⛶</button>
   <button id="export">HTML로 저장</button>
 </header>
 <main>
   <section class="left">
+    <div id="tut"></div>
     <div class="ed"><div id="gutter"></div><div class="wrap"><pre id="hl"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea><div id="ac"></div></div>
       <button id="helpBtn">📖 명령어</button><div id="help"></div></div>
     <pre id="err"></pre>
@@ -70,6 +81,7 @@ button,select{white-space:nowrap}
 <script>/*@RUNTIME*/</script>
 <script>/*@COMPILER*/</script>
 <script>/*@EXAMPLES*/</script>
+<script>/*@TUTORIAL*/</script>
 <script>
 (function () {
   const $ = id => document.getElementById(id);
@@ -102,7 +114,8 @@ button,select{white-space:nowrap}
         if (first && SETS.k.has(t)) cls = 'k';
         else if ((first || prev === '.') && SETS.c.has(t)) cls = 'c';
         else if (prev === '.') cls = '';
-        else if (SETS.l.has(t)) cls = 'l';
+        else if (first && dyn.funcs.has(t)) cls = 'c';
+        else if (SETS.l.has(t) || dyn.looks.has(t)) cls = 'l';
         else if (SETS.w.has(t)) cls = 'w';
         else if (SETS.k.has(t) && /^(make|if|else|elif|score|lives|level)$/.test(t)) cls = 'k';
         out += cls ? `<span class="${cls}">${t}</span>` : t;
@@ -113,7 +126,26 @@ button,select{white-space:nowrap}
     }
     return out;
   }
-  function highlight() { hl.innerHTML = code.value.split('\n').map(hlLine).join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; }
+  const dyn = { looks: new Set(), funcs: new Set() };
+  const RAWCOL = { '#': '#c9a27a', '=': '#8df08f', C: '#ffd93d', G: '#5ee7ff', S: '#ffe680', H: '#ff7a8a', '^': '#c9cfe0', F: '#ff4d5e', P: '#6fb3ff', E: '#7ee08a', B: '#9aa0b4' };
+  const ARTCOL = { '#': '#e8eaf6', k: '#6b6f8a', w: '#ffffff', r: '#ff4d5e', o: '#ff9a3c', y: '#ffd93d', g: '#4ade80', b: '#4d8dff', p: '#a66bff', c: '#5ee7ff', n: '#a86b45', m: '#ff7ac6', d: '#9aa0b4' };
+  const hlRaw = (line, art) => [...line].map(ch => { const c = (art ? ARTCOL : RAWCOL)[ch]; return c ? `<span style="color:${c}">${esc(ch)}</span>` : esc(ch); }).join('');
+  function scanDyn() {
+    dyn.looks = new Set([...code.value.matchAll(/^art\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]));
+    dyn.funcs = new Set([...code.value.matchAll(/^to\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]));
+  }
+  function highlight() {
+    scanDyn();
+    let raw = null;
+    const out = code.value.split('\n').map(line => {
+      const ind = line.match(/^ */)[0].length;
+      if (raw) { if (!line.trim()) return ''; if (ind > raw.ind) return hlRaw(line, raw.art); raw = null; }
+      const t = line.trim().replace(/\s*:$/, '');
+      if (t === 'map') raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
+      return hlLine(line);
+    });
+    hl.innerHTML = out.join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
+  }
 
   const mctx = document.createElement('canvas').getContext('2d');
   let acItems = [], acIdx = 0, acWord = '';
@@ -122,21 +154,23 @@ button,select{white-space:nowrap}
     while ((m = re.exec(code.value))) if (!L.statements.includes(m[1])) set.add(m[1]);
     return [...set];
   }
+  const allLooks = () => [...L.looks, ...dyn.looks];
   function candidates(before, word, lineHasIndent) {
     const t = before.replace(/^\s+/, '');
+    if (/^(glow|trail|flash|burst)\s+$/.test(t) || /^burst\s+\d+\s+$/.test(t) || /^art\s+\S+\s+$/.test(t)) return L.colors;
     if (/\.$/.test(before)) return L.cmds;
-    if (/(^|\s)make\s+$/.test(before)) return L.looks;
+    if (/(^|\s)(make|spawn|create)\s+$/.test(before)) return allLooks();
     if (/(^|\s)from\s+$/.test(before)) return L.sides;
     if (/(^|\s)at\s+(\S+\s+)?$/.test(before)) return [...L.pos, ...varNames(), ...L.looks];
     if (/^move\s+$/.test(t)) return L.dirs;
     if (/^control\s+$/.test(t)) return L.controls;
     if (/^color\s+$/.test(t)) return L.colors;
-    if (/^look\s+$/.test(t)) return L.looks;
+    if (/^look\s+$/.test(t)) return allLooks();
     if (/^sound\s+$/.test(t)) return L.sounds;
     if (/^background\s+$/.test(t)) return [...L.backs, ...L.colors];
     if (/^music\s+$/.test(t)) return L.musics;
     if (/^level\s+$/.test(t)) return ['up'];
-    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', ...L.looks, ...varNames(), ...L.builtin];
+    if (/^(if|when)\s+$/.test(t)) return ['key', 'click', ...allLooks(), ...varNames(), ...L.builtin];
     if (/^(if|when)\s+key\s+$/.test(t)) return ['space', 'left', 'right', 'up', 'down', 'enter'];
     if (/^(if|when)\s+(?!key\b)[\p{L}_][\p{L}\p{N}_]*\s+$/u.test(t)) return ['hits', 'touches', 'leaves'];
     if (/\s(hits|touches)\s+$/.test(t)) return [...L.looks, ...varNames()];
@@ -144,8 +178,8 @@ button,select{white-space:nowrap}
     if (/^(add|remove)\s+\S+\s+$/.test(t)) return [/^add/.test(t) ? 'to' : 'from'];
     if (/^(add|remove)\s+\S+\s+(to|from)\s+$/.test(t)) return ['score', 'lives', ...varNames()];
     if (/^set\s+$/.test(t)) return ['score', 'lives', ...varNames()];
-    if (!t || !word || t === word) return [...L.statements, ...L.cmds, ...varNames(), ...L.looks];
-    return [...varNames(), ...L.looks, ...L.builtin];
+    if (!t || !word || t === word) return [...L.statements, ...L.cmds, ...varNames(), ...allLooks(), ...dyn.funcs];
+    return [...varNames(), ...allLooks(), ...L.builtin];
   }
   function closeAc() { ac.style.display = 'none'; acItems = []; }
   function openAc(auto) {
@@ -177,27 +211,30 @@ button,select{white-space:nowrap}
   ac.addEventListener('mousedown', e => { e.preventDefault(); const d = e.target.closest('div'); if (d) pickAc(+d.dataset.i); });
 
   const HELP = [
-    ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea 또는 색'], ['lives 3', '목숨']]],
-    ['만들기', [['player = make ship at center bottom', '만들고 이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', '위에서 등장 (top bottom left right)'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자']]],
-    ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag', '플랫포머용']]],
-    ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', '방향 up down left right'], ['  toward player 150 follow', '대상을 따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', '회전'], ['  bounce', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', '중력'], ['  jump 700', '점프'], ['  solid', '밟을 수 있게'], ['  stop', '']]],
+    ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea sunset forest lava snow grid / 색'], ['lives 3', '목숨'], ['music chill', 'chill happy action off']]],
+    ['만들기', [['player = make ship at center bottom', '이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', 'top bottom left right'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자 / 이름']]],
+    ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag block', '플랫포머용'], ['gem bomb ghost fish cloud tree', '']]],
+    ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', 'up down left right'], ['  toward player 150 follow', '따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', ''], ['  bounce 0.8', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', ''], ['  jump 700', ''], ['  solid', ''], ['  patrol 100 80', '좌우 왕복'], ['  wander 80', '제멋대로 돌아다님'], ['  wrap', '반대쪽으로 나옴'], ['  stay', '화면 안에 가둠'], ['  life 5 sec', '시간이 지나면 사라짐'], ['  trail', '꼬리 효과'], ['  glow', '빛나기'], ['  fade 0.5', '투명도'], ['  hide', 'show 도 있어요'], ['  flip', '좌우 뒤집기'], ['  health 5', '체력 (막대 자동)'], ['  hurt 1', 'heal 도 있어요'], ['  stop', '']]],
+    ['지도 · 그림 (맨 왼쪽 줄)', [['map\n  ..........\n  .P..C..F..\n  ##########', '# 땅 = 얇은 발판 C 코인 G 보석 S 별 H 하트 ^ 가시 B 폭탄 F 깃발 E 슬라임 P 플레이어'], ['art cat orange\n  #.#\n  ###\n  #k#', '# 기본색 k w r o y g b p c n m d 색깔']]],
+    ['함수', [['to boom power\n  shake power\n  burst 20 red at center', '만들기'], ['boom 12', '부르기 (do boom 12 도 같아요)']]],
     ['반복·이벤트', [['every 1 sec', '계속 반복'], ['after 3 sec', '한 번만 나중에'], ['always', '매 프레임'], ['if player hits rock', '닿았을 때'], ['if key space', '키를 눌렀을 때'], ['if click', '클릭'], ['if rock leaves', '화면 밖으로 나감'], ['if score >= 100', '조건이 처음 참이 될 때 한 번'], ['loop 5 times', '반복']]],
-    ['점수·상태', [['add 10 to score', 'score +10 과 같아요'], ['remove 1 from lives', 'lives -1 과 같아요'], ['set score to 0', 'x = 0 과 같아요'], ['level up', '레벨 올리기 (level 로 읽기)'], ['win', ''], ['gameover', '']]],
-    ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "안녕!"', '말풍선'], ['shake', '화면 흔들림'], ['sound coin', 'boom coin shoot hit jump power pop'], ['music chill', 'chill happy action off'], ['label "글자" at center top', '']]],
-    ['조건·변수', [['if x > 3', '다른 블록 안에서는 보통 조건문 (else 가능)'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
+    ['점수·상태', [['add 10 to score', ''], ['remove 1 from lives', ''], ['set score to 0', ''], ['level up', 'level 로 읽기'], ['win', ''], ['gameover', '']]],
+    ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "HP {player.hp}"', '말풍선'], ['burst 30 gold at player', '불꽃'], ['confetti', ''], ['flash red', '화면 번쩍'], ['slowmo 1 sec', ''], ['banner "READY?" 2 sec', '큰 글자'], ['shake', ''], ['sound coin', 'boom coin shoot hit jump power pop laser click magic hurt whoosh'], ['label "점수 {score}" at left 110', '{} 안은 실시간으로 바뀌어요']]],
+    ['조건·변수', [['if x > 3', '블록 안에서는 일반 조건문 (else 가능)'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['choose("a", "b")', '아무거나 하나'], ['chance(30)', '30% 확률로 참'], ['distance(player, rock)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
   ];
-  help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
+  help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
   $('helpBtn').addEventListener('click', () => { help.style.display = help.style.display === 'block' ? 'none' : 'block'; });
   help.addEventListener('click', e => {
     const r = e.target.closest('.row'); if (!r) return;
-    const txt = r.dataset.c.replace(/&quot;/g, '"');
+    const txt = r.dataset.c;
     code.focus();
     const pos = code.selectionStart, v = code.value, ls = v.lastIndexOf('\n', pos - 1) + 1;
     const atLineStart = v.slice(ls, pos).trim() === '' && v.slice(pos).split('\n')[0].trim() === '';
-    document.execCommand('insertText', false, (atLineStart ? '' : '\n') + txt.replace(/^ {0,2}/, atLineStart ? '' : '  ') + '\n');
+    document.execCommand('insertText', false, (atLineStart ? '' : '\n') + (atLineStart ? txt : txt.replace(/^ {0,2}/, '  ')) + '\n');
   });
 
   const G = new FFRuntime.Engine($('game'));
+  G.autostart = true;
   let current = null, errLine = 0;
 
   function drawGutter() {
@@ -274,7 +311,37 @@ button,select{white-space:nowrap}
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
-  const saved = store.get('ff-code');
+  const toast = msg => { status.textContent = msg; status.className = 'ok'; setTimeout(() => { if (status.textContent === msg) status.textContent = errLine ? '고쳐야 할 곳이 있어요' : '실행 중'; }, 2200); };
+  $('share').addEventListener('click', async () => {
+    const b64 = btoa(unescape(encodeURIComponent(code.value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const url = location.href.split('#')[0] + '#c=' + b64;
+    try { await navigator.clipboard.writeText(url); toast('링크를 복사했어요'); }
+    catch (e) { const t = document.createElement('textarea'); t.value = url; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); toast('링크를 복사했어요'); } catch (e2) { toast('복사에 실패했어요'); } t.remove(); }
+  });
+  $('shot').addEventListener('click', () => {
+    $('game').toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'ffscript.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast('스크린샷을 저장했어요'); });
+  });
+  $('full').addEventListener('click', () => { const c = $('game'); if (c.requestFullscreen) c.requestFullscreen(); });
+
+  const tut = $('tut'), TUT = window.FF_TUTORIAL; let ti = 0;
+  function drawTut() {
+    const st = TUT[ti];
+    tut.innerHTML = `<b>${ti + 1}단계 · ${esc(st.title)}</b><br>${esc(st.text)}<div class="tb"><button id="tPrev">이전</button><button id="tLoad">이 단계 코드 넣기</button><button id="tNext">다음</button><span>${ti + 1} / ${TUT.length}</span></div>`;
+    $('tPrev').disabled = ti === 0; $('tNext').disabled = ti === TUT.length - 1;
+    $('tPrev').onclick = () => { ti--; drawTut(); loadStep(); };
+    $('tNext').onclick = () => { ti++; drawTut(); loadStep(); };
+    $('tLoad').onclick = loadStep;
+  }
+  function loadStep() { code.value = TUT[ti].code; store.set('ff-code', code.value); sel.value = ''; drawGutter(); run(false); }
+  $('tutBtn').addEventListener('click', () => {
+    const open = tut.style.display === 'block';
+    tut.style.display = open ? 'none' : 'block';
+    if (!open) { drawTut(); loadStep(); }
+  });
+
+  let saved = store.get('ff-code');
+  const hm = location.hash.match(/^#c=([\w-]+)$/);
+  if (hm) { try { saved = decodeURIComponent(escape(atob(hm[1].replace(/-/g, '+').replace(/_/g, '/')))); } catch (e) { } }
   if (saved && saved.trim()) { code.value = saved; sel.value = ''; } else { code.value = EX[names[0]]; sel.value = names[0]; }
   drawGutter(); run(false);
   window.FF_DEBUG = { G, code, run };
