@@ -1,27 +1,32 @@
 /* 삼원의 등불 — 화면. 규칙은 전부 core.js(TL)에 있고 여기서는 그리기와 입력만 한다. */
 (function () {
 'use strict';
-var TL = window.TL;
+var TL = window.TL, ART = window.ART, FX = window.FX;
 var $ = function (id) { return document.getElementById(id); };
 var elTop = $('top'), elMain = $('main'), elFx = $('fxlayer'), elModal = $('modal'), elToast = $('toast');
-var SAVE = 'trilantern_save_v1', META = 'trilantern_meta_v1';
+var SAVE = 'trilantern_save_v2', META = 'trilantern_meta_v1';
 
 var S = null;        // 진행 중인 판
 var sel = -1;        // 고른 손패 위치
 var busy = false;    // 적 차례 등 입력을 막는 동안 true
 var modal = null;    // 열려 있는 창
-var lastCombat = '';  // 마지막으로 시작 연출을 보여 준 전투
-var cast = null;      // 방금 낸 카드의 연출 정보
+var shrine = false;  // 제목 화면 대신 제단을 보는 중
 var seenUids = {};   // 손패에 이미 보인 카드 (새로 뽑은 카드만 애니메이션)
+var lastCombat = ''; // 마지막으로 시작 연출을 보여 준 전투
+var cast = null;     // 방금 낸 카드의 연출 정보
 var touch = window.matchMedia && window.matchMedia('(hover: none)').matches;
 var meta = loadMeta();
+
+var ASC_TEXT = ['', '적 체력 +8%', '모든 적이 힘 1을 갖고 시작', '정예·보스 체력 +15%', '시작 HP 64, 시작 골드 30', '상점 가격 +25%, 모닥불 회복량 20%'];
+var ACT_FLAVOR = ['낡은 갱도 깊은 곳에서 잿빛 먼지가 날린다.', '얼어붙은 동굴. 숨결이 하얗게 굳는다.', '구름 위 심연. 발밑으로 번개가 지나간다.'];
 
 /* ---------- 저장 ---------- */
 function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 function fetchStore(k) { try { var s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function loadMeta() {
   var m = fetchStore(META) || {};
-  return { runs: m.runs || 0, wins: m.wins || 0, best: m.best || 0, mute: !!m.mute, helped: !!m.helped };
+  return { runs: m.runs || 0, wins: m.wins || 0, best: m.best || 0, mute: !!m.mute, helped: !!m.helped,
+    embers: m.embers || 0, unlocked: m.unlocked || [], asc: m.asc || 0, ascSel: m.ascSel || 0 };
 }
 function saveMeta() { store(META, meta); }
 function save() {
@@ -32,7 +37,7 @@ function save() {
 }
 function loadSave() {
   var s = fetchStore(SAVE);
-  if (!s || s.v !== 1 || !s.deck || !s.phase) return null;
+  if (!s || s.v !== 2 || !s.deck || !s.phase || !s.map) return null;
   s.fx = [];
   return s;
 }
@@ -64,6 +69,7 @@ var SFX = {
   hurt: function () { tone(110, 0.22, 'sawtooth', 0.1, 45); },
   res: function (n) { tone(520 + 120 * Math.min(n, 6), 0.12, 'sine', 0.06, 0, 0.05); },
   turn: function () { tone(700, 0.07, 'sine', 0.04); },
+  shuffle: function () { tone(300, 0.06, 'triangle', 0.03); },
   win: function () { [523, 659, 784, 1047].forEach(function (f, k) { tone(f, 0.18, 'triangle', 0.07, 0, k * 0.09); }); },
   lose: function () { [392, 330, 262, 196].forEach(function (f, k) { tone(f, 0.28, 'sawtooth', 0.06, 0, k * 0.16); }); },
   coin: function () { tone(1200, 0.06, 'square', 0.04); tone(1600, 0.1, 'square', 0.04, 0, 0.06); }
@@ -73,8 +79,8 @@ var SFX = {
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function cardHTML(card, o) {
   o = o || {};
-  var d = TL.CARDS[card.id], cls = 'card el-' + d.el + (card.up ? ' up' : '') + (o.cls ? ' ' + o.cls : '');
-  var attrs = (o.a ? ' data-a="' + o.a + '"' : '') + (o.i !== undefined ? ' data-i="' + o.i + '"' : '') +
+  var d = TL.CARDS[card.id], cls = 'card el-' + d.el + ' rar' + Math.max(0, d.r) + (card.up ? ' up' : '') + (o.cls ? ' ' + o.cls : '');
+  var attrs = (o.a ? ' data-a="' + o.a + '"' : '') + (o.i !== undefined ? ' data-i="' + o.i + '"' : '') + (o.id ? ' data-id="' + o.id + '"' : '') +
     (o.uid ? ' data-uid="' + o.uid + '"' : '') + (o.r ? ' data-r="' + o.r + '"' : '') + (o.style ? ' style="' + o.style + '"' : '');
   return '<div class="' + cls + '"' + attrs + '>' +
     '<div class="cost">' + TL.costOf(card) + '</div>' +
@@ -82,8 +88,9 @@ function cardHTML(card, o) {
     '<div class="cart">' + ART.card(card.id, d.el) + '</div>' +
     '<div class="ctype">' + TL.EL[d.el].icon + ' ' + TL.TYPE_NAME[d.t] + '</div>' +
     '<div class="ctext">' + TL.cardText(card, o.combat ? S : null) + '</div>' +
+    '<div class="gem"></div>' +
     (o.tag ? '<div class="tag">' + o.tag + '</div>' : '') +
-    (o.price !== undefined ? '<div class="price">💰 ' + o.price + '</div>' : '') +
+    (o.price !== undefined ? '<div class="price">' + ART.icon(o.picon || 'coin') + o.price + '</div>' : '') +
     '</div>';
 }
 function stsHTML(st, blockN, pow) {
@@ -94,8 +101,8 @@ function stsHTML(st, blockN, pow) {
   });
   if (pow) {
     var P = { furnace: ['🏭', '용광로: 매 턴 모든 적에게 화상'], armor: ['🥋', '얼음 갑옷: 턴 종료 시 방어도'], perma: ['🏔️', '영구 동토: 방어도 절반 유지'],
-      rod: ['📡', '피뢰침: 전환 시 피해'], surge: ['🏃', '번개 질주: 매 턴 카드 추가'] };
-    Object.keys(P).forEach(function (k) { if (pow[k]) h += '<span title="' + P[k][1] + '">' + P[k][0] + (k === 'perma' ? '' : pow[k]) + '</span>'; });
+      rod: ['📡', '피뢰침: 전환 시 피해'], surge: ['🏃', '번개 질주: 매 턴 카드 추가'], tesla: ['⚡', '테슬라 코일: 번개 카드마다 피해'], anchor: ['⚓', '공명의 닻: 전환해도 공명 절반 유지'] };
+    Object.keys(P).forEach(function (k) { if (pow[k]) h += '<span title="' + P[k][1] + '">' + P[k][0] + (k === 'perma' || k === 'anchor' ? '' : pow[k]) + '</span>'; });
   }
   return h;
 }
@@ -107,16 +114,16 @@ function toast(msg, ms) {
 /* ---------- 상단 바 ---------- */
 function renderTop() {
   if (!S || S.phase === 'start') { elTop.innerHTML = ''; return; }
-  var act = TL.ACTS[Math.min(S.act, TL.ACTS.length - 1)];
+  var act = TL.ACTS[Math.min(S.act, TL.ACTS.length - 1)], row = S.pos ? TL.nodeAt(S, S.pos).row + 1 : 0;
   elTop.innerHTML =
-    '<span class="stat">❤️ ' + S.hp + '/' + S.maxHp + '</span>' +
-    '<span class="stat">💰 ' + S.gold + '</span>' +
-    '<span class="where">' + (S.act + 1) + '막 <b>' + act.name + '</b> ' + Math.min(S.step + 1, TL.STEPS) + '/' + TL.STEPS + '</span>' +
+    '<span class="res" title="체력">' + ART.icon('heart') + '<b>' + S.hp + '/' + S.maxHp + '</b></span>' +
+    '<span class="res" title="골드">' + ART.icon('coin') + '<b>' + S.gold + '</b></span>' +
+    '<span class="where"><b>' + (S.act + 1) + '막</b> ' + act.name + ' ' + row + '/' + TL.STEPS + '</span>' +
     '<div class="relics">' + S.relics.map(function (id) {
       return '<button class="relic" data-a="relic" data-id="' + id + '" title="' + esc(TL.RELICS[id].n + ': ' + TL.RELICS[id].x) + '">' + TL.RELICS[id].i + '</button>';
     }).join('') + '</div>' +
-    '<button class="tb" data-a="deck">🂠 ' + S.deck.length + '</button>' +
-    '<button class="tb" data-a="menu">☰</button>';
+    '<button class="tb" data-a="deck" title="내 덱">' + ART.icon('deck') + S.deck.length + '</button>' +
+    '<button class="tb" data-a="menu" title="메뉴">' + ART.icon('menu') + '</button>';
 }
 
 /* ---------- 화면들 ---------- */
@@ -125,53 +132,104 @@ function screen(cls, html) { elMain.innerHTML = '<div class="screen ' + cls + '"
 function renderTitle() {
   elTop.innerHTML = '';
   var has = !!loadSave();
-  screen('title',
-    '<div class="orbs">' + ART.logo() + '</div>' +
+  screen('tscr',
+    ART.titleBg().replace('<svg ', '<svg preserveAspectRatio="xMidYMid slice" ') +
+    '<div class="tin">' + ART.logo() +
     '<h1><span>삼원</span><span>의 </span><span>등불</span></h1>' +
     '<p>불·서리·번개 세 원소의 카드를 엮어 심연의 끝까지 내려가는 덱 빌딩 로그라이크.<br>같은 원소를 이으면 <b style="color:#fff">공명</b>, 원소를 바꾸면 <b style="color:#fff">전환</b>.</p>' +
     '<div class="col">' +
     (has ? '<button class="btn pri" data-a="continue">이어하기</button>' : '') +
     '<button class="btn' + (has ? '' : ' pri') + '" data-a="new">새 모험</button>' +
+    '<button class="btn" data-a="shrine">등불 제단 <small>불씨 ' + meta.embers + ' · 새 카드 해금 ' + meta.unlocked.length + '/' + TL.unlockList().length + '</small></button>' +
     '<button class="btn" data-a="help">놀이법</button>' +
     '<button class="btn" data-a="mute">' + (meta.mute ? '🔇 소리 꺼짐' : '🔊 소리 켜짐') + '</button>' +
     '</div>' +
-    '<div class="rec">' + (meta.runs ? '도전 ' + meta.runs + '회 · 완주 ' + meta.wins + '회 · 최고 ' + meta.best + '층' : '첫 도전을 기다리는 중') + '</div>');
+    '<div class="rec">' + (meta.runs ? '도전 ' + meta.runs + '회 · 완주 ' + meta.wins + '회 · 최고 ' + meta.best + '층' : '첫 도전을 기다리는 중') + '</div></div>');
+}
+
+function renderShrine() {
+  elTop.innerHTML = '';
+  var ids = TL.unlockList().sort(function (a, b) {
+    var o = { f: 0, i: 1, s: 2, n: 3 }, A = TL.CARDS[a], B = TL.CARDS[b];
+    return o[A.el] - o[B.el] || A.lock - B.lock;
+  });
+  screen('',
+    '<h2>등불 제단</h2>' +
+    '<p>모험에서 모은 불씨로 새 카드를 풉니다. 푼 카드는 다음 모험부터 보상과 상점에 나옵니다.</p>' +
+    '<div class="emberline">' + ART.icon('ember') + meta.embers + ' 불씨</div>' +
+    '<div class="cards unlockgrid">' + ids.map(function (id) {
+      var open = meta.unlocked.indexOf(id) >= 0, c = TL.CARDS[id];
+      return cardHTML({ id: id, up: 0 }, open ? { tag: '해금됨' } : { a: 'unlock', id: id, price: c.lock, picon: 'ember', cls: 'locked' });
+    }).join('') + '</div>' +
+    '<div class="rec">시련 단계: 최고 ' + meta.asc + ' (완주하면 다음 단계가 열립니다)</div>' +
+    '<button class="btn" data-a="back">돌아가기</button>');
 }
 
 function renderStart() {
+  var asc = Math.min(meta.asc, 5), cur = Math.min(meta.ascSel, asc), note = [];
+  for (var q = 1; q <= cur; q++) note.push(ASC_TEXT[q]);
+  var ascRow = '';
+  if (asc > 0) {
+    ascRow = '<div class="ascrow"><span>시련</span>';
+    for (var a = 0; a <= asc; a++) ascRow += '<button data-a="asc" data-i="' + a + '" class="' + (a === cur ? 'on' : '') + '">' + a + '</button>';
+    ascRow += '</div><p class="ascnote">' + (note.length ? note.join(' · ') : '기본 난이도') + '</p>';
+  }
   screen('',
     '<h2>등불에 새길 인장을 고르세요</h2>' +
-    '<p>기본 덱(불씨 4, 서리 방패 4, 스파크 2)에 인장의 카드 1장과 유물 1개가 더해집니다.</p>' +
+    '<p>기본 덱(불씨 4, 서리 방패 4, 스파크 2)에 인장의 카드 1장과 유물 1개가 더해집니다.</p>' + ascRow +
     '<div class="row">' + TL.ATTUNE.map(function (a, i) {
       var r = TL.RELICS[a.relic], c = TL.CARDS[a.card];
-      return '<button class="pickbox" data-a="attune" data-i="' + i + '" style="--c:var(--' + a.el + ')">' +
-        '<span class="big lantbig">' + ART.lantern(a.el) + '</span><b>' + a.n + '</b><small>' + a.x + '</small>' +
-        '<span class="get">' + r.i + ' <b>' + r.n + '</b> — ' + r.x + '</span>' +
-        '<span class="get">' + c.a + ' <b>' + c.n + '</b> — ' + TL.cardText({ id: a.card, up: 0 }, null) + '</span>' +
+      return '<button class="seal" data-a="attune" data-i="' + i + '" style="--c:var(--' + a.el + ')">' +
+        '<span class="sealart">' + ART.lantern(a.el) + '</span><b>' + a.n + '</b><small>' + a.x + '</small>' +
+        '<span class="get">' + r.i + ' <b>' + r.n + '</b><br>' + r.x + '</span>' +
+        '<span class="get">' + c.a + ' <b>' + c.n + '</b><br>' + TL.cardText({ id: a.card, up: 0 }, null) + '</span>' +
         '</button>';
     }).join('') + '</div>');
 }
 
+/* ---------- 지도 ---------- */
+function mapNodePos(n) { return { x: 46 + n.lane * 67, y: 506 - n.row * 64 }; }
 function renderMap() {
-  var act = TL.ACTS[S.act], dots = '';
-  for (var k = 0; k < TL.STEPS; k++) {
-    var label = k === TL.STEPS - 1 ? '👑' : k === TL.STEPS - 2 ? '🏕️' : (k + 1);
-    dots += '<i class="' + (k < S.step ? 'done' : k === S.step ? 'cur' : '') + '">' + label + '</i>';
-  }
-  screen('map',
-    '<h2>' + (S.act + 1) + '막 · ' + act.name + '</h2>' +
-    '<div class="track">' + dots + '</div>' +
-    '<p>' + (S.doors.length > 1 ? '갈림길이다. 어느 쪽으로 갈까?' : S.doors[0] === 'boss' ? '길 끝에서 무언가 기다리고 있다.' : '길은 하나뿐이다.') + '</p>' +
-    '<div class="row">' + S.doors.map(function (d, i) {
-      var D = TL.DOORS[d], name = D.n, desc = D.x, icon = D.i;
-      if (d === 'boss') { var b = TL.ENEMIES[act.boss[0]]; name = b.n; icon = ART.enemy(act.boss[0]); desc = '이 막의 주인. HP ' + b.hp[0] + '.'; }
-      return '<button class="pickbox" data-a="door" data-i="' + i + '"><span class="big">' + icon + '</span><b>' + name + '</b><small>' + desc + '</small></button>';
-    }).join('') + '</div>');
+  var act = TL.ACTS[S.act], rows = S.map.rows, path = S.path || [], opts = S.opts, curRow = S.pos ? TL.nodeAt(S, S.pos).row : -1;
+  var edges = '', nodes = '', legend = '';
+  rows.forEach(function (row) {
+    row.forEach(function (n) {
+      var a = mapNodePos(n);
+      n.next.forEach(function (id) {
+        var m = TL.nodeAt(S, id), b = mapNodePos(m), cls = 'edge';
+        var ia = path.indexOf(n.id), ib = path.indexOf(id);
+        if (ia >= 0 && ib === ia + 1) cls += ' walked';
+        else if (n.id === S.pos && opts.indexOf(id) >= 0) cls += ' next';
+        edges += '<path class="' + cls + '" d="M' + a.x + ' ' + a.y + ' L' + b.x + ' ' + b.y + '"/>';
+      });
+    });
+  });
+  rows.forEach(function (row) {
+    row.forEach(function (n) {
+      var p = mapNodePos(n), D = ART.NODE[n.type], oi = opts.indexOf(n.id), reach = oi >= 0, done = path.indexOf(n.id) >= 0 && n.id !== S.pos;
+      var cur = n.id === S.pos, passed = !reach && !done && !cur && n.row <= curRow;
+      var sc = n.type === 'boss' ? 1.35 : 1, cls = 'node' + (reach ? ' reach' : '') + (done ? ' done' : '') + (cur ? ' cur' : '') + (passed ? ' dim' : '');
+      nodes += '<g class="' + cls + '" transform="translate(' + p.x + ' ' + p.y + ')"' + (reach ? ' data-a="door" data-i="' + oi + '" data-t="' + n.type + '"' : '') + '>' +
+        ((reach || cur) ? '<circle class="glow" r="' + (27 * sc) + '" fill="' + D.ring + '" opacity=".4"/>' : '') +
+        '<g class="body" transform="scale(' + sc + ')"><circle class="ring" r="21" fill="' + D.fill + '" stroke="' + D.ring + '" stroke-width="3"/>' + ART.nodeIcon(n.type, 24) + '</g>' +
+        (done ? '<circle cx="' + (15 * sc) + '" cy="' + (-15 * sc) + '" r="7" fill="#e8b04a" stroke="#251607" stroke-width="1.500"/><path d="M' + (11.500 * sc) + ' ' + (-15 * sc) + 'l2.500 2.500 4-5" stroke="#251607" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' : '') +
+        (reach ? '<circle r="' + (30 * sc) + '" fill="transparent"/>' : '') +
+        '</g>';
+    });
+  });
+  ['combat', 'elite', 'rest', 'shop', 'event', 'treasure', 'boss'].forEach(function (t) {
+    legend += '<span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="' + ART.NODE[t].fill + '" stroke="' + ART.NODE[t].ring + '" stroke-width="1.500"/>' + ART.NODE[t].g + '</svg>' + TL.DOORS[t].n + '</span>';
+  });
+  elMain.innerHTML = '<div class="mapscr">' +
+    '<div class="maphead"><h2>' + (S.act + 1) + '막 · ' + act.name + '</h2><p>' + ACT_FLAVOR[S.act] + '</p></div>' +
+    '<div class="mapbox"><svg viewBox="0 0 360 548" preserveAspectRatio="xMidYMid meet">' + edges + nodes + '</svg></div>' +
+    '<div class="mapcap" id="mapcap">' + (opts.length > 1 ? '빛나는 길 중 하나를 고르세요' : '이어진 길은 하나뿐입니다') + '</div>' +
+    '<div class="legend">' + legend + '</div></div>';
 }
 
 function renderCombat() {
   var C = S.combat, alive = TL.alive(S);
-  var cKey = S.seed + '/' + S.act + '/' + S.step + '/' + S.fights, fresh = cKey !== lastCombat;
+  var cKey = S.seed + '/' + S.act + '/' + S.pos, fresh = cKey !== lastCombat;
   var selCard = sel >= 0 ? C.hand[sel] : null;
   var needTarget = selCard && TL.CARDS[selCard.id].tg && TL.canPlay(S, sel);
   var playable = false;
@@ -203,7 +261,8 @@ function renderCombat() {
     if (p.r > 0) cls += ' res'; else if (p.shift) cls += ' shift';
     if (i === sel) cls += ' sel';
     if (!seenUids[c.uid]) { cls += ' new'; seenUids[c.uid] = 1; }
-    return cardHTML(c, { a: 'card', i: i, cls: cls, combat: true, r: p.r });
+    var t = i - (n - 1) / 2;
+    return cardHTML(c, { a: 'card', i: i, cls: cls, combat: true, r: p.r, style: '--rot:' + (t * 2.4).toFixed(2) + 'deg;--ly:' + (Math.pow(Math.abs(t), 1.7) * 2.2).toFixed(1) + 'px' });
   }).join('');
   var keep = {}; C.hand.forEach(function (c) { keep[c.uid] = 1; }); seenUids = keep;
 
@@ -213,16 +272,17 @@ function renderCombat() {
     : !playable && n ? '낼 수 있는 카드가 없습니다. 턴을 끝내세요.' : '';
 
   elMain.innerHTML = '<div class="combat act' + S.act + (C.kind === 'boss' ? ' boss' : '') + '" data-chain="' + (C.chain.el || '') + '">' +
-    '<div class="enemies">' + en + '</div>' +
-    '<div class="mid"><div class="player" id="p"><div class="pi" id="plamp" style="--bd:-' + ((performance.now() / 1000) % 0.9).toFixed(2) + 's">' + ART.lantern(C.chain.el || S.attune || 'n') + '</div><div class="pinfo">' +
-      '<div class="hpbar' + (C.block > 0 ? ' blk' : '') + '"><i style="width:' + (100 * S.hp / S.maxHp) + '%"></i><span>' + S.hp + '/' + S.maxHp + '</span></div>' +
-      '<div class="sts">' + stsHTML(C.st, C.block, C.pow) + '</div>' + warn +
-    '</div></div>' + chainBox + '</div>' +
+    '<div class="stage">' +
+      '<div class="player" id="p"><div class="pi" id="plamp" style="--bd:-' + ((performance.now() / 1000) % 0.9).toFixed(2) + 's">' + ART.lantern(C.chain.el || S.attune || 'n') + '</div>' +
+        '<div class="pinfo"><div class="hpbar' + (C.block > 0 ? ' blk' : '') + '"><i style="width:' + (100 * S.hp / S.maxHp) + '%"></i><span>' + S.hp + '/' + S.maxHp + '</span></div>' +
+        '<div class="sts">' + stsHTML(C.st, C.block, C.pow) + '</div>' + warn + '</div>' + chainBox + '</div>' +
+      '<div class="enemies">' + en + '</div>' +
+    '</div>' +
     '<div class="hint">' + hintTxt + '</div>' +
     '<div class="ctrl">' +
       '<div class="energy' + (C.energy ? '' : ' zero') + '" title="에너지">' + C.energy + '</div>' +
-      '<button class="pile" data-a="pile" data-k="draw" title="뽑을 카드">📥 ' + C.draw.length + '</button>' +
-      '<button class="pile" data-a="pile" data-k="disc" title="버린 카드">📤 ' + C.disc.length + '</button>' +
+      '<button class="pile" data-a="pile" data-k="draw" title="뽑을 카드">' + ART.icon('draw') + C.draw.length + '</button>' +
+      '<button class="pile" data-a="pile" data-k="disc" title="버린 카드">' + ART.icon('disc') + C.disc.length + '</button>' +
       '<button class="endturn' + (!playable && !busy ? ' go' : '') + '" data-a="end"' + (busy ? ' disabled' : '') + '>턴 종료</button>' +
     '</div>' +
     '<div class="hand' + (n >= 5 ? ' many' : '') + '" id="hand" style="--n:' + Math.max(n, 2) + '">' + hand + '</div></div>';
@@ -235,19 +295,20 @@ function renderCombat() {
     }
   }
 }
+
 function renderReward() {
-  var R = S.reward, h = '<h2>' + (R.kind === 'boss' ? '막의 주인을 쓰러뜨렸다!' : '승리') + '</h2>';
-  h += '<div class="gain"><span>💰 골드 +' + R.gold + '</span>';
-  if (R.relic) h += '<span>' + TL.RELICS[R.relic].i + ' <b>' + TL.RELICS[R.relic].n + '</b> — ' + TL.RELICS[R.relic].x + '</span>';
+  var R = S.reward, h = '<h2>' + (R.kind === 'boss' ? '막의 주인을 쓰러뜨렸다' : '승리') + '</h2>';
+  h += '<div class="row" style="gap:8px"><span class="chip gold">' + ART.icon('coin') + '<b>+' + R.gold + '</b></span>';
+  if (R.relic) h += '<span class="chip">' + TL.RELICS[R.relic].i + ' <b>' + TL.RELICS[R.relic].n + '</b> ' + TL.RELICS[R.relic].x + '</span>';
   h += '</div>';
   if (R.bossRelics) {
-    h += '<p>유물 하나를 고르세요.</p><div class="row">' + R.bossRelics.map(function (id, i) {
+    h += '<p>유물 하나를 고르세요.</p><div class="reltiles">' + R.bossRelics.map(function (id, i) {
       var r = TL.RELICS[id];
-      return '<button class="pickbox" data-a="bossrelic" data-i="' + i + '"><span class="big">' + r.i + '</span><b>' + r.n + '</b><small>' + r.x + '</small></button>';
+      return '<button class="rtile" data-a="bossrelic" data-i="' + i + '"><span class="rm">' + r.i + '</span><span><b>' + r.n + '</b>' + r.x + '</span></button>';
     }).join('') + '</div>';
   } else if (R.cards) {
     h += '<p>덱에 넣을 카드를 한 장 고르세요. 덱이 얇을수록 핵심 카드가 자주 손에 들어오니, 건너뛰어도 됩니다.</p>' +
-      '<div class="cards">' + R.cards.map(function (c, i) { return cardHTML(c, { a: 'take', i: i }); }).join('') + '</div>' +
+      '<div class="cards big">' + R.cards.map(function (c, i) { return cardHTML(c, { a: 'take', i: i }); }).join('') + '</div>' +
       '<button class="btn" data-a="take" data-i="-1">건너뛰기</button>';
   }
   screen('', h);
@@ -256,12 +317,11 @@ function renderReward() {
 function renderRest() {
   var amt = TL.restHealAmount(S), up = TL.upgradable(S).length;
   screen('',
-    '<div class="eventicon">🏕️</div><h2>모닥불</h2><p>불 곁에서 숨을 고른다. 하나만 할 수 있다.</p>' +
-    '<div class="col">' +
-    '<button class="btn" data-a="rest"' + (amt ? '' : ' disabled') + '>쉬기<small>' + (amt ? 'HP ' + Math.min(amt, S.maxHp - S.hp) + ' 회복' : '얼음 왕관 때문에 회복할 수 없다') + '</small></button>' +
-    '<button class="btn" data-a="smith"' + (up ? '' : ' disabled') + '>벼리기<small>카드 1장을 영구히 강화</small></button>' +
-    (!amt && !up ? '<button class="btn" data-a="restskip">떠난다</button>' : '') +
-    '</div>');
+    ART.campfire() + '<h2>모닥불</h2><p>불 곁에서 숨을 고른다. 하나만 할 수 있다.</p>' +
+    '<div class="tiles">' +
+    '<button class="tile" data-a="rest"' + (amt ? '' : ' disabled') + '>' + ART.icon('heart') + '<b>쉬기</b><small>' + (!amt ? '얼음 왕관 때문에 회복할 수 없다' : S.hp >= S.maxHp ? '이미 체력이 가득하다' : 'HP ' + Math.min(amt, S.maxHp - S.hp) + ' 회복') + '</small></button>' +
+    '<button class="tile" data-a="smith"' + (up ? '' : ' disabled') + '>' + ART.icon('anvil') + '<b>벼리기</b><small>카드 1장을 영구히 강화</small></button>' +
+    '</div>' + (!amt && !up ? '<button class="btn" data-a="restskip">떠난다</button>' : ''));
 }
 
 function renderPick() {
@@ -279,27 +339,27 @@ function renderPick() {
 
 function renderShop() {
   var sh = S.shop;
-  var h = '<div class="eventicon">🛒</div><h2>상인</h2><p>"좋은 물건만 있다네. 💰 ' + S.gold + ' 가지고 있군."</p>';
-  h += '<div class="cards">' + sh.cards.map(function (c, i) {
+  var h = ART.stall() + '<h2>떠돌이 상인</h2><p>"좋은 물건만 있다네. 마음껏 보게."</p>';
+  h += '<div class="shelf">' + sh.cards.map(function (c, i) {
     return cardHTML(c, { a: 'buycard', i: i, price: c.price, cls: (c.sold ? 'sold' : '') + (S.gold < c.price ? ' poor' : '') });
-  }).join('') + '</div><div class="col">';
+  }).join('') + '</div><div class="reltiles">';
   sh.relics.forEach(function (r, i) {
     var R = TL.RELICS[r.id];
-    h += '<button class="btn shoprel" data-a="buyrelic" data-i="' + i + '"' + (r.sold || S.gold < r.price ? ' disabled' : '') + '>' +
-      '<span class="big">' + R.i + '</span><span><b>' + R.n + '</b>' + R.x + '</span><em>' + (r.sold ? '팔림' : '💰 ' + r.price) + '</em></button>';
+    h += '<button class="rtile" data-a="buyrelic" data-i="' + i + '"' + (r.sold || S.gold < r.price ? ' disabled' : '') + '>' +
+      '<span class="rm">' + R.i + '</span><span><b>' + R.n + '</b>' + R.x + '</span><em>' + (r.sold ? '품절' : ART.icon('coin') + r.price) + '</em></button>';
   });
-  h += '<button class="btn shoprel" data-a="shopremove"' + (sh.removed || S.gold < sh.removeCost || S.deck.length <= 5 ? ' disabled' : '') + '>' +
-    '<span class="big">🗑️</span><span><b>카드 제거</b>덱에서 카드 1장을 영구히 뺀다</span><em>' + (sh.removed ? '이용함' : '💰 ' + sh.removeCost) + '</em></button>';
-  h += '<button class="btn pri" data-a="leaveshop">떠난다</button></div>';
+  h += '<button class="rtile" data-a="shopremove"' + (sh.removed || S.gold < sh.removeCost || S.deck.length <= 5 ? ' disabled' : '') + '>' +
+    '<span class="rm">' + ART.icon('trash') + '</span><span><b>카드 제거</b>덱에서 카드 1장을 영구히 뺀다</span><em>' + (sh.removed ? '이용함' : ART.icon('coin') + sh.removeCost) + '</em></button>';
+  h += '</div><button class="btn pri" data-a="leaveshop">떠난다</button>';
   screen('', h);
 }
 
 function renderEvent() {
-  var E = TL.EVENTS[S.event.id], h = '<div class="eventicon">' + E.i + '</div><h2>' + E.t + '</h2>';
+  var E = TL.EVENTS[S.event.id], h = '<div class="medal">' + E.i + '</div><h2>' + E.t + '</h2>';
   if (S.event.res !== null) {
-    h += '<p style="color:var(--text)">' + esc(S.event.res) + '</p><div class="col"><button class="btn pri" data-a="eventdone">계속</button></div>';
+    h += '<div class="story">' + esc(S.event.res) + '</div><div class="col"><button class="btn pri" data-a="eventdone">계속</button></div>';
   } else {
-    h += '<p>' + E.x + '</p><div class="col">' + E.o(S).map(function (o, i) {
+    h += '<div class="story">' + E.x + '</div><div class="col">' + E.o(S).map(function (o, i) {
       return '<button class="btn" data-a="eventopt" data-i="' + i + '"' + (o.ok ? '' : ' disabled') + '>' + o.l + (o.s ? '<small>' + o.s + '</small>' : '') + '</button>';
     }).join('') + '</div>';
   }
@@ -309,22 +369,28 @@ function renderEvent() {
 function renderEnd() {
   var win = S.phase === 'win';
   if (!S.recorded) {
-    S.recorded = 1; meta.runs++; if (win) meta.wins++;
-    meta.best = Math.max(meta.best, S.floor); saveMeta(); store(SAVE, null);
+    S.recorded = 1;
+    S.gain = S.floor * 2 + (win ? 3 : S.act) * 15 + (win ? 60 + S.asc * 10 : 0);
+    meta.runs++; if (win) meta.wins++;
+    meta.best = Math.max(meta.best, S.floor); meta.embers += S.gain;
+    if (win && S.asc === meta.asc && meta.asc < 5) { meta.asc++; S.ascUp = 1; }
+    saveMeta(); store(SAVE, null);
   }
-  screen('title',
-    '<div class="eventicon">' + (win ? '🏆' : '🕯️') + '</div>' +
+  screen('',
+    '<div class="medal">' + (win ? '🏆' : '🕯️') + '</div>' +
     '<h2>' + (win ? '폭풍이 잦아들었다' : '등불이 꺼졌다') + '</h2>' +
-    '<p>' + (win ? '세 원소의 빛이 심연 끝까지 닿았습니다. 완주를 축하합니다!' : (S.act + 1) + '막 ' + TL.ACTS[S.act].name + '에서 쓰러졌습니다.') + '</p>' +
-    '<div class="gain"><span>도달 ' + S.floor + '층 · 승리한 전투 ' + S.stats.wins + '</span>' +
-    '<span>준 피해 ' + S.stats.dmg + ' · 받은 피해 ' + S.stats.taken + ' · 낸 카드 ' + S.stats.cards + '</span>' +
-    '<span>덱 ' + S.deck.length + '장 · 유물 ' + S.relics.map(function (r) { return TL.RELICS[r].i; }).join('') + '</span></div>' +
-    '<div class="col"><button class="btn pri" data-a="new">다시 도전</button><button class="btn" data-a="title">처음으로</button></div>');
+    '<p>' + (win ? '세 원소의 빛이 심연 끝까지 닿았습니다.' : (S.act + 1) + '막 ' + TL.ACTS[S.act].name + '에서 쓰러졌습니다.') + '</p>' +
+    '<div class="stats"><div class="stat"><b>' + S.floor + '</b><small>도달한 층</small></div><div class="stat"><b>' + S.stats.wins + '</b><small>승리한 전투</small></div>' +
+    '<div class="stat"><b>' + S.stats.dmg + '</b><small>준 피해</small></div><div class="stat"><b>' + S.stats.taken + '</b><small>받은 피해</small></div>' +
+    '<div class="stat"><b>' + S.stats.cards + '</b><small>낸 카드</small></div><div class="stat"><b>' + S.deck.length + '</b><small>덱 크기</small></div></div>' +
+    '<div class="emberline">' + ART.icon('ember') + '불씨 +' + S.gain + '</div>' +
+    (S.ascUp ? '<p style="color:var(--acc2)">시련 ' + meta.asc + ' 단계가 열렸습니다!</p>' : '') +
+    '<div class="col"><button class="btn pri" data-a="new">다시 도전</button><button class="btn" data-a="shrine">등불 제단에서 카드 풀기</button><button class="btn" data-a="title">처음으로</button></div>');
 }
 
 function render() {
   FX.ambient(S ? Math.min(S.act, 2) : 0);
-  if (!S) { renderTitle(); return; }
+  if (!S) { if (shrine) renderShrine(); else renderTitle(); return; }
   renderTop();
   switch (S.phase) {
     case 'start': renderStart(); break;
@@ -551,6 +617,8 @@ var HELP =
   '<p><b class="f">🔥 불 · 화상</b> — 턴이 시작될 때 수치만큼 피해를 주고(방어도 무시) 1 줄어듭니다. 쌓일수록 무섭습니다.</p>' +
   '<p><b class="i">❄️ 서리 · 한기</b> — 한기에 걸린 쪽은 주는 피해가 25% 줄어듭니다. 서리 카드는 방어에 강합니다.</p>' +
   '<p><b class="s">⚡ 번개 · 감전</b> — 감전된 쪽은 받는 피해가 50% 늘어납니다. 번개 카드는 드로우와 에너지에 강합니다.</p>' +
+  '<h3>지도와 성장</h3><p>지도에서 빛나는 길 하나를 고릅니다. 위로 갈수록 강한 적이 있고, 맨 위에는 보스가 기다립니다. 모닥불·상인·미지의 위치를 보고 경로를 미리 계획하세요.</p>' +
+  '<p>쓰러져도 <b>불씨</b>가 남습니다. 제목 화면의 <b>등불 제단</b>에서 불씨로 새 카드를 풀 수 있고, 완주하면 더 어려운 <b>시련</b> 단계가 열립니다.</p>' +
   '<h3>조작</h3><p>카드를 눌러 사용합니다. 적이 여럿이면 카드를 고른 뒤 적을 누르세요. 터치 화면에서는 한 번 눌러 확대하고 한 번 더 눌러 사용합니다.</p>' +
   '<p>키보드: 숫자 1~0 카드, E 또는 스페이스 턴 종료, Esc 선택 취소.</p>' +
   '<h3>요령</h3><p>카드를 무조건 집지 마세요. 덱이 얇고 한두 원소에 집중할수록 공명이 잘 이어집니다. 모닥불에서는 HP가 넉넉하면 강화가 이득입니다.</p>' +
@@ -564,7 +632,8 @@ function ask(msg, yes) {
     '<button class="btn pri" data-a="yes">예</button><button class="btn" data-a="close">아니요</button></div>');
 }
 function startNew() {
-  S = TL.newRun((Date.now() ^ (Math.random() * 0x7fffffff)) | 0); sel = -1; busy = false; seenUids = {};
+  meta.ascSel = Math.min(meta.ascSel, meta.asc);
+  S = TL.newRun((Date.now() ^ (Math.random() * 0x7fffffff)) | 0, { asc: meta.ascSel, unlocks: meta.unlocked.slice() }); sel = -1; busy = false; seenUids = {};
   closeModal(); render(); save();
   if (!meta.helped) { meta.helped = true; saveMeta(); openModal('놀이법', HELP); }
 }
@@ -577,7 +646,16 @@ var ACT = {
   },
   yes: function () { var f = pending; pending = null; closeModal(); if (f) f(); },
   'continue': function () { S = loadSave(); sel = -1; busy = false; seenUids = {}; render(); },
-  title: function () { S = null; closeModal(); render(); },
+  title: function () { S = null; shrine = false; closeModal(); render(); },
+  shrine: function () { S = null; shrine = true; render(); },
+  back: function () { shrine = false; render(); },
+  asc: function (d) { meta.ascSel = +d.i; saveMeta(); render(); },
+  unlock: function (d) {
+    var c = TL.CARDS[d.id];
+    if (!c || meta.unlocked.indexOf(d.id) >= 0) return;
+    if (meta.embers < c.lock) { toast('불씨가 부족합니다 (' + c.lock + ' 필요)'); return; }
+    meta.embers -= c.lock; meta.unlocked.push(d.id); saveMeta(); SFX.coin(); toast('<b>' + c.n + '</b> 해금! 다음 모험부터 나옵니다.'); render();
+  },
   help: function () { openModal('놀이법', HELP); },
   mute: function () { meta.mute = !meta.mute; saveMeta(); closeModal(); render(); if (!meta.mute) SFX.click(); },
   close: closeModal,
@@ -640,6 +718,13 @@ document.addEventListener('keydown', function (ev) {
       var was = touch; touch = false; clickCard(i); touch = was;
     }
   }
+});
+
+document.addEventListener('mouseover', function (ev) {
+  var t = ev.target.closest && ev.target.closest('.node.reach'), cap = $('mapcap');
+  if (!cap || !t) return;
+  var D = TL.DOORS[t.getAttribute('data-t')];
+  cap.innerHTML = '<b>' + D.n + '</b> — ' + D.x;
 });
 
 window.__tl = { get S() { return S; }, set S(v) { S = v; render(); } };

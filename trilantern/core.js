@@ -185,6 +185,31 @@ var CARDS = {
     fx: function (S, v) { applyAll(S, 'shock', v.n); } },
   surge: { n: '번개 질주', a: '🏃', el: 's', t: 'pow', c: 1, r: 2, v: {}, u: { c: 0 }, tx: '매 턴 카드를 1장 더 뽑는다.',
     fx: function (S) { addPow(S, 'surge', 1); } },
+  /* 해금 카드: 불씨로 제단에서 푼다 */
+  inferno: { n: '대화재', a: '🌋', el: 'f', t: 'skl', c: 2, r: 2, lock: 60, v: { n: 3 }, u: { n: 4 }, tx: '모든 적에게 화상 {n}. 이후 모든 적의 화상이 절반만큼 더 늘어난다.',
+    fx: function (S, v) { applyAll(S, 'burn', v.n); alive(S).forEach(function (e) { var add = Math.floor((e.st.burn || 0) / 2); if (add) { e.st.burn += add; fx(S, { t: 'st', who: eid(S, e), st: 'burn', n: add }); } }); } },
+  pyroclasm: { n: '화쇄류', a: '🌋', el: 'f', t: 'atk', c: 2, r: 2, lock: 80, tg: 1, v: { d: 6 }, u: { d: 8 }, tx: '피해 {d}. 이 카드보다 먼저 이번 턴에 낸 카드 1장마다 피해 +3.',
+    fx: function (S, v, t, x) { hit(S, t, x.d + 3 * (S.combat.played - 1)); } },
+  cauterize: { n: '소작', a: '🩹', el: 'f', t: 'skl', c: 1, r: 1, lock: 40, v: { b: 6, n: 2 }, u: { b: 8, n: 3 }, tx: '방어도 {b}. 모든 적에게 화상 {n}.',
+    fx: function (S, v, t, x) { block(S, x.b); applyAll(S, 'burn', v.n); } },
+  icicle: { n: '고드름', a: '🧊', el: 'i', t: 'atk', c: 0, r: 0, lock: 30, tg: 1, v: { d: 3, n: 1 }, u: { d: 5, n: 2 }, tx: '피해 {d}. 한기 {n}.',
+    fx: function (S, v, t, x) { hit(S, t, x.d); apply(S, t, 'chill', v.n); } },
+  hail: { n: '우박', a: '🧊', el: 'i', t: 'atk', c: 1, r: 0, lock: 40, v: { d: 4, n: 1, rd: 2 }, u: { d: 6, n: 1, rd: 3 }, tx: '모든 적에게 피해 {d}. 한기 {n}. 공명마다 피해 +{rd}.',
+    fx: function (S, v, t, x) { hitAll(S, x.d); applyAll(S, 'chill', v.n); } },
+  frostnova: { n: '서리 폭발', a: '❄️', el: 'i', t: 'skl', c: 2, r: 1, lock: 50, v: { n: 3, b: 8 }, u: { n: 4, b: 11 }, tx: '모든 적에게 한기 {n}. 방어도 {b}.',
+    fx: function (S, v, t, x) { applyAll(S, 'chill', v.n); block(S, x.b); } },
+  deepfreeze: { n: '심층 동결', a: '🥶', el: 'i', t: 'atk', c: 2, r: 1, lock: 60, tg: 1, v: { d: 8 }, u: { d: 11 }, tx: '피해 {d}. 대상의 한기 1당 피해 +3.',
+    fx: function (S, v, t, x) { hit(S, t, x.d + 3 * (t.st.chill || 0)); } },
+  arc: { n: '전호', a: '🌩️', el: 's', t: 'atk', c: 0, r: 0, lock: 30, v: { d: 3, k: 2, rd: 1 }, u: { d: 4, k: 2, rd: 2 }, tx: '무작위 적에게 피해 {d}를 {k}번. 공명마다 피해 +{rd}.',
+    fx: function (S, v, t, x) { for (var k = 0; k < v.k; k++) hitRand(S, x.d); } },
+  thunderclap: { n: '천둥벽력', a: '⛈️', el: 's', t: 'atk', c: 2, r: 1, lock: 60, v: { d: 7, n: 1, rd: 3 }, u: { d: 9, n: 2, rd: 4 }, tx: '모든 적에게 피해 {d}. 감전 {n}. 공명마다 피해 +{rd}.',
+    fx: function (S, v, t, x) { hitAll(S, x.d); applyAll(S, 'shock', v.n); } },
+  charge: { n: '충전', a: '🔋', el: 's', t: 'skl', c: 0, r: 1, lock: 50, ex: 1, v: { k: 1 }, u: { k: 2 }, tx: '에너지 1. 카드 {k}장 뽑기. 소멸.',
+    fx: function (S, v) { S.combat.energy += 1; draw(S, v.k); } },
+  tesla: { n: '테슬라 코일', a: '📡', el: 's', t: 'pow', c: 1, r: 2, lock: 80, v: { n: 3 }, u: { n: 5 }, tx: '번개 카드를 낼 때마다 무작위 적에게 피해 {n}.',
+    fx: function (S, v) { addPow(S, 'tesla', v.n); } },
+  anchor: { n: '공명의 닻', a: '⚓', el: 'n', t: 'pow', c: 1, r: 2, lock: 90, v: {}, u: { c: 0 }, tx: '원소를 바꿔도 공명이 절반 남는다.',
+    fx: function (S) { addPow(S, 'anchor', 1); } },
   /* 무속성: 공명을 끊지도 잇지도 않는다 */
   prism: { n: '프리즘', a: '🔮', el: 'n', t: 'skl', c: 1, r: 0, v: { b: 6, k: 1 }, u: { b: 9, k: 1 }, tx: '방어도 {b}. 카드 {k}장 뽑기.',
     fx: function (S, v, t, x) { block(S, x.b); draw(S, v.k); } },
@@ -209,7 +234,7 @@ function prospect(S, card) {
   var C = S && S.combat, el = CARDS[card.id].el;
   if (!C || el === 'n') return { r: 0, shift: false };
   if (C.chain.el === el) return { r: C.chain.n, shift: false };
-  return { r: 0, shift: !!C.chain.el };
+  return { r: C.chain.el && C.pow.anchor ? Math.floor(C.chain.n / 2) : 0, shift: !!C.chain.el };
 }
 function cardText(card, S) {
   var d = CARDS[card.id], v = vals(card), C = S && S.combat, r = prospect(S, card).r;
@@ -220,7 +245,7 @@ function cardText(card, S) {
     if (k === 'd') { var b = v.d + r * (v.rd || 0); return num(C ? calc(b, C.st, null) : b, v.d); }
     if (k === 'b') return num(v.b + r * (v.rb || 0), v.b);
     return v[k];
-  }).replace(/(공명|전환|소멸|화상|한기|감전|힘)/g, '<b>$1</b>');
+  }).replace('방어도 +0만큼','방어도만큼').replace(/(공명|전환|소멸|화상|한기|감전|힘)/g, '<b>$1</b>');
 }
 
 /* ---------- 유물 ---------- */
@@ -300,10 +325,11 @@ var ACTS = [
 ];
 var STEPS = 8; // 막마다 0..7, 7 이 보스
 
-function mkEnemy(S, key) {
-  var d = ENEMIES[key];
+function mkEnemy(S, key, kind) {
+  var d = ENEMIES[key], a = S.asc || 0;
   var hp = ri(S, d.hp[0], d.hp[1]);
-  var e = { key: key, hp: hp, maxHp: hp, block: 0, st: {}, pi: d.rnd ? ri(S, 0, d.pat.length - 1) : 0 };
+  hp = Math.round(hp * (1 + (a >= 1 ? 0.08 : 0) + (a >= 3 && kind && kind !== 'combat' ? 0.15 : 0)));
+  var e = { key: key, hp: hp, maxHp: hp, block: 0, st: a >= 2 ? { str: 1 } : {}, pi: d.rnd ? ri(S, 0, d.pat.length - 1) : 0 };
   e.intent = d.pat[e.pi % d.pat.length];
   return e;
 }
@@ -340,7 +366,7 @@ function startCombat(S, kind) {
     S.lastFight = keys.join(); S.fights++;
   }
   var C = S.combat = {
-    kind: kind, en: keys.map(function (k) { return mkEnemy(S, k); }),
+    kind: kind, en: keys.map(function (k) { return mkEnemy(S, k, kind); }),
     draw: S.deck.map(function (c) { return { id: c.id, up: c.up, uid: c.uid }; }),
     hand: [], disc: [], exh: [], energy: 0, block: 0, st: {}, pow: {},
     chain: { el: null, n: 0 }, played: 0, turn: 0, nextE: 0, phase: 'player', ei: 0, flags: {}
@@ -382,8 +408,9 @@ function playCard(S, hi, ti) {
   C.hand.splice(hi, 1);
   var p = prospect(S, card);
   if (d.el !== 'n') {
-    if (C.chain.el === d.el) C.chain.n++; else C.chain = { el: d.el, n: 1 };
+    if (C.chain.el === d.el) C.chain.n++; else C.chain = { el: d.el, n: 1 + (p.shift ? p.r : 0) };
   }
+  var tesla = C.pow.tesla || 0;
   C.played++; S.stats.cards++;
   fx(S, { t: 'play', el: d.el, type: d.t });
   d.fx(S, v, t, { r: p.r, shift: p.shift, d: (v.d || 0) + p.r * (v.rd || 0), b: (v.b || 0) + p.r * (v.rb || 0) });
@@ -392,6 +419,7 @@ function playCard(S, hi, ti) {
     if (C.pow.rod) hitRand(S, C.pow.rod);
     if (has(S, 'lens') && !C.flags.lens) { C.flags.lens = 1; draw(S, 1); }
   }
+  if (tesla && d.el === 's' && d.t !== 'pow') hitRand(S, tesla);
   if (p.r > 0) fx(S, { t: 'res', n: C.chain.n });
   if (has(S, 'fork') && C.chain.n >= 3 && !C.flags.fork) { C.flags.fork = 1; C.energy++; fx(S, { t: 'relic', id: 'fork' }); }
   if (has(S, 'gears') && C.played === 4) { fx(S, { t: 'relic', id: 'gears' }); alive(S).forEach(function (e) { damageEnemy(S, e, 6); }); }
@@ -486,6 +514,7 @@ function winCombat(S) {
   fx(S, { t: 'sfx', s: 'win' });
   if (kind === 'boss' && S.act === ACTS.length - 1) { S.phase = 'win'; return; }
   if (has(S, 'lamp')) heal(S, 5);
+  if (kind === 'combat') heal(S, 4);
   var gold = kind === 'boss' ? 60 : kind === 'elite' ? ri(S, 30, 40) : ri(S, 12, 20);
   if (has(S, 'purse')) gold += 12;
   S.gold += gold;
@@ -508,7 +537,7 @@ function rollCards(S, n, w) {
   while (out.length < n && guard++ < 300) {
     var r = weighted(S, [[0, w[0]], [1, w[1]], [2, w[2]]]);
     var pool = CARD_IDS.filter(function (id) {
-      return CARDS[id].r === r && !out.some(function (o) { return o.id === id; });
+      return CARDS[id].r === r && (!CARDS[id].lock || S.unlocked.indexOf(id) >= 0) && !out.some(function (o) { return o.id === id; });
     });
     if (!pool.length) continue;
     out.push({ id: pick(S, pool), up: rnd(S) < [0, 0.15, 0.3][S.act] ? 1 : 0 });
@@ -530,14 +559,14 @@ function takeCard(S, i) { // i < 0 이면 건너뛴다
   var boss = R.kind === 'boss';
   S.reward = null;
   if (boss) {
-    S.act++; S.step = 0; S.fights = 0; S.floor++;
+    S.act++; S.floor++;
     heal(S, Math.floor(S.maxHp * 0.5));
-    makeDoors(S); S.phase = 'map';
+    newAct(S); S.phase = 'map';
   } else advance(S);
   return true;
 }
 function advance(S) {
-  S.step++; S.floor++;
+  S.floor++;
   makeDoors(S); S.phase = 'map';
 }
 var DOORS = {
@@ -549,26 +578,65 @@ var DOORS = {
   treasure: { i: '🎁', n: '보물', x: '유물 하나를 얻는다.' },
   boss: { i: '👑', n: '보스', x: '이 막의 주인.' }
 };
-function makeDoors(S) {
-  var st = S.step;
-  if (st === 0) S.doors = ['combat'];
-  else if (st === STEPS - 1) S.doors = ['boss'];
-  else if (st === STEPS - 2) S.doors = ['rest', 'shop'];
-  else {
-    var w = [['event', 32], ['shop', 13], ['rest', 13], ['treasure', 7]];
-    if (st >= 2) w.push(['elite', 26]);
-    var out = ['combat'];
-    while (out.length < 3) {
-      var k = weighted(S, w);
-      if (out.indexOf(k) < 0) out.push(k);
-    }
-    S.doors = out;
+/* ---------- 지도: 갈래길이 있는 8줄. 마지막 줄이 보스 ---------- */
+function nodeAt(S, id) {
+  var p = id.split('-'), row = S.map.rows[+p[0]];
+  for (var i = 0; i < row.length; i++) if (row[i].lane === +p[1]) return row[i];
+  return null;
+}
+function link(A, B) {
+  var i = 0, j = 0;
+  function add() { if (A[i].next.indexOf(B[j].id) < 0) A[i].next.push(B[j].id); }
+  add();
+  while (i < A.length - 1 || j < B.length - 1) {
+    var ai = i < A.length - 1, bj = j < B.length - 1;
+    if (ai && bj) { if (Math.abs(A[i + 1].lane - B[j].lane) <= Math.abs(A[i].lane - B[j + 1].lane)) i++; else j++; }
+    else if (ai) i++; else j++;
+    add();
   }
+}
+function genMap(S) {
+  var rows = [], r, k, lanes;
+  for (r = 0; r < STEPS; r++) {
+    if (r === STEPS - 1) lanes = [2];
+    else { k = r === 0 ? ri(S, 3, 4) : ri(S, 2, 4); lanes = shuffle(S, [0, 1, 2, 3, 4]).slice(0, k).sort(); }
+    rows.push(lanes.map(function (l) { return { id: r + '-' + l, row: r, lane: l, type: 'combat', next: [] }; }));
+  }
+  for (r = 0; r < STEPS - 1; r++) link(rows[r], rows[r + 1]);
+  rows[STEPS - 1][0].type = 'boss';
+  for (r = 1; r < STEPS - 1; r++) rows[r].forEach(function (n) {
+    if (r === STEPS - 2) { n.type = 'rest'; return; }
+    var w = [['combat', 30], ['event', 26], ['shop', 9], ['rest', 13], ['treasure', 6]];
+    if (r >= 2) w.push(['elite', 9]);
+    n.type = weighted(S, w);
+  });
+  function ensure(type, a, b) {
+    var pool = [], found = false;
+    for (var q = a; q <= b; q++) rows[q].forEach(function (n) { if (n.type === type) found = true; else if (n.type === 'combat') pool.push(n); });
+    if (!found && pool.length) pick(S, pool).type = type;
+  }
+  ensure('elite', 2, 5); ensure('shop', 1, 5); ensure('event', 1, 5); ensure('rest', 2, 4);
+  return { rows: rows };
+}
+function newAct(S) {
+  S.map = genMap(S); S.pos = null; S.path = []; S.step = 0; S.fights = 0;
+  makeDoors(S);
+}
+function currentNodes(S) {
+  if (!S.pos) return S.map.rows[0];
+  return nodeAt(S, S.pos).next.map(function (id) { return nodeAt(S, id); });
+}
+function makeDoors(S) {
+  var ns = currentNodes(S);
+  S.opts = ns.map(function (n) { return n.id; });
+  S.doors = ns.map(function (n) { return n.type; });
 }
 function enterDoor(S, i) {
   if (S.phase !== 'map') return false;
-  var k = S.doors[i];
-  if (!k) return false;
+  var id = S.opts[i];
+  if (!id) return false;
+  var node = nodeAt(S, id), k = node.type;
+  S.pos = id; S.step = node.row; S.path.push(id);
   if (k === 'combat' || k === 'elite' || k === 'boss') startCombat(S, k);
   else if (k === 'rest') S.phase = 'rest';
   else if (k === 'shop') { makeShop(S); S.phase = 'shop'; }
@@ -588,7 +656,7 @@ function enterDoor(S, i) {
 }
 
 /* ---------- 모닥불 ---------- */
-function restHealAmount(S) { return has(S, 'crown') ? 0 : Math.floor(S.maxHp * 0.3) + (has(S, 'herb') ? 15 : 0); }
+function restHealAmount(S) { return has(S, 'crown') ? 0 : Math.floor(S.maxHp * (S.asc >= 5 ? 0.2 : 0.3)) + (has(S, 'herb') ? 15 : 0); }
 function restHeal(S) {
   if (S.phase !== 'rest' || has(S, 'crown')) return false;
   heal(S, restHealAmount(S)); advance(S); return true;
@@ -630,10 +698,10 @@ function pickCancel(S) {
 function makeShop(S) {
   var cards = rollCards(S, 5, [50, 37, 13]).map(function (c) {
     var base = [48, 72, 120][CARDS[c.id].r] + (c.up ? 25 : 0);
-    return { id: c.id, up: c.up, price: Math.round(base * (0.9 + rnd(S) * 0.2)), sold: 0 };
+    return { id: c.id, up: c.up, price: Math.round(base * (0.9 + rnd(S) * 0.2) * (S.asc >= 5 ? 1.25 : 1)), sold: 0 };
   });
   var rel = shuffle(S, relicPool(S, 'c')).slice(0, 2).map(function (id) {
-    return { id: id, price: ri(S, 135, 165), sold: 0 };
+    return { id: id, price: Math.round(ri(S, 135, 165) * (S.asc >= 5 ? 1.25 : 1)), sold: 0 };
   });
   S.shop = { cards: cards, relics: rel, removeCost: 70 + 25 * S.removes, removed: 0 };
 }
@@ -728,10 +796,12 @@ var ATTUNE = [
   { el: 'i', n: '서리의 인장', relic: 'ice', card: 'rime', x: '두꺼운 방어도로 버티고, 한기로 적의 공격을 무디게 한다.' },
   { el: 's', n: '번개의 인장', relic: 'coil', card: 'static', x: '카드를 많이 뽑고 많이 낸다. 감전된 적은 더 아프게 맞는다.' }
 ];
-function newRun(seed) {
+function newRun(seed, o) {
+  o = o || {};
+  var asc = o.asc || 0;
   var S = {
-    v: 1, rs: seed | 0, seed: seed | 0, uid: 1, phase: 'start',
-    hp: 72, maxHp: 72, gold: 60, deck: [], relics: ['lamp'],
+    v: 2, rs: seed | 0, seed: seed | 0, uid: 1, phase: 'start', asc: asc, unlocked: o.unlocks || [], pos: null, path: [], map: null, opts: [],
+    hp: asc >= 4 ? 64 : 72, maxHp: asc >= 4 ? 64 : 72, gold: asc >= 4 ? 30 : 60, deck: [], relics: ['lamp'],
     act: 0, step: 0, floor: 1, fights: 0, lastFight: '', removes: 0, seen: [],
     doors: [], combat: null, reward: null, shop: null, event: null, pick: null,
     stats: { wins: 0, dmg: 0, taken: 0, cards: 0 }, fx: []
@@ -746,7 +816,7 @@ function attune(S, i) {
   if (S.phase !== 'start' || !ATTUNE[i]) return false;
   gainRelic(S, ATTUNE[i].relic); addCard(S, ATTUNE[i].card);
   S.attune = ATTUNE[i].el;
-  makeDoors(S); S.phase = 'map';
+  newAct(S); S.phase = 'map';
   return true;
 }
 
@@ -761,6 +831,8 @@ var API = {
   buyCard: buyCard, buyRelic: buyRelic, shopRemove: shopRemove, leaveShop: leaveShop,
   eventChoose: eventChoose, eventDone: eventDone,
   vals: vals, costOf: costOf, cardName: cardName, cardText: cardText, prospect: prospect,
+  nodeAt: nodeAt, currentNodes: currentNodes, makeDoors: makeDoors,
+  unlockList: function () { return Object.keys(CARDS).filter(function (id) { return CARDS[id].lock; }); },
   intentView: intentView, incoming: incoming, alive: alive, has: has, calc: calc
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
