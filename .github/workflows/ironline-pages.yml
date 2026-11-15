@@ -10,6 +10,7 @@ on:
       - "ffscript/**"
       - "lodestar/**"
       - "resonance/**"
+      - "kitchendefense/**"
       - "site/**"
       - ".github/workflows/ironline-pages.yml"
   workflow_dispatch:
@@ -42,13 +43,14 @@ jobs:
           ls -la build/web
       - name: Assemble site
         run: |
-          mkdir -p _site/ironline _site/ffscript _site/lodestar/js _site/resonance
+          mkdir -p _site/ironline _site/ffscript _site/lodestar/js _site/resonance _site/kitchendefense
           cp -r site/. _site/
           cp -r ironline/build/web/. _site/ironline/
           cp ffscript/index.html _site/ffscript/index.html
           cp lodestar/index.html lodestar/style.css _site/lodestar/
           cp lodestar/js/*.js _site/lodestar/js/
           cp resonance/index.html _site/resonance/index.html
+          cp kitchendefense/index.html kitchendefense/logo.svg _site/kitchendefense/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
