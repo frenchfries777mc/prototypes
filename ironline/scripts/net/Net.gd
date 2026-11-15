@@ -421,7 +421,7 @@ func host_apply_inputs(sim: Sim) -> void:
 			continue
 		var b: int = inp.btn
 		sim.set_input(p.slot, inp.move, inp.yaw, inp.pitch, (b & Proto.BTN_FIRE) != 0,
-			(b & Proto.BTN_JUMP) != 0, (b & Proto.BTN_SPRINT) != 0, (b & Proto.BTN_RELOAD) != 0)
+			(b & Proto.BTN_JUMP) != 0, (b & Proto.BTN_SPRINT) != 0, (b & Proto.BTN_RELOAD) != 0, (b & Proto.BTN_ADS) != 0)
 
 
 ## sim.step 직후 호출: 이벤트를 모으고 주기적으로 스냅샷을 보낸다.
@@ -603,6 +603,7 @@ func client_tick(sim: Sim, move: Vector2, yaw: float, pitch: float, btn: int) ->
 		u.in_jump = (btn & Proto.BTN_JUMP) != 0
 		u.in_sprint = (btn & Proto.BTN_SPRINT) != 0
 		u.in_fire = (btn & Proto.BTN_FIRE) != 0
+		u.in_ads = (btn & Proto.BTN_ADS) != 0
 		sim.predict_local(u, Sim.TICK)
 	hist.append({"seq": seq, "move": move, "yaw": yaw, "btn": btn})
 	if hist.size() > 90:
@@ -723,6 +724,7 @@ func _reconcile(sim: Sim, u: Sim.Unit, auth: Vector3, local: Dictionary, on_grou
 		s.in_jump = (h.btn & Proto.BTN_JUMP) != 0
 		s.in_sprint = (h.btn & Proto.BTN_SPRINT) != 0
 		s.in_fire = (h.btn & Proto.BTN_FIRE) != 0
+		s.in_ads = (h.btn & Proto.BTN_ADS) != 0
 		sim._integrate(s, Sim.TICK)
 	var err_v := s.pos - u.pos
 	if err_v.length() > 1.8:

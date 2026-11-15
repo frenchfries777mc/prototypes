@@ -29,7 +29,7 @@ var fps_t := 0.0
 var render_scale := 1.0
 var cfg := {"bots": -1, "seed": 20260101, "team": -2, "tp": false, "perf": false, "nomouse": false,
 	"q": -1, "scale": 1.0, "join": "", "auto": "", "code": "", "name": "", "autostart": false,
-	"peerhost": "", "peerport": 443, "peersecure": true}
+	"peerhost": "", "peerport": 443, "peersecure": true, "warp": ""}
 var perf_acc := 0.0
 var perf_steps := 0
 var perf_t := 0.0
@@ -120,6 +120,7 @@ func _read_config() -> void:
 			"code": cfg.code = v.to_upper()
 			"name": cfg.name = v
 			"autostart": cfg.autostart = v == "1"
+			"warp": cfg.warp = v
 			"peerhost": cfg.peerhost = v
 			"peerport": cfg.peerport = int(v)
 			"peersecure": cfg.peersecure = v != "0"
@@ -374,6 +375,15 @@ func _play(dt: float) -> void:
 	if me.alive and not was_alive:
 		look_yaw = me.yaw
 		look_pitch = 0.0
+		if cfg.warp != "" and mode == "solo":
+			var wp: PackedStringArray = str(cfg.warp).split(",")
+			me.pos = Vector3(float(wp[0]), 0.0, float(wp[1]))
+			me.pos.y = sim.world.height_at(me.pos.x, me.pos.z)
+			me.prev_pos = me.pos
+			if wp.size() > 2:
+				look_yaw = deg_to_rad(float(wp[2]))
+				me.yaw = look_yaw
+			cfg.warp = ""
 	was_alive = me.alive
 	hud.show_score = Input.is_key_pressed(KEY_TAB)
 	hud.look_yaw = look_yaw
@@ -386,12 +396,14 @@ func _play(dt: float) -> void:
 		var fire := false
 		var jump := false
 		var sprint := false
+		var ads := false
 		if captured:
 			mv.x = float(Input.is_key_pressed(KEY_D)) - float(Input.is_key_pressed(KEY_A))
 			mv.y = float(Input.is_key_pressed(KEY_W)) - float(Input.is_key_pressed(KEY_S))
 			fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 			jump = Input.is_key_pressed(KEY_SPACE)
 			sprint = Input.is_key_pressed(KEY_SHIFT)
+			ads = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 		if mode == "client":
 			if sim.winner < 0:
 				var btn := 0
@@ -403,9 +415,11 @@ func _play(dt: float) -> void:
 					btn |= Proto.BTN_SPRINT
 				if reload_edge:
 					btn |= Proto.BTN_RELOAD
+				if ads:
+					btn |= Proto.BTN_ADS
 				net.client_tick(sim, mv, look_yaw, look_pitch, btn)
 		else:
-			sim.set_input(local_id, mv, look_yaw, look_pitch, fire, jump, sprint, reload_edge)
+			sim.set_input(local_id, mv, look_yaw, look_pitch, fire, jump, sprint, reload_edge, ads)
 			if mode == "host":
 				net.host_apply_inputs(sim)
 			var before := sim.events.size()

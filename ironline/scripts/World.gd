@@ -28,6 +28,7 @@ var craters: Array = []
 # {mn: Vector3, mx: Vector3, kind: int}  kind 0 석조벽 1 모래주머니 2 상자 3 목재
 var boxes: Array = []
 var box_cells := {}
+var houses: Array = []
 
 
 func _init(s: int = 1) -> void:
@@ -138,6 +139,14 @@ func _place_props(rng: RandomNumberGenerator) -> void:
 		if i >= 1 and i <= 3:
 			var sgn := -1.0 if pz > 0.0 else 1.0
 			_add_house(px - 3.0, pz + sgn * 22.0, rng)
+			for bq in 2:
+				_add_box(px - 3.0 + rng.randf_range(-6.0, 6.0), pz + sgn * (22.0 - 6.4 - rng.randf() * 1.5), 0.9, 0.9, 1.05, 5)
+		if i == 0 or i == 4 or i == 2:
+			var nt := 3 if i != 2 else 1
+			for tq in nt:
+				var ta := rng.randf() * TAU
+				var tr := rng.randf_range(16.0, 20.0)
+				_add_box(px + cos(ta) * tr, pz + sin(ta) * tr, 3.4, 2.7, 1.9, 6)
 		for k in 7:
 			var a := rng.randf() * TAU
 			var r := rng.randf_range(10.5, 20.0)
@@ -194,6 +203,7 @@ func _add_house(cx: float, cz: float, rng: RandomNumberGenerator) -> void:
 	var hd := 3.6
 	var t := 0.7
 	var h := rng.randf_range(2.8, 3.4)
+	houses.append({"cx": cx, "cz": cz, "hw": hw, "hd": hd, "h": h})
 	# 남쪽(z+)은 통벽, 북쪽(z-)은 출입구
 	_add_box(cx, cz + hd, hw * 2.0, t, h, 0)
 	_add_box(cx - hw * 0.5 - 1.0, cz - hd, hw - 2.0, t, h * 0.85, 0)

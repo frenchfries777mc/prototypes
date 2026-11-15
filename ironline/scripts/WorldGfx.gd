@@ -89,9 +89,13 @@ static func props(w: World) -> Node3D:
 			0: _wall(g, mn, mx, rng)
 			1: _sandbags(g, mn, mx, rng)
 			2: _crate(g, mn, mx, rng)
+			3: _timber(g, mn, mx)
+			5: _barrel(g, mn, mx, rng)
+			6: _tent(g, mn, mx, rng)
 			_: _timber(g, mn, mx)
 	_trees(chunks, w, rng)
 	_wire(chunks, w, rng)
+	_decor(chunks, w, rng)
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/props.gdshader")
 	var root := Node3D.new()
@@ -301,3 +305,160 @@ static func beam(height: float) -> MeshInstance3D:
 	mi.position.y = height * 0.5
 	# 셰이더는 로컬 y(−h/2..h/2)를 쓰므로 hy 보정을 위해 메시를 위로 올려 둔다
 	return mi
+
+
+static func _barrel(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
+	var c := (mn + mx) * 0.5
+	var base := Vector3(c.x, mn.y + 0.35, c.z)
+	var wood := _kind_col(Color(0.30, 0.20, 0.10) * rng.randf_range(0.8, 1.15), 3)
+	var steel := Color(0.07, 0.07, 0.07, 5.0 / 8.0)
+	var prof := [Vector2(0.0, 0.0), Vector2(0.27, 0.0), Vector2(0.31, 0.12), Vector2(0.345, 0.5), Vector2(0.31, 0.9), Vector2(0.27, 1.02), Vector2(0.0, 1.02)]
+	g.lathe(prof, 12, Transform3D(Basis.IDENTITY, base), wood)
+	for hy in [0.14, 0.42, 0.6, 0.88]:
+		var r := 0.31 + 0.04 * sin(hy / 1.02 * PI)
+		g.cone(r + 0.006, r + 0.006, 0.035, Transform3D(Basis.IDENTITY, base + Vector3(0, hy, 0)), steel, 0, 12, false)
+
+
+static func _tent(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
+	var size := mx - mn
+	var c := (mn + mx) * 0.5
+	var h := size.y - 0.35
+	var canvas := _kind_col(Color(0.42, 0.38, 0.25) * rng.randf_range(0.9, 1.1), 5)
+	var rot := Basis(Vector3.UP, rng.randf_range(-0.15, 0.15))
+	g.prism(Vector2(size.x, size.z), Vector2(0.12, size.z), h, Transform3D(rot, Vector3(c.x, mn.y + 0.35, c.z)), canvas, 0)
+	# 지지대와 밧줄 말뚝
+	var post := Color(0.2, 0.14, 0.09, 4.0 / 8.0)
+	for sz in [-1.0, 1.0]:
+		g.rod(Vector3(c.x, mn.y + 0.3, c.z + sz * (size.z * 0.5 + 0.05)), Vector3(c.x, mn.y + 0.35 + h + 0.12, c.z + sz * (size.z * 0.5 + 0.05)), 0.04, 0.04, post, 0, 6)
+
+
+static func _decor(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -> void:
+	var wood := _kind_col(Color(0.30, 0.21, 0.12), 3)
+	var post := Color(0.2, 0.14, 0.09, 4.0 / 8.0)
+	# 참호 바닥 널빤지와 벽 말뚝
+	for tx in World.TRENCH_X:
+		var z := -88.0
+		while z < 88.0:
+			var cx := w.trench_center(tx, z)
+			if not w._near_point(cx, z, World.POINT_R + 3.0):
+				var y := w.height_at(cx, z)
+				var g := _g(chunks, Vector3(cx, y, z))
+				if rng.randf() > 0.07:
+					g.box(Vector3(1.9, 0.05, 0.42), Transform3D(Basis(Vector3.UP, rng.randf_range(-0.06, 0.06)), Vector3(cx, y + 0.04, z)), wood)
+				if int(z) % 3 == 0 and rng.randf() < 0.85:
+					for side in [-1.0, 1.0]:
+						var px: float = cx + side * 1.75
+						var py := w.height_at(px, z)
+						g.rod(Vector3(px, py - 0.15, z), Vector3(px + side * 0.12, py + 1.0 + rng.randf() * 0.35, z), 0.055, 0.045, post, 0, 5)
+			z += 0.95
+	# 폐가 지붕 서까래
+	for hs in w.houses:
+		var g := _g(chunks, Vector3(hs.cx, 0.0, hs.cz))
+		var gy := w.height_at(hs.cx, hs.cz)
+		var top: float = gy + hs.h - 0.1
+		var ridge: float = top + 1.9
+		g.rod(Vector3(hs.cx - hs.hw - 0.4, ridge, hs.cz), Vector3(hs.cx + hs.hw + 0.4, ridge, hs.cz), 0.09, 0.09, post, 0, 6)
+		var x: float = hs.cx - hs.hw
+		while x <= hs.cx + hs.hw + 0.01:
+			if rng.randf() < 0.82:
+				g.rod(Vector3(x, top, hs.cz + hs.hd), Vector3(x, ridge, hs.cz), 0.06, 0.06, post, 0, 5)
+			if rng.randf() < 0.82:
+				g.rod(Vector3(x, top, hs.cz - hs.hd), Vector3(x, ridge, hs.cz), 0.06, 0.06, post, 0, 5)
+			x += 1.15
+		# 남은 지붕널
+		for k in 9:
+			var side := 1.0 if rng.randf() < 0.5 else -1.0
+			var t := rng.randf_range(0.1, 0.9)
+			var px: float = hs.cx + rng.randf_range(-hs.hw, hs.hw)
+			var pos := Vector3(px, lerpf(top, ridge, t) + 0.05, hs.cz + side * hs.hd * (1.0 - t))
+			var tilt := Basis(Vector3.RIGHT, -side * atan2(ridge - top, hs.hd)) * Basis(Vector3.UP, 0.0)
+			g.box(Vector3(rng.randf_range(0.7, 1.4), 0.05, 1.1), Transform3D(tilt, pos), wood)
+
+
+static func grass(w: World) -> Node3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = w.seed_v * 5 + 11
+	var chunks := {}
+	var step := 1.6
+	var x := -(World.HALF_X + 14.0)
+	while x < World.HALF_X + 14.0:
+		var z := -(World.HALF_Z + 14.0)
+		while z < World.HALF_Z + 14.0:
+			var px := x + rng.randf() * step
+			var pz := z + rng.randf() * step
+			z += step
+			var h := w.height_at(px, pz)
+			if h < -0.35:
+				continue
+			var near := false
+			for i in 5:
+				if Vector2(px - World.POINT_X[i], pz - World.POINT_Z[i]).length() < World.POINT_R + 2.0 + rng.randf() * 6.0:
+					near = true
+					break
+			if near:
+				continue
+			var mask := w.detail.get_noise_2d(px * 1.6, pz * 1.6) + w.noise.get_noise_2d(px * 3.0, pz * 3.0) * 0.5
+			if mask < -0.75 or rng.randf() > 0.93:
+				continue
+			var slope := absf(w.height_at(px + 1.0, pz) - h) + absf(w.height_at(px, pz + 1.0) - h)
+			if slope > 0.9:
+				continue
+			if w.inside_box(Vector3(px, h + 0.3, pz)):
+				continue
+			var key := Vector2i(int(floor(px / CHUNK)), int(floor(pz / CHUNK)))
+			if not chunks.has(key):
+				chunks[key] = {"v": PackedVector3Array(), "n": PackedVector3Array(), "c": PackedColorArray(), "i": PackedInt32Array()}
+			_tuft(chunks[key], Vector3(px, h - 0.03, pz), rng, mask)
+		x += step
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/grass.gdshader")
+	var root := Node3D.new()
+	root.name = "Grass"
+	for key in chunks:
+		var d: Dictionary = chunks[key]
+		var arr := []
+		arr.resize(Mesh.ARRAY_MAX)
+		arr[Mesh.ARRAY_VERTEX] = d.v
+		arr[Mesh.ARRAY_NORMAL] = d.n
+		arr[Mesh.ARRAY_COLOR] = d.c
+		arr[Mesh.ARRAY_INDEX] = d.i
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+		mesh.surface_set_material(0, mat)
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.visibility_range_end = 78.0
+		mi.visibility_range_end_margin = 10.0
+		mi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
+		root.add_child(mi)
+	return root
+
+
+static func _tuft(d: Dictionary, c: Vector3, rng: RandomNumberGenerator, mask: float) -> void:
+	var lush := clampf(0.5 + mask, 0.0, 1.0)
+	var dry := Color(0.40, 0.36, 0.17)
+	var green := Color(0.22, 0.33, 0.09)
+	var top_col := green.lerp(dry, rng.randf() * 0.55).lerp(Color(0.34, 0.44, 0.14), lush * 0.4)
+	var blades := 8
+	var height := rng.randf_range(0.22, 0.52) * (0.8 + lush * 0.5)
+	for b in blades:
+		var a := rng.randf() * TAU
+		var r := rng.randf() * 0.3
+		var base := c + Vector3(cos(a) * r, 0.0, sin(a) * r)
+		var wd := rng.randf_range(0.04, 0.07)
+		var dir := Vector3(cos(a + 1.57), 0.0, sin(a + 1.57))
+		var hh := height * rng.randf_range(0.65, 1.15)
+		var lean := Vector3(cos(a), 0.0, sin(a)) * rng.randf_range(0.04, 0.2)
+		var i0: int = d.v.size()
+		d.v.append(base - dir * wd)
+		d.v.append(base + dir * wd)
+		d.v.append(base + Vector3(0, hh, 0) + lean)
+		for k in 3:
+			d.n.append(Vector3.UP)
+		d.c.append(Color(top_col.r * 0.8, top_col.g * 0.8, top_col.b * 0.8, 0.0))
+		d.c.append(Color(top_col.r * 0.8, top_col.g * 0.8, top_col.b * 0.8, 0.0))
+		d.c.append(Color(top_col.r, top_col.g, top_col.b, 1.0))
+		d.i.append(i0)
+		d.i.append(i0 + 1)
+		d.i.append(i0 + 2)
