@@ -325,7 +325,7 @@ button,select{white-space:nowrap}
   function run(keep) {
     if (jsLock && /^\s*JS\b/m.test(code.value)) { G.load(() => { }, false); showError(0, '링크로 받은 코드에 JS가 들어 있어요. 믿을 수 있는 코드면 다시 시작을 눌러 실행하세요.'); return; }
     const r = FFScript.compileSafe(code.value);
-    if (!r.ok) { showError(r.line, r.message); return; }
+    if (!r.ok) { showError(r.line, r.message + (/^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? '\n\nHTML 코드예요. 위쪽 🔄 JS→FF 버튼으로 바꿔 보세요.' : '')); return; }
     clearError();
     try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
@@ -383,6 +383,16 @@ button,select{white-space:nowrap}
   const conv = $('conv'), convIn = $('convIn');
   $('convBtn').addEventListener('click', () => { conv.style.display = conv.style.display === 'flex' ? 'none' : 'flex'; if (conv.style.display === 'flex') convIn.focus(); });
   $('convClose').addEventListener('click', () => { conv.style.display = 'none'; });
+  code.addEventListener('paste', e => {
+    const t = e.clipboardData && e.clipboardData.getData('text');
+    if (!t) return;
+    const html = /^\s*<(!doctype|html|head|body|script)\b/i.test(t);
+    if (t.length > 60000 || (html && t.length > 3000)) {
+      e.preventDefault();
+      convIn.value = t; conv.style.display = 'flex'; convIn.focus();
+      toast(html ? 'HTML이네요. 코드 칸 대신 변환기에 넣었어요. 변환을 눌러 주세요' : '너무 긴 코드라서 변환기에 넣었어요. 변환을 눌러 주세요');
+    }
+  });
   let convJob = null;
   const convMsg = $('convMsg'), convGo = $('convGo');
   function convertAsync(text, onP) {
@@ -414,7 +424,7 @@ button,select{white-space:nowrap}
     jsLock = false; conv.style.display = 'none';
     code.focus(); code.select();
     const big = r.code.length > BIG;
-    if (r.code.length > 150000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
+    if (r.code.length > 30000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
     sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast('변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요'); return; } run(false);
     toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
   });
