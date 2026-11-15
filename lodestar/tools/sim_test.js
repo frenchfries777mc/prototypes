@@ -7,7 +7,7 @@ const api = globalThis.__api;
 const N = +process.argv[2] || 3;
 let fail = 0;
 for (let g = 0; g < N; g++) {
-  api.newGame({ noPlayer: true, seed: 1000 + g * 77 });
+  api.newGame({ noPlayer: true, seed: (+process.env.SEED0 || 1000) + g * 77 });
   const t0 = Date.now(); let maxU = 0;
   while (!api.G.over && api.G.t < 60 * 60) { api.tick(1 / 30); api.G.events.length = 0; maxU = Math.max(maxU, api.G.units.length); }
   const G = api.G;

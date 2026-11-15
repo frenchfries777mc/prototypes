@@ -84,7 +84,7 @@ function newGame(opt) {
   UID = 1; _seed = (opt.seed || (Date.now() & 0x7fffffff)) | 0;
   G = {
     t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], camps: [], towers: [], cores: [],
-    kills: [0, 0], over: null, waveN: 0, waveT: 12, visT: 0, stratT: 1, groupLane: [null, null],
+    kills: [0, 0], over: null, waveN: 0, waveT: 12, visT: 0, stratT: 1, groupLane: [null, null], focus: [0, 0], bossPlan: [null, null], behind: [false, false],
     player: null, diff: opt.diff === undefined ? 1 : opt.diff, playerLane: 'mid', plCand: 'mid', plCandT: 0
   };
   for (var T = 0; T < 2; T++) {
@@ -157,7 +157,11 @@ function give(h, g) { g *= gainMul(h); h.gold += g; h.earned += g; if (h.isPlaye
 function xpNeed(l) { return 160 + 110 * l; }
 function gainXp(h, x) {
   if (h.level >= MAX_LEVEL) return;
-  h.xp += x * gainMul(h);
+  /* 뒤처진 팀은 경험치를 더 받는다 (상대 평균 레벨과의 차이 1당 9%, 최대 45%) */
+  var sum = 0, n = 0;
+  for (var q = 0; q < G.heroes.length; q++) { var e = G.heroes[q]; if (e.team !== h.team) { sum += e.level; n++; } }
+  var catchUp = n ? 1 + Math.max(0, Math.min(0.45, 0.09 * (sum / n - h.level))) : 1;
+  h.xp += x * gainMul(h) * catchUp;
   while (h.level < MAX_LEVEL && h.xp >= xpNeed(h.level)) {
     h.xp -= xpNeed(h.level); h.level++; h.points++; recalc(h);
     fx({ type: 'ring', x: h.x, y: h.y, r: 120, dur: 0.6, color: '#ffe9a8', follow: h });
@@ -280,7 +284,10 @@ function killHero(src, v) {
   if (!killer) killer = recent;
   G.kills[1 - v.team]++;
   var sharers = ass.slice(); if (killer && sharers.indexOf(killer) < 0) sharers.push(killer);
-  if (killer) { killer.kills++; give(killer, 300); }
+  /* 현상금: 연속으로 처치한 영웅은 비싸고, 연속으로 죽은 영웅은 싸다 */
+  var vs = v.streak || 0, vd = v.dStreak || 0;
+  v.streak = 0; v.dStreak = vd + 1;
+  if (killer) { killer.kills++; killer.streak = (killer.streak || 0) + 1; killer.dStreak = 0; give(killer, 300 + Math.min(400, 60 * vs) - Math.min(150, 30 * vd)); }
   ass.forEach(function (a) { if (a !== killer) { a.assists++; give(a, 120); } });
   var xp = (140 + 22 * v.level) / (sharers.length > 1 ? sharers.length * 0.7 : 1);
   sharers.forEach(function (h) { gainXp(h, xp); });
@@ -503,6 +510,17 @@ function sellItem(h, idx) {
   h.gold += Math.round(I.cost * SELL_RATE); h.items.splice(idx, 1); recalc(h); return true;
 }
 
+/* 마우스 커서 가까이에 있는, 사거리 안의 적을 고른다. 영웅을 우선한다 */
+function pickAssist(h) {
+  var c = h.atkHold, best = null, bs = 1e9;
+  for (var i = 0; i < G.units.length; i++) {
+    var u = G.units[i];
+    if (u.dead || u.team === h.team || u.invuln || !u.vis[h.team] || !inRange(h, u)) continue;
+    var sc = Math.hypot(u.x - c.x, u.y - c.y) - (u.type === 'hero' ? 260 : 0);
+    if (sc < bs) { bs = sc; best = u; }
+  }
+  return best;
+}
 function chase(h, t, dt) {
   if (inRange(h, t)) { tryAttack(h, t); return; }
   moveGoal(h, t.x, t.y, dt);
@@ -518,6 +536,19 @@ function updHero(h, dt) {
   if (dist(h, MAP.FOUNT[1 - h.team]) < 760) { damage(null, h, h.maxHp * 0.35 * dt, 'true'); if (h.dead) return; }
   if (h.dash) { updDash(h, dt); return; }
   if (h.stunT > 0) return;
+  var md = h.moveDir, moving = false;
+  if (md && (md.x || md.y)) {
+    var ml = Math.hypot(md.x, md.y);
+    h.recallT = 0; h.order = null; h.path = null; moving = true;
+    stepTo(h, h.x + md.x / ml * 200, h.y + md.y / ml * 200, dt);
+    if (h.aimF !== null && h.aimF !== undefined) h.face = h.aimF;
+  }
+  if (h.atkHold && h.recallT <= 0) {
+    var at = pickAssist(h);
+    if (at) { tryAttack(h, at); return; }
+    if (h.aimF !== null && h.aimF !== undefined) h.face = h.aimF;
+  }
+  if (moving) return;
   if (h.recallT > 0) {
     h.recallT -= dt;
     if (h.recallT <= 0) {
@@ -761,6 +792,12 @@ function nudge(u, dx, dy) { if (MAP.isWalk(u.x + dx, u.y + dy)) { u.x += dx; u.y
 
 /* ───────── 팀 단위 판단 (3초마다) ───────── */
 function strategy() {
+  var lv = [0, 0];
+  G.heroes.forEach(function (h) { lv[h.team] += h.level; });
+  for (var B = 0; B < 2; B++) {
+    var gap = lv[1 - B] - lv[B], kg = G.kills[1 - B] - G.kills[B];
+    G.behind[B] = (kg >= 6 && gap >= 4) || gap >= 7;
+  }
   for (var T = 0; T < 2; T++) {
     /* 공격받는 건물 방어 */
     var structs = G.towers.concat([G.cores[T]]);
@@ -774,14 +811,38 @@ function strategy() {
         bots[i].ai.defend = s; bots[i].ai.defendT = G.t + 9;
       }
     });
-    /* 후반에는 한 공격로로 뭉친다 */
-    if (G.t > 780) {
+    /* 집중 공격 대상: 체력이 낮고 몸이 약하고 아군이 가까이 있는 적 영웅 */
+    var fb = null, fs = -1e9, cx = 0, cy = 0, cn = 0;
+    G.heroes.forEach(function (a) { if (a.team === T && !a.dead) { cx += a.x; cy += a.y; cn++; } });
+    if (cn) {
+      cx /= cn; cy /= cn;
+      G.heroes.forEach(function (e) {
+        if (e.team === T || e.dead || !e.vis[T]) return;
+        var d = Math.hypot(e.x - cx, e.y - cy); if (d > 2600) return;
+        var near = 0; G.heroes.forEach(function (a) { if (a.team === T && !a.dead && dist(a, e) < 1500) near++; });
+        var sc = (1 - e.hp / e.maxHp) * 800 + (e.armor < 35 ? 150 : 0) - e.hp * 0.15 + near * 140 - d * 0.1;
+        if (sc > fs) { fs = sc; fb = e; }
+      });
+    }
+    G.focus[T] = fb ? fb.id : 0;
+    /* 보스: 셋 이상이 건강하게 가까이 있으면 함께 잡으러 간다 */
+    G.bossPlan[T] = null;
+    if (G.t > 330 && cn && !G.behind[T]) {
+      var boss = null, bd = 1e9;
+      G.camps.forEach(function (cp) { if (cp.boss && cp.alive > 0) { var d2 = Math.hypot(cp.x - cx, cp.y - cy); if (d2 < bd) { bd = d2; boss = cp; } } });
+      if (boss) {
+        var sq = G.heroes.filter(function (a) { return a.team === T && !a.dead && a.ai && a.ai.mode !== 'retreat' && a.hp / a.maxHp > 0.6 && Math.hypot(a.x - boss.x, a.y - boss.y) < 4800; });
+        if (sq.length >= 3) G.bossPlan[T] = boss;
+      }
+    }
+    /* 중반부터 한 공격로로 뭉친다 */
+    if (G.t > 540) {
       var best = null, bn = 9;
       ['mid', 'top', 'bot'].forEach(function (ln) {
-        var n = 0; G.towers.forEach(function (t) { if (!t.dead && t.team !== T && t.lane === ln) n++; });
+        var n = 0; G.towers.forEach(function (t) { if (!t.dead && (G.behind[T] ? t.team === T : t.team !== T) && t.lane === ln) n++; });
         if (n < bn) { bn = n; best = ln; }
       });
-      if (G.groupLane[T] !== best && (!G.groupLane[T] || G.t - (G.groupSet || 0) > 60)) { G.groupLane[T] = best; G.groupSet = G.t; }
+      if (G.groupLane[T] !== best && (!G.groupLane[T] || G.t - (G.groupSet || 0) > 45)) { G.groupLane[T] = best; G.groupSet = G.t; }
     }
   }
   /* 플레이어가 선 공격로를 비워 두지 않도록 아군 봇 재배치 */

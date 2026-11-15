@@ -4,9 +4,9 @@
 (function () {
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
-  var STEP = 1 / 60, KEYS = ['Q', 'W', 'E', 'R'], CODES = { KeyQ: 0, KeyW: 1, KeyE: 2, KeyR: 3 };
+  var STEP = 1 / 60, KEYS = ['Q', 'E', 'R', 'F'], CODES = { KeyQ: 0, KeyE: 1, KeyR: 2, KeyF: 3 }, MOVEKEYS = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, ArrowUp: 1, ArrowLeft: 1, ArrowDown: 1, ArrowRight: 1 };
   var cv = $('cv'), state = 'menu', sel = 'kael', diff = 1, P = null;
-  var mouse = { px: 0, py: 0, x: 0, y: 0, inside: false, down: false }, aim = null, camLock = true, amove = false, pan = {};
+  var mouse = { px: 0, py: 0, x: 0, y: 0, inside: false, down: false }, aim = null, keys = {}, stick = { x: 0, y: 0 }, stickId = null, touchAtk = false, touchMode = false;
   var muted = false, last = 0, acc = 0, lastCmd = 0, demoT = 0, demoH = null, annT = 0, sellArm = -1, bossAnn = -99;
   var cache = {};
   function set(id, v) { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
@@ -53,13 +53,13 @@
 
   /* ── 메뉴 ── */
   var KEYHELP = [
-    ['우클릭 / 터치', '이동. 적을 누르면 공격합니다.'],
-    ['<kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd>', '누르고 있으면 조준, 떼면 커서 쪽으로 시전. <kbd>Ctrl</kbd>과 함께 누르면 스킬 레벨 업.'],
-    ['<kbd>A</kbd> 뒤 클릭', '공격 이동. 가는 길의 적을 알아서 공격합니다.'],
-    ['<kbd>B</kbd>', '귀환. 6초 뒤 우물로 돌아가 회복합니다.'],
-    ['<kbd>P</kbd> · <kbd>Tab</kbd>', '상점 · 전적. 상점은 우물에 있거나 쓰러졌을 때만 살 수 있습니다.'],
-    ['<kbd>Y</kbd> · 휠 · <kbd>Space</kbd>', '카메라 고정 전환 · 확대/축소 · 내 영웅으로.'],
-    ['<kbd>S</kbd> · <kbd>M</kbd>', '정지 · 소리 켜고 끄기.']
+    ['<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>', '이동. 화살표 키도 됩니다. 움직이는 동안에도 공격과 스킬을 쓸 수 있습니다.'],
+    ['마우스', '커서 쪽을 바라봅니다. 왼쪽 버튼을 누르고 있으면 커서에 가장 가까운 적을 공격하고, 가만히 서 있으면 알아서 공격합니다.'],
+    ['<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd>', '스킬. 누르고 있으면 조준, 떼면 커서 쪽으로 시전합니다. 아직 안 배운 스킬은 키를 누르면 레벨 업.'],
+    ['<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd>', '각각 Q E R F 스킬 레벨 업. 궁극기(F)는 6·11·15레벨에 배웁니다.'],
+    ['<kbd>B</kbd>', '귀환. 6초 동안 가만히 있으면 우물로 돌아가 회복합니다. 움직이거나 맞으면 취소됩니다.'],
+    ['<kbd>P</kbd> · <kbd>Tab</kbd> · <kbd>M</kbd>', '상점(우물에 있거나 쓰러졌을 때만) · 전적 · 소리 켜고 끄기.'],
+    ['터치', '왼쪽 화면을 누른 채 끌면 이동, 오른쪽 아래 공격 버튼을 누르고 있으면 공격, 스킬은 아래 버튼을 누릅니다.']
   ];
   function fillKeys(dl) { dl.innerHTML = KEYHELP.map(function (k) { return '<dt>' + k[0] + '</dt><dd>' + k[1] + '</dd>'; }).join(''); }
   function buildMenu() {
@@ -97,7 +97,7 @@
     var box = $('skills'); box.innerHTML = ''; skEls = [];
     P.def.skills.forEach(function (sk, i) {
       var w = el('div', 'skw'), plus = el('button', 'plus', '+'), b = el('button', 'sk');
-      plus.type = 'button'; plus.id = 'plus-' + i; plus.title = '스킬 레벨 업 (Ctrl+' + KEYS[i] + ')';
+      plus.type = 'button'; plus.id = 'plus-' + i; plus.title = '스킬 레벨 업 (' + (i + 1) + ')';
       plus.onclick = function () { if (levelSkill(P, i)) sfx('buy'); };
       b.type = 'button'; b.id = 'sk-' + i;
       b.innerHTML = '<span class="key">' + KEYS[i] + '</span><span class="cost"></span><span class="nm">' + sk.name + '</span><i class="cdm"></i><span class="cdv"></span><span class="pips">' +
@@ -127,12 +127,11 @@
     audioOn();
     newGame({ heroId: sel, diff: diff });
     P = G.player;
-    R.cam.x = P.x + 500; R.cam.y = P.y; camLock = true; aim = null; amove = false;
+    R.cam.x = P.x + 300; R.cam.y = P.y; aim = null; keys = {}; stick.x = stick.y = 0; stickId = null; touchAtk = false;
     $('menu').hidden = true; $('end').hidden = true; $('hud').hidden = false;
     $('shop').hidden = true; $('score').hidden = true; $('help').hidden = true; $('dead').hidden = true; $('feed').innerHTML = '';
     buildHud(); R.resize(); state = 'play';
-    announce('공격로를 밀어 적 로드스톤을 부수세요', 'g', 4);
-    cls($('lockBtn'), 'on', true);
+    announce(touchMode ? '왼쪽을 끌어 이동 · 공격 버튼으로 싸우세요' : 'WASD 이동 · 마우스로 조준 · 왼쪽 버튼 공격', 'g', 5);
   }
 
   /* ── 알림 ── */
@@ -267,15 +266,6 @@
     }
     return best;
   }
-  function command(touch) {
-    if (state !== 'play' || !P || P.dead) return;
-    var t = pick(mouse.x, mouse.y, touch ? 55 : 22);
-    lastCmd = performance.now();
-    if (amove) { amove = false; cv.style.cursor = 'crosshair'; cmdAMove(P, mouse.x, mouse.y); mark(mouse.x, mouse.y, '#ff9c8c'); return; }
-    if (t) { cmdAttack(P, t); mark(t.x, t.y, '#ff6b5e'); }
-    else { cmdMove(P, mouse.x, mouse.y); mark(mouse.x, mouse.y, '#8ef08a'); }
-  }
-  function mark(x, y, c) { G.fx.push({ type: 'mark', x: x, y: y, r: 46, dur: 0.35, color: c, t: 0 }); }
   function smartCast(i) {
     if (state !== 'play' || !P || P.dead) return;
     if (P.ranks[i] === 0) { if (!levelSkill(P, i)) sfx('err'); return; }
@@ -295,86 +285,115 @@
     var x = best ? best.x : P.x + Math.cos(P.face) * 600, y = best ? best.y : P.y + Math.sin(P.face) * 600;
     if (!castSkill(P, i, x, y)) sfx('err');
   }
+  function setTouch() { if (!touchMode) { touchMode = true; document.body.classList.add('touch'); } }
+  try { if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) setTouch(); } catch (e) {}
+
+  var stickEl = $('stick'), knob = stickEl.firstElementChild, stickO = null;
+  function moveStick(e) {
+    var dx = e.clientX - stickO.x, dy = e.clientY - stickO.y, l = Math.hypot(dx, dy), m = 56, k = l > m ? m / l : 1;
+    knob.style.transform = 'translate(' + (dx * k).toFixed(0) + 'px,' + (dy * k).toFixed(0) + 'px)';
+    var n = Math.min(1, l / m);
+    if (n < 0.2) { stick.x = stick.y = 0; } else { stick.x = dx / (l || 1) * n; stick.y = dy / (l || 1) * n; }
+  }
+  function endStick() { stickId = null; stick.x = stick.y = 0; stickEl.hidden = true; knob.style.transform = ''; }
 
   cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   cv.addEventListener('pointerdown', function (e) {
-    audioOn(); setMouse(e);
+    audioOn();
     if (state !== 'play') return;
-    mouse.down = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {}
-    if (aim && e.button === 0 && e.pointerType === 'mouse') { castSkill(P, aim.slot, mouse.x, mouse.y); aim = null; return; }
-    command(e.pointerType !== 'mouse');
+    if (e.pointerType === 'touch') {
+      setTouch();
+      var r = cv.getBoundingClientRect();
+      if (stickId === null && e.clientX - r.left < r.width * 0.6) {
+        stickId = e.pointerId; stickO = { x: e.clientX, y: e.clientY };
+        stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.hidden = false; knob.style.transform = '';
+        try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      }
+      e.preventDefault(); return;
+    }
+    setMouse(e);
+    if (e.button === 0) {
+      try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      if (aim) { if (!castSkill(P, aim.slot, mouse.x, mouse.y)) sfx('err'); aim = null; }
+      else mouse.down = true;
+    }
     e.preventDefault();
   });
   cv.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') { if (e.pointerId === stickId) moveStick(e); return; }
     setMouse(e);
-    if (mouse.down && state === 'play' && P && !P.dead && performance.now() - lastCmd > 160 && (!P.order || P.order.type === 'move')) { lastCmd = performance.now(); cmdMove(P, mouse.x, mouse.y); }
   });
-  window.addEventListener('pointerup', function () { mouse.down = false; });
-  cv.addEventListener('pointerleave', function () { mouse.inside = false; });
+  function pointerEnd(e) {
+    if (e.pointerType === 'touch') { if (e.pointerId === stickId) endStick(); return; }
+    mouse.down = false;
+  }
+  window.addEventListener('pointerup', pointerEnd);
+  window.addEventListener('pointercancel', pointerEnd);
+  cv.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') mouse.inside = false; });
   cv.addEventListener('wheel', function (e) { e.preventDefault(); R.setZoom(R.getZoom() * (e.deltaY > 0 ? 0.92 : 1.08)); }, { passive: false });
 
-  var mini = $('mini');
-  function miniCmd(e) {
-    if (state !== 'play' || !P) return;
-    var r = mini.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * MAP.W, y = (e.clientY - r.top) / r.height * MAP.H;
-    if (e.button === 2 || e.pointerType !== 'mouse') { if (!P.dead) { cmdMove(P, x, y); } }
-    else { camLock = false; cls($('lockBtn'), 'on', false); R.cam.x = x; R.cam.y = y; }
-  }
-  mini.addEventListener('pointerdown', function (e) { mini.setPointerCapture(e.pointerId); miniCmd(e); e.preventDefault(); });
-  mini.addEventListener('pointermove', function (e) { if (e.buttons === 1 && e.pointerType === 'mouse') miniCmd(e); });
-  mini.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  var atk = $('atkBtn');
+  atk.addEventListener('pointerdown', function (e) { setTouch(); touchAtk = true; try { atk.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { atk.addEventListener(n, function () { touchAtk = false; }); });
 
   function toggle(id) { var e = $(id), on = e.hidden; ['shop', 'score', 'help'].forEach(function (k) { $(k).hidden = true; }); if (id === 'shop') openShop(on); else e.hidden = !on; if (on && id === 'score') { cache.sc = -1; } }
-  function setLock(on) { camLock = on; cls($('lockBtn'), 'on', on); }
   $('shopBtn').onclick = function () { toggle('shop'); };
   $('shopX').onclick = function () { openShop(false); };
   $('scoreBtn').onclick = function () { toggle('score'); };
   $('scoreX').onclick = function () { $('score').hidden = true; };
   $('helpBtn').onclick = function () { toggle('help'); };
   $('helpX').onclick = function () { $('help').hidden = true; };
-  $('lockBtn').onclick = function () { setLock(!camLock); };
   $('muteBtn').onclick = function () { muted = !muted; cls($('muteBtn'), 'on', !muted); audioOn(); };
   cls($('muteBtn'), 'on', true);
 
   window.addEventListener('keydown', function (e) {
-    if (state !== 'play' || !P) { if (state === 'menu' && e.code === 'Enter') startGame(); return; }
-    audioOn();
     var c = e.code;
+    if (state !== 'play' || !P) { if (state === 'menu' && c === 'Enter') startGame(); return; }
+    audioOn();
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (c === 'Tab') { e.preventDefault(); if (!e.repeat) { $('score').hidden = false; $('shop').hidden = true; cache.sc = -1; } return; }
+    if (c in MOVEKEYS) { keys[c] = true; e.preventDefault(); return; }
     if (c in CODES) {
       e.preventDefault();
       var i = CODES[c];
-      if (e.ctrlKey || e.altKey || e.metaKey) { if (levelSkill(P, i)) sfx('buy'); return; }
       if (e.repeat) return;
       if (P.ranks[i] === 0) { if (P.points > 0 && levelSkill(P, i)) sfx('buy'); else sfx('err'); return; }
       aim = { slot: i, x: mouse.x, y: mouse.y };
       return;
     }
-    if (e.repeat && c.indexOf('Arrow') !== 0) return;
+    var dm = /^(?:Digit|Numpad)([1-4])$/.exec(c);
+    if (dm) { if (!e.repeat) { if (levelSkill(P, +dm[1] - 1)) sfx('buy'); else sfx('err'); } return; }
+    if (e.repeat) return;
     switch (c) {
-      case 'KeyS': cmdStop(P); aim = null; break;
       case 'KeyB': if (!P.dead) startRecall(P); break;
       case 'KeyP': toggle('shop'); break;
-      case 'KeyA': amove = true; cv.style.cursor = 'cell'; break;
-      case 'KeyY': setLock(!camLock); break;
       case 'KeyM': $('muteBtn').onclick(); break;
-      case 'Space': e.preventDefault(); pan.center = true; break;
-      case 'Escape': aim = null; amove = false; cv.style.cursor = 'crosshair'; ['shop', 'score', 'help'].forEach(function (k) { $(k).hidden = true; }); break;
-      case 'ArrowLeft': case 'ArrowRight': case 'ArrowUp': case 'ArrowDown': e.preventDefault(); pan[c] = true; setLock(false); break;
+      case 'Escape': aim = null; ['shop', 'score', 'help'].forEach(function (k) { $(k).hidden = true; }); break;
     }
   });
   window.addEventListener('keyup', function (e) {
     var c = e.code;
+    delete keys[c];
     if (c === 'Tab') { $('score').hidden = true; return; }
     if (c in CODES && aim && aim.slot === CODES[c] && state === 'play') {
-      if (!P.dead) { if (mouse.inside) { if (!castSkill(P, aim.slot, mouse.x, mouse.y)) sfx('err'); } else smartCast(aim.slot); }
-      aim = null; return;
+      if (!P.dead) { if (mouse.inside && !touchMode) { if (!castSkill(P, aim.slot, mouse.x, mouse.y)) sfx('err'); } else smartCast(aim.slot); }
+      aim = null;
     }
-    if (c === 'Space') pan.center = false;
-    if (c.indexOf('Arrow') === 0) pan[c] = false;
   });
-  window.addEventListener('blur', function () { pan = {}; aim = null; mouse.down = false; });
+  window.addEventListener('blur', function () { keys = {}; aim = null; mouse.down = false; touchAtk = false; });
   window.addEventListener('resize', function () { R.resize(); });
+
+  /* 매 프레임, 키보드·마우스·터치 입력을 영웅에게 전한다 */
+  function feedInput() {
+    if (state !== 'play' || !P || P.dead) { if (P) { P.moveDir = null; P.atkHold = null; P.aimF = null; } return; }
+    var mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + stick.x;
+    var my = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + stick.y;
+    P.moveDir = mx || my ? { x: mx, y: my } : null;
+    var useMouse = mouse.inside && !touchMode;
+    P.aimF = useMouse ? Math.atan2(mouse.y - P.y, mouse.x - P.x) : null;
+    if (P.aimF !== null && !P.dash && P.stunT <= 0 && P.recallT <= 0) P.face = P.aimF;
+    P.atkHold = touchAtk ? { x: P.x, y: P.y } : (mouse.down && useMouse && !aim ? { x: mouse.x, y: mouse.y } : null);
+  }
 
   /* ── 카메라 ── */
   function camera(dt) {
@@ -387,21 +406,19 @@
       return;
     }
     if (!P) return;
-    if (camLock || pan.center) {
-      var k = Math.min(1, dt * 9);
-      cam.x += (P.x - cam.x) * k; cam.y += (P.y + 60 - cam.y) * k;
-    } else {
-      var sp = 2400 * dt / R.getZoom(), m = 14, w = cv.clientWidth, h = cv.clientHeight;
-      if (pan.ArrowLeft || (mouse.inside && mouse.px < m)) cam.x -= sp;
-      if (pan.ArrowRight || (mouse.inside && mouse.px > w - m)) cam.x += sp;
-      if (pan.ArrowUp || (mouse.inside && mouse.py < m)) cam.y -= sp;
-      if (pan.ArrowDown || (mouse.inside && mouse.py > h - m)) cam.y += sp;
+    var tx = P.x, ty = P.y + 60, k = Math.min(1, dt * 8);
+    if (mouse.inside && !touchMode && !P.dead) {
+      tx += Math.max(-320, Math.min(320, (mouse.x - P.x) * 0.22));
+      ty += Math.max(-200, Math.min(200, (mouse.y - P.y) * 0.22));
     }
+    cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
   }
 
   /* ── 메인 루프 ── */
   function frame(ts) {
     var dt = Math.min(0.1, (ts - last) / 1000 || 0); last = ts;
+    if (mouse.inside) { var mw0 = R.s2w(mouse.px, mouse.py); mouse.x = mw0.x; mouse.y = mw0.y; }
+    feedInput();
     acc += dt; var n = 0;
     while (acc >= STEP && n < 5) { tick(STEP); acc -= STEP; n++; }
     if (n === 5) acc = 0;
@@ -411,7 +428,7 @@
     camera(dt);
     if (mouse.inside) { var w = R.s2w(mouse.px, mouse.py); mouse.x = w.x; mouse.y = w.y; }
     if (aim) { aim.x = mouse.x; aim.y = mouse.y; }
-    var hover = state === 'play' && mouse.inside && !mouse.down ? pick(mouse.x, mouse.y, 22) : null;
+    var hover = state === 'play' && mouse.inside && !touchMode && !mouse.down ? pick(mouse.x, mouse.y, 22) : null;
     R.draw({ me: 0, player: state === 'menu' ? null : P, aim: state === 'play' ? aim : null, hover: hover, fog: true }, ts / 1000);
     if (state !== 'menu') { R.drawMini(0, P); updHud(dt); }
     requestAnimationFrame(frame);
