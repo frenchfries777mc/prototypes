@@ -50,6 +50,7 @@ header button.ic{padding:7px 10px}
 #conv{display:none;position:absolute;inset:10px;z-index:6;flex-direction:column;gap:8px;background:#161a33f5;border:1px solid #3a4070;border-radius:12px;padding:12px;box-shadow:0 14px 40px #000b}
 #conv textarea{flex:1;resize:none;background:#0e1022;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;outline:0}
 #conv div{display:flex;gap:8px;justify-content:flex-end}
+#convMsg{margin-right:auto;align-self:center;font-size:13px;color:var(--dim)}
 #err{display:none;margin:0;padding:12px 16px;background:#3a1522;color:#ffc2cc;border-top:1px solid #6b2a3d;font-size:14px;line-height:1.5;white-space:pre-wrap;max-height:34%;overflow:auto}
 #err b{color:#fff}
 .right{display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;min-height:0;background:radial-gradient(circle at 50% 40%,#1a1d33,#0b0c16)}
@@ -79,7 +80,7 @@ button,select{white-space:nowrap}
     <div id="tut"></div>
     <div class="ed"><div id="gutter"></div><div class="wrap"><pre id="hl"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea><div id="ac"></div></div>
       <button id="helpBtn">📖 명령어</button><div id="help"></div>
-      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
+      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><span id="convMsg"></span><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
     <pre id="err"></pre>
   </section>
   <section class="right"><canvas id="game" width="960" height="540"></canvas></section>
@@ -2342,6 +2343,1460 @@ function Engine(canvas) {
 }
 
 global.FFRuntime = { Engine, LOOKS, BACKGROUNDS, COLORS };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script type="text/plain" id="cv-src">(function (global) {
+'use strict';
+const ID = '[\\p{L}_][\\p{L}\\p{N}_]*';
+const reID = new RegExp('^' + ID + '$', 'u');
+class FFError extends Error { constructor(line, msg) { super(msg); this.line = line; } }
+const fail = (n, m) => { throw new FFError(n, m); };
+
+const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart', 'ball', 'box', 'hero', 'slime', 'platform', 'spike', 'flag', 'gem', 'bomb', 'ghost', 'fish', 'cloud', 'tree', 'block', 'shot', 'checkpoint', 'ladder', 'water', 'door', 'boss', 'ice', 'spring', 'belt', 'waterfall', 'crumble', 'bat', 'bee'];
+const BACKS = ['space', 'night', 'sky', 'sea', 'sunset', 'forest', 'lava', 'snow', 'grid'];
+const MAP_CHARS = '.# =CGSHB^FEPKLWDITV<>XA';
+const ART_CHARS = '.# kwrogybpcnmd';
+const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
+const COLOR_WORDS = ['red', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'gold', 'cyan', 'sky', 'brown'];
+const CONTROLS = ['arrows', 'wasd', 'leftright', 'mouse', 'platformer'];
+const MUSICS = ['chill', 'happy', 'action', 'off'];
+const SOUNDS = ['boom', 'coin', 'shoot', 'hit', 'jump', 'power', 'start', 'over', 'win', 'pop', 'laser', 'click', 'magic', 'hurt', 'whoosh', 'splash', 'spring'];
+const POWERS = ['fast', 'big', 'small', 'shield', 'magnet', 'jump'];
+const DIRS = ['up', 'down', 'left', 'right'];
+const WAVES = ['sine', 'square', 'triangle', 'saw'];
+const WEATHERS = ['rain', 'snow', 'leaves', 'petals', 'off'];
+const PSHAPES = ['dot', 'star', 'ring', 'smoke', 'square'];
+const PKEYS = ['color', 'count', 'speed', 'life', 'size', 'gravity', 'shape', 'direction', 'spread', 'drag', 'rate'];
+const NOTE_RE = /^(?:(?:[A-Ga-g]|도|레|미|파|솔|라|시)[#b]?\d?|[-._])$/u;
+const POS_WORDS = ['left', 'center', 'right', 'top', 'middle', 'bottom', 'random'];
+const SIDES = ['top', 'bottom', 'left', 'right'];
+const MATH = ['sin', 'cos', 'tan', 'abs', 'floor', 'ceil', 'round', 'min', 'max', 'sqrt', 'pow', 'atan2', 'sign'];
+const CMDS = Object.assign(Object.create(null), {
+  move: 'move', toward: 'toward', stop: 'stop', control: 'control', speed: 'setSpeed', size: 'setSize', color: 'setColor',
+  spin: 'spin', bounce: 'setBounce', look: 'setLook', gravity: 'setGravity', jump: 'jump', solid: 'setSolid',
+  health: 'setHealth', hurt: 'hurt', heal: 'heal', fade: 'setAlpha', hide: 'hide', show: 'show', glow: 'setGlow', trail: 'setTrail', wrap: 'setWrap',
+  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', jumps: 'setJumps', dash: 'dash', open: 'open', power: 'power', charge: 'charge', summon: 'summon', emit: 'emit', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
+});
+const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take', 'minimap', 'particle', 'JS'];
+const BUILTIN = ['score', 'lives', 'level', 'time', 'scene', 'answer', 'has', 'choose', 'chance', 'distance', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
+const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times', 'follow', 'off', 'ends', 'topdown', 'answered', 'stomps'];
+const JS_RESERVED = ['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'enum', 'export', 'extends', 'finally', 'for', 'function', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'await', 'async', 'static', 'undefined', 'G', 'Math', '_o', 'window', 'document', 'eval'];
+const NOT_VARS = new Set([...STATEMENTS, ...BUILTIN.filter(w => w !== 'score' && w !== 'lives' && w !== 'level'), ...WORDS, ...JS_RESERVED]);
+
+function lev(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function hint(word, list) {
+  let best = null, bd = 99;
+  for (const w of list) { const d = lev(String(word).toLowerCase(), w); if (d < bd) { bd = d; best = w; } }
+  return best && bd <= (best.length >= 4 ? 2 : 1) ? ` 혹시 '${best}'를 말한 건가요?` : '';
+}
+const quoteList = a => a.map(x => `'${x}'`).join(', ');
+
+function stripComment(s) {
+  let q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") { q = c; continue; }
+    if (c === '/' && s[i + 1] === '/') return s.slice(0, i);
+    if (c === '#' && (i === 0 || /\s/.test(s[i - 1])) && (i + 1 >= s.length || /\s/.test(s[i + 1]))) return s.slice(0, i);
+  }
+  return s;
+}
+function splitTerms(s) {
+  const out = []; let cur = '', d = 0, q = null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) { cur += c; if (c === '\\') cur += s[++i] || ''; else if (c === q) q = null; continue; }
+    if (c === '"' || c === "'") { q = c; cur += c; continue; }
+    if ('([{'.includes(c)) d++;
+    if (')]}'.includes(c)) d--;
+    if (/\s/.test(c) && d === 0) { if (cur) { out.push(cur); cur = ''; } continue; }
+    cur += c;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+const TOK = new RegExp('\\s+|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|\\d+\\.?\\d*|\\.\\d+|' + ID + '|==|!=|<=|>=|&&|\\|\\||\\*\\*|[^]', 'gu');
+const q = JSON.stringify;
+
+function parseTree(src) {
+  const root = { n: 0, indent: -1, children: [] }, stack = [root];
+  let rawOf = null;
+  src.split('\n').forEach((line, i) => {
+    const expanded = line.replace(/\t/g, '  ');
+    if (rawOf) {
+      if (!expanded.trim()) return;
+      if (expanded.match(/^ */)[0].length > rawOf.indent) { rawOf.rowsRaw.push({ n: i + 1, text: expanded.replace(/\s+$/, '') }); return; }
+      rawOf = null;
+    }
+    const text = stripComment(expanded).replace(/\s+$/, '').replace(/\s*:$/, '');
+    if (!text.trim()) return;
+    const node = { n: i + 1, indent: text.match(/^ */)[0].length, text: text.trim(), children: [] };
+    while (stack[stack.length - 1].indent >= node.indent) stack.pop();
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+    if (/^(map(\s+\S+)?|art\s+\S.*|JS)$/.test(node.text)) { node.rowsRaw = []; rawOf = node; }
+  });
+  return root.children;
+}
+function rawRows(nd) {
+  const rows = nd.rowsRaw.map(r => r.text), min = Math.min(...rows.map(r => r.match(/^ */)[0].length));
+  return { rows: rows.map(r => r.slice(min)), lines: nd.rowsRaw.map(r => r.n) };
+}
+
+function jsSource(nd) {
+  const n = nd.n, rest = nd.text.replace(/^JS\b/, '').trim();
+  let code;
+  if (!rest) {
+    if (!nd.rowsRaw || !nd.rowsRaw.length) fail(n, 'JS 아래에 자바스크립트 코드를 들여써 주세요. 한 줄이면 JS "코드" 처럼 써도 돼요.');
+    code = rawRows(nd).rows.join('\n');
+  } else {
+    if (!/^"(?:[^"\\]|\\.)*"$|^'(?:[^'\\]|\\.)*'$/s.test(rest)) fail(n, 'JS 뒤에는 코드를 따옴표로 감싸서 써요. (예: JS "console.log(score)")  안의 " 는 \\" 로 써 주세요.');
+    code = rest.slice(1, -1).replace(/\\([\s\S])/g, '$1');
+  }
+  try { new Function(code); } catch (e) { fail(n, 'JS 코드에 문법 오류가 있어요: ' + e.message); }
+  return code;
+}
+function jsTopDecls(code) {
+  const names = [], cuts = [];
+  let d = 0, i = 0, q = null;
+  while (i < code.length) {
+    const c = code[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; i++; continue; }
+    if (c === '"' || c === "'" || c === '`') { q = c; i++; continue; }
+    if (c === '/' && code[i + 1] === '/') { while (i < code.length && code[i] !== '\n') i++; continue; }
+    if (c === '/' && code[i + 1] === '*') { const e = code.indexOf('*/', i + 2); i = e < 0 ? code.length : e + 2; continue; }
+    if ('([{'.includes(c)) d++; else if (')]}'.includes(c)) d--;
+    if (!d && /[lcv]/.test(c) && (i === 0 || !/[\p{L}\p{N}_$.]/u.test(code[i - 1]))) {
+      const m = code.slice(i).match(/^(let|const|var)\s+([\p{L}_$][\p{L}\p{N}_$]*)(?=\s*[=;,\n]|\s*$)/u);
+      if (m) {
+        cuts.push([i, m[1].length]); names.push(m[2]);
+        let j = i + m[0].length, dd = 0, qq = null;
+        while (j < code.length) {
+          const ch = code[j];
+          if (qq) { if (ch === '\\') j++; else if (ch === qq) qq = null; j++; continue; }
+          if (ch === '"' || ch === "'" || ch === '`') { qq = ch; j++; continue; }
+          if ('([{'.includes(ch)) dd++; else if (')]}'.includes(ch)) dd--;
+          if (!dd && (ch === ';' || ch === '\n')) break;
+          if (!dd && ch === ',') { const mm = code.slice(j + 1).match(/^\s*([\p{L}_$][\p{L}\p{N}_$]*)/u); if (mm) names.push(mm[1]); }
+          j++;
+        }
+        i += m[0].length; continue;
+      }
+    }
+    i++;
+  }
+  let out = code;
+  for (let k = cuts.length - 1; k >= 0; k--) out = out.slice(0, cuts[k][0]) + out.slice(cuts[k][0] + cuts[k][1]);
+  return { names, code: out };
+}
+
+function compile(src) {
+  const tree = parseTree(src);
+  const LOOKS = [...BUILTIN_LOOKS];
+  const vars = new Set(), funcs = new Set(), scenes = new Set(), sounds = new Set(), parts = new Set();
+  let hasLives = false, firstLivesAdd = 0, usesLevel = false, usesPScore = false, usesJS = false;
+
+  const assignRe = new RegExp('^(' + ID + ')\\s*(?:=(?!=)|\\+=|-=|\\*=|/=)', 'u');
+  (function collect(nodes, top, inScene) {
+    for (const nd of nodes) {
+      let tm;
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^scene\\s+(' + ID + ')$', 'u')))) {
+        if (scenes.has(tm[1])) fail(nd.n, `'${tm[1]}' 장면이 두 번 만들어졌어요. 장면 이름은 하나씩만 쓸 수 있어요.`);
+        scenes.add(tm[1]); collect(nd.children, true, true); continue;
+      }
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^to\\s+(' + ID + ')(?:\\s+.*)?$', 'u')))) {
+        if (NOT_VARS.has(tm[1]) || BUILTIN_LOOKS.includes(tm[1])) fail(nd.n, `'${tm[1]}'는 FF Script가 이미 쓰는 단어라서 함수 이름으로 쓸 수 없어요.`);
+        funcs.add(tm[1]);
+      }
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^art\\s+(' + ID + ')(?:\\s+\\S+)?$', 'u')))) {
+        if (NOT_VARS.has(tm[1]) || tm[1] === 'text' || tm[1] in Object.prototype) fail(nd.n, `'${tm[1]}'는 이미 있는 이름이라서 그림 이름으로 쓸 수 없어요.`);
+        if (!LOOKS.includes(tm[1])) LOOKS.push(tm[1]);
+      }
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^sound\\s+(' + ID + ')(\\s*=.*)?$', 'u'))) && (tm[2] || nd.children.length)) sounds.add(tm[1]);
+      if (top && !inScene && (tm = nd.text.match(new RegExp('^particle\\s+(' + ID + ')$', 'u')))) {
+        if (NOT_VARS.has(tm[1]) || LOOKS.includes(tm[1]) || COLOR_WORDS.includes(tm[1]) || tm[1] === 'off') fail(nd.n, `'${tm[1]}'는 이미 있는 이름이라서 파티클 이름으로 쓸 수 없어요.`);
+        parts.add(tm[1]);
+      }
+      if (top && !inScene && /^JS\b/.test(nd.text)) {
+        const jt = jsTopDecls(jsSource(nd));
+        if (jt.names.every(x => !NOT_VARS.has(x) && !LOOKS.includes(x) && !funcs.has(x) && x !== 'score' && x !== 'lives' && x !== 'level')) { jt.names.forEach(x => vars.add(x)); nd.jsTop = jt.code; }
+      }
+      if (top && /^map\b/.test(nd.text) && nd.rowsRaw && nd.rowsRaw.some(r => r.text.includes('P'))) vars.add('player');
+      const sm = nd.text.match(new RegExp('^set\\s+(' + ID + ')\\s+to\\b', 'u'));
+      const m = nd.text.match(assignRe) || (sm && [null, sm[1]]);
+      if (m && m[1] !== 'score' && m[1] !== 'lives' && m[1] !== 'level') {
+        if (NOT_VARS.has(m[1])) fail(nd.n, `'${m[1]}'는 FF Script가 이미 쓰는 단어라서 변수 이름으로 쓸 수 없어요. 다른 이름을 골라 주세요.`);
+        vars.add(m[1]);
+      }
+      collect(nd.children, false, inScene);
+    }
+  })(tree, true, false);
+
+  function ex(s, n, ctx) {
+    const toks = (s || '').match(TOK) || [], out = [];
+    const nextTok = i => { for (let j = i + 1; j < toks.length; j++) if (!/^\s+$/.test(toks[j])) return j; return -1; };
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i];
+      if (/^\s+$/.test(t)) continue;
+      const prev = out.length ? out[out.length - 1] : '';
+      if (t === '"' || t === "'") fail(n, '따옴표가 닫히지 않았어요. 글자는 "이렇게" 양쪽을 닫아 주세요.');
+      if (/^["']/.test(t) || /^[\d.]/.test(t)) { out.push(t); continue; }
+      if (';{}`\\[]'.includes(t)) fail(n, `'${t}' 기호는 FF Script에서 쓰지 않아요. 한 줄에 한 가지 일만 적어 주세요.`);
+      if (t === '=') fail(n, "여기서는 '='로 비교할 수 없어요. 같은지 물어볼 땐 '==' 또는 'is'를 써요. (예: if score == 10)");
+      if (!reID.test(t)) { out.push(t); continue; }
+      if (prev === '.') {
+        if (t === 'score') usesPScore = true;
+        if (!PROP_OK.test(t)) fail(n, `'.${t}'는 쓸 수 없어요. 쓸 수 있는 것: x, y, vx, vy, size, hp, speed, name 같은 값이나 key.left, mouse.x 같은 입력이에요.`);
+        out.push(t); continue;
+      }
+      switch (t) {
+        case 'and': out.push('&&'); continue;
+        case 'or': out.push('||'); continue;
+        case 'not': out.push('!'); continue;
+        case 'true': case 'false': case 'null': out.push(t); continue;
+        case 'is': {
+          const j = nextTok(i);
+          if (j > 0 && toks[j] === 'not') { out.push('!=='); i = j; } else out.push('===');
+          continue;
+        }
+        case 'random': out.push('G.rand'); continue;
+        case 'choose': out.push('G.choose'); continue;
+        case 'chance': out.push('G.chance'); continue;
+        case 'distance': out.push('G.dist'); continue;
+        case 'level': usesLevel = true; out.push('G.level'); continue;
+        case 'score': case 'lives': case 'time': out.push('G.' + t); continue;
+        case 'scene': out.push('G.sceneName'); continue;
+        case 'answer': out.push('G.answer'); continue;
+        case 'has': out.push('G.has'); continue;
+        case 'mouse': out.push('G.mouse'); continue;
+        case 'key': out.push('G.keys'); continue;
+        case 'width': out.push('G.W'); continue;
+        case 'height': out.push('G.H'); continue;
+        case 'PI': out.push('Math.PI'); continue;
+        case 'count': {
+          const a = nextTok(i), b = a > 0 ? nextTok(a) : -1, c = b > 0 ? nextTok(b) : -1;
+          if (a > 0 && toks[a] === '(' && b > 0 && reID.test(toks[b]) && c > 0 && toks[c] === ')') {
+            const nm = toks[b];
+            if (!LOOKS.includes(nm) && !vars.has(nm) && !(ctx && ctx.bound.has(nm))) fail(n, `count 안에는 모양 이름(rock 같은)이나 만든 이름을 써야 해요. '${nm}'는 찾을 수 없어요.${hint(nm, [...LOOKS, ...vars])}`);
+            out.push(`G.count(${q(nm)})`); i = c; continue;
+          }
+          fail(n, "count는 count(rock) 처럼 괄호 안에 모양 이름을 써서 개수를 세요.");
+        }
+      }
+      if (MATH.includes(t)) { out.push('Math.' + t); continue; }
+      if (vars.has(t) || LOOKS.includes(t) || (ctx && ctx.bound.has(t))) { out.push(t); continue; }
+      const known = [...vars, ...(ctx ? ctx.bound : []), ...LOOKS, ...BUILTIN];
+      fail(n, `'${t}'가 뭔지 모르겠어요.${hint(t, known)} 새 변수를 쓰려면 먼저 ${t} = 0 처럼 값을 정해 줘야 해요.`);
+    }
+    return out.join(' ');
+  }
+  function tpl(token, n, ctx) {
+    const m = token.trim();
+    if (!/^["'].*["']$/s.test(m) || !m.includes('{')) return ex(m, n, ctx);
+    const parts = m.slice(1, -1).split(/\{([^}]*)\}/);
+    return '(' + parts.map((p, i) => i % 2 ? `String(${ex(p, n, ctx)})` : q(p.replace(/\\(["'])/g, '$1'))).join('+') + ')';
+  }
+  const isTpl = t => /^["'].*\{.*["']$/s.test(t.trim());
+  function colorArg(rest, n, ctx, cmd) {
+    const w = (rest || '').trim();
+    if (/^["']/.test(w)) return ex(w, n, ctx);
+    if (COLOR_WORDS.includes(w) || /^#[0-9a-fA-F]{3,8}$/.test(w)) return q(w);
+    fail(n, `'${w}'는 모르는 색이에요.${hint(w, COLOR_WORDS)}\n쓸 수 있는 색: ${quoteList(COLOR_WORDS)} 또는 #ff8800 같은 색 코드`);
+  }
+  const need = (s, n, what) => { if (!s || !s.trim()) fail(n, what); };
+  const look = (w, n) => {
+    if (!LOOKS.includes(w)) fail(n, `'${w}'라는 모양은 없어요.${hint(w, LOOKS)}\n쓸 수 있는 모양: ${quoteList(LOOKS)}`);
+    return q(w);
+  };
+  const posTerm = (t, n, ctx) => POS_WORDS.includes(t) ? q(t) : ex(t, n, ctx);
+
+  function cmdArgs(name, rest, n, ctx) {
+    const terms = splitTerms(rest || '');
+    switch (name) {
+      case 'move': {
+        if (!terms.length || !DIRS.includes(terms[0])) fail(n, `move 뒤에는 방향이 와야 해요: ${quoteList(DIRS)}.${terms[0] ? hint(terms[0], DIRS) : ''} (예: move down 200)`);
+        const a = [q(terms[0])];
+        if (terms.length > 1) a.push(ex(terms.slice(1).join(' '), n, ctx));
+        return a.join(',');
+      }
+      case 'toward': {
+        const follow = terms[terms.length - 1] === 'follow';
+        const t = follow ? terms.slice(0, -1) : terms;
+        if (!t.length) fail(n, 'toward 뒤에는 향할 대상이 필요해요. (예: toward player 150, toward mouse 200 follow)');
+        const a = [ex(t[0], n, ctx)];
+        if (t.length > 1) a.push(ex(t.slice(1).join(' '), n, ctx)); else if (follow) a.push('undefined');
+        if (follow) a.push('true');
+        return a.join(',');
+      }
+      case 'control':
+        if (terms.length === 2 && terms[0] === 'platformer' && (terms[1] === 'arrows' || terms[1] === 'wasd')) return `${q('platformer')},${q(terms[1])}`;
+        if (terms[0] === 'platformer' && terms.length > 1) fail(n, 'platformer 뒤에는 wasd 나 arrows 만 써요. (2인용: 한 명은 control platformer wasd, 다른 한 명은 control platformer arrows)');
+        if (terms.length !== 1 || !CONTROLS.includes(terms[0])) fail(n, `control 뒤에는 ${quoteList(CONTROLS)} 중 하나가 와야 해요.${terms[0] ? hint(terms[0], CONTROLS) : ''}\n2인용 플랫포머는 control platformer wasd 와 control platformer arrows 로 나눠요.`);
+        return q(terms[0]);
+      case 'speed': case 'size': case 'spin':
+        need(rest, n, `${name} 뒤에는 숫자가 필요해요. (예: ${name} 300)`);
+        return ex(rest, n, ctx);
+      case 'color': need(rest, n, `color 뒤에는 색 이름이 필요해요. (예: color red)`); return colorArg(rest, n, ctx);
+      case 'glow': case 'trail': return rest && rest.trim() ? colorArg(rest, n, ctx) : '';
+      case 'health': case 'fade': need(rest, n, `${name} 뒤에는 숫자가 필요해요. (예: ${name} ${name === 'health' ? 5 : 0.5})`); return ex(rest, n, ctx);
+      case 'hurt': case 'heal': case 'wander': case 'bounce': return rest && rest.trim() ? ex(rest, n, ctx) : '';
+      case 'life': {
+        const c = (rest || '').replace(/\s*(?:sec|secs|seconds?|s)$/i, '');
+        need(c, n, 'life 뒤에는 남아 있을 시간(초)이 필요해요. (예: life 2 sec)'); return ex(c, n, ctx);
+      }
+      case 'patrol': {
+        const vert = terms[0] === 'up' || terms[0] === 'down', t = vert ? terms.slice(1) : terms;
+        if (!t.length) fail(n, 'patrol 뒤에는 왕복할 거리가 필요해요. (예: patrol 100, patrol 100 80, 위아래는 patrol up 100)');
+        const a = [ex(t[0], n, ctx), t.length > 1 ? ex(t.slice(1).join(' '), n, ctx) : 'undefined'];
+        if (vert) a.push('true');
+        return a.join(',');
+      }
+      case 'shoot': {
+        if (terms[0] === 'ring' || terms[0] === 'spread') {
+          if (terms.length > 3) fail(n, `shoot ${terms[0]}은 이렇게 써요: shoot ${terms[0]} 12 300  (개수, 속도)`);
+          return [q(terms[0]), terms[2] ? ex(terms[2], n, ctx) : 'undefined', terms[1] ? ex(terms[1], n, ctx) : 'undefined'].join(',');
+        }
+        if (terms.length > 2) fail(n, 'shoot은 이렇게 써요: shoot up, shoot player 400, shoot mouse  (뒤 숫자는 속도)');
+        const a = [!terms.length ? 'null' : DIRS.includes(terms[0]) ? q(terms[0]) : ex(terms[0], n, ctx)];
+        if (terms[1]) a.push(ex(terms[1], n, ctx));
+        return a.join(',');
+      }
+      case 'jumps': need(rest, n, 'jumps 뒤에는 점프 횟수가 필요해요. (예: jumps 2  → 이단 점프)'); return ex(rest, n, ctx);
+      case 'dash': return rest && rest.trim() ? ex(rest, n, ctx) : '';
+      case 'charge':
+        if (terms.length > 2) fail(n, 'charge는 이렇게 써요: boss.charge  /  boss.charge player  /  boss.charge player 900  (대상, 속도)');
+        return [terms[0] ? (terms[0] === 'mouse' ? q('mouse') : ex(terms[0], n, ctx)) : 'null', terms[1] ? ex(terms[1], n, ctx) : 'undefined'].join(',');
+      case 'summon': {
+        if (!terms.length || terms.length > 2) fail(n, 'summon은 이렇게 써요: boss.summon slime 3  (모양, 개수)  또는  boss.summon "🐝" 2');
+        const isText = /^["']/.test(terms[0]);
+        return [isText ? ex(terms[0], n, ctx) : look(terms[0], n), isText ? q('text') : look(terms[0], n), terms[1] ? ex(terms[1], n, ctx) : 'undefined'].join(',');
+      }
+      case 'emit': {
+        const v = (rest || '').trim();
+        if (v === 'off' || v === 'stop') return 'null';
+        if (!parts.has(v)) fail(n, `emit 뒤에는 particle 로 만든 이름이 필요해요.${v ? hint(v, [...parts]) : ''}${parts.size ? '\n만든 파티클: ' + quoteList([...parts]) : '\n먼저 particle fire 처럼 만들어 주세요.'}  (끄려면 emit off)`);
+        return q(v);
+      }
+      case 'power': {
+        if (!terms.length || !POWERS.includes(terms[0])) fail(n, `power 뒤에는 ${quoteList(POWERS)} 중 하나와 시간을 써요. (예: player.power fast 5)${terms[0] ? hint(terms[0], POWERS) : ''}`);
+        const sec = terms.slice(1).join(' ').replace(/\s*(?:sec|secs|seconds?|s)$/i, '');
+        return q(terms[0]) + (sec ? ',' + ex(sec, n, ctx) : '');
+      }
+      case 'chase': case 'flee': {
+        if (!terms.length) fail(n, `${name} 뒤에는 대상이 필요해요. (예: ${name} player 120 300  → 속도 120, 300 거리 안에서만)`);
+        if (terms.length > 3) fail(n, `${name}는 '${name} 대상 속도 거리' 까지만 써요. 수식은 괄호로 묶어 주세요.`);
+        return terms.map(x => ex(x, n, ctx)).join(',');
+      }
+      case 'look': need(rest, n, 'look 뒤에는 모양 이름이나 "🐸" 같은 이모지가 필요해요.'); return /^["']/.test(rest.trim()) ? ex(rest, n, ctx) : look(rest.trim(), n);
+      case 'gravity': case 'jump': return rest && rest.trim() ? ex(rest, n, ctx) : '';
+      case 'say': need(rest, n, 'say 뒤에는 말할 내용이 필요해요. (예: say "안녕!")'); return tpl(rest, n, ctx);
+      default:
+        if (rest && rest.trim()) fail(n, `${name} 뒤에는 아무것도 쓰지 않아요.`);
+        return '';
+    }
+  }
+  const cmdCall = (target, name, rest, n, ctx) => `G.ln=${n};${target}.${CMDS[name]}(${cmdArgs(name, rest, n, ctx)});`;
+
+  function makeStmt(nd, ctx, varName, rest) {
+    const n = nd.n, terms = splitTerms(rest || '');
+    if (['a', 'an', 'the'].includes(terms[0])) terms.shift();
+    if (!terms.length) fail(n, `make 뒤에는 모양 이름이 필요해요. (예: make rock from top)\n쓸 수 있는 모양: ${quoteList(LOOKS)}`);
+    const isText = /^["']/.test(terms[0]);
+    const L = isText ? q('text') : look(terms[0], n);
+    const K = isText ? ex(terms[0], n, ctx) : L;
+    let pos = [], from = 'null';
+    for (let i = 1; i < terms.length;) {
+      if (terms[i] === 'at') {
+        i++;
+        while (i < terms.length && terms[i] !== 'from') { pos.push(posTerm(terms[i], n, ctx)); i++; }
+        if (!pos.length || pos.length > 2) fail(n, "at 뒤에는 위치를 1~2개 써요. (예: at center bottom, at 100 200, at player)\n수식은 괄호로 묶어요: at (x + 20) 100");
+      } else if (terms[i] === 'from') {
+        if (!SIDES.includes(terms[i + 1])) fail(n, `from 뒤에는 ${quoteList(SIDES)} 중 하나가 와야 해요.${terms[i + 1] ? hint(terms[i + 1], SIDES) : ''}`);
+        from = q(terms[i + 1]); i += 2;
+      } else fail(n, `make 줄에서 '${terms[i]}'가 무슨 뜻인지 모르겠어요. 'at 위치' 또는 'from 방향'을 써 주세요.`);
+    }
+    let js = `G.ln=${n};{const _o=G.make(${K},${L},[${pos.join(',')}],${from});`;
+    if (varName) js += `_o.name=${q(varName)};${varName}=_o;`;
+    for (const c of nd.children) {
+      const m = c.text.match(new RegExp('^(' + ID + ')(?:\\s+(.*))?$', 'u'));
+      if (!m || !CMDS[m[1]]) fail(c.n, `make 아래에는 move, speed, size, color, control 같은 명령만 쓸 수 있어요.${m ? hint(m[1], Object.keys(CMDS)) : ''}`);
+      if (c.children.length) fail(c.children[0].n, '이 줄 아래에는 더 들여쓸 수 없어요.');
+      js += cmdCall('_o', m[1], m[2], c.n, ctx);
+    }
+    nd.usedKids = true;
+    return js + '}';
+  }
+
+  function sub(ctx, extra) {
+    return { bound: new Set([...ctx.bound, ...(extra || [])]), top: false, inScene: ctx.inScene };
+  }
+  function body(nd, ctx, extra, what) {
+    if (!nd.children.length) fail(nd.n, `${what} 아래에 한 칸 들여쓴 내용이 필요해요.`);
+    nd.usedKids = true;
+    return block(nd.children, sub(ctx, extra));
+  }
+  function topOnly(nd, ctx, w) {
+    if (!ctx.top) fail(nd.n, `${w}은(는) 맨 왼쪽 줄(들여쓰기 없는 곳)에서만 쓸 수 있어요.`);
+  }
+
+  const EVENT_RE = [new RegExp('^' + ID + '\\s+(?:hits|touches)\\s+' + ID + '$', 'u'), /^key\s+\S+$/, /^click$/, new RegExp('^' + ID + '\\s+leaves$', 'u'), /^talk\s+ends$/, /^answered$/, /^countdown\s+ends$/, new RegExp('^' + ID + '\\s+stomps\\s+' + ID + '$', 'u')];
+  function eventStmt(nd, ctx, rest, w) {
+    const n = nd.n;
+    let mm;
+    rest = rest.trim();
+    if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+(?:hits|touches)\\s+(' + ID + ')$', 'u')))) {
+      for (const nm of [mm[1], mm[2]]) if (!LOOKS.includes(nm) && !vars.has(nm)) fail(n, `'${nm}'는 모양 이름도, 만든 이름도 아니에요.${hint(nm, [...LOOKS, ...vars])}`);
+      const b = mm[1] === mm[2] ? 'other' : mm[2];
+      return `G.ln=${n};G.onHit(${q(mm[1])},${q(mm[2])},(${mm[1]},${b})=>{${body(nd, ctx, [mm[1], b], w)}});`;
+    }
+    if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+stomps\\s+(' + ID + ')$', 'u')))) {
+      for (const nm of [mm[1], mm[2]]) if (!LOOKS.includes(nm) && !vars.has(nm)) fail(n, `'${nm}'는 모양 이름도, 만든 이름도 아니에요.${hint(nm, [...LOOKS, ...vars])}`);
+      if (mm[1] === mm[2]) fail(n, 'stomps 앞뒤에는 서로 다른 것을 써 주세요. (예: if player stomps slime)');
+      return `G.ln=${n};G.onStomp(${q(mm[1])},${q(mm[2])},(${mm[1]},${mm[2]})=>{${body(nd, ctx, [mm[1], mm[2]], w)}});`;
+    }
+    if ((mm = rest.match(/^key\s+(\S+)$/))) return `G.ln=${n};G.onKey(${q(mm[1].toLowerCase())},()=>{${body(nd, ctx, null, w)}});`;
+    if (/^click$/.test(rest)) return `G.ln=${n};G.onKey("click",()=>{${body(nd, ctx, null, w)}});`;
+    if (/^talk\s+ends$/.test(rest)) return `G.ln=${n};G.onTalkEnd(()=>{${body(nd, ctx, null, w)}});`;
+    if (/^answered$/.test(rest)) return `G.ln=${n};G.onAnswer(()=>{${body(nd, ctx, null, w)}});`;
+    if (/^countdown\s+ends$/.test(rest)) return `G.ln=${n};G.onCountdownEnd(()=>{${body(nd, ctx, null, w)}});`;
+    if ((mm = rest.match(new RegExp('^(' + ID + ')\\s+leaves$', 'u')))) {
+      if (!LOOKS.includes(mm[1]) && !vars.has(mm[1])) fail(n, `'${mm[1]}'는 모양 이름도, 만든 이름도 아니에요.${hint(mm[1], [...LOOKS, ...vars])}`);
+      return `G.ln=${n};G.onLeave(${q(mm[1])},(${mm[1]})=>{${body(nd, ctx, [mm[1]], w)}});`;
+    }
+    return null;
+  }
+
+  function stmt(nd, ctx) {
+    const t = nd.text, n = nd.n;
+    let m;
+    if ((m = t.match(new RegExp('^(' + ID + ')\\s*=\\s*(?:make|spawn|create)(?:\\s+(.*))?$', 'u'))) && m[1] !== 'score') return makeStmt(nd, ctx, m[1], m[2]);
+    if ((m = t.match(/^(?:make|spawn|create)(?:\s+(.*))?$/))) return makeStmt(nd, ctx, null, m[1]);
+
+    if ((m = t.match(new RegExp('^(' + ID + '(?:\\.' + ID + ')*)\\s*(\\+=|-=|\\*=|/=|=(?!=))\\s*(.*)$', 'u')))) {
+      need(m[3], n, `${m[2]} 뒤에 값이 필요해요.`);
+      if (m[1] === 'lives') hasLives = true;
+      if (m[1] === 'time') fail(n, 'time은 읽기만 할 수 있어요.');
+      if (m[1] === 'level') usesLevel = true;
+      nd.usedKids = false;
+      return `G.ln=${n};${ex(m[1], n, ctx)}${m[2]}${ex(m[3], n, ctx)};`;
+    }
+    if ((m = t.match(new RegExp('^(' + ID + '(?:\\.' + ID + ')*)\\.(' + ID + ')(?:\\s+(.*))?$', 'u')))) {
+      if (!CMDS[m[2]]) fail(n, `'${m[2]}'라는 명령은 없어요.${hint(m[2], Object.keys(CMDS))}\n쓸 수 있는 명령: ${quoteList(Object.keys(CMDS))}`);
+      return cmdCall(ex(m[1], n, ctx), m[2], m[3], n, ctx);
+    }
+    m = t.match(new RegExp('^(' + ID + ')(?:\\s+(.*))?$', 'u'));
+    if (!m) fail(n, `이 줄을 이해하지 못했어요: ${t}`);
+    const w = m[1], rest = m[2] || '';
+    switch (w) {
+      case 'title': need(rest, n, 'title 뒤에는 "제목"을 따옴표로 감싸서 써 주세요.'); if (!/^["']/.test(rest)) fail(n, 'title 뒤의 제목은 따옴표로 감싸 주세요. (예: title "나의 게임")'); return `G.ln=${n};G.title(${ex(rest, n, ctx)});`;
+      case 'background': {
+        need(rest, n, `background 뒤에는 배경 이름이나 색이 필요해요: ${quoteList(BACKS)} 또는 색 이름`);
+        const v = rest.trim();
+        if (/^["']/.test(v)) return `G.ln=${n};G.background(${ex(v, n, ctx)});`;
+        if (BACKS.includes(v) || COLOR_WORDS.includes(v) || /^#[0-9a-fA-F]{3,8}$/.test(v)) return `G.ln=${n};G.background(${q(v)});`;
+        fail(n, `'${v}'는 모르는 배경이에요.${hint(v, [...BACKS, ...COLOR_WORDS])}\n쓸 수 있는 배경: ${quoteList(BACKS)} 또는 색 이름`);
+      }
+      case 'lives': {
+        need(rest, n, 'lives 뒤에 숫자가 필요해요. (예: lives 3, lives -1)');
+        if (/^[+-]/.test(rest.trim())) { if (!firstLivesAdd) firstLivesAdd = n; return `G.ln=${n};G.addLives(${ex(rest, n, ctx)});`; }
+        hasLives = true; return `G.ln=${n};G.setLives(${ex(rest, n, ctx)});`;
+      }
+      case 'score':
+        need(rest, n, 'score 뒤에 +10 처럼 늘릴 점수를 써 주세요.');
+        if (!/^[+-]/.test(rest.trim())) fail(n, "score 뒤에는 부호를 붙여 주세요. (예: score +10, score -5)");
+        return `G.ln=${n};G.addScore(${ex(rest, n, ctx)});`;
+      case 'every': case 'after': {
+        if (w === 'every') topOnly(nd, ctx, w);
+        need(rest, n, `${w} 뒤에 시간이 필요해요. (예: ${w} 1 sec)`);
+        const mm = rest.match(/^(.+?)\s*(?:sec|secs|second|seconds|s)?$/i);
+        return `G.ln=${n};G.${w}(${ex(mm[1], n, ctx)},()=>{${body(nd, ctx, null, w)}});`;
+      }
+      case 'always': topOnly(nd, ctx, w); if (rest) fail(n, 'always 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.onAlways(()=>{${body(nd, ctx, null, w)}});`;
+      case 'when': {
+        topOnly(nd, ctx, w);
+        const ev = eventStmt(nd, ctx, rest, w);
+        if (ev) return ev;
+        fail(n, `${w} 뒤의 모양을 모르겠어요. 이렇게 써요:\n  if player hits rock\n  if player stomps slime\n  if key space\n  if click\n  if rock leaves`);
+      }
+      case 'if': {
+        need(rest, n, 'if 뒤에 조건이 필요해요. (예: if score >= 10, if player hits rock)');
+        const ev = EVENT_RE.some(r => r.test(rest.trim())) ? eventStmt(nd, ctx, rest, w) : null;
+        if (ev) { if (!ctx.top) fail(n, "'if 누가 hits 무엇' 같은 이벤트 줄은 맨 왼쪽 줄에서만 쓸 수 있어요."); nd.isTrigger = true; return ev; }
+        if (ctx.top) { nd.isTrigger = true; return `G.ln=${n};G.onCond(()=>(${ex(rest, n, ctx)}),()=>{${body(nd, ctx, null, 'if')}});`; }
+        return `G.ln=${n};if(${ex(rest, n, ctx)}){${body(nd, ctx, null, 'if')}}`;
+      }
+      case 'add': case 'remove': {
+        const mm = rest.match(w === 'add' ? /^(.+?)\s+to\s+(.+)$/ : /^(.+?)\s+from\s+(.+)$/);
+        if (!mm) fail(n, w === 'add' ? 'add는 이렇게 써요: add 10 to score' : 'remove는 이렇게 써요: remove 1 from lives  (모양을 없애려면 rock.remove)');
+        const sign = w === 'add' ? '' : '-', tg = mm[2].trim(), amt = `${sign}(${ex(mm[1], n, ctx)})`;
+        if (tg === 'score') return `G.ln=${n};G.addScore(${amt});`;
+        if (tg === 'lives') { if (!firstLivesAdd) firstLivesAdd = n; return `G.ln=${n};G.addLives(${amt});`; }
+        if (tg === 'level') usesLevel = true;
+        return `G.ln=${n};${ex(tg, n, ctx)}${w === 'add' ? '+=' : '-='}${ex(mm[1], n, ctx)};`;
+      }
+      case 'set': {
+        const mm = rest.match(/^(.+?)\s+to\s+(.+)$/);
+        if (!mm) fail(n, 'set은 이렇게 써요: set score to 0');
+        const tg = mm[1].trim();
+        if (tg === 'lives') { hasLives = true; return `G.ln=${n};G.setLives(${ex(mm[2], n, ctx)});`; }
+        if (tg === 'level') usesLevel = true;
+        if (tg === 'time') fail(n, 'time은 읽기만 할 수 있어요.');
+        return `G.ln=${n};${ex(tg, n, ctx)}=${ex(mm[2], n, ctx)};`;
+      }
+      case 'else': case 'elif': fail(n, `${w} 앞에는 같은 칸에 if 줄이 있어야 해요.`);
+      case 'repeat': case 'loop': {
+        const cnt = rest.replace(/\s+times?$/i, '');
+        need(cnt, n, `${w} 뒤에 횟수가 필요해요. (예: ${w} 5 times)`);
+        return `G.ln=${n};for(let i=0;i<${ex(cnt, n, ctx)};i++){${body(nd, ctx, ['i'], w)}}`;
+      }
+      case 'confetti': if (rest) fail(n, 'confetti 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.confetti();`;
+      case 'flash': return `G.ln=${n};G.flashScreen(${rest ? colorArg(rest, n, ctx) : ''});`;
+      case 'slowmo': return `G.ln=${n};G.slowmo(${rest ? ex(rest.replace(/\s*(?:sec|secs|seconds?|s)$/i, ''), n, ctx) : ''});`;
+      case 'banner': {
+        need(rest, n, 'banner 뒤에는 "글자"가 필요해요. (예: banner "준비!" 2 sec)');
+        const terms = splitTerms(rest), sec = terms.slice(1).join(' ').replace(/\s*(?:sec|secs|seconds?|s)$/i, '');
+        return `G.ln=${n};G.banner(${tpl(terms[0], n, ctx)}${sec ? ',' + ex(sec, n, ctx) : ''});`;
+      }
+      case 'burst': {
+        const terms = splitTerms(rest), at = terms.indexOf('at'), pre = at < 0 ? terms : terms.slice(0, at);
+        let num = '30', col = '';
+        let pn = '';
+        for (const t of pre) { if (/^[\d(]/.test(t) || vars.has(t)) num = ex(t, n, ctx); else if (parts.has(t)) pn = t; else col = colorArg(t, n, ctx); }
+        const pos = at < 0 ? [] : terms.slice(at + 1).map(x => posTerm(x, n, ctx));
+        if (pn) return `G.ln=${n};G.burstP(${q(pn)},${pre.some(t => t !== pn && (/^[\d(]/.test(t) || vars.has(t))) ? num : 'null'},[${pos.join(',')}]);`;
+        return `G.ln=${n};G.burst(${num},${col || 'null'},[${pos.join(',')}]);`;
+      }
+      case 'to': {
+        topOnly(nd, ctx, 'to');
+        if (ctx.inScene) fail(n, '함수(to)는 scene 밖, 맨 왼쪽 줄에서 만들어 주세요. 그러면 모든 장면에서 쓸 수 있어요.');
+        const mm = rest.match(new RegExp('^(' + ID + ')((?:\\s+' + ID + ')*)$', 'u'));
+        if (!mm) fail(n, '함수는 이렇게 만들어요: to boom  또는  to hurt amount  (아래 줄에 내용을 들여써요)');
+        const params = mm[2].trim() ? mm[2].trim().split(/\s+/) : [];
+        return `function ${mm[1]}(${params.join(',')}){${body(nd, ctx, params, 'to')}}`;
+      }
+      case 'do': {
+        const mm = rest.match(new RegExp('^(' + ID + ')(?:\\s+(.*))?$', 'u'));
+        if (!mm || !funcs.has(mm[1])) fail(n, `do 뒤에는 to 로 만든 함수 이름이 필요해요.${mm ? hint(mm[1], [...funcs]) : ''}`);
+        return `G.ln=${n};${mm[1]}(${splitTerms(mm[2] || '').map(a => ex(a, n, ctx)).join(',')});`;
+      }
+      case 'map': {
+        topOnly(nd, ctx, 'map');
+        if (rest && rest.trim() !== 'topdown') fail(n, `map 뒤에는 아무것도 안 쓰거나 topdown(위에서 내려다보기)만 써요.${hint(rest.trim(), ['topdown'])}`);
+        if (!nd.rowsRaw || !nd.rowsRaw.length) fail(n, 'map 아래에 지도를 그려 주세요. (# 땅, C 코인, P 플레이어, F 깃발 …)');
+        const { rows, lines } = rawRows(nd);
+        rows.forEach((r, i) => { for (const ch of r) if (!MAP_CHARS.includes(ch)) fail(lines[i], `지도에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # = C G S H B ^ F E P K L W D I T V < > X A 그리고 빈칸은 .`); });
+        nd.usedKids = true;
+        return `G.ln=${n};${rows.some(r => r.includes('P')) ? 'player=' : ''}G.buildMap(${JSON.stringify(rows)}${rest.trim() === 'topdown' ? ',"topdown"' : ''});`;
+      }
+      case 'art': fail(n, 'art는 맨 왼쪽 줄에서만 쓸 수 있어요. (scene 안이 아니라 바깥에서 만들어 주세요)');
+      case 'scene': {
+        if (!ctx.top || ctx.inScene) fail(n, 'scene은 맨 왼쪽 줄에서만 만들 수 있어요. 장면 안에 장면을 넣을 수는 없어요.');
+        const mm = rest.match(new RegExp('^(' + ID + ')$', 'u'));
+        if (!mm) fail(n, 'scene은 이렇게 써요: scene menu  (아래 줄에 그 장면의 내용을 들여써요)');
+        if (!nd.children.length) fail(n, 'scene 아래에 한 칸 들여쓴 내용이 필요해요.');
+        nd.usedKids = true;
+        return `G.ln=${n};G.defScene(${q(mm[1])},()=>{${block(nd.children, { bound: new Set(ctx.bound), top: true, inScene: true })}});`;
+      }
+      case 'go': {
+        const mm = rest.match(new RegExp('^to\\s+(?:scene\\s+)?(' + ID + ')$', 'u'));
+        if (!mm) fail(n, `go는 이렇게 써요: go to menu${scenes.size ? '\n만든 장면: ' + quoteList([...scenes]) : '  (먼저 scene menu 로 장면을 만들어요)'}`);
+        if (!scenes.has(mm[1])) fail(n, `'${mm[1]}'라는 장면은 없어요.${hint(mm[1], [...scenes])}${scenes.size ? '\n만든 장면: ' + quoteList([...scenes]) : '\n먼저 scene ' + mm[1] + ' 으로 장면을 만들어 주세요.'}`);
+        return `G.ln=${n};G.goScene(${q(mm[1])});`;
+      }
+      case 'save': case 'load': case 'forget': {
+        need(rest, n, `${w} 뒤에는 변수 이름이 필요해요. (예: ${w} coins, ${w} coins and best)`);
+        const names = rest.trim().split(/\s*(?:,|\band\b)\s*/).filter(Boolean);
+        return names.map(nm => {
+          if (!reID.test(nm)) fail(n, `${w} 뒤에는 변수 이름만 써요. '${nm}'는 이름이 아니에요.`);
+          if (!['score', 'lives', 'level'].includes(nm) && !vars.has(nm)) fail(n, `'${nm}' 변수가 없어요.${hint(nm, [...vars])} 먼저 ${nm} = 0 처럼 만들어 주세요.`);
+          if (nm === 'level') usesLevel = true;
+          if (nm === 'lives') hasLives = true;
+          const tg = ex(nm, n, ctx);
+          if (w === 'save') return `G.ln=${n};G.saveVar(${q(nm)},${tg});`;
+          if (w === 'load') return `G.ln=${n};${tg}=G.loadVar(${q(nm)},${tg});`;
+          return `G.ln=${n};G.forgetVar(${q(nm)});`;
+        }).join('');
+      }
+      case 'talk': {
+        need(rest, n, 'talk 뒤에는 "대사"가 필요해요. (예: talk "안녕!"  또는  talk "할아버지" "어서 오너라")');
+        const terms = splitTerms(rest);
+        if (terms.length > 2 || terms.some(x => !/^["']/.test(x) && !reID.test(x))) fail(n, 'talk는 이렇게 써요: talk "대사"  또는  talk "이름" "대사"');
+        return `G.ln=${n};G.talk(${terms.length === 2 ? tpl(terms[0], n, ctx) : 'null'},${tpl(terms[terms.length - 1], n, ctx)});`;
+      }
+      case 'camera': {
+        const v = rest.trim(), mm = v.match(new RegExp('^follow\\s+(' + ID + ')(?:\\s+and\\s+(' + ID + '))?$', 'u'));
+        if (mm) return `G.ln=${n};G.camFollow(${ex(mm[1], n, ctx)}${mm[2] ? ',' + ex(mm[2], n, ctx) : ''});`;
+        if (v === 'off' || v === 'stop') return `G.ln=${n};G.camFollow(null);`;
+        fail(n, 'camera는 이렇게 써요: camera follow player  (두 명이면 camera follow p1 and p2, 멈추려면 camera off)');
+      }
+      case 'tone': {
+        const terms = splitTerms(rest), wv = terms.filter(x => WAVES.includes(x)), num = terms.filter(x => !WAVES.includes(x));
+        if (wv.length > 1) fail(n, `소리 종류는 하나만 써요: ${quoteList(WAVES)}`);
+        let f1 = 'null', rest2 = num;
+        const ti = num.indexOf('to');
+        if (ti === 0) fail(n, 'tone 맨 앞에는 높이(숫자)가 와야 해요. (예: tone 440, tone 300 to 900 0.3)');
+        if (ti > 0) { f1 = ex(num[ti + 1], n, ctx); rest2 = [...num.slice(0, ti), ...num.slice(ti + 2)]; }
+        if (!rest2.length || rest2.length > 2 || (ti > 0 && !num[ti + 1])) fail(n, `tone은 이렇게 써요: tone 440  /  tone 440 0.3  /  tone 300 to 900 0.3 saw\n소리 종류: ${quoteList(WAVES)}`);
+        return `G.ln=${n};G.tone(${ex(rest2[0], n, ctx)},${f1},${rest2[1] ? ex(rest2[1], n, ctx) : 'null'},${q(wv[0] || 'square')});`;
+      }
+      case 'play': {
+        const terms = splitTerms(rest), wv = terms.filter(x => WAVES.includes(x)), other = terms.filter(x => !WAVES.includes(x));
+        if (!other.length || !/^["']/.test(other[0]) || other.length > 2) fail(n, `play는 이렇게 써요: play "C E G C5"  또는  play "도 레 미" 0.2\n음 이름: C D E F G A B (또는 도 레 미 파 솔 라 시), 뒤에 숫자는 옥타브, - 는 쉼표`);
+        if (!isTpl(other[0])) {
+          const notes = JSON.parse(other[0][0] === "'" ? '"' + other[0].slice(1, -1).replace(/"/g, '\\"') + '"' : other[0]).trim().split(/\s+/).filter(Boolean);
+          const bad = notes.find(x => !NOTE_RE.test(x));
+          if (!notes.length) fail(n, 'play 안에 음이 없어요. (예: play "C E G")');
+          if (bad) fail(n, `'${bad}'는 음 이름이 아니에요. C D E F G A B (또는 도 레 미 파 솔 라 시), C5 처럼 옥타브, C# 처럼 반음, - 는 쉼표예요.`);
+        }
+        return `G.ln=${n};G.playNotes(${tpl(other[0], n, ctx)},${other[1] ? ex(other[1], n, ctx) : 'null'},${q(wv[0] || 'triangle')});`;
+      }
+      case 'ask': {
+        const terms = splitTerms(rest);
+        if (terms.length < 3 || terms.length > 6 || terms.some(x => !/^["']/.test(x))) fail(n, 'ask는 이렇게 써요: ask "무엇을 살까요?" "칼" "방패"  (질문 하나, 고를 것 2~5개, 모두 따옴표)');
+        return `G.ln=${n};G.ask(${tpl(terms[0], n, ctx)},[${terms.slice(1).map(x => tpl(x, n, ctx)).join(',')}]);`;
+      }
+      case 'countdown': {
+        const v = rest.replace(/\s*(?:sec|secs|seconds?|s)$/i, '').trim();
+        if (v === 'off' || v === 'stop') return `G.ln=${n};G.countdown(null);`;
+        need(v, n, 'countdown 뒤에는 초가 필요해요. (예: countdown 60, 끝났을 때는 if countdown ends)');
+        return `G.ln=${n};G.countdown(${ex(v, n, ctx)});`;
+      }
+      case 'give': case 'take': {
+        const terms = splitTerms(rest);
+        if (!terms.length || terms.length > 2) fail(n, `${w}는 이렇게 써요: ${w} "🔑"  또는  ${w} "🍎" 3  (가방은 has("🔑") 로 확인)`);
+        return `G.ln=${n};G.${w}(${ex(terms[0], n, ctx)}${terms[1] ? ',' + ex(terms[1], n, ctx) : ''});`;
+      }
+      case 'weather':
+        if (!WEATHERS.includes(rest.trim())) fail(n, `weather 뒤에는 ${quoteList(WEATHERS)} 중 하나가 와야 해요.${rest ? hint(rest.trim(), WEATHERS) : ''}`);
+        return `G.ln=${n};G.setWeather(${q(rest.trim())});`;
+      case 'level':
+        if (rest.trim() !== 'up') fail(n, "level 뒤에는 up만 쓸 수 있어요. (예: level up) 현재 레벨 숫자는 level 이라고만 쓰면 돼요.");
+        usesLevel = true; return `G.ln=${n};G.levelUp();`;
+      case 'music':
+        if (!MUSICS.includes(rest.trim())) fail(n, `music 뒤에는 ${quoteList(MUSICS)} 중 하나가 와야 해요.${rest ? hint(rest.trim(), MUSICS) : ''}`);
+        return `G.ln=${n};G.music(${q(rest.trim())});`;
+      case 'win': if (rest) fail(n, 'win 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.win();`;
+      case 'gameover': if (rest) fail(n, 'gameover 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.gameOver();`;
+      case 'shake': return `G.ln=${n};G.shake(${rest ? ex(rest, n, ctx) : ''});`;
+      case 'sound': {
+        const v = rest.trim(), mm = v.match(new RegExp('^(' + ID + ')\\s*=\\s*(.*)$', 'u'));
+        if (mm || (nd.children.length && reID.test(v))) {
+          if (!ctx.top || ctx.inScene) fail(n, '효과음 만들기는 scene 밖, 맨 왼쪽 줄에서 해 주세요. (예: sound boing = tone 200 to 900 0.15)');
+          if (mm && nd.children.length) fail(nd.children[0].n, '한 줄로 만든 효과음 아래에는 더 쓸 수 없어요. 여러 줄이면 sound 이름 아래에 들여써 주세요.');
+          const lines = mm ? [{ n, text: mm[2].trim(), children: [] }] : nd.children;
+          nd.usedKids = true;
+          const js = lines.map(c => {
+            if (!/^(tone|play|sound)\b/.test(c.text) || c.children.length) fail(c.n, '효과음 안에는 tone, play, sound 줄만 쓸 수 있어요. (예: sound boing = tone 200 to 900 0.15)');
+            return stmt(c, sub(ctx));
+          }).join('');
+          return `G.ln=${n};G.defSound(${q(mm ? mm[1] : v)},()=>{${js}});`;
+        }
+        if (!SOUNDS.includes(v) && !sounds.has(v)) fail(n, `sound 뒤에는 소리 이름이 필요해요: ${quoteList([...SOUNDS, ...sounds])}.${v ? hint(v, [...SOUNDS, ...sounds]) : ''}\n새 소리는 이렇게 만들어요: sound boing = tone 200 to 900 0.15`);
+        return `G.ln=${n};G.sound(${q(v)});`;
+      }
+      case 'particle': {
+        if (!ctx.top || ctx.inScene) fail(n, 'particle은 scene 밖, 맨 왼쪽 줄에서 만들어 주세요.');
+        const mm = rest.trim().match(new RegExp('^(' + ID + ')$', 'u'));
+        if (!mm) fail(n, 'particle은 이렇게 만들어요: particle fire  (아래 줄에 color, count, speed 같은 설정을 들여써요)');
+        if (!nd.children.length) fail(n, `particle 아래에 설정을 들여써 주세요. 쓸 수 있는 것: ${quoteList(PKEYS)}`);
+        nd.usedKids = true;
+        const spec = [];
+        for (const c of nd.children) {
+          if (c.children.length) fail(c.children[0].n, '이 줄 아래에는 더 들여쓸 수 없어요.');
+          const cm = c.text.match(/^(\S+)(?:\s+(.*))?$/), k = cm[1], vs = splitTerms(cm[2] || '');
+          if (!PKEYS.includes(k)) fail(c.n, `'${k}'는 파티클 설정이 아니에요.${hint(k, PKEYS)}\n쓸 수 있는 것: ${quoteList(PKEYS)}`);
+          if (!vs.length) fail(c.n, `${k} 뒤에 값이 필요해요. (예: ${{ color: 'color orange red', shape: 'shape star', direction: 'direction up' }[k] || k + ' 10'})`);
+          if (k === 'color') { spec.push(`color:[${vs.map(x => colorArg(x, c.n, ctx)).join(',')}]`); continue; }
+          if (k === 'shape') { if (vs.length > 1 || !PSHAPES.includes(vs[0])) fail(c.n, `shape 뒤에는 ${quoteList(PSHAPES)} 중 하나를 써요.${hint(vs[0], PSHAPES)}`); spec.push(`shape:${q(vs[0])}`); continue; }
+          if (k === 'direction') { if (vs.length > 1 || ![...DIRS, 'any'].includes(vs[0])) fail(c.n, `direction 뒤에는 ${quoteList([...DIRS, 'any'])} 중 하나를 써요.`); spec.push(`dir:${q(vs[0])}`); continue; }
+          const two = ['speed', 'life', 'size'].includes(k);
+          if (vs.length > (two ? 2 : 1)) fail(c.n, two ? `${k}는 숫자 하나나 두 개(최소 최대)를 써요. (예: ${k} 2 6)` : `${k}는 숫자 하나만 써요. 수식은 괄호로 묶어 주세요.`);
+          spec.push(`${k}:[${vs.map(x => ex(x, c.n, ctx)).join(',')}]`);
+        }
+        return `G.ln=${n};G.defParticle(${q(mm[1])},{${spec.join(',')}});`;
+      }
+      case 'JS': {
+        const code = jsSource(nd);
+        nd.usedKids = true; usesJS = true;
+        if (ctx.top && !ctx.inScene && nd.jsTop != null) return `G.ln=${n};\n${nd.jsTop}\n;`;
+        return `G.ln=${n};{\n${code}\n}`;
+      }
+      case 'minimap': {
+        const v = rest.trim();
+        if (v && v !== 'on' && v !== 'off') fail(n, 'minimap은 이렇게 써요: minimap  (끄려면 minimap off)');
+        return `G.ln=${n};G.setMinimap(${v !== 'off'});`;
+      }
+      case 'label': {
+        const terms = splitTerms(rest);
+        need(rest, n, 'label 뒤에는 "글자"가 필요해요. (예: label "안녕" at center top)');
+        const at = terms.indexOf('at');
+        const text = at < 0 ? terms : terms.slice(0, at);
+        const pos = at < 0 ? [] : terms.slice(at + 1).map(x => posTerm(x, n, ctx));
+        const tt = text.join(' ');
+        return `G.ln=${n};G.label(${isTpl(tt) ? '()=>' : ''}${tpl(tt, n, ctx)},[${pos.join(',')}]);`;
+      }
+    }
+    if (funcs.has(w)) return `G.ln=${n};${w}(${splitTerms(rest).map(a => ex(a, n, ctx)).join(',')});`;
+    if (CMDS[w]) fail(n, `'${w}'는 누구에게 시킬지가 필요해요. 이렇게 점(.)으로 이어 써요: rock.${w}`);
+    if ((vars.has(w) || LOOKS.includes(w)) && /^\S+/.test(rest) && CMDS[rest.split(/\s+/)[0]]) fail(n, `'${w} ${rest.split(/\s+/)[0]}' 처럼 띄우지 말고 점(.)으로 이어 주세요: ${w}.${rest.split(/\s+/)[0]}`);
+    fail(n, `'${w}'는 알 수 없는 명령이에요.${hint(w, [...STATEMENTS, ...Object.keys(CMDS)])}\n쓸 수 있는 명령: ${quoteList(STATEMENTS)}`);
+  }
+
+  function block(nodes, ctx) {
+    let out = '';
+    for (let i = 0; i < nodes.length; i++) {
+      const nd = nodes[i];
+      let js = stmt(nd, ctx);
+      if (nd.isTrigger && i + 1 < nodes.length && /^(else|elif)\b/.test(nodes[i + 1].text)) fail(nodes[i + 1].n, "맨 왼쪽 줄의 if(이벤트·조건 트리거)에는 else를 붙일 수 없어요. else는 다른 블록 안쪽의 if에서만 쓸 수 있어요.");
+      if (/^if\b/.test(nd.text) && !nd.isTrigger) {
+        while (i + 1 < nodes.length) {
+          const nx = nodes[i + 1], m = nx.text.match(/^(?:else\s+if|elif)\s+(.+)$/);
+          if (m) { js += `else if(${ex(m[1], nx.n, ctx)}){${body(nx, ctx, null, 'else if')}}`; i++; continue; }
+          if (/^else$/.test(nx.text)) { js += `else{${body(nx, ctx, null, 'else')}}`; i++; }
+          break;
+        }
+      }
+      if (nd.children.length && !nd.usedKids) fail(nd.children[0].n, '이 줄은 위 줄의 안쪽이 아니에요. 들여쓰기를 줄이거나, 위 줄 끝에 빠진 게 없는지 확인해 보세요.');
+      out += js;
+    }
+    return out;
+  }
+
+  const artNodes = tree.filter(nd => /^art\s/.test(nd.text)), rest0 = tree.filter(nd => !artNodes.includes(nd));
+  const artCode = artNodes.map(nd => {
+    const mm = nd.text.match(new RegExp('^art\\s+(' + ID + ')(?:\\s+(\\S+))?$', 'u'));
+    if (!mm) fail(nd.n, 'art는 이렇게 써요: art ghost white  (아래 줄에 글자로 그림을 그려요)');
+    if (!nd.rowsRaw.length) fail(nd.n, 'art 아래에 글자로 그림을 그려 주세요. (# 는 기본 색, k w r o y g b p c n m d 는 색깔)');
+    const { rows, lines } = rawRows(nd);
+    const frames = [[]];
+    rows.forEach((r, i) => {
+      if (/^-+$/.test(r.trim())) { if (frames[frames.length - 1].length) frames.push([]); return; }
+      for (const ch of r) if (!ART_CHARS.includes(ch)) fail(lines[i], `그림에서 '${ch}'는 쓸 수 없어요. 쓸 수 있는 글자: # . k w r o y g b p c n m d  (--- 줄은 다음 장면 그림)`);
+      frames[frames.length - 1].push(r);
+    });
+    if (!frames[frames.length - 1].length) frames.pop();
+    if (frames.length > 8) fail(nd.n, '움직이는 그림은 8장까지 가능해요.');
+    if (frames.some(f => f.length > 32 || f.some(r => r.length > 32))) fail(nd.n, '그림은 가로세로 32칸까지 가능해요.');
+    const col = mm[2] ? colorArg(mm[2], nd.n, null) : q('white');
+    return `G.defineArt(${q(mm[1])},${JSON.stringify(frames.length === 1 ? frames[0] : frames)},${col});`;
+  }).join('');
+  const code = artCode + block(rest0, { bound: new Set(), top: true, inScene: false });
+  if (firstLivesAdd && !hasLives) fail(firstLivesAdd, "목숨을 늘리고 줄이려면 먼저 맨 위에서 목숨 수를 정해 주세요. (예: lives 3)");
+  const declared = [...vars];
+  const head = (usesJS ? 'const {setInterval,setTimeout,clearInterval,clearTimeout,requestAnimationFrame,cancelAnimationFrame,document,window}=G.jsScope();' : '') + (usesLevel ? 'G.useLevel();' : '') + (usesPScore ? 'G.usePScore();' : '') + (declared.length ? `let ${declared.join(',')};` : '') +
+    LOOKS.filter(l => !vars.has(l)).map(l => `const ${l}=G.group(${q(l)});`).join('');
+  return head + code;
+}
+
+function compileSafe(src) {
+  try { return { ok: true, code: compile(src) }; }
+  catch (e) {
+    if (e instanceof FFError) return { ok: false, line: e.line, message: e.message };
+    return { ok: false, line: 0, message: '알 수 없는 문제가 생겼어요: ' + e.message };
+  }
+}
+function explain(e) {
+  const m = String(e && e.message || e);
+  if (/undefined|null/.test(m) && /Cannot (read|set)/.test(m)) return '아직 만들지 않은 것을 쓰려고 했어요. make로 먼저 만들었는지, 이름이 맞는지 확인해 보세요.';
+  if (/is not defined/.test(m)) return '모르는 이름을 썼어요: ' + m.replace(/ is not defined/, '');
+  return m;
+}
+function toFunction(code) { return new Function('G', code); }
+
+const lists = { pshapes: PSHAPES, pkeys: PKEYS, powers: POWERS, waves: WAVES, weathers: WEATHERS, statements: STATEMENTS, cmds: Object.keys(CMDS), looks: BUILTIN_LOOKS, backs: BACKS, colors: COLOR_WORDS, controls: CONTROLS, sounds: SOUNDS, dirs: DIRS, musics: MUSICS, pos: POS_WORDS, sides: SIDES, words: WORDS, builtin: BUILTIN };
+global.FFScript = { compile, compileSafe, explain, toFunction, jsTopNames: code => jsTopDecls(code).names, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+;(function (global) {
+'use strict';
+const MATH = ['sin', 'cos', 'tan', 'abs', 'floor', 'ceil', 'round', 'min', 'max', 'sqrt', 'pow', 'atan2', 'sign'];
+const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score)$/;
+const KEYNAME = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', ' ': 'space', Space: 'space', Spacebar: 'space', Enter: 'enter', NumpadEnter: 'enter', Shift: 'shift', ShiftLeft: 'shift', ShiftRight: 'shift' };
+const KEYCODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 32: 'space', 13: 'enter', 16: 'shift' };
+const BAD_IDS = new Set(['new', 'this', 'typeof', 'instanceof', 'in', 'of', 'void', 'delete', 'function', 'class', 'await', 'yield', 'async', 'arguments', 'super', 'import', 'export', 'return', 'var', 'let', 'const']);
+const OPS = ['>>>=', '===', '!==', '**=', '<<=', '>>=', '>>>', '...', '&&=', '||=', '??=', '=>', '==', '!=', '<=', '>=', '&&', '||', '??', '?.', '++', '--', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '**', '<<', '>>'];
+class Fallback extends Error { }
+const FB = () => { const e = new Fallback(); if (globalThis.FF_CONV_DEBUG) console.log(e.stack.split("\n").slice(2,4).join(" | ")); throw e; };
+
+/* ---------- tokens ---------- */
+function tokenize(src) {
+  const toks = []; let i = 0, nl = true;
+  const regexOk = () => { const p = toks[toks.length - 1]; return !p || (p.type === 'op' && p.t !== '++' && p.t !== '--') || (p.type === 'p' && '([{,;:?'.includes(p.t)) || (p.type === 'id' && /^(return|typeof|case|do|else|in|of|new|delete|void|throw)$/.test(p.t)); };
+  while (i < src.length) {
+    const c = src[i], s = i;
+    if (c === '\n') { nl = true; i++; continue; }
+    if (/\s/.test(c)) { i++; continue; }
+    if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; continue; }
+    if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); if (src.slice(i, e < 0 ? src.length : e).includes('\n')) nl = true; i = e < 0 ? src.length : e + 2; continue; }
+    let type, t;
+    if (c === '"' || c === "'") { i++; while (i < src.length && src[i] !== c && src[i] !== '\n') i += src[i] === '\\' ? 2 : 1; i++; type = 'str'; }
+    else if (c === '`') {
+      i++; let d = 0;
+      while (i < src.length) { if (src[i] === '\\') { i += 2; continue; } if (!d && src[i] === '`') break; if (src[i] === '$' && src[i + 1] === '{') { d++; i += 2; continue; } if (d && src[i] === '}') d--; i++; }
+      i++; type = 'tpl';
+    } else if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(src[i + 1] || ''))) { const m = src.slice(i).match(/^(0[xX][0-9a-fA-F]+|(\d[\d_]*\.?\d*|\.\d+)([eE][+-]?\d+)?)/); i += m[0].length; type = 'num'; }
+    else if (/[\p{L}_$]/u.test(c)) { const m = src.slice(i).match(/^[\p{L}\p{N}_$]+/u); i += m[0].length; type = 'id'; }
+    else if (c === '/' && regexOk()) { i++; let cls = false; while (i < src.length && src[i] !== '\n') { if (src[i] === '\\') { i += 2; continue; } if (src[i] === '[') cls = true; else if (src[i] === ']') cls = false; else if (src[i] === '/' && !cls) break; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; type = 're'; }
+    else { const op = OPS.find(o => src.startsWith(o, i)); if (op) { i += op.length; type = 'op'; } else { i++; type = '()[]{},;:?.'.includes(c) ? 'p' : 'op'; } }
+    t = src.slice(s, i);
+    toks.push({ t, type, s, e: i, nl, i: toks.length }); nl = false;
+  }
+  return toks;
+}
+const isP = (tk, t) => tk && tk.type === 'p' && tk.t === t;
+const isId = (tk, t) => tk && tk.type === 'id' && (t == null || tk.t === t);
+function matchClose(toks, i) {
+  const open = toks[i].t, close = { '(': ')', '[': ']', '{': '}' }[open]; let d = 0;
+  for (let j = i; j < toks.length; j++) { if (toks[j].type !== 'p') continue; if ('([{'.includes(toks[j].t)) d++; else if (')]}'.includes(toks[j].t)) { d--; if (!d) return toks[j].t === close ? j : -1; } }
+  return -1;
+}
+
+/* ---------- statements ---------- */
+function parse(toks, from, to) {
+  const out = []; let p = from;
+  const CONT = new Set(['.', '?.', '=', '+', '-', '*', '/', '%', '&&', '||', '??', '==', '===', '!=', '!==', '<', '>', '<=', '>=', ',', '?', ':', '=>', '+=', '-=', '*=', '/=', '(', '[', '{', '**', '&', '|', '^']);
+  function stmt() {
+    const s = p, tk = toks[p];
+    const done = (o) => Object.assign(o, { from: s, to: p });
+    if (isP(tk, ';')) { p++; return done({ k: 'empty' }); }
+    if (isP(tk, '{')) { const e = matchClose(toks, p); if (e < 0 || e >= to) FB(); const body = parse(toks, p + 1, e); p = e + 1; return done({ k: 'block', body }); }
+    if (isId(tk, 'function') && isId(toks[p + 1])) {
+      const name = toks[p + 1].t; if (!isP(toks[p + 2], '(')) FB();
+      const pe = matchClose(toks, p + 2); if (pe < 0 || !isP(toks[pe + 1], '{')) FB();
+      const be = matchClose(toks, pe + 1); if (be < 0 || be >= to) FB();
+      const params = toks.slice(p + 3, pe);
+      const node = { k: 'func', name, params, bodyFrom: pe + 2, bodyTo: be };
+      p = be + 1; return done(node);
+    }
+    if (isId(tk, 'if') && isP(toks[p + 1], '(')) {
+      const ce = matchClose(toks, p + 1); if (ce < 0) FB();
+      const cond = toks.slice(p + 2, ce); p = ce + 1;
+      const then = stmt(); let alt = null;
+      if (isId(toks[p], 'else')) { p++; alt = stmt(); }
+      return done({ k: 'if', cond, then, alt });
+    }
+    if ((isId(tk, 'for') || isId(tk, 'while') || isId(tk, 'with') || isId(tk, 'switch')) && isP(toks[p + 1], '(')) {
+      const ce = matchClose(toks, p + 1); if (ce < 0) FB();
+      const head = toks.slice(p + 2, ce); p = ce + 1;
+      const body = stmt();
+      return done({ k: tk.t, head, body });
+    }
+    if (isId(tk, 'do')) { p++; stmt(); if (isId(toks[p], 'while') && isP(toks[p + 1], '(')) { p = matchClose(toks, p + 1) + 1; if (isP(toks[p], ';')) p++; } return done({ k: 'raw' }); }
+    if (isId(tk, 'try')) {
+      p++; const blk = () => { if (!isP(toks[p], '{')) FB(); p = matchClose(toks, p) + 1; };
+      blk(); if (isId(toks[p], 'catch')) { p++; if (isP(toks[p], '(')) p = matchClose(toks, p) + 1; blk(); } if (isId(toks[p], 'finally')) { p++; blk(); }
+      return done({ k: 'raw' });
+    }
+    if (isId(tk, 'class')) { while (p < to && !isP(toks[p], '{')) p++; p = matchClose(toks, p) + 1; if (p <= 0) FB(); return done({ k: 'raw' }); }
+    let d = 0;
+    while (p < to) {
+      const t = toks[p];
+      if (t.type === 'p') {
+        if ('([{'.includes(t.t)) d++;
+        else if (')]}'.includes(t.t)) { if (!d) break; d--; }
+        else if (t.t === ';' && !d) { p++; break; }
+      }
+      p++;
+      if (!d && p < to && toks[p].nl) {
+        const prev = toks[p - 1], nx = toks[p];
+        if (!CONT.has(prev.t) && !(nx.type === 'op' && CONT.has(nx.t) && nx.t !== '++' && nx.t !== '--') && !isP(nx, '.') && !isP(nx, '?') && !isP(nx, ':') && !isP(nx, ',') && !isP(nx, '?.')) break;
+      }
+    }
+    if (p === s) p++;
+    return done({ k: 'expr' });
+  }
+  while (p < to) out.push(stmt());
+  return out;
+}
+
+/* ---------- expressions ---------- */
+function unquote(t) {
+  const q0 = t[0], body = t.slice(1, -1);
+  if (t[t.length - 1] !== q0) FB();
+  return body.replace(/\\(u\{[0-9a-fA-F]+\}|u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (_, e) => {
+    if (e[0] === 'u' && e.length > 1) return String.fromCodePoint(parseInt(e.replace(/[u{}]/g, ''), 16));
+    if (e[0] === 'x' && e.length === 3) return String.fromCharCode(parseInt(e.slice(1), 16));
+    return { n: '\n', t: '\t', r: '', b: '', f: '', v: '', 0: '' }[e] != null ? { n: '\n', t: '\t', r: '', b: '', f: '', v: '', 0: '' }[e] : e;
+  });
+}
+const jsq = raw => { const b = raw.replace(/\\/g, '\\\\'); return !raw.includes('"') ? '"' + b + '"' : !raw.includes("'") ? "'" + b + "'" : '"' + b.replace(/"/g, '\\"') + '"'; };
+const ffStr = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ') + '"';
+function splitTop(toks, sep) {
+  const parts = [[]]; let d = 0;
+  for (const t of toks) {
+    if (t.type === 'p' && '([{'.includes(t.t)) d++;
+    if (t.type === 'p' && ')]}'.includes(t.t)) d--;
+    if (!d && t.t === sep && (t.type === 'p' || t.type === 'op')) { parts.push([]); continue; }
+    parts[parts.length - 1].push(t);
+  }
+  return parts;
+}
+function tplParts(t, cx) {
+  const body = t.slice(1, -1), out = []; let i = 0, lit = '';
+  while (i < body.length) {
+    if (body[i] === '\\') { lit += unquote('"' + body.slice(i, i + 2) + '"'); i += 2; continue; }
+    if (body[i] === '$' && body[i + 1] === '{') {
+      let d = 1, j = i + 2; while (j < body.length && d) { if (body[j] === '{') d++; else if (body[j] === '}') d--; j++; }
+      if (/[{}"]/.test(lit)) FB();
+      out.push(lit.replace(/\n/g, ' ')); lit = '';
+      out.push('{' + expr(tokenize(body.slice(i + 2, j - 1)), cx) + '}'); i = j; continue;
+    }
+    lit += body[i++];
+  }
+  if (/[{}"]/.test(lit)) FB();
+  out.push(lit.replace(/\n/g, ' '));
+  return '"' + out.join('') + '"';
+}
+function textArg(toks, cx) {
+  if (toks.length === 1 && toks[0].type === 'str') { const v = unquote(toks[0].t); if (/[{}]/.test(v)) FB(); return ffStr(v); }
+  if (toks.length === 1 && toks[0].type === 'tpl') return tplParts(toks[0].t, cx);
+  const plus = splitTop(toks, '+');
+  if (plus.length > 1 && plus.some(p => p.length === 1 && p[0].type === 'str') && plus.every(p => p.length)) {
+    const firstStr = plus.findIndex(p => p.length === 1 && p[0].type === 'str');
+    if (firstStr <= 1) {
+      let out = '';
+      for (const p of plus) {
+        if (p.length === 1 && p[0].type === 'str') { const v = unquote(p[0].t); if (/[{}"]/.test(v)) FB(); out += v.replace(/\n/g, ' '); }
+        else if (p.length === 1 && p[0].type === 'tpl') out += tplParts(p[0].t, cx).slice(1, -1);
+        else { const e = expr(p, cx); if (/["{}]/.test(e)) FB(); out += '{' + e + '}'; }
+      }
+      return '"' + out + '"';
+    }
+  }
+  const e = expr(toks, cx); return '"{' + e + '}"';
+}
+function expr(toks, cx) {
+  if (!toks.length) FB();
+  const out = [];
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i], nx = toks[i + 1];
+    if (cx.banned && t.type === 'id' && cx.banned.has(t.t) && !isP(toks[i - 1], '.') && !(cx.rename && cx.rename[t.t])) FB();
+    if (t.type === 'num') { const v = Number(t.t.replace(/_/g, '')); if (!isFinite(v)) FB(); out.push(String(v)); continue; }
+    if (t.type === 'str') { const v = unquote(t.t); out.push(JSON.stringify(v)); continue; }
+    if (t.type === 'tpl' || t.type === 're') FB();
+    if (t.type === 'id') {
+      if (BAD_IDS.has(t.t)) FB();
+      if (t.t === 'undefined') { out.push('null'); continue; }
+      if (t.t === 'Math' && isP(nx, '.') && isId(toks[i + 2])) {
+        const m = toks[i + 2].t;
+        if (m === 'PI') { out.push('PI'); i += 2; continue; }
+        if (m === 'random' && isP(toks[i + 3], '(') && isP(toks[i + 4], ')')) { out.push('(random(0, 1000000) / 1000000)'); i += 4; continue; }
+        if (m === 'floor' && isP(toks[i + 3], '(')) {
+          const ce = matchClose(toks, i + 3), inner = toks.slice(i + 4, ce);
+          if (ce > 0 && inner.length === 7 && isId(inner[0], 'Math') && isId(inner[2], 'random') && isP(inner[3], '(') && isP(inner[4], ')') && inner[5].t === '*' && inner[6].type === 'num') {
+            out.push(`random(0, ${Number(inner[6].t) - 1})`); i = ce; continue;
+          }
+        }
+        if (MATH.includes(m) && isP(toks[i + 3], '(')) { out.push(m); i += 2; continue; }
+        FB();
+      }
+      if (isP(nx, '(') && !(cx.calls && cx.calls.has(t.t))) FB();
+      const nm = cx.rename && cx.rename[t.t] ? cx.rename[t.t] : t.t;
+      if (isP(toks[i - 1], '.')) { if (!PROP_OK.test(t.t) || isP(nx, '(')) FB(); out.push(t.t); continue; }
+      out.push(nm); continue;
+    }
+    if (t.type === 'op') {
+      const map = { '===': '==', '!==': '!=', '&&': 'and', '||': 'or', '!': 'not' };
+      if (map[t.t]) { out.push(map[t.t]); continue; }
+      if (['+', '-', '*', '/', '%', '<', '>', '<=', '>=', '==', '!=', '**'].includes(t.t)) { out.push(t.t); continue; }
+      FB();
+    }
+    if (t.type === 'p') {
+      if (t.t === '.') { if (!isId(nx) || !out.length) FB(); out.push('.'); continue; }
+      if ('(),?:'.includes(t.t)) { out.push(t.t); continue; }
+      FB();
+    }
+  }
+  return out.join(' ').replace(/ \. /g, '.').replace(/\( /g, '(').replace(/ \)/g, ')').replace(/ ,/g, ',').replace(/([\p{L}\p{N}_]) \(/gu, (m, a) => a + '(').replace(/\b(and|or|not)\(/g, '$1 (');
+}
+const term = (s) => /\s/.test(s) && !/^\(.*\)$/.test(s) ? '(' + s + ')' : s;
+
+/* ---------- converter ---------- */
+function convertJS(src, opts) {
+  opts = opts || {};
+  const toks = tokenize(src), memo = new Map(), all = [];
+  const reg = st => { all.push(st); if (st.k === 'block') st.body.forEach(reg); if (st.k === 'if') { reg(st.then); if (st.alt) reg(st.alt); } if (st.k === 'for' || st.k === 'while' || st.k === 'with' || st.k === 'switch') reg(st.body); };
+  const P = (a, b) => { const key = a + ':' + b; if (!memo.has(key)) { let r; try { r = parse(toks, a, b); } catch (e) { r = [{ k: 'raw', from: a, to: b }]; } r.forEach(reg); memo.set(key, r); } return memo.get(key); };
+  const X = (a, b) => { const key = 'x' + a + ':' + b; if (!memo.has(key)) { const r = { k: 'expr', from: a, to: b }; reg(r); memo.set(key, r); } return memo.get(key); };
+  const tree = P(0, toks.length);
+  const parentOf = t => { let best = null; for (const s of all) if (s !== t && s.from <= t.from && t.to <= s.to && (s.to - s.from > t.to - t.from || s.k === 'block' || s.k === 'if' || s.k === 'for' || s.k === 'func') && (!best || s.to - s.from <= best.to - best.from)) { if (best && s.to - s.from === best.to - best.from && all.indexOf(s) < all.indexOf(best)) continue; best = s; } return best; };
+  const rawOf = (st) => {
+    const a = toks[st.from], b = toks[st.to - 1];
+    if (!a) return '';
+    let txt = src.slice(lineStart(a.s), b.e);
+    const lines = txt.split('\n'), first = src.slice(lineStart(a.s), a.s);
+    if (first.trim()) lines[0] = lines[0].slice(first.length);
+    const ind = Math.min(...lines.filter(l => l.trim()).slice(1).map(l => l.match(/^\s*/)[0].length), lines[0] ? a.s - lineStart(a.s) : 99);
+    return lines.map((l, i) => i === 0 ? l.trim() : l.slice(Math.min(ind, l.match(/^\s*/)[0].length))).join('\n').replace(/\s+$/, '');
+  };
+  function lineStart(pos) { return src.lastIndexOf('\n', pos - 1) + 1; }
+  const funcs = new Set();
+  for (const st of tree) {
+    if (st.k === 'func') funcs.add(st.name);
+    if (st.k === 'expr' && /^(let|const|var)$/.test(toks[st.from].t) && isId(toks[st.from + 1]) && toks[st.from + 2] && toks[st.from + 2].t === '=' && (isId(toks[st.from + 3], 'function') || toks.slice(st.from + 3, st.to).some(t => t.t === '=>'))) funcs.add(toks[st.from + 1].t);
+  }
+
+  function emit(lines, st, ind) {
+    return { lines, st, ind };
+  }
+  function jsLines(st, ind, cx) {
+    const tk = toks.slice(st.from, st.to);
+    if (cx.banned && tk.some((t, i) => t.type === 'id' && cx.banned.has(t.t) && !isP(tk[i - 1], '.'))) FB();
+    const raw = rawOf(st); if (!raw) return [];
+    cx.stats.js++;
+    if (!raw.includes('\n')) return [[ind, 'JS ' + jsq(raw), st, raw]];
+    return [[ind, 'JS', st, raw], ...raw.split('\n').filter(l => l.trim()).map(l => [ind + 2, l, st, null, true])];
+  }
+  function body(st, ind, cx) {
+    const list = st.k === 'block' ? st.body : [st];
+    const out = [];
+    for (const s of list) out.push(...conv(s, ind, cx));
+    if (!out.length) FB();
+    return out;
+  }
+  function fnExpr(tk, cx) {
+    let i = 0, params = [];
+    if (isId(tk[0], 'async')) FB();
+    if (isId(tk[0], 'function')) { i = 1; if (isId(tk[1])) i = 2; if (!isP(tk[i], '(')) FB(); const e = matchClose(tk, i); params = tk.slice(i + 1, e); i = e + 1; if (!isP(tk[i], '{')) FB(); }
+    else if (isP(tk[0], '(')) { const e = matchClose(tk, 0); params = tk.slice(1, e); i = e + 1; if (!(tk[i] && tk[i].t === '=>')) FB(); i++; }
+    else if (isId(tk[0]) && tk[1] && tk[1].t === '=>') { params = [tk[0]]; i = 2; }
+    else FB();
+    const names = params.filter(t => !isP(t, ','));
+    if (names.some(t => t.type !== 'id')) FB();
+    const base = tk[0].i;
+    if (isP(tk[i], '{')) { const e = matchClose(tk, i); if (e !== tk.length - 1) FB(); return { params: names.map(t => t.t), stmts: P(base + i + 1, base + e) }; }
+    return { params: names.map(t => t.t), stmts: [X(base + i, base + tk.length)] };
+  }
+  function hasReturn(stmts) { return stmts.some(s => toks.slice(s.from, s.to).some(t => isId(t, 'return') || isId(t, 'this') || isId(t, 'arguments'))); }
+  function convFunc(name, params, stmts, ind, cx, st) {
+    if (!cx.top || hasReturn(stmts) || !stmts.length) FB();
+    const sub = Object.assign({}, cx, { top: false, fn: true });
+    const out = []; for (const s of stmts) out.push(...conv(s, ind + 2, sub));
+    if (!out.length) FB();
+    return [[ind, 'to ' + name + (params.length ? ' ' + params.join(' ') : ''), st], ...out];
+  }
+  function secs(tk, cx) {
+    if (tk.length === 1 && tk[0].type === 'num') return String(Math.max(0.05, Number(tk[0].t) / 1000));
+    return '(' + expr(tk, cx) + ') / 1000';
+  }
+  function keyConds(cond, ev) {
+    const keys = [];
+    for (const part of splitTop(cond, '||')) {
+      let tk = part;
+      if (isP(tk[0], '(') && matchClose(tk, 0) === tk.length - 1) tk = tk.slice(1, -1);
+      if (tk.length !== 5 || !isId(tk[0], ev) || !isP(tk[1], '.') || !['===', '=='].includes(tk[3].t)) return null;
+      const prop = tk[2].t, v = tk[4];
+      let k = null;
+      if ((prop === 'key' || prop === 'code') && v.type === 'str') { const s = unquote(v.t); k = KEYNAME[s] || (s.length === 1 ? s.toLowerCase() : /^Key[A-Z]$/.test(s) ? s.slice(3).toLowerCase() : /^Digit\d$/.test(s) ? s.slice(5) : null); }
+      else if ((prop === 'keyCode' || prop === 'which') && v.type === 'num') { const n = Number(v.t); k = KEYCODE[n] || (n >= 65 && n <= 90 ? String.fromCharCode(n + 32) : n >= 48 && n <= 57 ? String(n - 48) : null); }
+      if (!k || !/^[\w]+$/.test(k)) return null;
+      keys.push(k);
+    }
+    return keys;
+  }
+  function convListener(type, fn, ind, cx, st) {
+    if (!cx.top) FB();
+    const { params, stmts } = fn;
+    const sub = Object.assign({}, cx, { top: false, banned: new Set([...(cx.banned || []), ...params]) });
+    if (/^(click|mousedown|pointerdown|touchstart)$/.test(type)) {
+      const out = []; for (const s of stmts) out.push(...conv(s, ind + 2, sub));
+      if (!out.length) FB();
+      return [[ind, 'if click', st], ...out];
+    }
+    if (!/^(keydown|keypress)$/.test(type)) FB();
+    const ev = params[0], out = [];
+    if (!ev) FB();
+    const skip = s => s.k === 'empty' || (s.k === 'expr' && toks.slice(s.from, s.to).map(t => t.t).join('').replace(/;$/, '') === ev + '.preventDefault()');
+    const walk = (s) => {
+      if (skip(s)) return;
+      if (s.k === 'block') { s.body.forEach(walk); return; }
+      if (s.k !== 'if') FB();
+      const ks = keyConds(s.cond, ev); if (!ks) FB();
+      const inner = body(s.then, ind + 2, sub);
+      for (const k of ks) out.push([ind, 'if key ' + k, s], ...inner);
+      if (s.alt) { if (s.alt.k !== 'if') FB(); walk(s.alt); }
+    };
+    stmts.forEach(walk);
+    if (!out.length) FB();
+    return out;
+  }
+  function callParts(tk) {
+    let i = 0;
+    while (i < tk.length && !isP(tk[i], '(')) i++;
+    if (i >= tk.length || i === 0) return null;
+    const e = matchClose(tk, i);
+    if (e !== tk.length - 1 && !(e === tk.length - 2 && isP(tk[tk.length - 1], ';'))) return null;
+    const callee = tk.slice(0, i).map(t => t.t).join('');
+    const args = tk.slice(i + 1, e).length ? splitTop(tk.slice(i + 1, e), ',') : [];
+    return { callee, args };
+  }
+  function conv(st, ind, cx) {
+    if (st.fb) return jsLines(st, ind, cx);
+    try { return conv1(st, ind, cx); }
+    catch (e) { if (!(e instanceof Fallback)) throw e; st.fb = true; return jsLines(st, ind, cx); }
+  }
+  function conv1(st, ind, cx) {
+    let tk = toks.slice(st.from, st.to);
+    if (tk.length && isP(tk[tk.length - 1], ';')) tk = tk.slice(0, -1);
+    switch (st.k) {
+      case 'empty': return [];
+      case 'block': { const out = []; for (const s of st.body) out.push(...conv(s, ind, cx)); return out; }
+      case 'func': {
+        const params = st.params.filter(t => !isP(t, ','));
+        if (params.some(t => t.type !== 'id')) FB();
+        return convFunc(st.name, params.map(t => t.t), P(st.bodyFrom, st.bodyTo), ind, cx, st);
+      }
+      case 'if': {
+        const top = cx.top, i0 = top ? ind + 2 : ind, sub = top ? Object.assign({}, cx, { top: false }) : cx;
+        const lines = [[i0, 'if ' + expr(st.cond, sub), st], ...body(st.then, i0 + 2, sub)];
+        let a = st.alt;
+        while (a) {
+          if (a.k === 'if' && !a.fb) { lines.push([i0, 'else if ' + expr(a.cond, sub), a], ...body(a.then, i0 + 2, sub)); a = a.alt; }
+          else { lines.push([i0, 'else', a], ...body(a, i0 + 2, sub)); a = null; }
+        }
+        return top ? [[ind, 'after 0 sec', st], ...lines] : lines;
+      }
+      case 'for': {
+        const h = splitTop(st.head, ';');
+        if (h.length !== 3) FB();
+        let [ini, cond, upd] = h;
+        if (ini.length && /^(let|var)$/.test(ini[0].t)) ini = ini.slice(1);
+        if (ini.length !== 3 || !isId(ini[0]) || ini[1].t !== '=' || ini[2].t !== '0') FB();
+        const v = ini[0].t;
+        if (cond.length < 3 || !isId(cond[0], v) || !['<', '<='].includes(cond[1].t)) FB();
+        const u = upd.map(t => t.t).join('');
+        if (![v + '++', '++' + v, v + '+=1'].includes(u)) FB();
+        const btoks = toks.slice(st.body.from, st.body.to);
+        if (v !== 'i' && btoks.some(t => isId(t, 'i'))) FB();
+        const sub = Object.assign({}, cx, { top: false, rename: Object.assign({}, cx.rename, { [v]: 'i' }), banned: v !== 'i' ? new Set([...(cx.banned || []), v]) : cx.banned });
+        let n = expr(cond.slice(2), sub);
+        if (cond[1].t === '<=') n = /^\d+$/.test(n) ? String(+n + 1) : '(' + n + ') + 1';
+        return [[ind, 'loop ' + n + ' times', st], ...body(st.body, ind + 2, sub)];
+      }
+      case 'expr': break;
+      default: FB();
+    }
+    if (!tk.length) return [];
+    const T = tk.map(t => t.t);
+    if (/^(let|const|var)$/.test(T[0])) {
+      const decls = splitTop(tk.slice(1), ','), out = [];
+      for (const d of decls) {
+        if (!isId(d[0])) FB();
+        if (d.length === 1) { out.push([ind, d[0].t + ' = 0', st]); continue; }
+        if (d[1].t !== '=') FB();
+        const rhs = d.slice(2);
+        if (funcs.has(d[0].t) && decls.length === 1) { const f = fnExpr(rhs, cx); return convFunc(d[0].t, f.params, f.stmts, ind, cx, st); }
+        out.push([ind, d[0].t + ' = ' + expr(rhs, cx), st]);
+      }
+      return out;
+    }
+    if (tk.length === 2 && isId(tk[0]) && (T[1] === '++' || T[1] === '--')) { if (cx.banned && cx.banned.has(T[0])) FB(); return [[ind, `${cx.rename && cx.rename[T[0]] || T[0]} ${T[1] === '++' ? '+=' : '-='} 1`, st]]; }
+    if (tk.length === 2 && isId(tk[1]) && (T[0] === '++' || T[0] === '--')) { if (cx.banned && cx.banned.has(T[1])) FB(); return [[ind, `${T[1]} ${T[0] === '++' ? '+=' : '-='} 1`, st]]; }
+    let ai = -1;
+    for (let i = 0, d = 0; i < tk.length; i++) { const t = tk[i]; if (t.type === 'p' && '([{'.includes(t.t)) d++; else if (t.type === 'p' && ')]}'.includes(t.t)) d--; else if (!d && t.type === 'op' && ['=', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=', '??='].includes(t.t)) { ai = i; break; } }
+    if (ai > 0 && !['=', '+=', '-=', '*=', '/='].includes(T[ai])) FB();
+    if (ai > 0) {
+      const lhs = T.slice(0, ai).join(''), rhs = tk.slice(ai + 1), op = T[ai];
+      if (lhs === 'document.title' && op === '=') { if (rhs.length !== 1 || rhs[0].type !== 'str') FB(); return [[ind, 'title ' + ffStr(unquote(rhs[0].t)), st]]; }
+      if (/^document\.body\.style\.(background|backgroundColor)$/.test(lhs) && op === '=') {
+        if (rhs.length !== 1 || rhs[0].type !== 'str') FB();
+        const c = colorWord(unquote(rhs[0].t)); if (!c) FB();
+        return [[ind, 'background ' + c, st]];
+      }
+      if (!/^[\p{L}_$][\p{L}\p{N}_$]*(\.[\p{L}_$][\p{L}\p{N}_$]*)?$/u.test(lhs)) FB();
+      const parts = lhs.split('.');
+      if (parts.length === 2 && !PROP_OK.test(parts[1])) FB();
+      if (cx.banned && cx.banned.has(parts[0])) FB();
+      if (parts[0].includes('$')) FB();
+      return [[ind, `${expr(tk.slice(0, ai), cx)} ${op} ${expr(rhs, cx)}`, st]];
+    }
+    const call = callParts(tk);
+    if (call) {
+      const { callee, args } = call;
+      if (callee === 'alert' && args.length === 1) return [[ind, 'talk ' + textArg(args[0], cx), st]];
+      if ((callee === 'setInterval' || callee === 'setTimeout') && args.length === 2) {
+        if (callee === 'setInterval' && !cx.top) FB();
+        let stmts;
+        if (args[0].length === 1 && isId(args[0][0]) && funcs.has(args[0][0].t)) stmts = null;
+        else { const f = fnExpr(args[0], cx); if (f.params.length) FB(); stmts = f.stmts; }
+        const head = [ind, (callee === 'setInterval' ? 'every ' : 'after ') + secs(args[1], cx) + ' sec', st];
+        const sub = Object.assign({}, cx, { top: false });
+        if (!stmts) return [head, [ind + 2, args[0][0].t, st]];
+        const out = []; for (const s of stmts) out.push(...conv(s, ind + 2, sub));
+        if (!out.length) FB();
+        return [head, ...out];
+      }
+      const lm = callee.match(/^(?:(?:window|document|document\.body|canvas|[\p{L}_$][\p{L}\p{N}_$]*)\.)?addEventListener$/u);
+      if (lm && args.length >= 2 && args[0].length === 1 && args[0][0].type === 'str') return convListener(unquote(args[0][0].t), fnExpr(args[1], cx), ind, cx, st);
+      if (funcs.has(callee)) return [[ind, callee + args.map(a => ' ' + term(expr(a, cx))).join(''), st]];
+    }
+    FB();
+  }
+  function colorWord(v) {
+    const W = (global.FFScript && global.FFScript.COLOR_WORDS) || [];
+    v = v.trim().toLowerCase();
+    if (W.includes(v)) return v;
+    if (/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(v)) return v;
+    return null;
+  }
+
+  const stats = { js: 0 };
+  const buildOf = (list) => {
+    const cx = { top: true, stats, rename: null, banned: null, calls: null };
+    const lines = [];
+    for (const st of list) for (const l of conv(st, 0, cx)) lines.push(l);
+    return lines;
+  };
+  const build = () => { stats.js = 0; return buildOf(tree); };
+  return { build, buildOf, tree, stats, rawOf, toks, parentOf };
+}
+
+function htmlDecode(s) {
+  return s.replace(/&(#x?[0-9a-fA-F]+|amp|lt|gt|quot|apos|nbsp);/g, (m, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' })[e] || (e[0] === '#' ? String.fromCodePoint(e[1] === 'x' ? parseInt(e.slice(2), 16) : +e.slice(1)) : m));
+}
+const BLOCKS = /^(h[1-6]|p|div|section|article|header|footer|main|li|ul|ol|span|b|strong|i|em|label|center|small|br|nav|aside|figure|figcaption|blockquote|pre|code|font|u|s|mark)$/i;
+const DROP = /^(meta|link|base|noscript|template)$/i;
+const lc = s => s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32));
+function findBlocks(html, low, name) {
+  const out = []; let i = 0;
+  while ((i = low.indexOf('<' + name, i)) >= 0) {
+    const c = low[i + name.length + 1];
+    if (c && !/[\s>\/]/.test(c)) { i += name.length + 1; continue; }
+    const oe = html.indexOf('>', i); if (oe < 0) break;
+    let ce = low.indexOf('</' + name, oe + 1), end;
+    if (ce < 0) { ce = html.length; end = html.length; } else { const g = html.indexOf('>', ce); end = g < 0 ? html.length : g + 1; }
+    out.push({ start: i, attrs: html.slice(i + name.length + 1, oe), from: oe + 1, to: ce, end });
+    i = end;
+  }
+  return out;
+}
+function cutRanges(s, ranges) {
+  if (!ranges.length) return s;
+  ranges.sort((a, b) => a[0] - b[0]);
+  let out = '', last = 0;
+  for (const [a, b] of ranges) { if (a < last) continue; out += s.slice(last, a); last = b; }
+  return out + s.slice(last);
+}
+function findComments(s) {
+  const out = []; let i = 0;
+  while ((i = s.indexOf('<!--', i)) >= 0) { const e = s.indexOf('-->', i + 4); const end = e < 0 ? s.length : e + 3; out.push([i, end]); i = end; }
+  return out;
+}
+function convertHTML(html, pre) {
+  const out = { lines: [], scripts: [] };
+  const low = lc(html), titles = findBlocks(html, low, 'title'), styleBs = findBlocks(html, low, 'style'), scriptBs = findBlocks(html, low, 'script');
+  if (titles.length) { const tt = htmlDecode(html.slice(titles[0].from, Math.min(titles[0].to, titles[0].from + 400))).trim(); if (tt) pre.push('title ' + ffStr(tt)); }
+  const styles = styleBs.map(b => html.slice(b.from, b.to)).join('\n').slice(0, 300000);
+  const bm = styles.match(/(?:^|[}\s,])(?:html\s*,\s*)?body\s*(?:,\s*html\s*)?\{[^}]*?background(?:-color)?\s*:\s*([^;}]+)/i) || (html.match(/<body[^>]*style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*([^;"']+)/i));
+  if (bm) { const v = bm[1].trim().toLowerCase(), W = (global.FFScript && global.FFScript.COLOR_WORDS) || []; if (W.includes(v) || /^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(v)) pre.push('background ' + v); }
+  for (const b of scriptBs) {
+    const code = html.slice(b.from, b.to), sm = b.attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    if (sm) out.scripts.push({ src: sm[1] }); else if (/module/i.test(b.attrs)) out.scripts.push({ module: code }); else if (code.trim()) out.scripts.push({ code });
+  }
+  let body;
+  { const bs = low.indexOf('<body'), be = bs < 0 ? -1 : html.indexOf('>', bs), ce = low.lastIndexOf('</body');
+    if (be >= 0 && ce > be) body = html.slice(be + 1, ce);
+    else { const hb = findBlocks(html, low, 'head')[0]; body = hb ? html.slice(0, hb.start) + html.slice(hb.end) : html; } }
+  { const bl = lc(body); body = cutRanges(body, [...findBlocks(body, bl, 'script'), ...findBlocks(body, bl, 'style'), ...findBlocks(body, bl, 'title')].map(b => [b.start, b.end])); }
+  body = cutRanges(body, findComments(body)).replace(/<\/?(html|head|body|!doctype)[^>]*>/gi, '');
+  const texts = [], raws = [];
+  let cur = '';
+  const flush = () => { const t = htmlDecode(cur).replace(/\s+/g, ' ').trim(); if (t) texts.push(t); cur = ''; };
+  const re = /<(\/?)([a-zA-Z][\w-]*)([^>]*)>|([^<]+)/g; let m;
+  while ((m = re.exec(body))) {
+    if (m[4] != null) { cur += m[4]; continue; }
+    const tag = m[2].toLowerCase();
+    if (DROP.test(tag)) continue;
+    if (BLOCKS.test(tag) && !/\bid\s*=/i.test(m[3])) { if (/^(h[1-6]|p|div|li|br|section|article|header|footer|main|center|pre|blockquote)$/.test(tag)) flush(); continue; }
+    if (m[1]) continue;
+    flush();
+    let raw = m[0];
+    if (!/^(img|input|br|hr|source|track|wbr|area|col|embed|param)$/.test(tag) && !/\/>$/.test(raw)) {
+      let d = 1; const r2 = new RegExp('<(/?)' + tag + '\\b[^>]*>', 'gi'); r2.lastIndex = re.lastIndex; let m2, end = body.length;
+      while ((m2 = r2.exec(body))) { if (m2[1]) d--; else d++; if (!d) { end = r2.lastIndex; break; } }
+      raw = body.slice(m.index, end); re.lastIndex = end;
+    }
+    raws.push(raw.replace(/\s+/g, ' ').trim());
+  }
+  flush();
+  texts.slice(0, 8).forEach((t, i) => out.lines.push('label ' + ffStr(t.replace(/[{}]/g, '')) + ' at center ' + (60 + i * 46)));
+  raws.forEach(r => out.lines.push('G.addHTML(`' + r.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`)'));
+  return out;
+}
+
+function renameClashes(code) {
+  const L = global.FFScript && global.FFScript.lists; if (!L) return code;
+  const NATIVE = new Set(['window', 'document', 'Math', 'console', 'alert']);
+  const R = new Set([...L.statements, ...L.builtin, ...L.words, 'score', 'lives', 'level', 'time', 'G', '_o', 'i'].filter(w => !NATIVE.has(w)));
+  let toks; try { toks = tokenize(code); } catch (e) { return code; }
+  const D = new Set();
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i];
+    if (t.type === 'id' && /^(let|const|var)$/.test(t.t)) {
+      let d = 0;
+      for (let j = i + 1; j < toks.length; j++) {
+        const u = toks[j];
+        if (j > i + 1 && !d && (isP(u, ';') || (u.nl && !isP(toks[j - 1], ',')))) break;
+        if (u.type === 'p' && '([{'.includes(u.t)) d++; else if (u.type === 'p' && ')]}'.includes(u.t)) { if (!d) break; d--; }
+        if (!d && u.type === 'id' && (j === i + 1 || isP(toks[j - 1], ','))) D.add(u.t);
+      }
+    }
+    if (isId(t, 'function') && isId(toks[i + 1])) D.add(toks[i + 1].t);
+    if (t.t === '=>') {
+      if (isId(toks[i - 1])) D.add(toks[i - 1].t);
+      else if (isP(toks[i - 1], ')')) { let d = 0; for (let j = i - 1; j >= 0; j--) { if (isP(toks[j], ')')) d++; else if (isP(toks[j], '(')) { if (!--d) break; } else if (d === 1 && isId(toks[j])) D.add(toks[j].t); } }
+    }
+    if (isId(t, 'function')) { let j = i + 1; if (isId(toks[j])) j++; if (isP(toks[j], '(')) { const e = matchClose(toks, j); for (let k = j + 1; k < e; k++) if (isId(toks[k]) && (isP(toks[k - 1], '(') || isP(toks[k - 1], ','))) D.add(toks[k].t); } }
+  }
+  const hit = [...D].filter(n => R.has(n));
+  if (!hit.length) return code;
+  const all = new Set(toks.filter(t => t.type === 'id').map(t => t.t));
+  const to = Object.create(null); for (const n of hit) { let m = n + '_'; while (all.has(m)) m += '_'; to[n] = m; }
+  let out = '', last = 0;
+  toks.forEach((t, i) => {
+    if (t.type !== 'id' || !to[t.t] || isP(toks[i - 1], '.') || isP(toks[i - 1], '?.')) return;
+    if (isP(toks[i + 1], ':') && (isP(toks[i - 1], '{') || isP(toks[i - 1], ','))) return;
+    out += code.slice(last, t.s) + to[t.t]; last = t.e;
+  });
+  return out + code.slice(last);
+}
+
+const MAXSIZE = 3 * 1024 * 1024;
+function detectOther(s) {
+  if (/^\s*(?:package\s+[\w.]+\s*;|import\s+(?:static\s+)?javax?\.[\w.*]+\s*;)/m.test(s) || /\b(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:class|interface|enum|void|int|long|double|boolean|String)\b/.test(s) || /System\.out\.print/.test(s)) return 'Java';
+  if (/^\s*using\s+System\b/m.test(s) || /Console\.Write(?:Line)?\s*\(/.test(s)) return 'C#';
+  if (/^\s*#include\s*[<"]/m.test(s)) return 'C/C++';
+  if (/^\s*def\s+\w+\s*\([^)]*\)\s*:/m.test(s) || /^\s*(?:elif\b.*|else)\s*:\s*$/m.test(s) || /^\s*from\s+\w+\s+import\s+/m.test(s)) return 'Python';
+  return null;
+}
+const jsBlock = (code) => ['JS', ...code.split('\n').filter(l => l.trim()).map(l => '  ' + l)];
+function convert(input, opts) {
+  opts = opts || {};
+  const t0 = Date.now(), budget = opts.budgetMs || 20000, over = () => Date.now() - t0 > budget;
+  let lastP = 0;
+  const prog = (stage, done, total, force) => { if (!opts.onProgress) return; const n = Date.now(); if (!force && n - lastP < 80) return; lastP = n; opts.onProgress({ stage, done, total }); };
+  const src = String(input || '').replace(/\r\n?/g, '\n');
+  if (src.length > MAXSIZE) return { code: '', ok: false, error: '붙여 넣은 코드가 너무 커요 (' + (src.length / 1048576).toFixed(1) + 'MB). 3MB 이하로 줄여서 다시 해 주세요.', js: 0 };
+  prog('읽는 중', 0, 1, true);
+  const pre = [], htmlLines = [];
+  let code = src, scripts = null;
+  const looksHTML = /<\s*(html|head|body|script|div|p|h[1-6]|canvas|title|style|button|img|span|!doctype)\b/i.test(src);
+  if (looksHTML) { const h = convertHTML(src, pre); htmlLines.push(...h.lines); scripts = h.scripts; code = h.scripts.filter(s => s.code).map(s => s.code).join('\n'); }
+  const extJS = [];
+  if (scripts) for (const s of scripts) {
+    if (s.src) extJS.push(`(function(){const s=document.createElement('script');s.src=${JSON.stringify(s.src)};document.head.appendChild(s);})()`);
+    if (s.module) extJS.push(s.module);
+  }
+  if (code.trim()) {
+    let synErr = null; try { new Function(code); } catch (e) { synErr = e.message; }
+    if (synErr) {
+      const lang = looksHTML ? null : detectOther(src);
+      return { code: '', ok: false, js: 0, error: lang ? lang + ' 코드는 바꿀 수 없어요. 이 변환기는 HTML과 JavaScript만 FF Script로 바꿔요.' : '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + synErr + ')' };
+    }
+  }
+  code = renameClashes(code);
+  const FF = global.FFScript;
+  const headOf = () => [...pre, ...htmlLines.map(l => /^G\.addHTML/.test(l) ? 'JS ' + jsq(l) : l), ...extJS.map(c => c.includes('\n') ? 'JS\n' + c.split('\n').filter(l => l.trim()).map(l => '  ' + l).join('\n') : 'JS ' + jsq(c))];
+  const wholeJS = (why) => {
+    const head = headOf(), body = code.trim() ? jsBlock(code) : [];
+    const text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
+    const r = FF ? FF.compileSafe(text) : { ok: true };
+    return { code: text, ok: r.ok, error: r.ok ? '' : '바꾸지 못했어요: ' + (r.message || ''), js: 1, whole: why };
+  };
+  try {
+  const C = convertJS(code);
+  let lines, text = '', okRun = false, timedOut = false;
+  const lift0 = ls => { const lift = ls.filter(([i, t]) => !i && /^(title|background) /.test(t)); return [...lift, ...ls.filter(l => !lift.includes(l))]; };
+  const markUp = (owner) => { if (owner.fb) { let par = C.parentOf(owner); while (par && par.fb) par = C.parentOf(par); if (!par) return false; par.fb = true; } else owner.fb = true; return true; };
+
+  /* 1단계: 문장 묶음(chunk)마다 따로 검사해서 고친다 (전체를 매번 다시 컴파일하지 않음) */
+  if (FF && C.tree.length) {
+    const chunks = []; let cur = [], w = 0;
+    for (const st of C.tree) { cur.push(st); w += st.to - st.from; if (cur.length >= 40 || w >= 1500) { chunks.push(cur); cur = []; w = 0; } }
+    if (cur.length) chunks.push(cur);
+    const stubs = new Map();
+    const learn = (ls) => {
+      for (const e of ls) {
+        if (e[4]) continue;
+        const t = e[1].trim();
+        if (e[3] != null) { if (e[0] === 0 && FF.jsTopNames) for (const nm of FF.jsTopNames(e[3])) if (!stubs.has(nm)) stubs.set(nm, [nm + ' = 0']); continue; }
+        let m;
+        if (e[0] === 0 && (m = t.match(/^to\s+([\p{L}_][\p{L}\p{N}_]*)((?:\s+[\p{L}_][\p{L}\p{N}_]*)*)$/u))) { stubs.set(m[1], ['to ' + m[1] + m[2], '  shake']); continue; }
+        if ((m = t.match(/^([\p{L}_][\p{L}\p{N}_]*)\s*(?:=(?!=)|\+=|-=|\*=|\/=)/u)) && !/^(score|lives|level)$/.test(m[1]) && !stubs.has(m[1])) stubs.set(m[1], [m[1] + ' = 0']);
+      }
+    };
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      prog('고치는 중', ci, chunks.length);
+      if (over()) { timedOut = true; for (const c of chunks.slice(ci)) for (const st of c) st.fb = true; break; }
+      let ls, guard = 0;
+      const ids = new Set(); for (let k = chunk[0].from; k < chunk[chunk.length - 1].to; k++) if (C.toks[k].type === 'id') ids.add(C.toks[k].t);
+      let used = [...stubs].filter(([k]) => ids.has(k)), preLines = used.flatMap(([, v]) => v);
+      for (;;) {
+        ls = C.buildOf(chunk);
+        const r = FF.compileSafe([...preLines, ...ls.map(([i, t]) => ' '.repeat(i) + t)].join('\n') + '\n');
+        if (r.ok) break;
+        const idx = r.line - 1 - preLines.length;
+        if (idx < 0) { let acc = 0; for (const [k, v] of used) { acc += v.length; if (r.line - 1 < acc) { stubs.delete(k); break; } } used = [...stubs].filter(([k]) => ids.has(k)); preLines = used.flatMap(([, v]) => v); if (guard++ > 5000) break; continue; }
+        const owner = ls[idx] && ls[idx][2];
+        if (!owner || guard++ > 400 || over() || !markUp(owner)) { for (const st of chunk) st.fb = true; ls = C.buildOf(chunk); break; }
+      }
+      learn(ls);
+    }
+  }
+
+  /* 2단계: 전체를 한 번 컴파일해서 확인, 남은 문제는 시간 안에서만 고친다 */
+  let guard = 0;
+  while (true) {
+    prog('마무리하는 중', 0, 1);
+    lines = lift0(C.build());
+    const body = lines.map(([i, t]) => ' '.repeat(i) + t), head = headOf();
+    text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
+    if (!FF) break;
+    const r = FF.compileSafe(text);
+    if (r.ok) { okRun = true; break; }
+    if (guard++ > 400 || over()) { timedOut = true; break; }
+    const idx = r.line - 1 - head.length - (head.length && body.length ? 1 : 0);
+    const owner = lines[idx] && lines[idx][2];
+    if (!owner || !markUp(owner)) break;
+  }
+  if (!okRun && timedOut) return wholeJS('timeout');
+  if (okRun) {
+    const js = [...htmlLines.filter(l => /^G\.addHTML/.test(l)), ...extJS];
+    const headPlain = [...pre, ...htmlLines.filter(l => !/^G\.addHTML/.test(l))];
+    const merged = [], L = lines;
+    for (let i = 0; i < L.length;) {
+      const e = L[i];
+      if (e[3] != null) {
+        const ind = e[0], codes = [];
+        while (i < L.length && L[i][3] != null && L[i][0] === ind) { codes.push(L[i][3]); i++; while (i < L.length && L[i][4]) i++; }
+        if (codes.length === 1 && !codes[0].includes('\n')) merged.push(' '.repeat(ind) + 'JS ' + jsq(codes[0]));
+        else { merged.push(' '.repeat(ind) + 'JS'); for (const c of codes) for (const l of c.split('\n')) if (l.trim()) merged.push(' '.repeat(ind + 2) + l); }
+        continue;
+      }
+      merged.push(' '.repeat(e[0]) + e[1]); i++;
+    }
+    const jsHead = js.length ? (js.length === 1 && !js[0].includes('\n') ? ['JS ' + jsq(js[0])] : ['JS', ...js.flatMap(c => c.split('\n').filter(l => l.trim()).map(l => '  ' + l))]) : [];
+    const head2 = [...headPlain, ...jsHead];
+    const t2 = [...head2, ...(head2.length && merged.length ? [''] : []), ...merged].join('\n') + '\n';
+    if (!over() && FF.compileSafe(t2).ok) text = t2;
+  }
+  let error = '';
+  if (!okRun && FF) { const r = FF.compileSafe(text); error = /문법 오류/.test(r.message || '') ? '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + String(r.message).replace(/^.*문법 오류가 있어요: /, '') + ')' : '바꾸지 못했어요: ' + (r.message || ''); }
+  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length, timedOut };
+  } catch (e) {
+    const w = wholeJS('error'); w.note = String(e && e.message || e).slice(0, 80); return w;
+  }
+}
+
+global.FFConvert = { convert, tokenize };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>(function (global) {
@@ -5370,7 +6825,7 @@ function explain(e) {
 function toFunction(code) { return new Function('G', code); }
 
 const lists = { pshapes: PSHAPES, pkeys: PKEYS, powers: POWERS, waves: WAVES, weathers: WEATHERS, statements: STATEMENTS, cmds: Object.keys(CMDS), looks: BUILTIN_LOOKS, backs: BACKS, colors: COLOR_WORDS, controls: CONTROLS, sounds: SOUNDS, dirs: DIRS, musics: MUSICS, pos: POS_WORDS, sides: SIDES, words: WORDS, builtin: BUILTIN };
-global.FFScript = { compile, compileSafe, explain, toFunction, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
+global.FFScript = { compile, compileSafe, explain, toFunction, jsTopNames: code => jsTopDecls(code).names, FFError, LOOKS: BUILTIN_LOOKS, BACKS, COLOR_WORDS, lists };
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>(function (global) {
@@ -5405,7 +6860,7 @@ function tokenize(src) {
     else if (c === '/' && regexOk()) { i++; let cls = false; while (i < src.length && src[i] !== '\n') { if (src[i] === '\\') { i += 2; continue; } if (src[i] === '[') cls = true; else if (src[i] === ']') cls = false; else if (src[i] === '/' && !cls) break; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; type = 're'; }
     else { const op = OPS.find(o => src.startsWith(o, i)); if (op) { i += op.length; type = 'op'; } else { i++; type = '()[]{},;:?.'.includes(c) ? 'p' : 'op'; } }
     t = src.slice(s, i);
-    toks.push({ t, type, s, e: i, nl }); nl = false;
+    toks.push({ t, type, s, e: i, nl, i: toks.length }); nl = false;
   }
   return toks;
 }
@@ -5629,7 +7084,7 @@ function convertJS(src, opts) {
     else FB();
     const names = params.filter(t => !isP(t, ','));
     if (names.some(t => t.type !== 'id')) FB();
-    const base = toks.indexOf(tk[0]);
+    const base = tk[0].i;
     if (isP(tk[i], '{')) { const e = matchClose(tk, i); if (e !== tk.length - 1) FB(); return { params: names.map(t => t.t), stmts: P(base + i + 1, base + e) }; }
     return { params: names.map(t => t.t), stmts: [X(base + i, base + tk.length)] };
   }
@@ -5807,14 +7262,14 @@ function convertJS(src, opts) {
   }
 
   const stats = { js: 0 };
-  const build = () => {
-    stats.js = 0;
+  const buildOf = (list) => {
     const cx = { top: true, stats, rename: null, banned: null, calls: null };
     const lines = [];
-    for (const st of tree) lines.push(...conv(st, 0, cx));
+    for (const st of list) for (const l of conv(st, 0, cx)) lines.push(l);
     return lines;
   };
-  return { build, tree, stats, rawOf, toks, parentOf };
+  const build = () => { stats.js = 0; return buildOf(tree); };
+  return { build, buildOf, tree, stats, rawOf, toks, parentOf };
 }
 
 function htmlDecode(s) {
@@ -5822,19 +7277,49 @@ function htmlDecode(s) {
 }
 const BLOCKS = /^(h[1-6]|p|div|section|article|header|footer|main|li|ul|ol|span|b|strong|i|em|label|center|small|br|nav|aside|figure|figcaption|blockquote|pre|code|font|u|s|mark)$/i;
 const DROP = /^(meta|link|base|noscript|template)$/i;
+const lc = s => s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32));
+function findBlocks(html, low, name) {
+  const out = []; let i = 0;
+  while ((i = low.indexOf('<' + name, i)) >= 0) {
+    const c = low[i + name.length + 1];
+    if (c && !/[\s>\/]/.test(c)) { i += name.length + 1; continue; }
+    const oe = html.indexOf('>', i); if (oe < 0) break;
+    let ce = low.indexOf('</' + name, oe + 1), end;
+    if (ce < 0) { ce = html.length; end = html.length; } else { const g = html.indexOf('>', ce); end = g < 0 ? html.length : g + 1; }
+    out.push({ start: i, attrs: html.slice(i + name.length + 1, oe), from: oe + 1, to: ce, end });
+    i = end;
+  }
+  return out;
+}
+function cutRanges(s, ranges) {
+  if (!ranges.length) return s;
+  ranges.sort((a, b) => a[0] - b[0]);
+  let out = '', last = 0;
+  for (const [a, b] of ranges) { if (a < last) continue; out += s.slice(last, a); last = b; }
+  return out + s.slice(last);
+}
+function findComments(s) {
+  const out = []; let i = 0;
+  while ((i = s.indexOf('<!--', i)) >= 0) { const e = s.indexOf('-->', i + 4); const end = e < 0 ? s.length : e + 3; out.push([i, end]); i = end; }
+  return out;
+}
 function convertHTML(html, pre) {
   const out = { lines: [], scripts: [] };
-  const tm = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  if (tm && htmlDecode(tm[1]).trim()) pre.push('title ' + ffStr(htmlDecode(tm[1]).trim()));
-  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join('\n');
+  const low = lc(html), titles = findBlocks(html, low, 'title'), styleBs = findBlocks(html, low, 'style'), scriptBs = findBlocks(html, low, 'script');
+  if (titles.length) { const tt = htmlDecode(html.slice(titles[0].from, Math.min(titles[0].to, titles[0].from + 400))).trim(); if (tt) pre.push('title ' + ffStr(tt)); }
+  const styles = styleBs.map(b => html.slice(b.from, b.to)).join('\n').slice(0, 300000);
   const bm = styles.match(/(?:^|[}\s,])(?:html\s*,\s*)?body\s*(?:,\s*html\s*)?\{[^}]*?background(?:-color)?\s*:\s*([^;}]+)/i) || (html.match(/<body[^>]*style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*([^;"']+)/i));
   if (bm) { const v = bm[1].trim().toLowerCase(), W = (global.FFScript && global.FFScript.COLOR_WORDS) || []; if (W.includes(v) || /^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(v)) pre.push('background ' + v); }
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    const sm = m[1].match(/\bsrc\s*=\s*["']([^"']+)["']/i);
-    if (sm) out.scripts.push({ src: sm[1] }); else if (/module/i.test(m[1])) out.scripts.push({ module: m[2] }); else if (m[2].trim()) out.scripts.push({ code: m[2] });
+  for (const b of scriptBs) {
+    const code = html.slice(b.from, b.to), sm = b.attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    if (sm) out.scripts.push({ src: sm[1] }); else if (/module/i.test(b.attrs)) out.scripts.push({ module: code }); else if (code.trim()) out.scripts.push({ code });
   }
-  let body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [null, html.replace(/<head[\s\S]*?<\/head>/i, '')])[1];
-  body = body.replace(/<script\b[\s\S]*?<\/script>/gi, '').replace(/<style\b[\s\S]*?<\/style>/gi, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?(html|head|body|!doctype)[^>]*>/gi, '').replace(/<title[\s\S]*?<\/title>/gi, '');
+  let body;
+  { const bs = low.indexOf('<body'), be = bs < 0 ? -1 : html.indexOf('>', bs), ce = low.lastIndexOf('</body');
+    if (be >= 0 && ce > be) body = html.slice(be + 1, ce);
+    else { const hb = findBlocks(html, low, 'head')[0]; body = hb ? html.slice(0, hb.start) + html.slice(hb.end) : html; } }
+  { const bl = lc(body); body = cutRanges(body, [...findBlocks(body, bl, 'script'), ...findBlocks(body, bl, 'style'), ...findBlocks(body, bl, 'title')].map(b => [b.start, b.end])); }
+  body = cutRanges(body, findComments(body)).replace(/<\/?(html|head|body|!doctype)[^>]*>/gi, '');
   const texts = [], raws = [];
   let cur = '';
   const flush = () => { const t = htmlDecode(cur).replace(/\s+/g, ' ').trim(); if (t) texts.push(t); cur = ''; };
@@ -5897,8 +7382,23 @@ function renameClashes(code) {
   return out + code.slice(last);
 }
 
-function convert(input) {
+const MAXSIZE = 3 * 1024 * 1024;
+function detectOther(s) {
+  if (/^\s*(?:package\s+[\w.]+\s*;|import\s+(?:static\s+)?javax?\.[\w.*]+\s*;)/m.test(s) || /\b(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:class|interface|enum|void|int|long|double|boolean|String)\b/.test(s) || /System\.out\.print/.test(s)) return 'Java';
+  if (/^\s*using\s+System\b/m.test(s) || /Console\.Write(?:Line)?\s*\(/.test(s)) return 'C#';
+  if (/^\s*#include\s*[<"]/m.test(s)) return 'C/C++';
+  if (/^\s*def\s+\w+\s*\([^)]*\)\s*:/m.test(s) || /^\s*(?:elif\b.*|else)\s*:\s*$/m.test(s) || /^\s*from\s+\w+\s+import\s+/m.test(s)) return 'Python';
+  return null;
+}
+const jsBlock = (code) => ['JS', ...code.split('\n').filter(l => l.trim()).map(l => '  ' + l)];
+function convert(input, opts) {
+  opts = opts || {};
+  const t0 = Date.now(), budget = opts.budgetMs || 20000, over = () => Date.now() - t0 > budget;
+  let lastP = 0;
+  const prog = (stage, done, total, force) => { if (!opts.onProgress) return; const n = Date.now(); if (!force && n - lastP < 80) return; lastP = n; opts.onProgress({ stage, done, total }); };
   const src = String(input || '').replace(/\r\n?/g, '\n');
+  if (src.length > MAXSIZE) return { code: '', ok: false, error: '붙여 넣은 코드가 너무 커요 (' + (src.length / 1048576).toFixed(1) + 'MB). 3MB 이하로 줄여서 다시 해 주세요.', js: 0 };
+  prog('읽는 중', 0, 1, true);
   const pre = [], htmlLines = [];
   let code = src, scripts = null;
   const looksHTML = /<\s*(html|head|body|script|div|p|h[1-6]|canvas|title|style|button|img|span|!doctype)\b/i.test(src);
@@ -5908,26 +7408,80 @@ function convert(input) {
     if (s.src) extJS.push(`(function(){const s=document.createElement('script');s.src=${JSON.stringify(s.src)};document.head.appendChild(s);})()`);
     if (s.module) extJS.push(s.module);
   }
+  if (code.trim()) {
+    let synErr = null; try { new Function(code); } catch (e) { synErr = e.message; }
+    if (synErr) {
+      const lang = looksHTML ? null : detectOther(src);
+      return { code: '', ok: false, js: 0, error: lang ? lang + ' 코드는 바꿀 수 없어요. 이 변환기는 HTML과 JavaScript만 FF Script로 바꿔요.' : '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + synErr + ')' };
+    }
+  }
   code = renameClashes(code);
-  const C = convertJS(code);
   const FF = global.FFScript;
-  let lines, text = '', okRun = false, guard = 0;
-  while (guard++ < 400) {
-    lines = C.build();
-    const lift = lines.filter(([i, t]) => !i && /^(title|background) /.test(t));
-    lines = [...lift, ...lines.filter(l => !lift.includes(l))];
-    const body = lines.map(([i, t]) => ' '.repeat(i) + t);
-    const head = [...pre, ...htmlLines.map(l => /^G\.addHTML/.test(l) ? 'JS ' + jsq(l) : l), ...extJS.map(c => c.includes('\n') ? 'JS\n' + c.split('\n').filter(l => l.trim()).map(l => '  ' + l).join('\n') : 'JS ' + jsq(c))];
+  const headOf = () => [...pre, ...htmlLines.map(l => /^G\.addHTML/.test(l) ? 'JS ' + jsq(l) : l), ...extJS.map(c => c.includes('\n') ? 'JS\n' + c.split('\n').filter(l => l.trim()).map(l => '  ' + l).join('\n') : 'JS ' + jsq(c))];
+  const wholeJS = (why) => {
+    const head = headOf(), body = code.trim() ? jsBlock(code) : [];
+    const text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
+    const r = FF ? FF.compileSafe(text) : { ok: true };
+    return { code: text, ok: r.ok, error: r.ok ? '' : '바꾸지 못했어요: ' + (r.message || ''), js: 1, whole: why };
+  };
+  try {
+  const C = convertJS(code);
+  let lines, text = '', okRun = false, timedOut = false;
+  const lift0 = ls => { const lift = ls.filter(([i, t]) => !i && /^(title|background) /.test(t)); return [...lift, ...ls.filter(l => !lift.includes(l))]; };
+  const markUp = (owner) => { if (owner.fb) { let par = C.parentOf(owner); while (par && par.fb) par = C.parentOf(par); if (!par) return false; par.fb = true; } else owner.fb = true; return true; };
+
+  /* 1단계: 문장 묶음(chunk)마다 따로 검사해서 고친다 (전체를 매번 다시 컴파일하지 않음) */
+  if (FF && C.tree.length) {
+    const chunks = []; let cur = [], w = 0;
+    for (const st of C.tree) { cur.push(st); w += st.to - st.from; if (cur.length >= 40 || w >= 1500) { chunks.push(cur); cur = []; w = 0; } }
+    if (cur.length) chunks.push(cur);
+    const stubs = new Map();
+    const learn = (ls) => {
+      for (const e of ls) {
+        if (e[4]) continue;
+        const t = e[1].trim();
+        if (e[3] != null) { if (e[0] === 0 && FF.jsTopNames) for (const nm of FF.jsTopNames(e[3])) if (!stubs.has(nm)) stubs.set(nm, [nm + ' = 0']); continue; }
+        let m;
+        if (e[0] === 0 && (m = t.match(/^to\s+([\p{L}_][\p{L}\p{N}_]*)((?:\s+[\p{L}_][\p{L}\p{N}_]*)*)$/u))) { stubs.set(m[1], ['to ' + m[1] + m[2], '  shake']); continue; }
+        if ((m = t.match(/^([\p{L}_][\p{L}\p{N}_]*)\s*(?:=(?!=)|\+=|-=|\*=|\/=)/u)) && !/^(score|lives|level)$/.test(m[1]) && !stubs.has(m[1])) stubs.set(m[1], [m[1] + ' = 0']);
+      }
+    };
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      prog('고치는 중', ci, chunks.length);
+      if (over()) { timedOut = true; for (const c of chunks.slice(ci)) for (const st of c) st.fb = true; break; }
+      let ls, guard = 0;
+      const ids = new Set(); for (let k = chunk[0].from; k < chunk[chunk.length - 1].to; k++) if (C.toks[k].type === 'id') ids.add(C.toks[k].t);
+      let used = [...stubs].filter(([k]) => ids.has(k)), preLines = used.flatMap(([, v]) => v);
+      for (;;) {
+        ls = C.buildOf(chunk);
+        const r = FF.compileSafe([...preLines, ...ls.map(([i, t]) => ' '.repeat(i) + t)].join('\n') + '\n');
+        if (r.ok) break;
+        const idx = r.line - 1 - preLines.length;
+        if (idx < 0) { let acc = 0; for (const [k, v] of used) { acc += v.length; if (r.line - 1 < acc) { stubs.delete(k); break; } } used = [...stubs].filter(([k]) => ids.has(k)); preLines = used.flatMap(([, v]) => v); if (guard++ > 5000) break; continue; }
+        const owner = ls[idx] && ls[idx][2];
+        if (!owner || guard++ > 400 || over() || !markUp(owner)) { for (const st of chunk) st.fb = true; ls = C.buildOf(chunk); break; }
+      }
+      learn(ls);
+    }
+  }
+
+  /* 2단계: 전체를 한 번 컴파일해서 확인, 남은 문제는 시간 안에서만 고친다 */
+  let guard = 0;
+  while (true) {
+    prog('마무리하는 중', 0, 1);
+    lines = lift0(C.build());
+    const body = lines.map(([i, t]) => ' '.repeat(i) + t), head = headOf();
     text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
     if (!FF) break;
     const r = FF.compileSafe(text);
     if (r.ok) { okRun = true; break; }
+    if (guard++ > 400 || over()) { timedOut = true; break; }
     const idx = r.line - 1 - head.length - (head.length && body.length ? 1 : 0);
     const owner = lines[idx] && lines[idx][2];
-    if (!owner) break;
-    if (owner.fb) { let par = C.parentOf(owner); while (par && par.fb) par = C.parentOf(par); if (!par) break; par.fb = true; }
-    else owner.fb = true;
+    if (!owner || !markUp(owner)) break;
   }
+  if (!okRun && timedOut) return wholeJS('timeout');
   if (okRun) {
     const js = [...htmlLines.filter(l => /^G\.addHTML/.test(l)), ...extJS];
     const headPlain = [...pre, ...htmlLines.filter(l => !/^G\.addHTML/.test(l))];
@@ -5946,11 +7500,14 @@ function convert(input) {
     const jsHead = js.length ? (js.length === 1 && !js[0].includes('\n') ? ['JS ' + jsq(js[0])] : ['JS', ...js.flatMap(c => c.split('\n').filter(l => l.trim()).map(l => '  ' + l))]) : [];
     const head2 = [...headPlain, ...jsHead];
     const t2 = [...head2, ...(head2.length && merged.length ? [''] : []), ...merged].join('\n') + '\n';
-    if (FF.compileSafe(t2).ok) text = t2;
+    if (!over() && FF.compileSafe(t2).ok) text = t2;
   }
   let error = '';
   if (!okRun && FF) { const r = FF.compileSafe(text); error = /문법 오류/.test(r.message || '') ? '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + String(r.message).replace(/^.*문법 오류가 있어요: /, '') + ')' : '바꾸지 못했어요: ' + (r.message || ''); }
-  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length };
+  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length, timedOut };
+  } catch (e) {
+    const w = wholeJS('error'); w.note = String(e && e.message || e).slice(0, 80); return w;
+  }
 }
 
 global.FFConvert = { convert, tokenize };
@@ -6922,7 +8479,9 @@ if p2 hits flag
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
+  const BIG = 400000;
   function highlight() {
+    if (code.value.length > BIG) { hl.textContent = code.value + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
     scanDyn();
     let raw = null;
     const out = code.value.split('\n').map(line => {
@@ -7065,7 +8624,7 @@ if p2 hits flag
   function drawGutter() {
     const n = code.value.split('\n').length;
     let h = '';
-    for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+    if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
     gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
@@ -7090,7 +8649,9 @@ if p2 hits flag
   let timer = 0;
   code.addEventListener('input', () => {
     drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
-    clearTimeout(timer); timer = setTimeout(() => run(true), 350);
+    clearTimeout(timer);
+    if (code.value.length > BIG) { status.textContent = '코드가 커서 자동 실행은 쉬어요. 다시 시작을 눌러 주세요'; status.className = ''; return; }
+    timer = setTimeout(() => run(true), 350);
   });
   code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
   code.addEventListener('input', () => openAc());
@@ -7137,14 +8698,40 @@ if p2 hits flag
   const conv = $('conv'), convIn = $('convIn');
   $('convBtn').addEventListener('click', () => { conv.style.display = conv.style.display === 'flex' ? 'none' : 'flex'; if (conv.style.display === 'flex') convIn.focus(); });
   $('convClose').addEventListener('click', () => { conv.style.display = 'none'; });
-  $('convGo').addEventListener('click', () => {
+  let convJob = null;
+  const convMsg = $('convMsg'), convGo = $('convGo');
+  function convertAsync(text, onP) {
+    return new Promise(resolve => {
+      let w = null, done = false, timer = null, url = null;
+      const fin = r => { if (done) return; done = true; clearTimeout(timer); if (w) w.terminate(); if (url) URL.revokeObjectURL(url); resolve(r); };
+      convJob = { cancel: () => fin({ cancelled: true }) };
+      const sync = () => setTimeout(() => { try { fin(FFConvert.convert(text, { budgetMs: 4000 })); } catch (e) { fin({ ok: false, error: '바꾸는 중에 문제가 생겼어요.' }); } }, 30);
+      try {
+        const body = $('cv-src').textContent + '\nonmessage=function(e){var r;try{r=FFConvert.convert(e.data.src,{budgetMs:e.data.budget,onProgress:function(p){postMessage({p:p})}});}catch(err){r={ok:false,error:"바꾸는 중에 문제가 생겼어요.",code:"",js:0};}postMessage({r:r});};';
+        url = URL.createObjectURL(new Blob([body], { type: 'text/javascript' }));
+        w = new Worker(url);
+        w.onmessage = e => { if (e.data.p) onP(e.data.p); else fin(e.data.r); };
+        w.onerror = () => { if (done) return; w.terminate(); w = null; sync(); };
+        timer = setTimeout(() => fin({ ok: false, error: '90초가 지나도 끝나지 않아서 멈췄어요. 코드를 나눠서 다시 해 보세요.' }), 90000);
+        w.postMessage({ src: text, budget: 30000 });
+      } catch (e) { sync(); }
+    });
+  }
+  convGo.addEventListener('click', async () => {
+    if (convJob) { convJob.cancel(); return; }
     if (!convIn.value.trim()) return;
-    const r = FFConvert.convert(convIn.value);
+    const text = convIn.value;
+    convGo.textContent = '취소'; convMsg.textContent = '시작하는 중…';
+    const r = await convertAsync(text, p => { convMsg.textContent = p.stage + (p.total > 1 ? ` ${Math.min(100, Math.round(p.done / p.total * 100))}%` : '…'); });
+    convJob = null; convGo.textContent = '변환'; convMsg.textContent = '';
+    if (r.cancelled) { toast('취소했어요'); return; }
     if (!r.ok) { toast(r.error || '바꾸지 못했어요'); return; }
     jsLock = false; conv.style.display = 'none';
-    code.focus(); code.select(); document.execCommand('insertText', false, r.code);
-    sel.value = ''; store.set('ff-code', code.value); drawGutter(); run(false);
-    toast(r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
+    code.focus(); code.select();
+    const big = r.code.length > BIG;
+    if (r.code.length > 150000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
+    sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast('변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요'); return; } run(false);
+    toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
   });
 
   $('export').addEventListener('click', () => {
