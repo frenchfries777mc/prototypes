@@ -10,7 +10,7 @@
 :root{
   --bg:#0d0f14;--panel:#171b23;--panel2:#1f2530;--line:#2a3140;--text:#e8ecf2;--dim:#8b95a5;
   --f:#ff7a3c;--i:#5cc8ff;--s:#ffd84a;--n:#b9a6ff;--acc:#e8b04a;--hp:#e5484d;--ok:#4cc38a;--blk:#6ea8ff;
-  --cw:118px;--ch:168px;
+  --cw:124px;--ch:184px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);overflow:hidden;
@@ -36,7 +36,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .screen{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding:22px 14px 28px;text-align:center}
 .screen h1{margin:0;font-size:clamp(32px,8vw,54px);letter-spacing:.02em}
 .screen h2{margin:0;font-size:22px}
-.screen p{margin:0;color:var(--dim);line-height:1.6;max-width:560px}
+.screen p{word-break:keep-all;margin:0;color:var(--dim);line-height:1.6;max-width:560px}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 22px;font-size:16px;min-width:180px}
 .btn:hover:not(:disabled){border-color:var(--acc)}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:700}
@@ -47,7 +47,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .row{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:100%}
 
 /* 제목 화면 */
-.title .orbs{font-size:44px;letter-spacing:6px;filter:drop-shadow(0 0 18px rgba(255,160,80,.35))}
+.title .orbs{filter:drop-shadow(0 0 22px rgba(255,170,90,.35))}
+.logo{width:min(250px,62vw);height:auto;overflow:visible}
 .title h1 span:nth-child(1){color:var(--f)}.title h1 span:nth-child(2){color:var(--i)}.title h1 span:nth-child(3){color:var(--s)}
 .title{justify-content:center}
 .rec{font-size:13px;color:var(--dim)}
@@ -77,7 +78,8 @@ button{font:inherit;color:inherit;cursor:pointer}
   font-weight:800;font-size:15px;display:grid;place-items:center;border:2px solid #0d0f14}
 .card .cname{font-weight:700;font-size:13.5px;line-height:1.2;padding:0 12px;white-space:nowrap}
 .card.up .cname{color:#8ff0b5}
-.card .cart{font-size:30px;line-height:1.15}
+.card .cart{width:100%;height:52px;flex:none;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 0 10px rgba(0,0,0,.55)}
+.card .cart svg{display:block;width:100%;height:100%}
 .card .ctype{font-size:10.5px;color:var(--c);letter-spacing:.03em}
 .card .ctext{font-size:11.5px;line-height:1.38;color:#d6dbe3;margin-top:2px;word-break:keep-all}
 .card .ctext b{color:#fff}
@@ -94,14 +96,22 @@ button{font:inherit;color:inherit;cursor:pointer}
 .combat{flex:1;min-height:0;display:flex;flex-direction:column;
   background:radial-gradient(ellipse at 50% 30%,#1b2130 0%,var(--bg) 70%)}
 .enemies{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 10px 4px}
-.enemy{flex:1;max-width:190px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;
+.enemy{flex:1;max-width:230px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;
   border:2px solid transparent;transition:opacity .4s,transform .15s}
 .enemy.targetable{cursor:pointer;border-color:rgba(232,176,74,.55);background:rgba(232,176,74,.07);animation:pulse 1s infinite}
 .enemy.dead{opacity:0;pointer-events:none}
 .intent{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:13.5px;min-height:24px;font-weight:700;
   background:rgba(0,0,0,.45);border:1px solid var(--line);border-radius:10px;padding:2px 8px}
 .intent .atk{color:#ff9d9d}.intent .def{color:var(--blk)}.intent .buff{color:#8ff0b5}.intent .debuff{color:#d6a5ff}
-.eicon{font-size:clamp(44px,11vw,68px);line-height:1.1;filter:drop-shadow(0 6px 8px rgba(0,0,0,.6))}
+.eicon{width:clamp(78px,24vw,132px);aspect-ratio:1;animation:bob 3.2s ease-in-out var(--bd,0s) infinite}
+.eicon.elite{width:clamp(92px,28vw,150px)}.eicon.boss{width:clamp(120px,38vw,210px)}
+.eicon svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 8px 10px rgba(0,0,0,.55))}
+.enemy.hurt .eicon svg{animation:flashw .3s}
+.enemy.dying .eicon{animation:none}
+.enemy.enter .eicon{animation:enter .6s cubic-bezier(.2,.9,.3,1.25) backwards,bob 3.2s ease-in-out var(--bd,0s) infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes enter{from{opacity:0;transform:translateY(-40px) scale(.7)}}
+@keyframes flashw{0%{filter:brightness(3) saturate(.2)}100%{filter:brightness(1)}}
 .ename{font-size:12.5px;color:var(--dim);white-space:nowrap}
 .hpbar{position:relative;width:100%;max-width:150px;height:15px;background:#0a0c10;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .hpbar i{position:absolute;inset:0 auto 0 0;background:var(--hp);transition:width .25s}
@@ -113,7 +123,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 .mid{display:flex;align-items:center;gap:10px;padding:4px 12px}
 .player{display:flex;align-items:center;gap:8px;flex:1;min-width:0;border-radius:12px;padding:4px}
-.player .pi{font-size:38px;line-height:1}
+.player .pi{width:40px;height:54px;flex:none}
+.lant{display:block;width:100%;height:100%;overflow:visible}
+.lflame{transform-origin:30px 62px;animation:flick .9s ease-in-out var(--bd,0s) infinite}
+@keyframes flick{0%,100%{transform:scale(1,1)}35%{transform:scale(.94,1.1)}70%{transform:scale(1.05,.96)}}
 .player .pinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;align-items:flex-start;max-width:230px}
 .player .hpbar{max-width:none}
 .player .sts{justify-content:flex-start}
@@ -169,6 +182,28 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes drawin{from{opacity:0;transform:translateY(40px)}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;transition-duration:.01s!important}}
 
+/* 분위기·연출 */
+.combat{position:relative}
+.combat.act0{background:radial-gradient(ellipse at 50% 100%,rgba(255,110,50,.16),transparent 60%),radial-gradient(ellipse at 50% 25%,#2a1a16 0%,#0d0f14 75%)}
+.combat.act1{background:radial-gradient(ellipse at 50% 100%,rgba(92,200,255,.16),transparent 60%),radial-gradient(ellipse at 50% 25%,#152336 0%,#0b0e14 75%)}
+.combat.act2{background:radial-gradient(ellipse at 50% 100%,rgba(170,120,255,.2),transparent 60%),radial-gradient(ellipse at 50% 25%,#1e1a38 0%,#0c0b16 75%)}
+.combat.boss::after{content:'';position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 110px rgba(255,40,40,.2)}
+.combat[data-chain=f]{box-shadow:inset 0 -80px 80px -60px rgba(255,122,60,.22)}
+.combat[data-chain=i]{box-shadow:inset 0 -80px 80px -60px rgba(92,200,255,.22)}
+.combat[data-chain=s]{box-shadow:inset 0 -80px 80px -60px rgba(255,216,74,.2)}
+.chainbox.pulse{animation:pop .4s}
+@keyframes pop{40%{transform:scale(1.18)}}
+#vig{position:fixed;inset:0;pointer-events:none;z-index:185;opacity:0}
+.ghost{position:fixed;z-index:250;pointer-events:none;margin:0!important;transform-origin:center;box-shadow:0 0 24px var(--c)}
+.bigtext{position:absolute;z-index:5;font-weight:900;letter-spacing:.02em;white-space:nowrap;transform:translate(-50%,-50%);text-shadow:0 0 14px currentColor,0 3px 6px #000;animation:bigpop 1s ease-out forwards}
+@keyframes bigpop{0%{opacity:0;transform:translate(-50%,-30%) scale(.4)}18%{opacity:1;transform:translate(-50%,-50%) scale(1.25)}35%{transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-140%) scale(1)}}
+.banner{position:absolute;left:0;right:0;top:30%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 0;background:linear-gradient(90deg,transparent,rgba(0,0,0,.78) 20%,rgba(0,0,0,.78) 80%,transparent);animation:banner 1.9s ease-out forwards}
+.banner small{letter-spacing:.5em;font-size:13px;color:#ff8a8a}.banner.elite small{color:#e0f0ff}
+.banner b{font-size:clamp(26px,7vw,44px);letter-spacing:.06em;text-shadow:0 0 22px rgba(255,80,80,.7)}
+@keyframes banner{0%{opacity:0;transform:scaleY(.2)}12%{opacity:1;transform:scaleY(1)}80%{opacity:1}100%{opacity:0}}
+.pickbox .big svg{width:64px;height:64px;overflow:visible}
+.pickbox .lantbig svg{width:44px;height:58px}
+
 /* 모달 / 알림 */
 #modal{position:fixed;inset:0;z-index:300;background:rgba(5,6,9,.82);display:none;align-items:center;justify-content:center;padding:14px}
 #modal.on{display:flex}
@@ -194,13 +229,13 @@ button{font:inherit;color:inherit;cursor:pointer}
 .shoprel em{font-style:normal;color:var(--acc);white-space:nowrap}
 
 @media (max-width:640px){
-  :root{--cw:100px;--ch:150px}
+  :root{--cw:104px;--ch:158px}
   #top{gap:7px;padding:6px 8px;font-size:13px}
   #top .where b{display:none}
-  .card .cname{font-size:12.5px;padding:0 10px}.card .cart{font-size:24px}.card .ctext{font-size:10.5px;line-height:1.32}
+  .card .cname{font-size:12.5px;padding:0 10px}.card .cart{height:42px}.card .ctext{font-size:10.5px;line-height:1.32}
   .card .ctype{font-size:10px}
   .mid{padding:2px 8px;gap:6px}.ctrl{padding:4px 8px;gap:6px}
-  .player .pi{font-size:30px}
+  .player .pi{width:32px;height:44px}
   .chainbox{min-width:76px;padding:4px 6px}
   .hand{padding:26px 8px 10px}
   .hand .card.sel{transform:translateY(-12px) scale(1.2)}
@@ -214,7 +249,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @media (max-height:620px){
   :root{--cw:96px;--ch:140px}
   .eicon{font-size:40px}
-  .card .cart{font-size:20px}
+  .card .cart{height:34px}
 }
 </style>
 </head>
@@ -223,10 +258,13 @@ button{font:inherit;color:inherit;cursor:pointer}
   <header id="top"></header>
   <main id="main"></main>
 </div>
+<div id="vig"></div>
 <div id="fxlayer"></div>
 <div id="modal"></div>
 <div id="toast"></div>
 <script src="core.js"></script>
+<script src="art.js"></script>
+<script src="fx.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>
