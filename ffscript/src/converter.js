@@ -558,8 +558,6 @@ function renameClashes(code) {
   if (!hit.length) return code;
   const all = new Set(toks.filter(t => t.type === 'id').map(t => t.t));
   const to = Object.create(null); for (const n of hit) { let m = n + '_'; while (all.has(m)) m += '_'; to[n] = m; }
-  let out = '', last = 0;
-  const names = Object.keys(to), reN = names.length ? new RegExp('(?<![\\p{L}\\p{N}_$.])(' + names.map(n => n.replace(/[$]/g, '\\$')).join('|') + ')(?![\\p{L}\\p{N}_$])', 'gu') : null;
   const fixTpl = txt => {
     let r = '', k = 0;
     while (k < txt.length) {
@@ -567,19 +565,24 @@ function renameClashes(code) {
       if (txt[k] === '$' && txt[k + 1] === '{') {
         let d = 1, e = k + 2;
         while (e < txt.length && d) { if (txt[e] === '{') d++; else if (txt[e] === '}') d--; e++; }
-        r += '${' + fixTpl(txt.slice(k + 2, e - 1)).replace(reN, m => to[m]) + '}'; k = e; continue;
+        r += '${' + rn(txt.slice(k + 2, e - 1)) + '}'; k = e; continue;
       }
       r += txt[k++];
     }
     return r;
   };
-  toks.forEach((t, i) => {
-    if (t.type === 'tpl' && reN && t.t.includes('${')) { out += code.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
-    if (t.type !== 'id' || !to[t.t] || isP(toks[i - 1], '.') || isP(toks[i - 1], '?.')) return;
-    if (isP(toks[i + 1], ':') && (isP(toks[i - 1], '{') || isP(toks[i - 1], ','))) return;
-    out += code.slice(last, t.s) + to[t.t]; last = t.e;
-  });
-  return out + code.slice(last);
+  function rn(text, tk) {
+    if (!tk) { try { tk = tokenize(text); } catch (e) { return text; } }
+    let out = '', last = 0;
+    tk.forEach((t, i) => {
+      if (t.type === 'tpl' && t.t.includes('${')) { out += text.slice(last, t.s) + fixTpl(t.t); last = t.e; return; }
+      if (t.type !== 'id' || !to[t.t] || isP(tk[i - 1], '.') || isP(tk[i - 1], '?.')) return;
+      if (isP(tk[i + 1], ':') && (isP(tk[i - 1], '{') || isP(tk[i - 1], ','))) return;
+      out += text.slice(last, t.s) + to[t.t]; last = t.e;
+    });
+    return out + text.slice(last);
+  }
+  return rn(code, toks);
 }
 
 const MAXSIZE = 3 * 1024 * 1024;
