@@ -28,6 +28,11 @@ function rgba(hex, a) {
 }
 
 /* ---------- sound ---------- */
+const MUSIC = {
+  chill: { tempo: 260, wave: 'sine', vol: 0.05, bassEvery: 8, bass: [131, 110, 87, 98], lead: [523, 0, 659, 0, 784, 659, 0, 523, 587, 0, 698, 0, 880, 698, 0, 587, 523, 0, 659, 0, 784, 0, 659, 523, 494, 0, 587, 0, 784, 0, 0, 0] },
+  happy: { tempo: 170, wave: 'triangle', vol: 0.06, bassEvery: 4, bass: [131, 131, 175, 196], lead: [523, 659, 784, 659, 523, 659, 784, 1047, 587, 698, 880, 698, 587, 698, 880, 1175] },
+  action: { tempo: 140, wave: 'square', vol: 0.03, bassEvery: 2, bass: [110, 110, 131, 98], lead: [440, 0, 523, 440, 0, 659, 523, 0, 392, 0, 494, 392, 0, 587, 494, 0] }
+};
 const Sfx = {
   ctx: null, out: null,
   init() {
@@ -59,6 +64,19 @@ const Sfx = {
     fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(f1, t + dur);
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     s.connect(fl); fl.connect(g); g.connect(this.out); s.start(t); s.stop(t + dur + 0.05);
+  },
+  setMusic(name) {
+    clearInterval(this.mt); this.mt = 0;
+    const P = MUSIC[name];
+    if (!this.ctx || !P) return;
+    let step = 0;
+    this.mt = setInterval(() => {
+      if (this.ctx.state !== 'running') return;
+      const n = P.lead[step % P.lead.length];
+      if (n) this.tone(P.wave, n, n, P.tempo / 1000 * 1.6, P.vol);
+      if (step % P.bassEvery === 0) { const b = P.bass[(step / P.bassEvery | 0) % P.bass.length]; this.tone('triangle', b, b, P.tempo / 1000 * P.bassEvery * 0.9, P.vol * 1.6); }
+      step++;
+    }, P.tempo);
   },
   play(name) {
     if (!this.ctx) return;
@@ -283,6 +301,53 @@ look('slime', {
   }
 });
 
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif';
+look('text', {
+  size: 48, color: '#ffffff', hit: 0.38,
+  draw(ctx, o) {
+    ctx.font = `${o.size * 0.9}px ${EMOJI_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = o.color; ctx.fillText(o.text, 0, o.size * 0.04);
+  }
+});
+look('platform', {
+  size: 180, color: '#8a5a38', hit: 0.01, solid: true, ph: 22,
+  draw(ctx, o) {
+    const w = o.size, h = 22, c = o.color;
+    const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+    g.addColorStop(0, shade(c, 0.15)); g.addColorStop(1, shade(c, -0.45));
+    ctx.fillStyle = g; roundRect(ctx, -w / 2, -h / 2, w, h, 8); ctx.fill();
+    ctx.fillStyle = '#5fd06a'; roundRect(ctx, -w / 2, -h / 2 - 3, w, 10, 5); ctx.fill();
+    ctx.fillStyle = '#8df08f'; roundRect(ctx, -w / 2 + 4, -h / 2 - 2, w - 8, 3, 2); ctx.fill();
+    ctx.fillStyle = rgba('#000000', 0.18);
+    for (let x = -w / 2 + 14; x < w / 2 - 8; x += 26) { ctx.beginPath(); ctx.arc(x, 4, 2.4, 0, TAU); ctx.fill(); }
+  }
+});
+look('spike', {
+  size: 44, color: '#c9cfe0', hit: 0.34,
+  draw(ctx, o) {
+    const s = o.size / 2, c = o.color, n = 3, w = s * 2 / n;
+    for (let i = 0; i < n; i++) {
+      const x = -s + i * w;
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, shade(c, 0.4)); g.addColorStop(0.5, c); g.addColorStop(1, shade(c, -0.5));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, s); ctx.lineTo(x + w / 2, -s); ctx.lineTo(x + w, s); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = rgba('#000000', 0.3); ctx.fillRect(-s, s - 4, s * 2, 4);
+  }
+});
+look('flag', {
+  size: 64, color: '#ff4d5e', hit: 0.45, glow: 0.35,
+  draw(ctx, o, t) {
+    const s = o.size / 2, c = o.color;
+    ctx.fillStyle = '#e8e8f0'; ctx.fillRect(-s * 0.7, -s, s * 0.14, s * 2);
+    ctx.fillStyle = '#ffd93d'; ctx.beginPath(); ctx.arc(-s * 0.63, -s, s * 0.14, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-s * 0.56, -s * 0.9);
+    for (let i = 0; i <= 10; i++) { const u = i / 10; ctx.lineTo(-s * 0.56 + u * s * 1.5, -s * 0.9 + Math.sin(t * 6 + u * 5) * 4 * u); }
+    for (let i = 10; i >= 0; i--) { const u = i / 10; ctx.lineTo(-s * 0.56 + u * s * 1.5, -s * 0.2 + Math.sin(t * 6 + u * 5) * 4 * u); }
+    ctx.closePath(); ctx.fillStyle = c; ctx.fill();
+  }
+});
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
@@ -373,6 +438,8 @@ class Obj {
     this.angle = 0; this.spinV = L.spin ? rnd(-90, 90) : 0; this.alive = true; this.age = 0;
     this.ctrl = null; this.speed = 300; this.bounce = false; this.seed = (seedN++ * 1.7) % 10;
     this.flash = 0; this.pop = 0; this.homing = null; this.hp = 1;
+    this.text = ''; this.gravity = 0; this.solid = !!L.solid; this.ph = L.ph || 0; this.onGround = false; this.standing = null;
+    this.jumpV = 760; this.coyote = 0; this.jumpHeld = false;
     if (L.init) L.init(this);
   }
   get r() { return this.size * this.L.hit; }
@@ -394,13 +461,24 @@ class Obj {
     return this;
   }
   stop() { this.vx = this.vy = 0; this.homing = null; return this; }
-  control(type) { this.ctrl = type; return this; }
+  control(type) { this.ctrl = type; if (type === 'platformer' && !this.gravity) this.gravity = 1900; return this; }
   setSpeed(v) { this.speed = v; return this; }
   setSize(v) { this.size = v; return this; }
   setColor(c) { this.color = color(c); return this; }
   spin(v) { this.spinV = v; return this; }
   setBounce() { this.bounce = true; return this; }
-  setLook(n) { const L = LOOKS[n]; if (L) { this.L = L; this.lookName = n; if (L.init) L.init(this); } return this; }
+  setLook(n) {
+    const L = LOOKS[n];
+    if (L) { this.L = L; this.lookName = n; if (L.init) L.init(this); } else { this.L = LOOKS.text; this.lookName = 'text'; this.text = String(n); }
+    return this;
+  }
+  setGravity(v) { this.gravity = v == null ? 1900 : v; return this; }
+  setSolid() { this.solid = true; if (!this.ph) this.ph = this.size * 0.5; return this; }
+  jump(v) {
+    if (v != null) this.jumpV = v;
+    if (this.onGround || !this.gravity) { this.vy = -this.jumpV; this.onGround = false; this.standing = null; Sfx.play('jump'); }
+    return this;
+  }
   explode() { if (this.alive) this.G.explode(this); return this; }
   sparkle() { this.G.sparkle(this); return this; }
   remove() { this.alive = false; return this; }
@@ -413,7 +491,7 @@ class Group {
   get y() { const l = this.list; return l.length ? l[0].y : 0; }
   get alive() { return this.list.length > 0; }
 }
-['move', 'toward', 'stop', 'control', 'setSpeed', 'setSize', 'setColor', 'spin', 'setBounce', 'setLook', 'explode', 'sparkle', 'remove', 'say']
+['move', 'toward', 'stop', 'control', 'setSpeed', 'setSize', 'setColor', 'spin', 'setBounce', 'setLook', 'setGravity', 'setSolid', 'jump', 'explode', 'sparkle', 'remove', 'say']
   .forEach(m => { Group.prototype[m] = function (...a) { this.list.forEach(o => o[m](...a)); return this; }; });
 
 /* ---------- engine ---------- */
@@ -429,12 +507,18 @@ function Engine(canvas) {
   G.keys = {}; G.mouse = { x: W / 2, y: H / 2, down: false, active: false };
   G.onError = null;
   let best = 0;
-  try { best = +(global.localStorage.getItem('ffscript-best') || 0); } catch (e) { }
+  const bestKey = () => 'ffscript-best:' + (G.titleText || '');
+  function loadBest() { best = 0; try { best = +(global.localStorage.getItem(bestKey()) || 0); } catch (e) { } }
+  function saveBest() {
+    G.newBest = false;
+    if (G.score > best) { best = G.score; G.newBest = true; try { global.localStorage.setItem(bestKey(), best); } catch (e) { } }
+  }
 
   function reset() {
     G.objs = []; G.parts = []; G.texts = []; G.labels = []; G.timers = []; G.always = []; G.touches = []; G.keyEvents = []; G.leaves = [];
     G.contacts = new Set(); G.time = 0; G.score = 0; G.lives = null; G.titleText = ''; G.bg = 'space'; G.bgColor = null;
     G.shakeAmt = 0; G.flashA = 0; G.flashC = '#ffffff'; G.slow = 1; G.slowT = 0; G.scorePop = 0; G.livesPop = 0; G.overT = 0;
+    G.level = 1; G.showLevel = false; G.levelBanner = 0; G.musicName = null; G.newBest = false;
   }
   G.rand = (a, b) => (Number.isInteger(a) && Number.isInteger(b)) ? Math.floor(rnd(a, b + 1)) : rnd(a, b);
   G.count = name => G.objs.filter(o => o.alive && (o.kind === name || o.name === name)).length;
@@ -445,6 +529,7 @@ function Engine(canvas) {
 
   G.make = function (kind, look, pos, from) {
     const o = new Obj(G, kind, look);
+    if (look === 'text') o.text = String(kind);
     G.place(o, pos, from);
     o.pop = 1;
     G.objs.push(o);
@@ -492,6 +577,12 @@ function Engine(canvas) {
   };
   G.shake = n => { G.shakeAmt = Math.max(G.shakeAmt, n == null ? 10 : n); };
   G.sound = n => Sfx.play(n);
+  G.music = n => { G.musicName = n; if (G.state === 'play') Sfx.setMusic(n); };
+  G.useLevel = () => { G.showLevel = true; };
+  G.levelUp = () => {
+    G.level++; G.showLevel = true; G.levelBanner = 2; G.flashA = 0.2; G.flashC = '#ffd93d';
+    Sfx.play('power');
+  };
 
   G.explode = function (o) {
     const c = o.color;
@@ -529,11 +620,11 @@ function Engine(canvas) {
   G.gameOver = function () {
     if (G.state !== 'play') return;
     G.state = 'over'; G.overT = 0; G.slow = 0.25; G.slowT = 0.6; Sfx.play('over');
-    if (G.score > best) { best = G.score; G.newBest = true; try { global.localStorage.setItem('ffscript-best', best); } catch (e) { } } else G.newBest = false;
+    saveBest(); Sfx.setMusic(null);
   };
   G.win = function () {
     if (G.state !== 'play') return;
-    G.state = 'won'; G.overT = 0; Sfx.play('win');
+    G.state = 'won'; G.overT = 0; saveBest(); Sfx.setMusic(null); Sfx.play('win');
     for (let i = 0; i < 160; i++) G.particle({ x: rnd(0, W), y: rnd(-200, 0), vx: rnd(-60, 60), vy: rnd(80, 260), life: rnd(1.5, 3), size: rnd(4, 8), color: ['#ff4d5e', '#ffd93d', '#4ade80', '#4d8dff', '#ff7ac6'][i % 5], confetti: true, rot: rnd(0, TAU) });
   };
 
@@ -543,9 +634,11 @@ function Engine(canvas) {
     const was = G.state;
     G.state = keepPlaying && (was === 'play' || was === 'over' || was === 'won') ? 'play' : 'title';
     try { program(G); } catch (e) { if (G.onError) G.onError(e); else throw e; }
+    loadBest();
+    if (G.state !== 'play') Sfx.setMusic(null);
   };
   function restart() { G.load(program, true); Sfx.play('start'); }
-  function start() { Sfx.init(); if (G.state === 'title') { G.state = 'play'; Sfx.play('start'); } }
+  function start() { Sfx.init(); if (G.state === 'title') { G.state = 'play'; Sfx.play('start'); Sfx.setMusic(G.musicName); } }
 
   function ownerDead(ev) { return ev.owner && !ev.owner.alive; }
   function run(fn, ...a) { try { fn(...a); } catch (e) { if (G.onError) { G.onError(e); G.state = 'error'; } else throw e; } }
@@ -566,6 +659,9 @@ function Engine(canvas) {
       o.age += dt;
       if (o.ctrl) controlStep(o, dt);
       if (o.homing) o.toward(o.homing.tg, o.homing.sp, true);
+      if (o.gravity) o.vy += o.gravity * dt;
+      if (o.standing && o.standing.alive) { o.x += o.standing.vx * dt; o.y += o.standing.vy * dt; }
+      const py = o.y;
       o.x += o.vx * dt; o.y += o.vy * dt;
       o.angle += o.spinV * Math.PI / 180 * dt;
       if (o.L.update) o.L.update(o, G, dt);
@@ -575,6 +671,7 @@ function Engine(canvas) {
         if (o.y < r && o.vy < 0 || o.y > H - r && o.vy > 0) { o.vy *= -1; o.y = clamp(o.y, r, H - r); }
       }
       if (o.ctrl) { const r = o.size / 2; o.x = clamp(o.x, r, W - r); o.y = clamp(o.y, r, H - r); }
+      if (o.gravity) land(o, py);
       const out = o.x < -o.size * 2 || o.x > W + o.size * 2 || o.y < -o.size * 2 || o.y > H + o.size * 2;
       if (out && !o.ctrl) {
         o.alive = false;
@@ -601,7 +698,33 @@ function Engine(canvas) {
     }
   }
 
+  function land(o, py) {
+    const r = o.size / 2;
+    o.onGround = false;
+    if (o.vy >= 0) {
+      const pb = py + r, nb = o.y + r;
+      for (const p of G.objs) {
+        if (!p.solid || !p.alive || p === o) continue;
+        const top = p.y - p.ph / 2;
+        if (pb <= top + 8 && nb >= top && Math.abs(o.x - p.x) < p.size / 2 + r * 0.45) { o.y = top - r; o.vy = 0; o.onGround = true; o.standing = p; break; }
+      }
+      if (!o.onGround && o.y + r >= H) { o.y = H - r; o.vy = 0; o.onGround = true; o.standing = null; }
+    }
+    if (!o.onGround) o.standing = null;
+  }
+
   function controlStep(o, dt) {
+    if (o.ctrl === 'platformer') {
+      const k = G.keys, follow = G.mouse.active && G.mouse.down;
+      let tx = ((k.right || k.d ? 1 : 0) - (k.left || k.a ? 1 : 0)) * o.speed;
+      if (follow) { const dx = G.mouse.x - o.x; tx = Math.abs(dx) > 24 ? Math.sign(dx) * o.speed : 0; }
+      o.vx = lerp(o.vx, tx, 1 - Math.exp(-(tx ? 14 : 10) * dt));
+      const want = k.up || k.w || k.space || (follow && G.mouse.y < o.y - 60);
+      o.coyote = o.onGround ? 0.1 : o.coyote - dt;
+      if (want && o.coyote > 0 && !o.jumpHeld) { o.vy = -o.jumpV; o.coyote = 0; o.jumpHeld = true; o.onGround = false; o.standing = null; Sfx.play('jump'); }
+      if (!want) { o.jumpHeld = false; if (o.vy < -150) o.vy *= Math.exp(-12 * dt); }
+      return;
+    }
     const k = G.keys, c = o.ctrl;
     let tx = 0, ty = 0;
     const follow = c === 'mouse' || (G.mouse.active && G.mouse.down);
@@ -713,6 +836,13 @@ function Engine(canvas) {
       ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `700 15px ${FONT}`; ctx.fillText('SCORE', 34, 38);
       ctx.save(); ctx.translate(96 + w / 2, 38); ctx.scale(s, s); ctx.textAlign = 'center';
       ctx.font = `800 26px ${FONT}`; ctx.fillStyle = '#ffffff'; ctx.fillText(txt, 0, 1); ctx.restore();
+      ctx.textAlign = 'left'; ctx.font = `700 13px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fillText('BEST ' + Math.max(best, G.score), 24, 76);
+      if (G.showLevel) {
+        const lt = 'LEVEL ' + G.level; ctx.font = `800 16px ${FONT}`;
+        const lw = ctx.measureText(lt).width + 36; pill(W / 2 - lw / 2, 16, lw, 36);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#ffe680'; ctx.fillText(lt, W / 2, 35);
+      }
       if (G.lives != null) {
         const n = G.lives, hw = 30, tw = Math.max(1, Math.min(n, 10)) * hw + 22;
         pill(W - 18 - tw, 16, tw, 44);
@@ -722,6 +852,12 @@ function Engine(canvas) {
           LOOKS.heart.draw(ctx, { size: 22, color: '#ff4d5e', seed: i }, t); ctx.restore();
         }
       }
+    }
+    if (G.levelBanner > 0 && G.state === 'play') {
+      const k = G.levelBanner / 2, a = Math.min(1, k * 3, (1 - k) * 6 + 0.2);
+      ctx.save(); ctx.globalAlpha = Math.max(0, a); ctx.textAlign = 'center';
+      ctx.font = `900 ${56 + (1 - k) * 10}px ${FONT}`; ctx.shadowColor = 'rgba(255,200,60,0.9)'; ctx.shadowBlur = 24;
+      ctx.fillStyle = '#fff3b0'; ctx.fillText('LEVEL ' + G.level, W / 2, H * 0.3 - (1 - k) * 20); ctx.restore();
     }
     if (G.state === 'title') overlay(G.titleText || 'FF Script', '클릭하거나 아무 키나 눌러 시작', t, 1);
     if (G.state === 'over') {
@@ -765,6 +901,7 @@ function Engine(canvas) {
     for (const o of G.objs) if (o.pop > 0) o.pop = Math.max(0, o.pop - real * 4.5);
     stepParticles(dt);
     G.shakeAmt *= Math.exp(-10 * real); G.flashA *= Math.exp(-6 * real);
+    if (G.levelBanner > 0) G.levelBanner -= real;
     G.scorePop *= Math.exp(-10 * real); G.livesPop *= Math.exp(-8 * real);
     fit();
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
@@ -816,7 +953,7 @@ function Engine(canvas) {
   canvas.style.touchAction = 'none';
   G.restart = restart;
   G.destroy = () => {
-    global.cancelAnimationFrame(raf);
+    global.cancelAnimationFrame(raf); Sfx.setMusic(null);
     global.removeEventListener('keydown', onKeyDown); global.removeEventListener('keyup', onKeyUp);
     global.removeEventListener('pointermove', onMove); global.removeEventListener('pointerup', onUp);
   };
