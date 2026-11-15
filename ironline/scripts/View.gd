@@ -41,6 +41,7 @@ var vm: MeshInstance3D
 var vm_weapon := -1
 var kick := 0.0
 var shake := 0.0
+var shake_amt := 0.5
 var bob := 0.0
 var debug_3p := false
 var tp_dist := 3.2
@@ -289,7 +290,7 @@ func _shells(dt: float, shake_scale: float) -> void:
 	fx.blast(p)
 	get_tree().create_timer(minf(d / 340.0, 1.6)).timeout.connect(func(): sfx.boom_at(p))
 	if shake_scale > 0.0 and d < 100.0:
-		shake = maxf(shake, (1.0 - d / 100.0) * 1.6 * shake_scale)
+		shake = maxf(shake, (1.0 - d / 100.0) * 0.8 * shake_scale)
 
 
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
@@ -311,8 +312,8 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	# 카메라
 	var sh := Vector3.ZERO
 	if shake > 0.0:
-		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
-	shake = maxf(0.0, shake - dt * 3.0)
+		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * minf(shake, 1.0) * shake_amt * 0.02
+	shake = maxf(0.0, shake - dt * 5.0)
 	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
 	if spectating:
 		var tu: Sim.Unit = sim.units[spec_id]
@@ -485,7 +486,7 @@ func consume(events: Array, local_id: int) -> void:
 						fx.burst("dust", b, Vector3.UP)
 				if e.id == local_id:
 					kick = 1.0
-					shake += 0.35
+					shake += 0.12
 					vm_flash_t = 0.045
 					if shooter.weapon == 0:
 						bolt_t = 0.8
@@ -505,12 +506,12 @@ func consume(events: Array, local_id: int) -> void:
 							var dd := cp2.distance_to(cam_pos)
 							if dd < 3.5 and e.a.distance_to(cam_pos) > 6.0:
 								sfx.whiz_at(cp2)
-								shake += 0.15
+								shake += 0.04
 			"hit":
 				if e.a == local_id:
 					sfx.play2d(sfx.tick, -4.0, 1.4 if e.head else 1.0)
 				if e.v == local_id:
-					shake += 1.0
+					shake += 0.6
 					sfx.play2d(sfx.thump, -2.0)
 			"kill":
 				if e.k == local_id:
