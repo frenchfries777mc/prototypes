@@ -36,7 +36,7 @@ const TEAM := [
 	{"coat": Color(0.33, 0.29, 0.13), "coat2": Color(0.27, 0.23, 0.10), "pants": Color(0.27, 0.23, 0.11),
 	 "helmet": Color(0.30, 0.26, 0.12), "wrap": Color(0.31, 0.27, 0.13), "mark": Color(0.88, 0.76, 0.42)},
 ]
-const SKIN := Color(0.46, 0.28, 0.19)
+const SKIN := Color(0.34, 0.225, 0.165)
 const LEATHER := Color(0.09, 0.055, 0.03)
 const WOOD := Color(0.11, 0.058, 0.026)
 const STEEL := Color(0.10, 0.11, 0.12)
@@ -211,7 +211,7 @@ static func soldier_mesh(team: int, weapon: int, low: bool = false) -> ArrayMesh
 	cg.sphere(0.04, Geo.xf_at(h_l), SKIN, LAL)
 	_weapon(cg, mg, weapon, rifle_xf, CHEST)
 	var mesh := ArrayMesh.new()
-	cg.commit_to(mesh, Geo.mat_cloth())
+	cg.commit_to(mesh, Geo.mat_cloth_shader())
 	mg.commit_to(mesh, Geo.mat_gear())
 	Geo.lod = 1.0
 	_mesh_cache[key] = mesh

@@ -1,6 +1,7 @@
 shader_type canvas_item;
 // 후처리: 색보정, 비네트, 약한 필름 그레인, 피격 시 붉은 테두리
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform float bloom = 0.55;
 uniform float hurt = 0.0;
 uniform float low_hp = 0.0;
 uniform float vignette = 0.32;
@@ -14,6 +15,16 @@ float h21(vec2 p) {
 
 void fragment() {
 	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
+	// 블룸: 밉맵 없이 두 반경의 고리 샘플로 밝은 부분만 번지게 한다
+	vec2 px = vec2(1.0) / vec2(textureSize(screen_tex, 0));
+	vec3 glow = vec3(0.0);
+	for (int i = 0; i < 8; i++) {
+		float a = float(i) * 0.785398;
+		vec2 d = vec2(cos(a), sin(a));
+		glow += max(texture(screen_tex, SCREEN_UV + d * px * 7.0).rgb - 0.66, vec3(0.0));
+		glow += max(texture(screen_tex, SCREEN_UV + d * px * 18.0).rgb - 0.58, vec3(0.0)) * 0.8;
+	}
+	c += glow * (bloom * 0.14);
 	// 따뜻한 그림자 / 차가운 하이라이트 + 채도
 	float l = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(vec3(l), c, 1.08);
