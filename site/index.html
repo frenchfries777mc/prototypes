@@ -68,6 +68,13 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
       <div class="tags"><i>2D</i><i>쟁탈전</i></div>
       <span>실행 →</span>
     </a>
+    <a class="card" href="#resonance">
+      <div class="im"><img src="img/resonance.jpg" alt=""></div>
+      <h2>잔향의 탑</h2>
+      <p>종 네 개와 문 하나. 아는 만큼만 열리는 1인칭 퍼즐 탑.</p>
+      <div class="tags"><i>3D</i><i>퍼즐</i></div>
+      <span>실행 →</span>
+    </a>
   </div>
 </main>
 <section id="view">
@@ -84,7 +91,7 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'}};
+  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'}};
   var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
   frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
   var join=new URLSearchParams(location.search).get('join');
