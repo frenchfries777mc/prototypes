@@ -57,6 +57,7 @@ class Unit:
 	var in_fire := false
 	var in_reload := false
 	var in_sprint := false
+	var in_ads := false
 	# 봇 상태
 	var role := 0  # 0 돌격 1 방어
 	var target := -1
@@ -178,7 +179,7 @@ func predict_local(u: Unit, dt: float) -> void:
 
 
 func set_input(id: int, move: Vector2, yaw: float, pitch: float, fire: bool, jump: bool,
-		sprint: bool, reload: bool) -> void:
+		sprint: bool, reload: bool, ads: bool = false) -> void:
 	var u: Unit = units[id]
 	if u.is_bot:
 		return
@@ -188,6 +189,7 @@ func set_input(id: int, move: Vector2, yaw: float, pitch: float, fire: bool, jum
 	u.in_fire = fire
 	u.in_jump = jump
 	u.in_sprint = sprint
+	u.in_ads = ads
 	if reload:
 		u.in_reload = true
 
@@ -263,6 +265,8 @@ func _integrate(u: Unit, dt: float) -> void:
 	var sp: float = u.bot_speed if u.is_bot else (SPRINT if (u.in_sprint and u.in_move.y > 0.5 and not u.in_fire) else WALK)
 	if u.reload_t > 0.0 and not u.is_bot:
 		sp *= 0.85
+	if u.in_ads and not u.is_bot:
+		sp *= 0.62
 	var wish := Vector3(u.in_move.x, 0.0, -u.in_move.y)
 	if wish.length() > 1.0:
 		wish = wish.normalized()
@@ -323,7 +327,7 @@ func _try_fire(u: Unit) -> void:
 		return
 	u.ammo -= 1
 	u.fire_cd = w.cd
-	var spread: float = w.spread * (1.0 + u.speed_now * 0.12)
+	var spread: float = w.spread * (1.0 + u.speed_now * 0.12) * (0.3 if u.in_ads else 1.0)
 	var dir := _aim_dir(u.yaw, u.pitch)
 	dir = (dir + Vector3(rng.randfn(0.0, spread), rng.randfn(0.0, spread), rng.randfn(0.0, spread))).normalized()
 	var origin := u.pos + Vector3(0.0, EYE, 0.0)

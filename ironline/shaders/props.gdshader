@@ -92,8 +92,9 @@ void fragment() {
 		col = base * (0.55 + 0.7 * bark);
 		rough = 0.95;
 	} else {
-		col = base;
-		rough = 0.75;
+		float weave = 0.5 + 0.5 * sin(q.x * 70.0) * sin(q.y * 70.0);
+		col = base * (0.88 + 0.2 * grime) * (0.94 + 0.1 * weave);
+		rough = 0.85;
 	}
 	// 바닥 근처 흙먼지
 	col = mix(col, vec3(0.30, 0.24, 0.17), clamp(0.5 - wpos.y * 0.15, 0.0, 0.0));

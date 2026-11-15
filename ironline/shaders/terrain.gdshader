@@ -2,10 +2,10 @@ shader_type spatial;
 render_mode diffuse_burley, specular_disabled;
 // 지형: 고도·경사·노이즈로 풀/마른 풀/흙/진흙/바위를 섞는다. 텍스처 없이 셰이더 노이즈만 쓴다.
 
-uniform vec3 grass_a : source_color = vec3(0.24, 0.31, 0.12);
-uniform vec3 grass_b : source_color = vec3(0.40, 0.42, 0.18);
-uniform vec3 dry     : source_color = vec3(0.50, 0.44, 0.26);
-uniform vec3 dirt    : source_color = vec3(0.27, 0.21, 0.15);
+uniform vec3 grass_a : source_color = vec3(0.15, 0.22, 0.07);
+uniform vec3 grass_b : source_color = vec3(0.28, 0.34, 0.11);
+uniform vec3 dry     : source_color = vec3(0.42, 0.38, 0.22);
+uniform vec3 dirt    : source_color = vec3(0.21, 0.17, 0.12);
 uniform vec3 mud     : source_color = vec3(0.17, 0.13, 0.10);
 uniform vec3 rock    : source_color = vec3(0.34, 0.32, 0.29);
 uniform vec2 points[5];
@@ -13,6 +13,7 @@ uniform vec2 points[5];
 varying vec3 wpos;
 varying vec3 wnrm;
 varying float ao;
+varying float vdist;
 
 float h21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -40,6 +41,7 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	ao = COLOR.r;
+	vdist = length((MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 }
 
 void fragment() {
@@ -55,6 +57,14 @@ void fragment() {
 	// 풀 결 느낌의 미세 변화
 	col *= 0.82 + 0.36 * n3;
 	col *= 0.92 + 0.16 * n4;
+	// 근거리 미세 질감(멀어지면 사라짐)
+	float near_w = 1.0 - smoothstep(8.0, 70.0, vdist);
+	float f1 = vnoise(p * 14.0);
+	float f2 = vnoise(p * 41.0 + 3.0);
+	float f3 = vnoise(p * 97.0 + 9.0);
+	col *= 1.0 + near_w * ((f1 - 0.5) * 0.45 + (f2 - 0.5) * 0.4 + (f3 - 0.5) * 0.3);
+	// 드문 마른 잡초색 점
+	col = mix(col, dry * 1.2, near_w * step(0.86, f2) * 0.5);
 
 	// 거점 주변은 밟혀서 흙이 드러남
 	float pd = 1e9;
