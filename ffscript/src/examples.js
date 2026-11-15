@@ -291,5 +291,151 @@ if key space
     wander 70
     life 25 sec
     glow
+`,
+  'Big World': `title "Big World"
+background sky
+lives 3
+music happy
+weather petals
+coins = 0
+load coins
+
+map
+  ..........................................................
+  .............................S............................
+  ............C....................===.........C............
+  ...........===...............E..............===...........
+  .....C.C...................#####..........E...............
+  .P.............C.C.C.......#####...............C.C..F.....
+  #######...#########..##..############...###############...
+  #######^^^#########^^##^^############^^^###############^^^
+
+make platform at 420 330
+  size 130
+  patrol up 90 60
+
+slime.gravity
+slime.chase player 130 260
+
+label "🪙 {coins}" at right 110
+
+if player hits coin
+  coin.sparkle
+  add 10 to score
+  add 1 to coins
+  save coins
+
+if player hits star
+  star.sparkle
+  add 50 to score
+  play "C5 E5 G5" 0.08
+
+if player hits slime
+  if player.vy > 0 and player.y < slime.y - 10
+    slime.explode
+    player.vy = -560
+    add 20 to score
+  else
+    remove 1 from lives
+    player.x = 80
+    player.y = 300
+
+if player hits spike
+  remove 1 from lives
+  player.x = 80
+  player.y = 300
+
+if player hits flag
+  win
+`,
+  'Maze Quest': `title "Maze Quest"
+background grid
+music chill
+gems = 0
+
+scene start
+  make "🗝" at center 220
+    size 90
+  label "MAZE QUEST" at center 330
+  label "SPACE" at center 390
+  if key space
+    go to maze
+
+scene maze
+  set gems to 0
+  map topdown
+    ####################
+    #P....#.....G.....E#
+    #.##..#.####.####..#
+    #.#G.......#....#..#
+    #.#####.##.#.##.#.##
+    #.....#..#...#G....#
+    ###.#.##.#####.###.#
+    #G..#....E.....#..C#
+    ####################
+  label "💎 {gems} / 4" at left 110
+  talk "요정" "보석 4개를 모아서 출구(코인)로 가요!"
+  talk "요정" "유령이랑 슬라임은 가까이 가면 쫓아와요. 조심!"
+  make ghost at 648 102
+    size 38
+    chase player 105 240
+  slime.chase player 85 200
+  if player hits gem
+    gem.sparkle
+    add 1 to gems
+  if gems >= 4
+    sound magic
+    talk "요정" "문이 열렸어요!"
+  if player hits coin
+    if gems >= 4
+      go to clear
+    else
+      player.say "보석이 모자라요"
+  if player hits slime
+    go to caught
+  if player hits ghost
+    go to caught
+
+scene caught
+  shake 14
+  label "잡혔다!" at center
+  after 1.5 sec
+    go to maze
+
+scene clear
+  confetti
+  play "C E G C5 G C5" 0.13
+  label "탈출 성공!" at center
+`,
+  'Music Box': `title "Music Box"
+background night
+weather snow
+
+piano = make "🎹" at center
+  size 130
+
+label "A  S  D  F  G  H" at center 420
+
+if key a
+  tone 262 0.4 triangle
+  burst 12 red at 200 300
+if key s
+  tone 294 0.4 triangle
+  burst 12 orange at 320 300
+if key d
+  tone 330 0.4 triangle
+  burst 12 yellow at 440 300
+if key f
+  tone 392 0.4 triangle
+  burst 12 green at 560 300
+if key g
+  tone 440 0.4 triangle
+  burst 12 cyan at 680 300
+if key h
+  tone 523 0.4 triangle
+  burst 12 purple at 800 300
+if key space
+  play "도 미 솔 도5 솔 미 도" 0.14
+  confetti
 `
 };
