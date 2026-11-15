@@ -9,12 +9,13 @@ const BUILTIN_LOOKS = ['ship', 'rock', 'coin', 'star', 'enemy', 'bullet', 'heart
 const BACKS = ['space', 'night', 'sky', 'sea', 'sunset', 'forest', 'lava', 'snow', 'grid'];
 const MAP_CHARS = '.# =CGSHB^FEPKLWDITV<>XA';
 const ART_CHARS = '.# kwrogybpcnmd';
-const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
+const PROP_OK = /^(x|y|vx|vy|size|angle|alive|name|hp|maxHp|age|text|color|speed|gravity|onGround|inWater|score|length|down|left|right|up|space|enter|shift|escape|[a-z0-9])$/;
 const COLOR_WORDS = ['red', 'orange', 'yellow', 'green', 'blue', 'navy', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'gold', 'cyan', 'sky', 'brown'];
 const CONTROLS = ['arrows', 'wasd', 'leftright', 'mouse', 'platformer'];
 const MUSICS = ['chill', 'happy', 'action', 'off'];
 const SOUNDS = ['boom', 'coin', 'shoot', 'hit', 'jump', 'power', 'start', 'over', 'win', 'pop', 'laser', 'click', 'magic', 'hurt', 'whoosh', 'splash', 'spring'];
-const POWERS = ['fast', 'big', 'small', 'shield', 'magnet', 'jump'];
+const POWERS = ['fast', 'big', 'small', 'shield', 'magnet', 'jump', 'ghost'];
+const LISTFN = { len: 'G.len', contains: 'G.contains', last: 'G.last', shuffle: 'G.shuffle', sort: 'G.sorted' };
 const DIRS = ['up', 'down', 'left', 'right'];
 const WAVES = ['sine', 'square', 'triangle', 'saw'];
 const WEATHERS = ['rain', 'snow', 'leaves', 'petals', 'off'];
@@ -28,9 +29,9 @@ const CMDS = Object.assign(Object.create(null), {
   move: 'move', toward: 'toward', stop: 'stop', control: 'control', speed: 'setSpeed', size: 'setSize', color: 'setColor',
   spin: 'spin', bounce: 'setBounce', look: 'setLook', gravity: 'setGravity', jump: 'jump', solid: 'setSolid',
   health: 'setHealth', hurt: 'hurt', heal: 'heal', fade: 'setAlpha', hide: 'hide', show: 'show', glow: 'setGlow', trail: 'setTrail', wrap: 'setWrap',
-  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', jumps: 'setJumps', dash: 'dash', open: 'open', power: 'power', charge: 'charge', summon: 'summon', emit: 'emit', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
+  stay: 'setStay', life: 'setLife', flip: 'flip', patrol: 'setPatrol', wander: 'setWander', chase: 'setChase', flee: 'setFlee', shoot: 'shoot', respawn: 'respawn', jumps: 'setJumps', dash: 'dash', open: 'open', power: 'power', charge: 'charge', phase: 'setPhase', dangle: 'setDangle', summon: 'summon', emit: 'emit', explode: 'explode', sparkle: 'sparkle', remove: 'remove', say: 'say'
 });
-const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take', 'minimap', 'particle', 'JS'];
+const STATEMENTS = ['title', 'background', 'lives', 'score', 'make', 'every', 'after', 'when', 'always', 'if', 'else', 'repeat', 'win', 'gameover', 'shake', 'sound', 'label', 'level', 'music', 'add', 'remove', 'set', 'loop', 'spawn', 'create', 'burst', 'confetti', 'flash', 'slowmo', 'banner', 'to', 'do', 'map', 'art', 'scene', 'go', 'save', 'load', 'forget', 'talk', 'camera', 'tone', 'play', 'weather', 'ask', 'countdown', 'give', 'take', 'minimap', 'particle', 'wind', 'JS'];
 const BUILTIN = ['score', 'lives', 'level', 'time', 'scene', 'answer', 'has', 'choose', 'chance', 'distance', 'mouse', 'key', 'width', 'height', 'count', 'random', 'PI', ...MATH];
 const WORDS = ['and', 'or', 'not', 'is', 'true', 'false', 'null', 'at', 'from', 'hits', 'touches', 'leaves', 'sec', 'elif', 'when', 'to', 'times', 'follow', 'off', 'ends', 'topdown', 'answered', 'stomps'];
 const JS_RESERVED = ['break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'enum', 'export', 'extends', 'finally', 'for', 'function', 'import', 'in', 'instanceof', 'let', 'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'await', 'async', 'static', 'undefined', 'G', 'Math', '_o', 'window', 'document', 'eval'];
@@ -201,7 +202,7 @@ function compile(src) {
       const prev = out.length ? out[out.length - 1] : '';
       if (t === '"' || t === "'") fail(n, '따옴표가 닫히지 않았어요. 글자는 "이렇게" 양쪽을 닫아 주세요.');
       if (/^["']/.test(t) || /^[\d.]/.test(t)) { out.push(t); continue; }
-      if (';{}`\\[]'.includes(t)) fail(n, `'${t}' 기호는 FF Script에서 쓰지 않아요. 한 줄에 한 가지 일만 적어 주세요.`);
+      if (';{}`\\'.includes(t)) fail(n, `'${t}' 기호는 FF Script에서 쓰지 않아요. 한 줄에 한 가지 일만 적어 주세요.`);
       if (t === '=') fail(n, "여기서는 '='로 비교할 수 없어요. 같은지 물어볼 땐 '==' 또는 'is'를 써요. (예: if score == 10)");
       if (!reID.test(t)) { out.push(t); continue; }
       if (prev === '.') {
@@ -209,6 +210,7 @@ function compile(src) {
         if (!PROP_OK.test(t)) fail(n, `'.${t}'는 쓸 수 없어요. 쓸 수 있는 것: x, y, vx, vy, size, hp, speed, name 같은 값이나 key.left, mouse.x 같은 입력이에요.`);
         out.push(t); continue;
       }
+      if (LISTFN[t] && !vars.has(t) && !(ctx && ctx.bound.has(t)) && toks[nextTok(i)] === '(') { out.push(LISTFN[t]); continue; }
       switch (t) {
         case 'and': out.push('&&'); continue;
         case 'or': out.push('||'); continue;
@@ -323,6 +325,16 @@ function compile(src) {
       }
       case 'jumps': need(rest, n, 'jumps 뒤에는 점프 횟수가 필요해요. (예: jumps 2  → 이단 점프)'); return ex(rest, n, ctx);
       case 'dash': return rest && rest.trim() ? ex(rest, n, ctx) : '';
+      case 'phase': {
+        const v = (rest || '').trim();
+        if (!v || v === 'on') return 'true';
+        if (v === 'off') return 'false';
+        fail(n, 'phase는 그냥 쓰면 벽을 통과하고, 끄려면 phase off 라고 써요.');
+      }
+      case 'dangle': {
+        if (terms.length > 2) fail(n, 'dangle은 이렇게 써요: spider.dangle  /  spider.dangle 120  /  spider.dangle 120 200  (줄 길이, 내려오는 속도)');
+        return terms.map(x => ex(x, n, ctx)).join(',');
+      }
       case 'charge':
         if (terms.length > 2) fail(n, 'charge는 이렇게 써요: boss.charge  /  boss.charge player  /  boss.charge player 900  (대상, 속도)');
         return [terms[0] ? (terms[0] === 'mouse' ? q('mouse') : ex(terms[0], n, ctx)) : 'null', terms[1] ? ex(terms[1], n, ctx) : 'undefined'].join(',');
@@ -432,7 +444,7 @@ function compile(src) {
     if ((m = t.match(new RegExp('^(' + ID + ')\\s*=\\s*(?:make|spawn|create)(?:\\s+(.*))?$', 'u'))) && m[1] !== 'score') return makeStmt(nd, ctx, m[1], m[2]);
     if ((m = t.match(/^(?:make|spawn|create)(?:\s+(.*))?$/))) return makeStmt(nd, ctx, null, m[1]);
 
-    if ((m = t.match(new RegExp('^(' + ID + '(?:\\.' + ID + ')*)\\s*(\\+=|-=|\\*=|/=|=(?!=))\\s*(.*)$', 'u')))) {
+    if ((m = t.match(new RegExp('^(' + ID + '(?:\\.' + ID + ')*(?:\\[[^\\]]+\\])?)\\s*(\\+=|-=|\\*=|/=|=(?!=))\\s*(.*)$', 'u')))) {
       need(m[3], n, `${m[2]} 뒤에 값이 필요해요.`);
       if (m[1] === 'lives') hasLives = true;
       if (m[1] === 'time') fail(n, 'time은 읽기만 할 수 있어요.');
@@ -492,7 +504,9 @@ function compile(src) {
         if (tg === 'score') return `G.ln=${n};G.addScore(${amt});`;
         if (tg === 'lives') { if (!firstLivesAdd) firstLivesAdd = n; return `G.ln=${n};G.addLives(${amt});`; }
         if (tg === 'level') usesLevel = true;
-        return `G.ln=${n};${ex(tg, n, ctx)}${w === 'add' ? '+=' : '-='}${ex(mm[1], n, ctx)};`;
+        const T = ex(tg, n, ctx), V = ex(mm[1], n, ctx);
+        if (w === 'add') return `G.ln=${n};{const _v=${V};if(Array.isArray(${T}))${T}.push(_v);else ${T}+=_v;}`;
+        return `G.ln=${n};{const _v=${V};if(Array.isArray(${T})){const _i=${T}.indexOf(_v);if(_i>=0)${T}.splice(_i,1);}else ${T}-=_v;}`;
       }
       case 'set': {
         const mm = rest.match(/^(.+?)\s+to\s+(.+)$/);
@@ -505,8 +519,13 @@ function compile(src) {
       }
       case 'else': case 'elif': fail(n, `${w} 앞에는 같은 칸에 if 줄이 있어야 해요.`);
       case 'repeat': case 'loop': {
+        const em = rest.match(new RegExp('^each\\s+(' + ID + ')\\s+in\\s+(.+)$', 'u'));
+        if (em) {
+          if (NOT_VARS.has(em[1]) || LOOKS.includes(em[1]) || funcs.has(em[1])) fail(n, `'${em[1]}'는 이미 쓰는 이름이라서 each 뒤의 이름으로 쓸 수 없어요. (예: loop each item in items)`);
+          return `G.ln=${n};for(let ${em[1]} of Array.from(${ex(em[2], n, ctx)}||[])){${body(nd, ctx, [em[1]], w)}}`;
+        }
         const cnt = rest.replace(/\s+times?$/i, '');
-        need(cnt, n, `${w} 뒤에 횟수가 필요해요. (예: ${w} 5 times)`);
+        need(cnt, n, `${w} 뒤에 횟수가 필요해요. (예: ${w} 5 times, 목록은 ${w} each item in items)`);
         return `G.ln=${n};for(let i=0;i<${ex(cnt, n, ctx)};i++){${body(nd, ctx, ['i'], w)}}`;
       }
       case 'confetti': if (rest) fail(n, 'confetti 뒤에는 아무것도 쓰지 않아요.'); return `G.ln=${n};G.confetti();`;
@@ -584,10 +603,17 @@ function compile(src) {
         return `G.ln=${n};G.talk(${terms.length === 2 ? tpl(terms[0], n, ctx) : 'null'},${tpl(terms[terms.length - 1], n, ctx)});`;
       }
       case 'camera': {
-        const v = rest.trim(), mm = v.match(new RegExp('^follow\\s+(' + ID + ')(?:\\s+and\\s+(' + ID + '))?$', 'u'));
+        const v = rest.trim(), mm = v.match(new RegExp('^follow\\s+(' + ID + ')(?:\\s+and\\s+(' + ID + '))?$', 'u')), sp = v.match(new RegExp('^split\\s+(' + ID + ')\\s+and\\s+(' + ID + ')$', 'u'));
+        if (sp) return `G.ln=${n};G.camFollow(${ex(sp[1], n, ctx)},${ex(sp[2], n, ctx)},true);`;
         if (mm) return `G.ln=${n};G.camFollow(${ex(mm[1], n, ctx)}${mm[2] ? ',' + ex(mm[2], n, ctx) : ''});`;
         if (v === 'off' || v === 'stop') return `G.ln=${n};G.camFollow(null);`;
-        fail(n, 'camera는 이렇게 써요: camera follow player  (두 명이면 camera follow p1 and p2, 멈추려면 camera off)');
+        fail(n, 'camera는 이렇게 써요: camera follow player  (두 명이면 camera follow p1 and p2, 화면을 반씩 나누려면 camera split p1 and p2, 멈추려면 camera off)');
+      }
+      case 'wind': {
+        const wt = splitTerms(rest);
+        if (wt.length === 1 && (wt[0] === 'off' || wt[0] === 'stop')) return `G.ln=${n};G.setWind(null);`;
+        if (!wt.length || wt.length > 2 || !DIRS.includes(wt[0])) fail(n, `wind는 이렇게 써요: wind right 150  (방향, 세기)  끄려면 wind off${wt[0] ? hint(wt[0], DIRS) : ''}`);
+        return `G.ln=${n};G.setWind(${q(wt[0])}${wt[1] ? ',' + ex(wt[1], n, ctx) : ''});`;
       }
       case 'tone': {
         const terms = splitTerms(rest), wv = terms.filter(x => WAVES.includes(x)), num = terms.filter(x => !WAVES.includes(x));
