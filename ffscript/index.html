@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="ff-build" content="11-15 17:45">
+<meta name="ff-build" content="11-15 18:00">
 <title>FF Script</title>
 <style>
 :root{--bg:#0e0f1a;--panel:#161828;--line:#262a44;--text:#e8eaf6;--dim:#8b90b0;--accent:#6fb3ff;--err:#ff6b81;--ok:#5be3a0}
@@ -66,7 +66,7 @@ button,select{white-space:nowrap}
 </head>
 <body>
 <header>
-  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">11-15 17:45</span>
+  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">11-15 18:00</span>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
   <button id="save" class="ic" title="내 게임으로 저장">💾</button>
@@ -9224,7 +9224,12 @@ if p2 hits flag
   }
   function clearError() { errLine = 0; err.style.display = 'none'; drawGutter(); }
 
-  G.onError = e => { showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e)); };
+  G.onError = e => {
+    let hint = '';
+    const nm = String(e && e.message || '').match(/^(\S+) is not defined$/), ln = code.value.split('\n')[(G.ln || 0) - 1] || '';
+    if (nm && /^\s*JS\b/.test(ln)) hint = `\nJS 코드 안에서 '${nm[1]}'를 못 찾았어요. 옛 변환기로 바꾼 코드일 수 있어요.\n원본을 위쪽 🔄 JS→FF로 다시 변환해 보세요.`;
+    showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e) + hint);
+  };
 
   let jsLock = false;
   function run(keep) {
@@ -9232,7 +9237,7 @@ if p2 hits flag
     const r = FFScript.compileSafe(code.value);
     if (!r.ok) { showError(r.line, /^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? 'HTML 코드예요. FF Script 문법이 아니에요.\n위쪽 🔄 JS→FF 버튼에 붙여 넣으면 FF Script로 바꿔 줘요.' : r.message); return; }
     clearError();
-    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
+    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; if (!errLine) { status.textContent = '실행 중'; status.className = 'ok'; } }
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
   }
 
