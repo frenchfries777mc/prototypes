@@ -65,8 +65,9 @@
   function buildMenu() {
     var g = $('heroGrid');
     HERO_IDS.forEach(function (id) {
-      var d = HEROES[id], b = el('button', 'hc', '<i style="background:' + d.color + '">' + d.name.charAt(0) + '</i><b>' + d.name + '</b><small>' + d.role + '</small>');
+      var d = HEROES[id], b = el('button', 'hc', '<canvas width="270" height="180"></canvas><b>' + d.name + '</b><small>' + d.role + '</small>');
       b.type = 'button'; b.id = 'hero-' + id; b.setAttribute('role', 'option');
+      Spr.portrait(b.querySelector('canvas'), id);
       b.onclick = function () { sel = id; showHero(); };
       g.appendChild(b);
     });
@@ -86,8 +87,8 @@
     HERO_IDS.forEach(function (id) { $('hero-' + id).setAttribute('aria-selected', id === sel ? 'true' : 'false'); });
     var d = HEROES[sel];
     $('heroInfo').style.borderColor = d.color;
-    $('heroInfo').innerHTML = '<h2>' + d.name + '<small>' + d.title + ' · ' + d.role + (d.melee ? ' · 근접' : ' · 원거리') + '</small></h2><p>' + d.tip + '</p><ul>' +
-      d.skills.map(function (s, i) { return '<li><kbd>' + KEYS[i] + '</kbd><b>' + s.name + '</b> — ' + s.d + '</li>'; }).join('') + '</ul>';
+    $('heroInfo').innerHTML = '<canvas id="heroPrev" width="300" height="400"></canvas><div class="txt"><h2>' + d.name + '<small>' + d.title + ' · ' + d.role + (d.melee ? ' · 근접' : ' · 원거리') + '</small></h2><p>' + d.tip + '</p><ul>' +
+      d.skills.map(function (s, i) { return '<li><kbd>' + KEYS[i] + '</kbd><b>' + s.name + '</b> — ' + s.d + '</li>'; }).join('') + '</ul></div>';
   }
 
   /* ── HUD 구성 ── */
@@ -110,7 +111,7 @@
     var w2 = el('div', 'skw'), rc = el('button', 'sk rc', '<span class="key">B</span><span class="nm">귀환</span><i class="cdm"></i>');
     rc.type = 'button'; rc.id = 'sk-recall'; rc.onclick = function () { if (P && !P.dead) startRecall(P); };
     w2.appendChild(rc); box.appendChild(w2);
-    $('portrait').style.background = P.color; $('pglyph').textContent = P.name.charAt(0);
+    Spr.portrait($('pcv'), P.defId);
     var it = $('items'); it.innerHTML = '';
     for (var k = 0; k < 6; k++) { var s = el('div', 'slot'); s.id = 'slot-' + k; it.appendChild(s); }
     cache = {};
@@ -261,7 +262,7 @@
     for (var i = 0; i < G.units.length; i++) {
       var u = G.units[i];
       if (u.dead || u.team === 0 || u.invuln || (!u.vis[0])) continue;
-      var d = Math.hypot(u.x - x, u.y - y) - u.r;
+      var dd = Math.hypot(u.x - x, u.y - y), d = (u.type === 'hero' || u.type === 'minion' || u.type === 'monster' ? Math.min(dd, Math.hypot(u.x - x, u.y - 48 - y)) : dd) - u.r;
       if (d < pad && d < bd) { bd = d; best = u; }
     }
     return best;
@@ -405,6 +406,7 @@
     while (acc >= STEP && n < 5) { tick(STEP); acc -= STEP; n++; }
     if (n === 5) acc = 0;
     if (state === 'menu' && (G.over || G.t > 1500)) { newGame({ noPlayer: true }); demoH = null; }
+    if (state === 'menu') drawPreview(ts / 1000);
     handleEvents();
     camera(dt);
     if (mouse.inside) { var w = R.s2w(mouse.px, mouse.py); mouse.x = w.x; mouse.y = w.y; }
@@ -415,6 +417,14 @@
     requestAnimationFrame(frame);
   }
 
+  function drawPreview(t) {
+    var cv2 = $('heroPrev'); if (!cv2) return;
+    var cyc = t % 5, k = { t: t };
+    if (cyc > 1.3 && cyc < 1.64) k.atk = (cyc - 1.3) / 0.34;
+    else if (cyc > 2.6 && cyc < 3.0) k.cast = (cyc - 2.6) / 0.4;
+    else if (cyc > 3.4 && cyc < 4.6) { k.mv = 1; k.ph = t * 8; }
+    Spr.portrait(cv2, sel, { full: true, k: k });
+  }
   function boot() {
     R.init(cv, mini);
     buildMenu();

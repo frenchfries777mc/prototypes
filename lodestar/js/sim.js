@@ -132,6 +132,8 @@ function updStatus(u, dt) {
   if (u.stunT > 0) u.stunT -= dt;
   if (u.rootT > 0) u.rootT -= dt;
   if (u.flash > 0) u.flash -= dt;
+  if (u.swing > 0) u.swing -= dt;
+  if (u.castT > 0) u.castT -= dt;
   var ms = 0, as = 0, ad = 0, armor = 0, slow = 0, ls = 0, st = false, sh = 0, dm = 0, rg = 0;
   for (var i = u.buffs.length - 1; i >= 0; i--) {
     var b = u.buffs[i]; b.t -= dt;
@@ -330,7 +332,7 @@ function tryAttack(u, t) {
   var dmg = u.ad;
   if (u.empower) { dmg += u.empower; u.empower = 0; }
   if (u.stealth) breakStealth(u);
-  u.swing = 0.18;
+  u.swingMax = u.type === 'hero' ? Math.min(0.34, 0.75 / u.as) : 0.2; u.swing = u.swingMax; u.atkN = (u.atkN || 0) + 1;
   if (u.ranged) {
     G.proj.push({ homing: true, x: u.x, y: u.y, target: t, speed: u.type === 'tower' ? 1500 : 1350, dmg: dmg, src: u, team: u.team,
       color: u.type === 'hero' ? u.color : (u.team === 0 ? '#7fe6dc' : u.team === 1 ? '#ff8c7a' : '#cfc3ff'), big: u.type === 'tower' });
@@ -416,7 +418,7 @@ function castSkill(h, i, tx, ty) {
   var dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
   if (d < 1) { dx = Math.cos(h.face); dy = Math.sin(h.face); d = 1; }
   var ux = dx / d, uy = dy / d;
-  h.mp -= val(sk.cost, rk); h.cds[i] = skillCd(h, i); h.recallT = 0;
+  h.mp -= val(sk.cost, rk); h.cds[i] = skillCd(h, i); h.recallT = 0; h.castT = 0.4;
   if (sk.kind !== 'self' && sk.kind !== 'blink') h.face = Math.atan2(uy, ux);
   if (!(sk.buff && sk.buff.stealth)) breakStealth(h);
   var dmg = skillDmg(h, sk, rk);
@@ -508,7 +510,6 @@ function chase(h, t, dt) {
 function updHero(h, dt) {
   if (h.dead) { h.respawnT -= dt; if (h.respawnT <= 0) respawn(h); return; }
   for (var i = 0; i < 4; i++) if (h.cds[i] > 0) h.cds[i] -= dt;
-  if (h.swing > 0) h.swing -= dt;
   h.gold += 2 * dt * gainMul(h); h.earned += 2 * dt * gainMul(h);
   var reg = h.hpr + (h.regenB || 0);
   if (inFountain(h)) { reg += h.maxHp * 0.14; h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.14 * dt); }

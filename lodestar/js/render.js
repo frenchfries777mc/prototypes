@@ -113,28 +113,42 @@ var R = (function () {
     ctx.closePath();
   }
 
+  /* 걷는 중인지, 어느 쪽을 보는지 등 그림에 필요한 상태를 유닛에서 뽑는다 */
+  function pose(u, t) {
+    var sp = Math.hypot(u.vx || 0, u.vy || 0), want = sp > 25 ? 1 : 0;
+    u.mvS = (u.mvS || 0) + (want - (u.mvS || 0)) * 0.25;
+    var cx = Math.cos(u.face);
+    if (u.dx === undefined) u.dx = cx < 0 ? -1 : 1;
+    if (cx > 0.3) u.dx = 1; else if (cx < -0.3) u.dx = -1;
+    return {
+      t: t + u.id * 0.7, mv: u.mvS, ph: t * (6 + Math.min(8, sp / 60)) + u.id,
+      atk: u.swing > 0 ? 1 - u.swing / (u.swingMax || 0.2) : -1, cast: u.castT > 0 ? 1 - u.castT / 0.4 : 0,
+      dash: !!u.dash, alt: (u.atkN || 0) & 1
+    };
+  }
+  function foot(u, r, col, a) {
+    ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.beginPath(); ctx.ellipse(u.x, u.y + r * 0.62, r * 1.15, r * 0.46, 0, 0, 6.2832); ctx.fill();
+    if (col) { ctx.globalAlpha = a || 1; ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(u.x, u.y + r * 0.62, r * 1.15, r * 0.46, 0, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = 1; }
+  }
+
   function drawUnit(u, me, t) {
     var col = teamCol(u, me), x = u.x, y = u.y, r = u.r;
     if (u.type === 'hero') return drawHero(u, me, t);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
     if (u.type === 'minion') {
-      ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.strokeStyle = '#08110f'; ctx.lineWidth = 4;
-      if (u.mtype === 'melee') { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); }
-      else if (u.mtype === 'ranged') poly(x, y, r * 1.15, 4, Math.PI / 2);
-      else poly(x, y, r * 1.1, 4, Math.PI / 4);
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#08110f'; ctx.beginPath(); ctx.arc(x + Math.cos(u.face) * r * 0.45, y + Math.sin(u.face) * r * 0.45, r * 0.28, 0, 6.2832); ctx.fill();
-      if (u.hp < u.maxHp) bar(x, y - r - 16, 40, 5, u.hp / u.maxHp, col, 0);
+      var ms = u.mtype === 'siege' ? 1.25 : u.mtype === 'ranged' ? 0.98 : 1.02, fy = y + r * 0.62;
+      foot(u, r, col, 0.8);
+      Spr.minion(ctx, u.mtype, x, fy, ms, u.dx === undefined ? (u.team ? -1 : 1) : u.dx, col, pose(u, t));
+      if (u.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.beginPath(); ctx.ellipse(x, fy - 34 * ms, 15 * ms, 26 * ms, 0, 0, 6.2832); ctx.fill(); }
+      if (u.hp < u.maxHp) bar(x, fy - 100 * ms, 44, 6, u.hp / u.maxHp, col, 0);
     } else if (u.type === 'monster') {
-      var boss = !!u.boss;
-      ctx.fillStyle = u.flash > 0 ? '#ffffff' : (u.boss === 'hoard' ? '#d9a93a' : boss ? '#7d5fd6' : '#6b5a9a');
-      ctx.strokeStyle = '#0d0a18'; ctx.lineWidth = boss ? 7 : 4;
-      poly(x, y, r * 1.1, boss ? 8 : 6, t * (boss ? 0.2 : 0) + u.id); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = boss ? '#fff3c4' : '#e6dcff';
-      ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.1, r * 0.14, 0, 6.2832); ctx.arc(x + r * 0.3, y - r * 0.1, r * 0.14, 0, 6.2832); ctx.fill();
-      if (boss || u.hp < u.maxHp) bar(x, y - r - 22, boss ? 150 : 54, boss ? 10 : 6, u.hp / u.maxHp, boss ? C.gold : C.neutral, 0);
-      if (boss) label(u.name, x, y - r - 34, 22, C.gold);
+      var boss = !!u.boss, big = u.mtype === 'big', ms2 = boss ? r / 62 : big ? 1.1 : u.mtype === 'wisp' ? 1.3 : 1.3, fy2 = y + r * 0.62, top = boss ? 190 : big ? 108 : u.mtype === 'wisp' ? 70 : 52;
+      foot(u, r, null);
+      Spr.monster(ctx, u.mtype, x, fy2, ms2, u.dx === undefined ? 1 : u.dx, pose(u, t));
+      if (u.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(x, fy2 - top * ms2 * 0.5, r * 0.8, top * ms2 * 0.45, 0, 0, 6.2832); ctx.fill(); }
+      if (boss || u.hp < u.maxHp) bar(x, fy2 - top * ms2 - 14, boss ? 170 : 58, boss ? 11 : 6, u.hp / u.maxHp, boss ? C.gold : C.neutral, 0);
+      if (boss) label(u.name, x, fy2 - top * ms2 - 28, 22, C.gold);
     } else if (u.type === 'tower') {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
       ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 7;
       poly(x, y, r, 6, Math.PI / 6); ctx.fill(); ctx.stroke();
       ctx.fillStyle = u.flash > 0 ? '#ffffff' : col; ctx.globalAlpha = u.invuln ? 0.45 : 1;
@@ -142,6 +156,7 @@ var R = (function () {
       ctx.globalAlpha = 1;
       bar(x, y - r - 30, 120, 9, u.hp / u.maxHp, u.invuln ? '#6f7f80' : col, 0);
     } else if (u.type === 'core') {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.55, r * 1.05, r * 0.5, 0, 0, 6.2832); ctx.fill();
       var pu = 1 + Math.sin(t * 2) * 0.05;
       ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 9;
       poly(x, y, r, 8, Math.PI / 8); ctx.fill(); ctx.stroke();
@@ -158,38 +173,30 @@ var R = (function () {
     ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(4,9,11,0.9)'; ctx.strokeText(txt, x, y);
     ctx.fillStyle = col; ctx.fillText(txt, x, y);
   }
+  var HS = 1.32; /* 영웅 그림 배율. 발끝 기준 키는 약 130 */
   function drawHero(h, me, t) {
     if (h.dead) return;
-    var mine = h.team === me, x = h.x, y = h.y, r = h.r, col = h.isPlayer ? C.me : teamCol(h, me);
+    var mine = h.team === me, x = h.x, y = h.y, r = h.r, col = h.isPlayer ? C.me : teamCol(h, me), fy = y + r * 0.62;
     ctx.globalAlpha = h.stealth ? 0.4 : 1;
-    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + r * 0.6, r * 1.1, r * 0.5, 0, 0, 6.2832); ctx.fill();
-    if (h.isPlayer) { ctx.strokeStyle = 'rgba(244,247,200,0.5)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r + 14 + Math.sin(t * 3) * 2, 0, 6.2832); ctx.stroke(); }
-    if (h.recallT > 0) {
-      ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y, r + 26, -1.57, -1.57 + 6.2832 * (1 - h.recallT / 6)); ctx.stroke();
-    }
-    /* 무기: 바라보는 방향 */
-    var fa = h.face + (h.swing > 0 ? Math.sin(h.swing / 0.18 * Math.PI) * 0.9 : 0);
-    ctx.strokeStyle = '#dfe9e6'; ctx.lineWidth = 7; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x + Math.cos(fa) * r * 0.7, y + Math.sin(fa) * r * 0.7);
-    ctx.lineTo(x + Math.cos(fa) * (r + (h.def.melee ? 34 : 20)), y + Math.sin(fa) * (r + (h.def.melee ? 34 : 20))); ctx.stroke();
-    ctx.fillStyle = '#0b1417'; ctx.strokeStyle = col; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = h.flash > 0 ? '#ffffff' : h.color; ctx.beginPath(); ctx.arc(x, y, r - 9, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = '#0b1417'; ctx.font = '400 40px "Black Han Sans", "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(h.name.charAt(0), x, y + 3);
-    if (h.shield > 0) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(x, y, r + 8, 0, 6.2832); ctx.stroke(); }
-    if (h.stunT > 0) { ctx.strokeStyle = '#ffe36a'; ctx.lineWidth = 5; ctx.setLineDash([14, 12]); ctx.lineDashOffset = -t * 60; ctx.beginPath(); ctx.arc(x, y - r - 4, 22, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
-    if (h.rootT > 0) { ctx.strokeStyle = '#9fd6ff'; ctx.lineWidth = 5; poly(x, y, r + 12, 6, t); ctx.stroke(); }
-    for (var b = 0; b < h.buffs.length; b++) if (h.buffs[b].titan) { ctx.strokeStyle = 'rgba(168,130,255,0.8)'; ctx.lineWidth = 4; poly(x, y, r + 20, 8, t * 1.5); ctx.stroke(); }
+    foot(h, r, col, h.isPlayer ? 0.95 : 0.75);
+    if (h.recallT > 0) { ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, fy, r + 26, -1.57, -1.57 + 6.2832 * (1 - h.recallT / 6)); ctx.stroke(); }
+    if (h.shield > 0) { ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(x, fy, r + 16, (r + 16) * 0.4, 0, 0, 6.2832); ctx.stroke(); }
+    var k = pose(h, t);
+    if (h.dash) { var a = Math.atan2(h.dash.uy, h.dash.ux); h.dx = Math.cos(a) < 0 ? -1 : 1; }
+    Spr.hero(ctx, h.defId, x, fy, HS, h.dx, k);
+    if (h.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.beginPath(); ctx.ellipse(x, fy - 62, 24, 52, 0, 0, 6.2832); ctx.fill(); }
+    if (h.stunT > 0) { ctx.strokeStyle = '#ffe36a'; ctx.lineWidth = 5; ctx.setLineDash([14, 12]); ctx.lineDashOffset = -t * 60; ctx.beginPath(); ctx.ellipse(x, fy - 150, 26, 8, 0, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); }
+    if (h.rootT > 0) { ctx.strokeStyle = '#9fd6ff'; ctx.lineWidth = 5; poly(x, fy, r + 12, 6, t); ctx.stroke(); }
+    for (var b = 0; b < h.buffs.length; b++) if (h.buffs[b].titan) { ctx.strokeStyle = 'rgba(168,130,255,0.85)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(x, fy, r + 24, (r + 24) * 0.42, 0, 0, 6.2832); ctx.stroke(); }
     /* 체력·마나 막대 */
-    var by = y - r - 34, w = 104;
+    var by = fy - 172, w = 104;
     bar(x + 10, by, w, 11, h.hp / h.maxHp, h.isPlayer ? '#8ef08a' : mine ? C.ally : C.enemy, h.shield / h.maxHp);
     ctx.fillStyle = 'rgba(4,9,11,0.55)';
-    for (var k = 250; k < h.maxHp; k += 250) ctx.fillRect(x + 10 - w / 2 + w * k / h.maxHp, by, 1.5, 11);
+    for (var k2 = 250; k2 < h.maxHp; k2 += 250) ctx.fillRect(x + 10 - w / 2 + w * k2 / h.maxHp, by, 1.5, 11);
     if (mine) { ctx.fillStyle = 'rgba(4,9,11,0.85)'; ctx.fillRect(x + 10 - w / 2 - 2, by + 13, w + 4, 6); ctx.fillStyle = '#5aa8ff'; ctx.fillRect(x + 10 - w / 2, by + 13, w * h.mp / h.maxMp, 4); }
     ctx.fillStyle = '#0b1417'; ctx.strokeStyle = col; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(x - w / 2 - 4, by + 7, 15, 0, 6.2832); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = C.ink; ctx.font = '700 18px "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.ink; ctx.font = '700 18px "IBM Plex Sans KR", system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(h.level, x - w / 2 - 4, by + 8);
     label(h.name, x + 10, by - 8, 19, col);
     ctx.globalAlpha = 1;
