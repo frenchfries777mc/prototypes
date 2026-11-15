@@ -641,6 +641,13 @@ func _push_event(sim: Sim, e: Dictionary) -> void:
 	for k in ["i", "o", "prev", "k", "v", "w", "a", "id"]:
 		if ev.has(k):
 			ev[k] = int(ev[k])
+	if ev.t == "kill" and ev.v < sim.units.size() and ev.k < sim.units.size():
+		var vu: Sim.Unit = sim.units[ev.v]
+		var ku: Sim.Unit = sim.units[ev.k]
+		vu.killer = ev.k
+		vu.kill_w = ev.w
+		vu.kill_dist = ku.pos.distance_to(vu.pos)
+		vu.kill_hp = ku.hp
 	if ev.t == "end":
 		sim.winner = int(ev.w)
 		sim.win_reason = str(ev.reason)
