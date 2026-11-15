@@ -1,0 +1,352 @@
+class_name View
+extends Node3D
+## 시뮬레이션 상태를 3D 장면으로 그린다(읽기 전용). 조명·그림자·스키닝 캐릭터·이펙트·사운드를 담당한다.
+
+const HAZE := Color(0.74, 0.72, 0.66)
+const COL_A := Color(0.36, 0.58, 1.0)
+const COL_B := Color(1.0, 0.78, 0.3)
+const COL_N := Color(0.82, 0.82, 0.82)
+const FAR_CULL := 150.0
+const ANIM_DIST := 70.0
+const SHADOW_DIST := 45.0
+const LOD_DIST := 48.0
+
+
+class UG:
+	var root: Node3D
+	var sk: Skeleton3D
+	var mi: MeshInstance3D
+	var flash: MeshInstance3D
+	var st := {}
+	var weapon := -1
+	var flash_t := 0.0
+	var shadow := true
+	var low := false
+	var shown := false
+	var dead := false
+
+
+var sim: Sim
+var cam: Camera3D
+var sun: DirectionalLight3D
+var env: Environment
+var ugs: Array = []
+var fx: Fx
+var sfx: Sfx
+var flag_meshes: Array = []
+var flag_nodes: Array = []
+var zone_nodes: Array = []
+var beam_nodes: Array = []
+var vm: MeshInstance3D
+var vm_weapon := -1
+var kick := 0.0
+var shake := 0.0
+var bob := 0.0
+var debug_3p := false
+var quality := 2
+var flash_mat: StandardMaterial3D
+var flash_quad: QuadMesh
+var cam_pos := Vector3.ZERO
+var frame_budget_shots := 0
+
+
+func setup(s: Sim) -> void:
+	sim = s
+	_build_env()
+	var t := WorldGfx.terrain(sim.world)
+	add_child(t)
+	add_child(WorldGfx.props(sim.world))
+	fx = Fx.new()
+	add_child(fx)
+	sfx = Sfx.new()
+	add_child(sfx)
+	_build_points()
+	_build_smoke()
+	_build_units()
+	_build_camera()
+
+
+func _build_env() -> void:
+	env = Environment.new()
+	env.background_mode = Environment.BG_SKY
+	var sky := Sky.new()
+	var sm := ShaderMaterial.new()
+	sm.shader = load("res://shaders/sky.gdshader")
+	sky.sky_material = sm
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.52, 0.56, 0.64)
+	env.ambient_light_energy = 0.9
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 1.05
+	env.tonemap_white = 5.0
+	env.fog_enabled = true
+	env.fog_light_color = HAZE
+	env.fog_density = 0.0042
+	env.fog_sun_scatter = 0.25
+	env.adjustment_enabled = true
+	env.adjustment_contrast = 1.06
+	env.adjustment_saturation = 1.08
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+	sun = DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-38.0, 42.0, 0.0)
+	sun.light_color = Color(1.0, 0.9, 0.76)
+	sun.light_energy = 1.55
+	sun.shadow_enabled = true
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 120.0
+	sun.directional_shadow_split_1 = 0.25
+	sun.shadow_bias = 0.05
+	sun.shadow_normal_bias = 1.2
+	sun.shadow_blur = 1.3
+	add_child(sun)
+
+
+func apply_quality(q: int) -> void:
+	quality = q
+	sun.shadow_enabled = q >= 1
+	sun.directional_shadow_max_distance = 120.0 if q >= 2 else 80.0
+	var vp := get_viewport()
+	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
+	if q == 0:
+		for ug in ugs:
+			ug.mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _build_points() -> void:
+	flag_meshes = [WorldGfx.flag(Color(0.72, 0.72, 0.72)), WorldGfx.flag(COL_A * 0.8), WorldGfx.flag(COL_B * 0.85)]
+	for i in Sim.NPOINTS:
+		var p: Sim.Pt = sim.pts[i]
+		var f := MeshInstance3D.new()
+		f.mesh = flag_meshes[0]
+		f.position = p.pos
+		add_child(f)
+		flag_nodes.append(f)
+		var z := WorldGfx.zone_disc(World.POINT_R)
+		z.position = p.pos + Vector3(0, 0.12, 0)
+		add_child(z)
+		zone_nodes.append(z)
+		var b := WorldGfx.beam(70.0)
+		b.position = p.pos + Vector3(0, 35.0, 0)
+		add_child(b)
+		beam_nodes.append(b)
+
+
+func _build_smoke() -> void:
+	var w := sim.world
+	var n := 0
+	for c in w.craters:
+		if n >= 7:
+			break
+		var x: float = c[0]
+		var z: float = c[1]
+		if absf(x) > World.HALF_X - 10.0:
+			continue
+		fx.smoke_column(Vector3(x, w.height_at(x, z) + 0.3, z), 0.8 + 0.4 * (n % 3))
+		n += 1
+
+
+func _build_units() -> void:
+	var mats := {}
+	flash_quad = QuadMesh.new()
+	flash_quad.size = Vector2(0.9, 0.9)
+	flash_mat = StandardMaterial3D.new()
+	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	flash_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	flash_mat.albedo_color = Color(1.0, 0.82, 0.45, 1.0)
+	flash_mat.albedo_texture = fx._soft
+	flash_quad.material = flash_mat
+	var skin := Rig.skin()
+	for u in sim.units:
+		var ug := UG.new()
+		ug.root = Node3D.new()
+		ug.sk = Rig.make_skeleton()
+		ug.root.add_child(ug.sk)
+		ug.mi = MeshInstance3D.new()
+		ug.mi.mesh = Rig.soldier_mesh(u.team, u.weapon)
+		ug.weapon = u.weapon
+		ug.sk.add_child(ug.mi)
+		ug.mi.skeleton = NodePath("..")
+		ug.mi.skin = skin
+		ug.mi.custom_aabb = AABB(Vector3(-1.5, -0.2, -1.5), Vector3(3, 2.6, 3))
+		var ba := BoneAttachment3D.new()
+		ba.bone_name = "chest"
+		ug.sk.add_child(ba)
+		ug.flash = MeshInstance3D.new()
+		ug.flash.mesh = flash_quad
+		ug.flash.position = Vector3(0.10, 0.12, -1.25)
+		ug.flash.visible = false
+		ug.flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ba.add_child(ug.flash)
+		ug.st = Rig.new_state()
+		ug.root.visible = false
+		add_child(ug.root)
+		ugs.append(ug)
+
+
+func _build_camera() -> void:
+	cam = Camera3D.new()
+	cam.fov = 75.0
+	cam.near = 0.05
+	cam.far = 700.0
+	cam.current = true
+	add_child(cam)
+	vm = MeshInstance3D.new()
+	vm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cam.add_child(vm)
+
+
+func _set_viewmodel(weapon: int) -> void:
+	if weapon == vm_weapon:
+		return
+	vm_weapon = weapon
+	vm.mesh = Rig.viewmodel_mesh(weapon)
+
+
+## 프레임마다 호출. alpha = 틱 사이 보간 비율.
+func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
+	var me: Sim.Unit = sim.units[local_id]
+	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
+	if not me.alive:
+		cp.y = maxf(cp.y - minf(me.death_age * 2.0, 1.2), me.pos.y + 0.35)
+	cam_pos = cp
+	# 병사
+	for u in sim.units:
+		_update_unit(u, ugs[u.id], alpha, dt, local_id)
+	# 거점 표식
+	for i in Sim.NPOINTS:
+		var pt: Sim.Pt = sim.pts[i]
+		var fi := 0 if pt.owner < 0 else (1 if pt.owner == 0 else 2)
+		if flag_nodes[i].mesh != flag_meshes[fi]:
+			flag_nodes[i].mesh = flag_meshes[fi]
+		var oc := COL_N
+		if pt.owner == 0:
+			oc = COL_A
+		elif pt.owner == 1:
+			oc = COL_B
+		var lead := 0 if pt.cap > 0.0 else 1
+		var fc := COL_A if lead == 0 else COL_B
+		var fill := absf(pt.cap) if pt.owner != lead else 0.0
+		var zm: ShaderMaterial = zone_nodes[i].material_override
+		zm.set_shader_parameter("col", oc)
+		zm.set_shader_parameter("col_fill", fc)
+		zm.set_shader_parameter("fill", fill)
+		zm.set_shader_parameter("contested", 1.0 if (pt.n_a > 0 and pt.n_b > 0) else 0.0)
+		var bm: ShaderMaterial = beam_nodes[i].material_override
+		bm.set_shader_parameter("col", oc)
+	# 카메라
+	var sh := Vector3.ZERO
+	if shake > 0.0:
+		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
+	shake = maxf(0.0, shake - dt * 3.0)
+	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
+	if debug_3p:
+		cp += cam.basis * Vector3(0.9, 0.5, 3.2)
+	cam.position = cp
+	cam.fov = lerpf(cam.fov, 75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), minf(1.0, dt * 6.0))
+	# 1인칭 총
+	_set_viewmodel(me.weapon)
+	vm.visible = me.alive and not debug_3p
+	kick = move_toward(kick, 0.0, dt * 7.0)
+	bob += me.speed_now * dt * 1.9
+	var amp := minf(1.0, me.speed_now * 0.25)
+	var sway := sin(bob) * 0.008 * amp
+	var lift := absf(cos(bob)) * 0.006 * amp
+	vm.scale = Vector3.ONE * 0.85
+	vm.position = Vector3(0.19 + sway, -0.2 - lift, -0.42 + kick * 0.07)
+	vm.rotation = Vector3(kick * 0.09 + (0.04 if me.speed_now > 6.0 else 0.0), 0.0, sway * 1.2)
+	if me.reload_t > 0.0:
+		vm.rotation.x = -0.55
+		vm.position.y -= 0.1
+		vm.rotation.z = 0.2
+	fx.update(dt)
+	sfx.update(dt, cp)
+
+
+func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -> void:
+	var hide: bool = (u.id == local_id and u.alive and not debug_3p) or (not u.alive and u.death_age > 8.0)
+	var p: Vector3 = u.prev_pos.lerp(u.pos, alpha)
+	var dist := p.distance_to(cam_pos)
+	if hide or dist > FAR_CULL:
+		if ug.shown:
+			ug.root.visible = false
+			ug.shown = false
+		return
+	if not ug.shown:
+		ug.root.visible = true
+		ug.shown = true
+	var want_low: bool = dist > LOD_DIST - (6.0 if ug.low else 0.0)
+	if ug.weapon != u.weapon or ug.low != want_low:
+		ug.weapon = u.weapon
+		ug.low = want_low
+		ug.mi.mesh = Rig.soldier_mesh(u.team, u.weapon, want_low)
+	var yaw := lerp_angle(u.prev_yaw, u.yaw, alpha)
+	var b := Basis(Vector3.UP, yaw)
+	if u.alive:
+		ug.dead = false
+		if dist < ANIM_DIST:
+			var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+			var strafe := clampf(u.vel.dot(right) / 4.5, -1.0, 1.0)
+			Rig.animate(ug.sk, ug.st, u.speed_now, dt, u.pitch, not u.on_ground, strafe)
+	else:
+		if not ug.dead:
+			ug.dead = true
+			Rig.death_pose(ug.sk)
+		var fall := clampf(u.death_age * 3.2, 0.0, 1.0)
+		fall = 1.0 - (1.0 - fall) * (1.0 - fall)
+		b = b * Basis(Vector3.RIGHT, fall * (PI * 0.5 - 0.1))
+		p.y += fall * 0.12
+	ug.root.transform = Transform3D(b, p)
+	var want_shadow := dist < SHADOW_DIST and quality >= 1
+	if want_shadow != ug.shadow:
+		ug.shadow = want_shadow
+		ug.mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if want_shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if ug.flash_t > 0.0:
+		ug.flash_t -= dt
+		ug.flash.visible = ug.flash_t > 0.0 and u.alive
+		ug.flash.rotation.z = randf() * TAU
+	elif ug.flash.visible:
+		ug.flash.visible = false
+
+
+## 시뮬레이션 이벤트 중 화면/소리 효과가 필요한 것만 소비한다.
+func consume(events: Array, local_id: int) -> void:
+	sfx.begin_frame()
+	var w := sim.world
+	for e in events:
+		match e.t:
+			"shot":
+				var shooter: Sim.Unit = sim.units[e.id]
+				fx.add_tracer(e.a, e.b, e.team)
+				var b: Vector3 = e.b
+				if e.hit:
+					fx.burst("blood", b, Vector3.UP)
+				else:
+					var gy := w.height_at(b.x, b.z)
+					if w.inside_box(b + Vector3(0, -0.05, 0)) or b.y > gy + 1.2:
+						fx.burst("wall", b, Vector3.UP)
+					else:
+						fx.burst("dust", b, Vector3.UP)
+				if e.id == local_id:
+					kick = 1.0
+					shake += 0.35
+					sfx.own_shot(shooter.weapon)
+					fx.muzzle_light(cam_pos + cam.basis * Vector3(0.2, -0.1, -1.2))
+				else:
+					ugs[e.id].flash_t = 0.06
+					sfx.shot_at(shooter.weapon, e.a, e.a.distance_to(cam_pos))
+			"hit":
+				if e.a == local_id:
+					sfx.play2d(sfx.tick, -4.0, 1.4 if e.head else 1.0)
+				if e.v == local_id:
+					shake += 1.0
+					sfx.play2d(sfx.thump, -2.0)
+			"kill":
+				if e.k == local_id:
+					sfx.play2d(sfx.chime, -6.0)
+			"cap":
+				sfx.play2d(sfx.chime, -8.0, 0.8 if e.o != sim.units[local_id].team else 1.2)
