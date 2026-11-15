@@ -50,6 +50,7 @@ header button.ic{padding:7px 10px}
 #conv{display:none;position:absolute;inset:10px;z-index:6;flex-direction:column;gap:8px;background:#161a33f5;border:1px solid #3a4070;border-radius:12px;padding:12px;box-shadow:0 14px 40px #000b}
 #conv textarea{flex:1;resize:none;background:#0e1022;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;outline:0}
 #conv div{display:flex;gap:8px;justify-content:flex-end}
+#convMsg{margin-right:auto;align-self:center;font-size:13px;color:var(--dim)}
 #err{display:none;margin:0;padding:12px 16px;background:#3a1522;color:#ffc2cc;border-top:1px solid #6b2a3d;font-size:14px;line-height:1.5;white-space:pre-wrap;max-height:34%;overflow:auto}
 #err b{color:#fff}
 .right{display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;min-height:0;background:radial-gradient(circle at 50% 40%,#1a1d33,#0b0c16)}
@@ -79,12 +80,14 @@ button,select{white-space:nowrap}
     <div id="tut"></div>
     <div class="ed"><div id="gutter"></div><div class="wrap"><pre id="hl"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea><div id="ac"></div></div>
       <button id="helpBtn">📖 명령어</button><div id="help"></div>
-      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
+      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><span id="convMsg"></span><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
     <pre id="err"></pre>
   </section>
   <section class="right"><canvas id="game" width="960" height="540"></canvas></section>
 </main>
 <script type="text/plain" id="rt-src">/*@RUNTIME_TEXT*/</script>
+<script type="text/plain" id="cv-src">/*@COMPILER_TEXT*/
+;/*@CONVERTER_TEXT*/</script>
 <script>/*@RUNTIME*/</script>
 <script>/*@COMPILER*/</script>
 <script>/*@CONVERTER*/</script>
@@ -155,7 +158,9 @@ button,select{white-space:nowrap}
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
+  const BIG = 400000;
   function highlight() {
+    if (code.value.length > BIG) { hl.textContent = code.value + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
     scanDyn();
     let raw = null;
     const out = code.value.split('\n').map(line => {
@@ -298,7 +303,7 @@ button,select{white-space:nowrap}
   function drawGutter() {
     const n = code.value.split('\n').length;
     let h = '';
-    for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+    if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
     gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
@@ -323,7 +328,9 @@ button,select{white-space:nowrap}
   let timer = 0;
   code.addEventListener('input', () => {
     drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
-    clearTimeout(timer); timer = setTimeout(() => run(true), 350);
+    clearTimeout(timer);
+    if (code.value.length > BIG) { status.textContent = '코드가 커서 자동 실행은 쉬어요. 다시 시작을 눌러 주세요'; status.className = ''; return; }
+    timer = setTimeout(() => run(true), 350);
   });
   code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
   code.addEventListener('input', () => openAc());
@@ -370,14 +377,40 @@ button,select{white-space:nowrap}
   const conv = $('conv'), convIn = $('convIn');
   $('convBtn').addEventListener('click', () => { conv.style.display = conv.style.display === 'flex' ? 'none' : 'flex'; if (conv.style.display === 'flex') convIn.focus(); });
   $('convClose').addEventListener('click', () => { conv.style.display = 'none'; });
-  $('convGo').addEventListener('click', () => {
+  let convJob = null;
+  const convMsg = $('convMsg'), convGo = $('convGo');
+  function convertAsync(text, onP) {
+    return new Promise(resolve => {
+      let w = null, done = false, timer = null, url = null;
+      const fin = r => { if (done) return; done = true; clearTimeout(timer); if (w) w.terminate(); if (url) URL.revokeObjectURL(url); resolve(r); };
+      convJob = { cancel: () => fin({ cancelled: true }) };
+      const sync = () => setTimeout(() => { try { fin(FFConvert.convert(text, { budgetMs: 4000 })); } catch (e) { fin({ ok: false, error: '바꾸는 중에 문제가 생겼어요.' }); } }, 30);
+      try {
+        const body = $('cv-src').textContent + '\nonmessage=function(e){var r;try{r=FFConvert.convert(e.data.src,{budgetMs:e.data.budget,onProgress:function(p){postMessage({p:p})}});}catch(err){r={ok:false,error:"바꾸는 중에 문제가 생겼어요.",code:"",js:0};}postMessage({r:r});};';
+        url = URL.createObjectURL(new Blob([body], { type: 'text/javascript' }));
+        w = new Worker(url);
+        w.onmessage = e => { if (e.data.p) onP(e.data.p); else fin(e.data.r); };
+        w.onerror = () => { if (done) return; w.terminate(); w = null; sync(); };
+        timer = setTimeout(() => fin({ ok: false, error: '90초가 지나도 끝나지 않아서 멈췄어요. 코드를 나눠서 다시 해 보세요.' }), 90000);
+        w.postMessage({ src: text, budget: 30000 });
+      } catch (e) { sync(); }
+    });
+  }
+  convGo.addEventListener('click', async () => {
+    if (convJob) { convJob.cancel(); return; }
     if (!convIn.value.trim()) return;
-    const r = FFConvert.convert(convIn.value);
+    const text = convIn.value;
+    convGo.textContent = '취소'; convMsg.textContent = '시작하는 중…';
+    const r = await convertAsync(text, p => { convMsg.textContent = p.stage + (p.total > 1 ? ` ${Math.min(100, Math.round(p.done / p.total * 100))}%` : '…'); });
+    convJob = null; convGo.textContent = '변환'; convMsg.textContent = '';
+    if (r.cancelled) { toast('취소했어요'); return; }
     if (!r.ok) { toast(r.error || '바꾸지 못했어요'); return; }
     jsLock = false; conv.style.display = 'none';
-    code.focus(); code.select(); document.execCommand('insertText', false, r.code);
-    sel.value = ''; store.set('ff-code', code.value); drawGutter(); run(false);
-    toast(r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
+    code.focus(); code.select();
+    const big = r.code.length > BIG;
+    if (r.code.length > 150000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
+    sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast('변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요'); return; } run(false);
+    toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
   });
 
   $('export').addEventListener('click', () => {

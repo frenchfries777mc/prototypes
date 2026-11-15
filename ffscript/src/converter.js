@@ -30,7 +30,7 @@ function tokenize(src) {
     else if (c === '/' && regexOk()) { i++; let cls = false; while (i < src.length && src[i] !== '\n') { if (src[i] === '\\') { i += 2; continue; } if (src[i] === '[') cls = true; else if (src[i] === ']') cls = false; else if (src[i] === '/' && !cls) break; i++; } i++; while (/[a-z]/.test(src[i] || '')) i++; type = 're'; }
     else { const op = OPS.find(o => src.startsWith(o, i)); if (op) { i += op.length; type = 'op'; } else { i++; type = '()[]{},;:?.'.includes(c) ? 'p' : 'op'; } }
     t = src.slice(s, i);
-    toks.push({ t, type, s, e: i, nl }); nl = false;
+    toks.push({ t, type, s, e: i, nl, i: toks.length }); nl = false;
   }
   return toks;
 }
@@ -254,7 +254,7 @@ function convertJS(src, opts) {
     else FB();
     const names = params.filter(t => !isP(t, ','));
     if (names.some(t => t.type !== 'id')) FB();
-    const base = toks.indexOf(tk[0]);
+    const base = tk[0].i;
     if (isP(tk[i], '{')) { const e = matchClose(tk, i); if (e !== tk.length - 1) FB(); return { params: names.map(t => t.t), stmts: P(base + i + 1, base + e) }; }
     return { params: names.map(t => t.t), stmts: [X(base + i, base + tk.length)] };
   }
@@ -432,14 +432,14 @@ function convertJS(src, opts) {
   }
 
   const stats = { js: 0 };
-  const build = () => {
-    stats.js = 0;
+  const buildOf = (list) => {
     const cx = { top: true, stats, rename: null, banned: null, calls: null };
     const lines = [];
-    for (const st of tree) lines.push(...conv(st, 0, cx));
+    for (const st of list) for (const l of conv(st, 0, cx)) lines.push(l);
     return lines;
   };
-  return { build, tree, stats, rawOf, toks, parentOf };
+  const build = () => { stats.js = 0; return buildOf(tree); };
+  return { build, buildOf, tree, stats, rawOf, toks, parentOf };
 }
 
 function htmlDecode(s) {
@@ -447,19 +447,49 @@ function htmlDecode(s) {
 }
 const BLOCKS = /^(h[1-6]|p|div|section|article|header|footer|main|li|ul|ol|span|b|strong|i|em|label|center|small|br|nav|aside|figure|figcaption|blockquote|pre|code|font|u|s|mark)$/i;
 const DROP = /^(meta|link|base|noscript|template)$/i;
+const lc = s => s.replace(/[A-Z]/g, c => String.fromCharCode(c.charCodeAt(0) + 32));
+function findBlocks(html, low, name) {
+  const out = []; let i = 0;
+  while ((i = low.indexOf('<' + name, i)) >= 0) {
+    const c = low[i + name.length + 1];
+    if (c && !/[\s>\/]/.test(c)) { i += name.length + 1; continue; }
+    const oe = html.indexOf('>', i); if (oe < 0) break;
+    let ce = low.indexOf('</' + name, oe + 1), end;
+    if (ce < 0) { ce = html.length; end = html.length; } else { const g = html.indexOf('>', ce); end = g < 0 ? html.length : g + 1; }
+    out.push({ start: i, attrs: html.slice(i + name.length + 1, oe), from: oe + 1, to: ce, end });
+    i = end;
+  }
+  return out;
+}
+function cutRanges(s, ranges) {
+  if (!ranges.length) return s;
+  ranges.sort((a, b) => a[0] - b[0]);
+  let out = '', last = 0;
+  for (const [a, b] of ranges) { if (a < last) continue; out += s.slice(last, a); last = b; }
+  return out + s.slice(last);
+}
+function findComments(s) {
+  const out = []; let i = 0;
+  while ((i = s.indexOf('<!--', i)) >= 0) { const e = s.indexOf('-->', i + 4); const end = e < 0 ? s.length : e + 3; out.push([i, end]); i = end; }
+  return out;
+}
 function convertHTML(html, pre) {
   const out = { lines: [], scripts: [] };
-  const tm = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  if (tm && htmlDecode(tm[1]).trim()) pre.push('title ' + ffStr(htmlDecode(tm[1]).trim()));
-  const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join('\n');
+  const low = lc(html), titles = findBlocks(html, low, 'title'), styleBs = findBlocks(html, low, 'style'), scriptBs = findBlocks(html, low, 'script');
+  if (titles.length) { const tt = htmlDecode(html.slice(titles[0].from, Math.min(titles[0].to, titles[0].from + 400))).trim(); if (tt) pre.push('title ' + ffStr(tt)); }
+  const styles = styleBs.map(b => html.slice(b.from, b.to)).join('\n').slice(0, 300000);
   const bm = styles.match(/(?:^|[}\s,])(?:html\s*,\s*)?body\s*(?:,\s*html\s*)?\{[^}]*?background(?:-color)?\s*:\s*([^;}]+)/i) || (html.match(/<body[^>]*style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*([^;"']+)/i));
   if (bm) { const v = bm[1].trim().toLowerCase(), W = (global.FFScript && global.FFScript.COLOR_WORDS) || []; if (W.includes(v) || /^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(v)) pre.push('background ' + v); }
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    const sm = m[1].match(/\bsrc\s*=\s*["']([^"']+)["']/i);
-    if (sm) out.scripts.push({ src: sm[1] }); else if (/module/i.test(m[1])) out.scripts.push({ module: m[2] }); else if (m[2].trim()) out.scripts.push({ code: m[2] });
+  for (const b of scriptBs) {
+    const code = html.slice(b.from, b.to), sm = b.attrs.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+    if (sm) out.scripts.push({ src: sm[1] }); else if (/module/i.test(b.attrs)) out.scripts.push({ module: code }); else if (code.trim()) out.scripts.push({ code });
   }
-  let body = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || [null, html.replace(/<head[\s\S]*?<\/head>/i, '')])[1];
-  body = body.replace(/<script\b[\s\S]*?<\/script>/gi, '').replace(/<style\b[\s\S]*?<\/style>/gi, '').replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?(html|head|body|!doctype)[^>]*>/gi, '').replace(/<title[\s\S]*?<\/title>/gi, '');
+  let body;
+  { const bs = low.indexOf('<body'), be = bs < 0 ? -1 : html.indexOf('>', bs), ce = low.lastIndexOf('</body');
+    if (be >= 0 && ce > be) body = html.slice(be + 1, ce);
+    else { const hb = findBlocks(html, low, 'head')[0]; body = hb ? html.slice(0, hb.start) + html.slice(hb.end) : html; } }
+  { const bl = lc(body); body = cutRanges(body, [...findBlocks(body, bl, 'script'), ...findBlocks(body, bl, 'style'), ...findBlocks(body, bl, 'title')].map(b => [b.start, b.end])); }
+  body = cutRanges(body, findComments(body)).replace(/<\/?(html|head|body|!doctype)[^>]*>/gi, '');
   const texts = [], raws = [];
   let cur = '';
   const flush = () => { const t = htmlDecode(cur).replace(/\s+/g, ' ').trim(); if (t) texts.push(t); cur = ''; };
@@ -522,8 +552,23 @@ function renameClashes(code) {
   return out + code.slice(last);
 }
 
-function convert(input) {
+const MAXSIZE = 3 * 1024 * 1024;
+function detectOther(s) {
+  if (/^\s*(?:package\s+[\w.]+\s*;|import\s+(?:static\s+)?javax?\.[\w.*]+\s*;)/m.test(s) || /\b(?:public|private|protected)\s+(?:static\s+)?(?:final\s+)?(?:class|interface|enum|void|int|long|double|boolean|String)\b/.test(s) || /System\.out\.print/.test(s)) return 'Java';
+  if (/^\s*using\s+System\b/m.test(s) || /Console\.Write(?:Line)?\s*\(/.test(s)) return 'C#';
+  if (/^\s*#include\s*[<"]/m.test(s)) return 'C/C++';
+  if (/^\s*def\s+\w+\s*\([^)]*\)\s*:/m.test(s) || /^\s*(?:elif\b.*|else)\s*:\s*$/m.test(s) || /^\s*from\s+\w+\s+import\s+/m.test(s)) return 'Python';
+  return null;
+}
+const jsBlock = (code) => ['JS', ...code.split('\n').filter(l => l.trim()).map(l => '  ' + l)];
+function convert(input, opts) {
+  opts = opts || {};
+  const t0 = Date.now(), budget = opts.budgetMs || 20000, over = () => Date.now() - t0 > budget;
+  let lastP = 0;
+  const prog = (stage, done, total, force) => { if (!opts.onProgress) return; const n = Date.now(); if (!force && n - lastP < 80) return; lastP = n; opts.onProgress({ stage, done, total }); };
   const src = String(input || '').replace(/\r\n?/g, '\n');
+  if (src.length > MAXSIZE) return { code: '', ok: false, error: '붙여 넣은 코드가 너무 커요 (' + (src.length / 1048576).toFixed(1) + 'MB). 3MB 이하로 줄여서 다시 해 주세요.', js: 0 };
+  prog('읽는 중', 0, 1, true);
   const pre = [], htmlLines = [];
   let code = src, scripts = null;
   const looksHTML = /<\s*(html|head|body|script|div|p|h[1-6]|canvas|title|style|button|img|span|!doctype)\b/i.test(src);
@@ -533,26 +578,80 @@ function convert(input) {
     if (s.src) extJS.push(`(function(){const s=document.createElement('script');s.src=${JSON.stringify(s.src)};document.head.appendChild(s);})()`);
     if (s.module) extJS.push(s.module);
   }
+  if (code.trim()) {
+    let synErr = null; try { new Function(code); } catch (e) { synErr = e.message; }
+    if (synErr) {
+      const lang = looksHTML ? null : detectOther(src);
+      return { code: '', ok: false, js: 0, error: lang ? lang + ' 코드는 바꿀 수 없어요. 이 변환기는 HTML과 JavaScript만 FF Script로 바꿔요.' : '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + synErr + ')' };
+    }
+  }
   code = renameClashes(code);
-  const C = convertJS(code);
   const FF = global.FFScript;
-  let lines, text = '', okRun = false, guard = 0;
-  while (guard++ < 400) {
-    lines = C.build();
-    const lift = lines.filter(([i, t]) => !i && /^(title|background) /.test(t));
-    lines = [...lift, ...lines.filter(l => !lift.includes(l))];
-    const body = lines.map(([i, t]) => ' '.repeat(i) + t);
-    const head = [...pre, ...htmlLines.map(l => /^G\.addHTML/.test(l) ? 'JS ' + jsq(l) : l), ...extJS.map(c => c.includes('\n') ? 'JS\n' + c.split('\n').filter(l => l.trim()).map(l => '  ' + l).join('\n') : 'JS ' + jsq(c))];
+  const headOf = () => [...pre, ...htmlLines.map(l => /^G\.addHTML/.test(l) ? 'JS ' + jsq(l) : l), ...extJS.map(c => c.includes('\n') ? 'JS\n' + c.split('\n').filter(l => l.trim()).map(l => '  ' + l).join('\n') : 'JS ' + jsq(c))];
+  const wholeJS = (why) => {
+    const head = headOf(), body = code.trim() ? jsBlock(code) : [];
+    const text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
+    const r = FF ? FF.compileSafe(text) : { ok: true };
+    return { code: text, ok: r.ok, error: r.ok ? '' : '바꾸지 못했어요: ' + (r.message || ''), js: 1, whole: why };
+  };
+  try {
+  const C = convertJS(code);
+  let lines, text = '', okRun = false, timedOut = false;
+  const lift0 = ls => { const lift = ls.filter(([i, t]) => !i && /^(title|background) /.test(t)); return [...lift, ...ls.filter(l => !lift.includes(l))]; };
+  const markUp = (owner) => { if (owner.fb) { let par = C.parentOf(owner); while (par && par.fb) par = C.parentOf(par); if (!par) return false; par.fb = true; } else owner.fb = true; return true; };
+
+  /* 1단계: 문장 묶음(chunk)마다 따로 검사해서 고친다 (전체를 매번 다시 컴파일하지 않음) */
+  if (FF && C.tree.length) {
+    const chunks = []; let cur = [], w = 0;
+    for (const st of C.tree) { cur.push(st); w += st.to - st.from; if (cur.length >= 40 || w >= 1500) { chunks.push(cur); cur = []; w = 0; } }
+    if (cur.length) chunks.push(cur);
+    const stubs = new Map();
+    const learn = (ls) => {
+      for (const e of ls) {
+        if (e[4]) continue;
+        const t = e[1].trim();
+        if (e[3] != null) { if (e[0] === 0 && FF.jsTopNames) for (const nm of FF.jsTopNames(e[3])) if (!stubs.has(nm)) stubs.set(nm, [nm + ' = 0']); continue; }
+        let m;
+        if (e[0] === 0 && (m = t.match(/^to\s+([\p{L}_][\p{L}\p{N}_]*)((?:\s+[\p{L}_][\p{L}\p{N}_]*)*)$/u))) { stubs.set(m[1], ['to ' + m[1] + m[2], '  shake']); continue; }
+        if ((m = t.match(/^([\p{L}_][\p{L}\p{N}_]*)\s*(?:=(?!=)|\+=|-=|\*=|\/=)/u)) && !/^(score|lives|level)$/.test(m[1]) && !stubs.has(m[1])) stubs.set(m[1], [m[1] + ' = 0']);
+      }
+    };
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      prog('고치는 중', ci, chunks.length);
+      if (over()) { timedOut = true; for (const c of chunks.slice(ci)) for (const st of c) st.fb = true; break; }
+      let ls, guard = 0;
+      const ids = new Set(); for (let k = chunk[0].from; k < chunk[chunk.length - 1].to; k++) if (C.toks[k].type === 'id') ids.add(C.toks[k].t);
+      let used = [...stubs].filter(([k]) => ids.has(k)), preLines = used.flatMap(([, v]) => v);
+      for (;;) {
+        ls = C.buildOf(chunk);
+        const r = FF.compileSafe([...preLines, ...ls.map(([i, t]) => ' '.repeat(i) + t)].join('\n') + '\n');
+        if (r.ok) break;
+        const idx = r.line - 1 - preLines.length;
+        if (idx < 0) { let acc = 0; for (const [k, v] of used) { acc += v.length; if (r.line - 1 < acc) { stubs.delete(k); break; } } used = [...stubs].filter(([k]) => ids.has(k)); preLines = used.flatMap(([, v]) => v); if (guard++ > 5000) break; continue; }
+        const owner = ls[idx] && ls[idx][2];
+        if (!owner || guard++ > 400 || over() || !markUp(owner)) { for (const st of chunk) st.fb = true; ls = C.buildOf(chunk); break; }
+      }
+      learn(ls);
+    }
+  }
+
+  /* 2단계: 전체를 한 번 컴파일해서 확인, 남은 문제는 시간 안에서만 고친다 */
+  let guard = 0;
+  while (true) {
+    prog('마무리하는 중', 0, 1);
+    lines = lift0(C.build());
+    const body = lines.map(([i, t]) => ' '.repeat(i) + t), head = headOf();
     text = [...head, ...(head.length && body.length ? [''] : []), ...body].join('\n') + '\n';
     if (!FF) break;
     const r = FF.compileSafe(text);
     if (r.ok) { okRun = true; break; }
+    if (guard++ > 400 || over()) { timedOut = true; break; }
     const idx = r.line - 1 - head.length - (head.length && body.length ? 1 : 0);
     const owner = lines[idx] && lines[idx][2];
-    if (!owner) break;
-    if (owner.fb) { let par = C.parentOf(owner); while (par && par.fb) par = C.parentOf(par); if (!par) break; par.fb = true; }
-    else owner.fb = true;
+    if (!owner || !markUp(owner)) break;
   }
+  if (!okRun && timedOut) return wholeJS('timeout');
   if (okRun) {
     const js = [...htmlLines.filter(l => /^G\.addHTML/.test(l)), ...extJS];
     const headPlain = [...pre, ...htmlLines.filter(l => !/^G\.addHTML/.test(l))];
@@ -571,11 +670,14 @@ function convert(input) {
     const jsHead = js.length ? (js.length === 1 && !js[0].includes('\n') ? ['JS ' + jsq(js[0])] : ['JS', ...js.flatMap(c => c.split('\n').filter(l => l.trim()).map(l => '  ' + l))]) : [];
     const head2 = [...headPlain, ...jsHead];
     const t2 = [...head2, ...(head2.length && merged.length ? [''] : []), ...merged].join('\n') + '\n';
-    if (FF.compileSafe(t2).ok) text = t2;
+    if (!over() && FF.compileSafe(t2).ok) text = t2;
   }
   let error = '';
   if (!okRun && FF) { const r = FF.compileSafe(text); error = /문법 오류/.test(r.message || '') ? '붙여 넣은 코드에 자바스크립트 문법 오류가 있어서 바꿀 수 없어요. (' + String(r.message).replace(/^.*문법 오류가 있어요: /, '') + ')' : '바꾸지 못했어요: ' + (r.message || ''); }
-  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length };
+  return { code: text, ok: okRun, error, js: C.stats.js + extJS.length + htmlLines.filter(l => /^G\.addHTML/.test(l)).length, timedOut };
+  } catch (e) {
+    const w = wholeJS('error'); w.note = String(e && e.message || e).slice(0, 80); return w;
+  }
 }
 
 global.FFConvert = { convert, tokenize };
