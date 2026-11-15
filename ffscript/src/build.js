@@ -5,6 +5,8 @@ if (/<\/script/i.test(rt)) throw new Error('runtime.js contains </script');
 const out = r('editor.html')
   .replace('/*@RUNTIME_TEXT*/', () => rt)
   .replace('/*@RUNTIME*/', () => rt)
+  .replace('/*@COMPILER_TEXT*/', () => r('compiler.js'))
+  .replace('/*@CONVERTER_TEXT*/', () => r('converter.js'))
   .replace('/*@COMPILER*/', () => r('compiler.js'))
   .replace('/*@CONVERTER*/', () => r('converter.js'))
   .replace('/*@EXAMPLES*/', () => r('examples.js'))
