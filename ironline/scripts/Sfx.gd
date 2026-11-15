@@ -154,3 +154,14 @@ func update(dt: float, cam_pos: Vector3) -> void:
 		p.volume_db = 2.0
 		p.pitch_scale = rng.randf_range(0.8, 1.1)
 		p.play()
+
+
+func boom_at(pos: Vector3) -> void:
+	var p: AudioStreamPlayer3D = pool3d[i3]
+	i3 = (i3 + 1) % pool3d.size()
+	p.stream = boom
+	p.max_distance = 300.0
+	p.global_position = pos
+	p.volume_db = 4.0
+	p.pitch_scale = rng.randf_range(0.85, 1.1)
+	p.play()
