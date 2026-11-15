@@ -2,6 +2,8 @@
 'use strict';
 var TL = require('../core.js');
 var N = +process.argv[2] || 300;
+var ASC = +process.argv[3] || 0;
+var UNLOCK = process.argv[4] === 'all';
 
 function clone(S) { var f = S.fx; S.fx = []; var c = JSON.parse(JSON.stringify(S)); S.fx = f; return c; }
 
@@ -114,7 +116,7 @@ function step(S) {
 var res = { win: 0, byAtt: [0, 0, 0], runsAtt: [0, 0, 0], death: {}, hpEnd: [], floors: 0, turns: 0 };
 var relicWin = {}, relicSeen = {};
 for (var n = 0; n < N; n++) {
-  var S = TL.newRun(1000 + n * 7919);
+  var S = TL.newRun(1000 + n * 7919, { asc: ASC, unlocks: UNLOCK ? TL.unlockList() : [] });
   S._att = n % 3;
   var guard = 0;
   while (S.phase !== 'over' && S.phase !== 'win' && guard++ < 5000) step(S);

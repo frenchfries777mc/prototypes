@@ -406,7 +406,8 @@ var MAP = {
   guard: 'shield', lance: 'spear', wall: 'bricks', blizzard: 'tornado', rime: 'flake', freeze: 'flake', armor: 'armor', shatter: 'hammer', composure: 'crystal',
   permafrost: 'mountain', avalanche: 'mountain', bloom: 'flake',
   spark: 'bolt', chain: 'chain', jolt: ['bolt', 1.1], static: ['orb', .8], capacitor: 'battery', overload: 'battery', storm: 'cloud', rod: 'rod', discharge: 'burst', flash: 'star', conduct: 'chain', surge: 'surge',
-  prism: 'prism', amplify: 'rings', fusion: 'fusion', soot: 'soot'
+  prism: 'prism', amplify: 'rings', fusion: 'fusion', soot: 'soot',
+  inferno: 'flames', pyroclasm: 'burst', cauterize: 'brazier', icicle: 'spear', hail: 'flake', frostnova: 'flake', deepfreeze: 'crystal', arc: 'chain', thunderclap: 'cloud', charge: 'battery', tesla: 'rod', anchor: 'rings'
 };
 function card(id, el) {
   var p = PAL[el] || PAL.n, m = MAP[id] || 'star', f = Array.isArray(m) ? m[0] : m, k = Array.isArray(m) ? m[1] : undefined;
@@ -440,5 +441,66 @@ function logo() {
   return svg('0 0 164 84', s, 'logo');
 }
 
-root.ART = { enemy: enemy, card: card, lantern: lantern, logo: logo, PAL: PAL, enemyKeys: Object.keys(ENEMY) };
+
+/* ---------- 아이콘, 지도 노드, 장면 ---------- */
+var IC = {
+  heart: '<path d="M12 21s-8.5-5.6-8.5-11.4A4.7 4.7 0 0 1 12 7.2a4.7 4.7 0 0 1 8.5 2.4C20.500 15.400 12 21 12 21z" fill="#e5484d" stroke="#6a1016" stroke-width="1.3" stroke-linejoin="round"/><path d="M7.200 8.800a2.600 2.600 0 0 0-1.600 2.400" stroke="#ffc2c4" stroke-width="1.500" fill="none" stroke-linecap="round"/>',
+  coin: '<circle cx="12" cy="12" r="9" fill="#e8b04a" stroke="#7a4e0c" stroke-width="1.400"/><circle cx="12" cy="12" r="6" fill="none" stroke="#fff1bd" stroke-width="1.300"/><path d="M12 8.200v7.600" stroke="#7a4e0c" stroke-width="1.600" stroke-linecap="round"/>',
+  deck: '<rect x="6.500" y="3.500" width="12" height="16" rx="2" fill="#2a3040" stroke="#8d93a0" stroke-width="1.300" transform="rotate(8 12 12)"/><rect x="4.500" y="4.500" width="12" height="16" rx="2" fill="#39425a" stroke="#c9ccd6" stroke-width="1.300"/><circle cx="10.500" cy="12.500" r="2.800" fill="#e8b04a"/>',
+  menu: '<path d="M5 7h14M5 12h14M5 17h14" stroke="#e8e6df" stroke-width="2" stroke-linecap="round"/>',
+  draw: '<rect x="5" y="4" width="14" height="16" rx="2.500" fill="#2a3040" stroke="#9aa2b4" stroke-width="1.300"/><path d="M12 8v7m-3-3 3 3 3-3" stroke="#e8e6df" stroke-width="1.700" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  disc: '<rect x="5" y="4" width="14" height="16" rx="2.500" fill="#2a3040" stroke="#9aa2b4" stroke-width="1.300"/><path d="M12 16V9m-3 3 3-3 3 3" stroke="#e8e6df" stroke-width="1.700" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  ember: '<path d="M12 2.500 17.500 9 15 21H9L6.500 9z" fill="#ff8a3c" stroke="#7a2a08" stroke-width="1.300" stroke-linejoin="round"/><path d="M12 2.500 12 21H9L6.500 9z" fill="#ffd27a" opacity=".6"/>',
+  anvil: '<path d="M4 8h16l-2.500 4H14l1 4h2v3H7v-3h2l1-4H6.500z" fill="#9aa4b8" stroke="#2a303c" stroke-width="1.300" stroke-linejoin="round"/><path d="M4 8h16" stroke="#e6ecf6" stroke-width="1.500"/>',
+  trash: '<path d="M6 8h12l-1 12H7z" fill="#6a7284" stroke="#2a303c" stroke-width="1.300" stroke-linejoin="round"/><path d="M4.500 8h15M9.500 8V5h5v3" stroke="#c9ccd6" stroke-width="1.500" fill="none" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke="#2a303c" stroke-width="1.300"/>',
+  lock: '<rect x="5.500" y="10.500" width="13" height="10" rx="2" fill="#6a7284" stroke="#2a303c" stroke-width="1.300"/><path d="M8.500 10.500V8a3.500 3.500 0 0 1 7 0v2.500" fill="none" stroke="#c9ccd6" stroke-width="1.700"/>'
+};
+function icon(name, cls) { return '<svg viewBox="0 0 24 24" class="ic ' + (cls || '') + '" aria-hidden="true">' + (IC[name] || '') + '</svg>'; }
+
+var NODE = {
+  combat: { ring: '#9aa2b4', fill: '#262b36', g: '<path d="M7 5l10 12M17 5L7 17" stroke="#e8e6df" stroke-width="2.200" stroke-linecap="round"/><circle cx="17.500" cy="18" r="1.800" fill="#c9a050"/><circle cx="6.500" cy="18" r="1.800" fill="#c9a050"/><path d="M5.500 3.800l3.700.8-1.600 2.600zM18.500 3.800l-3.700.8 1.600 2.600z" fill="#e8e6df"/>' },
+  elite: { ring: '#ff4d57', fill: '#3a1218', g: '<path d="M12 4.500c-4 0-6.500 2.600-6.500 6 0 2 1 3.300 2.500 4V18h8v-3.500c1.500-.7 2.500-2 2.500-4 0-3.400-2.500-6-6.500-6z" fill="#f2ece0" stroke="#2a0a0e" stroke-width="1.200"/><circle cx="9.500" cy="11" r="1.800" fill="#3a1218"/><circle cx="14.500" cy="11" r="1.800" fill="#3a1218"/><path d="M10.500 15v2m3-2v2" stroke="#3a1218" stroke-width="1.200"/>' },
+  rest: { ring: '#ff9a3c', fill: '#33200f', g: '<path d="M12 3.500c2.500 3 4 4.800 4 7.500a4 4 0 0 1-8 0c0-1.500.6-2.600 1.500-3.600.3 1.200.9 1.800 1.600 2C11.500 7.500 11.700 5.500 12 3.500z" fill="#ffb347" stroke="#8a3a08" stroke-width="1.100" stroke-linejoin="round"/><path d="M5 19.500 19 16M5 16l14 3.500" stroke="#c89a6a" stroke-width="2" stroke-linecap="round"/>' },
+  shop: { ring: '#e8b04a', fill: '#322810', g: '<path d="M9 5h6l-1.500 3h-3z" fill="#c9a050" stroke="#6a4a10" stroke-width="1.100" stroke-linejoin="round"/><path d="M12 7.500c-4.500 1-6.500 4-6.500 7.200 0 2.500 2 4.300 6.500 4.300s6.500-1.800 6.500-4.300c0-3.200-2-6.200-6.500-7.200z" fill="#e8b04a" stroke="#6a4a10" stroke-width="1.200"/><circle cx="12" cy="14.500" r="2.200" fill="none" stroke="#6a4a10" stroke-width="1.300"/>' },
+  event: { ring: '#b9a6ff', fill: '#241d40', g: '<text x="12" y="18.500" text-anchor="middle" font-size="17" font-weight="800" fill="#efe9ff" font-family="Do Hyeon,Noto Sans KR,sans-serif">?</text>' },
+  treasure: { ring: '#ffd84a', fill: '#332a0a', g: '<path d="M4.500 11V19h15v-8z" fill="#a8742a" stroke="#4a2a08" stroke-width="1.200" stroke-linejoin="round"/><path d="M4.500 11a7.500 5 0 0 1 15 0z" fill="#c8923a" stroke="#4a2a08" stroke-width="1.200" stroke-linejoin="round"/><rect x="10.500" y="10" width="3" height="4.500" rx=".8" fill="#ffd84a" stroke="#4a2a08" stroke-width="1"/>' },
+  boss: { ring: '#ff3a3a', fill: '#3a0e12', g: '<path d="M4.500 17.500 3.500 7.500l4.500 3.500L12 5l4 6 4.500-3.500-1 10z" fill="#ffd84a" stroke="#6a4a10" stroke-width="1.200" stroke-linejoin="round"/><rect x="5" y="17.500" width="14" height="2.200" rx=".8" fill="#e8b04a" stroke="#6a4a10" stroke-width="1"/>' }
+};
+function nodeIcon(type, size) { var n = NODE[type] || NODE.combat; return '<g transform="translate(' + (-size / 2) + ' ' + (-size / 2) + ') scale(' + (size / 24) + ')">' + n.g + '</g>'; }
+
+function campfire() {
+  return svg('0 0 220 130',
+    '<defs><radialGradient id="cfg"><stop offset="0" stop-color="#ffb347" stop-opacity=".55"/><stop offset="1" stop-color="#ff7a3c" stop-opacity="0"/></radialGradient></defs>' +
+    '<ellipse cx="110" cy="112" rx="96" ry="12" fill="#000" opacity=".4"/><circle cx="110" cy="76" r="62" fill="url(#cfg)"/>' +
+    '<g stroke="#07080c" stroke-opacity=".6" stroke-width="2" stroke-linecap="round"><rect x="62" y="98" width="96" height="14" rx="6" fill="#6a4426" transform="rotate(-12 110 105)"/><rect x="62" y="98" width="96" height="14" rx="6" fill="#7a5230" transform="rotate(12 110 105)"/></g>' +
+    '<g class="cf1"><path d="M110 18c20 24 32 38 32 58a32 32 0 0 1-64 0c0-12 5-21 12-29 2 10 7 14 13 16-3-15-1-28 7-45z" fill="#ff7a3c" stroke="#7a2208" stroke-width="2" stroke-linejoin="round"/></g>' +
+    '<g class="cf2"><path d="M110 46c12 14 19 24 19 36a19 19 0 0 1-38 0c0-8 3-13 7-18 2 7 5 9 8 10-2-9-1-17 4-28z" fill="#ffc24a"/></g>' +
+    '<g class="cf3"><path d="M110 70c6 7 9 12 9 18a9 9 0 0 1-18 0c0-4 1-7 4-10 1 3 3 5 4 5-1-5-1-9 1-13z" fill="#fff2c0"/></g>' +
+    '<g fill="#ffd27a"><circle cx="84" cy="40" r="2"/><circle cx="140" cy="30" r="1.600"/><circle cx="150" cy="56" r="1.800"/><circle cx="74" cy="64" r="1.400"/></g>', 'scene');
+}
+function stall() {
+  var st = '', i;
+  for (i = 0; i < 8; i++) st += '<path d="M' + (20 + i * 25) + ' 22h25l-4 26h-17z" fill="' + (i % 2 ? '#f0e8d4' : '#c8402e') + '" stroke="#2a1008" stroke-opacity=".5" stroke-width="1.500"/>';
+  return svg('0 0 240 110',
+    '<defs><radialGradient id="shg"><stop offset="0" stop-color="#ffc24a" stop-opacity=".5"/><stop offset="1" stop-color="#ffc24a" stop-opacity="0"/></radialGradient></defs>' +
+    '<circle cx="120" cy="70" r="70" fill="url(#shg)"/>' +
+    '<rect x="24" y="22" width="6" height="84" fill="#5a3a20"/><rect x="210" y="22" width="6" height="84" fill="#5a3a20"/>' + st +
+    '<path d="M16 22h208l-6-10H22z" fill="#a8301f" stroke="#2a1008" stroke-opacity=".5" stroke-width="1.500"/>' +
+    '<line x1="120" y1="48" x2="120" y2="60" stroke="#9a7a3a" stroke-width="2"/><rect x="113" y="60" width="14" height="18" rx="3" fill="#ffc24a" fill-opacity=".8" stroke="#9a7a3a" stroke-width="1.500"/>' +
+    '<rect x="16" y="86" width="208" height="20" rx="3" fill="#6a4426" stroke="#2a1608" stroke-width="1.500"/><path d="M16 92h208" stroke="#8a5a30" stroke-width="1.500"/>' +
+    '<circle cx="52" cy="80" r="7" fill="#c8e0f0"/><circle cx="76" cy="82" r="5" fill="#ff7a3c"/><circle cx="168" cy="81" r="6" fill="#ffd84a"/><circle cx="192" cy="82" r="5" fill="#b9a6ff"/>', 'scene');
+}
+function titleBg() {
+  var st = '', i, x, h;
+  for (i = 0; i < 12; i++) { x = i * 36 - 6; h = 26 + ((i * 37) % 50); st += '<path d="M' + x + ' -2L' + (x + 18) + ' ' + h + 'L' + (x + 36) + ' -2z" fill="#07080c"/>'; }
+  return svg('0 0 400 300',
+    '<defs><linearGradient id="tb1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a0b10"/><stop offset=".7" stop-color="#171320"/><stop offset="1" stop-color="#2a1a18"/></linearGradient>' +
+    '<radialGradient id="tbf"><stop offset="0" stop-color="#ff7a3c" stop-opacity=".35"/><stop offset="1" stop-color="#ff7a3c" stop-opacity="0"/></radialGradient>' +
+    '<radialGradient id="tbi"><stop offset="0" stop-color="#5cc8ff" stop-opacity=".3"/><stop offset="1" stop-color="#5cc8ff" stop-opacity="0"/></radialGradient>' +
+    '<radialGradient id="tbs"><stop offset="0" stop-color="#ffd84a" stop-opacity=".3"/><stop offset="1" stop-color="#ffd84a" stop-opacity="0"/></radialGradient></defs>' +
+    '<rect width="400" height="300" fill="url(#tb1)"/><circle cx="90" cy="170" r="120" fill="url(#tbf)"/><circle cx="200" cy="150" r="130" fill="url(#tbi)"/><circle cx="310" cy="170" r="120" fill="url(#tbs)"/>' +
+    '<path d="M0 230 L40 200 L80 224 L130 186 L190 226 L250 190 L310 222 L360 196 L400 220 V300 H0z" fill="#0f0e16"/><path d="M0 262 L60 240 L120 262 L190 236 L260 262 L330 240 L400 258 V300 H0z" fill="#08080c"/>' + st, 'tbg');
+}
+
+root.ART = { icon: icon, nodeIcon: nodeIcon, NODE: NODE, campfire: campfire, stall: stall, titleBg: titleBg,  enemy: enemy, card: card, lantern: lantern, logo: logo, PAL: PAL, enemyKeys: Object.keys(ENEMY) };
 })(typeof window !== 'undefined' ? window : this);
