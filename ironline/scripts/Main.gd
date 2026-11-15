@@ -30,11 +30,17 @@ var fps_t := 0.0
 var render_scale := 1.0
 var cfg := {"bots": -1, "seed": 20260101, "team": -2, "tp": false, "tpd": 3.2, "perf": false, "nomouse": false,
 	"q": -1, "scale": 1.0, "join": "", "auto": "", "code": "", "name": "", "autostart": false,
-	"peerhost": "", "peerport": 443, "peersecure": true, "warp": ""}
+	"peerhost": "", "peerport": 443, "peersecure": true, "warp": "", "die": false}
 var perf_acc := 0.0
 var perf_steps := 0
 var perf_t := 0.0
 var net_log_t := 0.0
+var quick_state := ""
+var quick_idx := 0
+var quick_t := 0.0
+var recorded := false
+var caps_mine := 0
+const PUB_ROOMS := 4
 
 
 func _ready() -> void:
@@ -67,6 +73,7 @@ func _ready() -> void:
 	net.failed.connect(_on_net_failed)
 	net.peer_left.connect(_on_peer_left)
 	menu.play_solo.connect(_on_play_solo)
+	menu.quick_match.connect(_on_quick_match)
 	menu.host_room.connect(_on_host_room)
 	menu.join_room.connect(_on_join_room)
 	menu.start_match.connect(func(): net.start_match())
@@ -87,6 +94,8 @@ func _ready() -> void:
 	_apply_quality()
 	if cfg.auto == "solo":
 		_on_play_solo()
+	elif cfg.auto == "quick":
+		_on_quick_match()
 	elif cfg.auto == "host":
 		_on_host_room(cfg.code)
 	elif cfg.auto == "join":
@@ -122,6 +131,7 @@ func _read_config() -> void:
 			"code": cfg.code = v.to_upper()
 			"name": cfg.name = v
 			"autostart": cfg.autostart = v == "1"
+			"die": cfg.die = v == "1"
 			"warp": cfg.warp = v
 			"peerhost": cfg.peerhost = v
 			"peerport": cfg.peerport = int(v)
@@ -154,6 +164,7 @@ func _ensure_world(seed_v: int, bots: int) -> void:
 	move_child(view, 0)
 	view.setup(sim)
 	hud.setup(sim, 0)
+	menu.set_map(hud._mini)
 	built_seed = seed_v
 	built_bots = bots
 	_apply_quality()
@@ -197,6 +208,43 @@ func _on_play_solo() -> void:
 	_begin_match(team * Sim.HUMANS_PER_TEAM)
 
 
+## 빠른 대전: 공개 방 PUB1~4 에 차례로 접속해 보고, 없으면 내가 PUB 방의 방장이 된다(20초 뒤 봇으로 채워 시작).
+func _on_quick_match() -> void:
+	if building:
+		return
+	quick_state = "joining"
+	quick_idx = 0
+	_quick_try()
+
+
+func _quick_try() -> void:
+	if quick_idx < PUB_ROOMS:
+		if net.join_room("PUB%d" % (quick_idx + 1), menu.player_name, menu.pref_team, _peer_cfg()):
+			mode = "client"
+			st = St.LOBBY
+			menu.show_lobby()
+			menu.refresh_lobby(net)
+		else:
+			quick_state = ""
+	else:
+		quick_state = "hosting"
+		quick_t = 20.0
+		quick_host_idx = 0
+		_quick_host()
+
+
+var quick_host_idx := 0
+
+
+func _quick_host() -> void:
+	var code := "PUB%d" % (quick_host_idx + 1)
+	if net.host_room(code, menu.player_name, menu.pref_team, {"seed": cfg.seed, "bots": menu.bots}, _peer_cfg()):
+		mode = "host"
+		st = St.LOBBY
+		menu.show_lobby()
+		menu.refresh_lobby(net, quick_t)
+
+
 func _on_host_room(code: String = "") -> void:
 	if building:
 		return
@@ -231,6 +279,18 @@ func _on_lobby_changed() -> void:
 
 
 func _on_net_failed(msg: String) -> void:
+	if quick_state == "joining" and msg.begins_with("방을 찾을 수 없어요"):
+		net.shutdown()
+		quick_idx += 1
+		_quick_try()
+		return
+	if quick_state == "hosting" and msg.begins_with("이미 같은 코드"):
+		net.shutdown()
+		quick_host_idx += 1
+		if quick_host_idx < PUB_ROOMS:
+			_quick_host()
+			return
+	quick_state = ""
 	menu.toast(msg)
 	if st != St.MENU:
 		_to_menu()
@@ -248,9 +308,13 @@ func _on_match_start(info: Dictionary) -> void:
 
 
 func _begin_match(slot: int) -> void:
+	quick_state = ""
+	recorded = false
+	caps_mine = 0
+	hud.xp_gain = 0
 	sim.reset(built_bots)
 	local_id = slot
-	sim.claim_slot(local_id, 0)
+	sim.claim_slot(local_id, menu.loadout)
 	if mode != "solo":
 		for k in net.names:
 			var id := int(k)
@@ -275,6 +339,7 @@ func _begin_match(slot: int) -> void:
 
 
 func _to_menu() -> void:
+	quick_state = ""
 	net.shutdown()
 	st = St.MENU
 	mode = "solo"
@@ -329,6 +394,12 @@ func _process(dt: float) -> void:
 	net.poll(dt)
 	if sim == null or building:
 		return
+	if quick_state == "hosting" and st == St.LOBBY and net.role == Net.Role.HOST and not net.started:
+		quick_t -= dt
+		menu.refresh_lobby(net, maxf(quick_t, 0.0))
+		if quick_t <= 0.0 and net.status == "ready":
+			quick_state = ""
+			net.start_match()
 	if cfg.autostart and net.role == Net.Role.HOST and not net.started and net.players.size() >= 2:
 		net.start_match()
 	if st == St.PLAYING:
@@ -392,8 +463,18 @@ func _play(dt: float) -> void:
 				me.yaw = look_yaw
 			cfg.warp = ""
 	was_alive = me.alive
+	if cfg.die and me.alive and me.inv_t < 3.0 and sim.time > 2.0:
+		var att: Sim.Unit = sim.units[3 if me.team == 0 else 0]
+		att.alive = true
+		att.pos = me.pos + Vector3(14, 0, 0)
+		att.hp = 61.0
+		me.inv_t = 0.0
+		sim.damage(me, 999.0, att, true)
+		me.respawn_t = 60.0
+		cfg.die = false
 	hud.show_score = Input.is_key_pressed(KEY_TAB)
 	hud.look_yaw = look_yaw
+	hud.spec_id = view.spec_id
 	var captured: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or bool(cfg.nomouse)
 	hud.captured = captured
 	acc += dt
@@ -443,6 +524,12 @@ func _play(dt: float) -> void:
 		acc = 0.0
 	if mode == "client":
 		net.client_frame(sim, dt)
+	for e in sim.events:
+		if e.t == "cap" and e.o == me.team:
+			caps_mine += 1
+	if sim.winner >= 0 and not recorded:
+		recorded = true
+		hud.xp_gain = menu.record_match(me.kills, me.deaths, sim.winner == me.team, caps_mine)
 	view.consume(sim.events, local_id)
 	hud.consume(sim.events)
 	sim.events.clear()
