@@ -612,6 +612,7 @@ func _bot_ai(u: Unit, dt: float) -> void:
 		var dist := d.length()
 		var want := atan2(-d.x, -d.z)
 		u.yaw = _turn(u.yaw, want, 5.5 * dt)
+		u.pitch = atan2((tgt.pos.y + 1.2) - (u.pos.y + EYE), maxf(dist, 1.0))
 		u.strafe_t -= dt
 		if u.strafe_t <= 0.0:
 			if rng.randf() < 0.6:
@@ -634,6 +635,7 @@ func _bot_ai(u: Unit, dt: float) -> void:
 
 
 func _bot_nav(u: Unit, dt: float) -> void:
+	u.pitch = move_toward(u.pitch, 0.0, dt * 1.5)
 	var to := u.wp - u.pos
 	to.y = 0.0
 	var dist := to.length()
