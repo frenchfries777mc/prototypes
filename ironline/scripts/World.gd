@@ -206,6 +206,8 @@ func _place_props(rng: RandomNumberGenerator) -> void:
 			else:
 				var horiz := rng.randf() < 0.5
 				_add_box(x, z, 3.2 if horiz else 0.7, 0.7 if horiz else 3.2, rng.randf_range(1.5, 2.3), 0)
+	for wx in [-120.0, 120.0]:
+		_add_box(wx, road_z(wx) + 4.2, 4.2, 1.9, 1.5, 10)
 	# 2) 참호 가장자리 모래주머니
 	for tx in TRENCH_X:
 		var z := -86.0
