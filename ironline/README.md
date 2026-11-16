@@ -2,7 +2,7 @@
 
 3v3 플레이어 + 양 팀 봇(총 50~100명)이 싸우는 **1인칭 거점 점령전**. 발칸 전쟁~1차 대전 무렵을 모티브로 한 가상 전선이 배경이고,
 실시간 햇빛·그림자, 절차적 하늘과 지형 셰이더, 스키닝 애니메이션 병사, 예광탄·먼지·연기 이펙트, 절차적 사운드를 갖춘 풀 3D다.
-외부 모델·텍스처·음원 파일 없이 전부 코드로 만든다. Godot 4.3(GDScript)으로 만들고 웹(WebAssembly)으로 내보내 브라우저에서 바로 실행한다.
+병사·무기·지형 형상·소리는 전부 코드로 만들고, 땅·벽·기와·나무 질감과 일부 소품 모델만 CC0 자산을 쓴다. Godot 4.3(GDScript)으로 만들고 웹(WebAssembly)으로 내보내 브라우저에서 바로 실행한다.
 
 ## 규칙
 
@@ -77,4 +77,5 @@ scripts/Main.gd        조립, 입력, 고정 틱 + 보간
 ## 라이선스
 
 3D 모델(통·상자·탄약 상자·제리캔)은 Poly Haven 의 **CC0** 자산이다 — 출처와 작가는 [`assets/models/LICENSES.md`](assets/models/LICENSES.md).
+PBR 텍스처(땅·벽돌·회반죽·기와·목재·껍질·바위)도 Poly Haven **CC0** — [`assets/textures/LICENSES.md`](assets/textures/LICENSES.md).
 글꼴 Gothic A1(한글 2350자 + 라틴 서브셋)은 SIL OFL 1.1 (`assets/fonts/OFL.txt`). 코드는 처음부터 새로 작성했고 다른 게임의 코드를 포함하지 않는다.

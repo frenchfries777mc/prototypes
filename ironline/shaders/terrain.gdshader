@@ -10,6 +10,19 @@ uniform vec3 dirt    : source_color = vec3(0.21, 0.17, 0.12);
 uniform vec3 mud     : source_color = vec3(0.17, 0.13, 0.10);
 uniform vec3 rock    : source_color = vec3(0.34, 0.32, 0.29);
 uniform vec2 points[5];
+// Poly Haven CC0 PBR 텍스처(질감 구조만 쓰고 색은 우리 팔레트를 유지한다)
+uniform sampler2D g_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D g_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D d_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D d_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D m_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D m_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D r_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D r_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
+const vec3 AVG_G = vec3(0.291, 0.248, 0.119);
+const vec3 AVG_D = vec3(0.150, 0.106, 0.061);
+const vec3 AVG_M = vec3(0.092, 0.073, 0.048);
+const vec3 AVG_R = vec3(0.163, 0.157, 0.102);
 uniform vec3 sky_refl : source_color = vec3(0.50, 0.46, 0.44);
 
 varying vec3 wpos;
@@ -58,10 +71,22 @@ void fragment() {
 	float n4 = vnoise(p * 6.0);
 	float slope = 1.0 - clamp(wnrm.y, 0.0, 1.0);
 
+	// 텍스처 디테일: 평균색으로 나눠 '밝기/구조'만 뽑는다. 큰 주기와 작은 주기를 섞어 반복 무늬를 감춘다.
+	vec2 uvg = wpos.xz * 0.21;
+	vec3 tg = texture(g_d, uvg).rgb * 0.6 + texture(g_d, uvg * 0.23 + 0.37).rgb * 0.4;
+	vec3 td = texture(d_d, wpos.xz * 0.3).rgb * 0.6 + texture(d_d, wpos.xz * 0.07 + 0.13).rgb * 0.4;
+	vec3 tm = texture(m_d, wpos.xz * 0.26).rgb * 0.6 + texture(m_d, wpos.xz * 0.06 + 0.5).rgb * 0.4;
+	vec3 tr = texture(r_d, wpos.xz * 0.35).rgb;
+	float near_t = 1.0 - smoothstep(30.0, 110.0, vdist);
+	vec3 det_g = mix(vec3(1.0), clamp(tg / AVG_G, 0.25, 2.6), 0.85 * near_t + 0.25);
+	vec3 det_d = mix(vec3(1.0), clamp(td / AVG_D, 0.25, 2.6), 0.9 * near_t + 0.25);
+	vec3 det_m = mix(vec3(1.0), clamp(tm / AVG_M, 0.25, 2.6), 0.9 * near_t + 0.25);
+	vec3 det_r = mix(vec3(1.0), clamp(tr / AVG_R, 0.25, 2.6), 0.9 * near_t + 0.25);
+
 	vec3 col = mix(grass_a, grass_b, smoothstep(0.25, 0.75, n1 * 0.7 + n2 * 0.5));
 	col = mix(col, dry, smoothstep(0.55, 0.85, n2 * 0.6 + n1 * 0.4) * 0.8);
-	col *= 0.82 + 0.36 * n3;
-	col *= 0.92 + 0.16 * n4;
+	col *= det_g;
+	col *= 0.9 + 0.2 * n3;
 
 	// 근거리 미세 질감(멀어지면 사라짐)
 	float near_w = 1.0 - smoothstep(8.0, 70.0, vdist);
@@ -78,7 +103,7 @@ void fragment() {
 	}
 	float trod = 1.0 - smoothstep(4.0, 10.5, pd + (n2 - 0.5) * 12.0 + (n1 - 0.5) * 8.0);
 	float patchy = smoothstep(0.3, 0.6, n1 + n2 * 0.5);
-	col = mix(col, dirt * (0.8 + 0.5 * n3), trod * 0.42 * patchy);
+	col = mix(col, dirt * det_d * (0.9 + 0.3 * n3), trod * 0.42 * patchy);
 
 	// 야생화: 셀마다 중심이 흔들린 작은 동그란 점
 	vec2 fp = p * 3.2;
@@ -92,15 +117,15 @@ void fragment() {
 
 	// 비포장 도로: 바큇자국 두 줄, 가운데 잡초
 	float rut = exp(-pow((abs(roadoff) - 0.95) / 0.3, 2.0));
-	vec3 rcol = mix(vec3(0.30, 0.24, 0.17) * (0.8 + 0.4 * n3), vec3(0.13, 0.10, 0.07), rut * 0.65);
+	vec3 rcol = mix(vec3(0.30, 0.24, 0.17) * det_d * (0.85 + 0.3 * n3), vec3(0.13, 0.10, 0.07) * det_m, rut * 0.65);
 	rcol = mix(rcol, col, smoothstep(0.55, 0.15, abs(roadoff)) * 0.55);
 	col = mix(col, rcol, clamp(road, 0.0, 1.0) * 0.92);
 
 	// 참호·포탄 구덩이 바닥은 진흙
 	float low = smoothstep(-0.2, -1.5, wpos.y);
-	col = mix(col, mud * (0.7 + 0.6 * n3), low * 0.9);
-	col = mix(col, dirt, smoothstep(0.1, 0.45, slope) * 0.6);
-	col = mix(col, rock * (0.7 + 0.6 * n4), smoothstep(0.5, 0.8, slope));
+	col = mix(col, mud * det_m * (0.8 + 0.4 * n3), low * 0.9);
+	col = mix(col, dirt * det_d, smoothstep(0.1, 0.45, slope) * 0.6);
+	col = mix(col, rock * det_r * (0.8 + 0.4 * n4), smoothstep(0.5, 0.8, slope));
 
 	// 웅덩이: 낮은 곳 중 노이즈가 높은 자리에 물이 고여 하늘을 비춘다
 	float lowspot = smoothstep(-0.55, -1.25, wpos.y);
@@ -113,7 +138,16 @@ void fragment() {
 	EMISSION = sky_refl * (0.07 + 0.42 * fres) * puddle;
 
 	// 가짜 요철: 노이즈 기울기로 법선을 살짝 흔든다
-	vec3 bump = vec3(n3 - 0.5, 0.0, n4 - 0.5) * 0.35;
+	// 텍스처 법선: 가중치에 따라 풀/흙/진흙/바위 법선을 섞는다
+	float w_mud = clamp(low, 0.0, 1.0);
+	float w_dirt = clamp(trod * 0.5 + road + smoothstep(0.1, 0.45, slope) * 0.6, 0.0, 1.0);
+	float w_rock = smoothstep(0.5, 0.8, slope);
+	vec2 ng = texture(g_n, uvg).xy * 2.0 - 1.0;
+	vec2 nd = texture(d_n, wpos.xz * 0.3).xy * 2.0 - 1.0;
+	vec2 nm = texture(m_n, wpos.xz * 0.26).xy * 2.0 - 1.0;
+	vec2 nr = texture(r_n, wpos.xz * 0.35).xy * 2.0 - 1.0;
+	vec2 nmix = mix(mix(mix(ng, nd, w_dirt), nm, w_mud), nr, w_rock);
+	vec3 bump = vec3(nmix.x, 0.0, nmix.y) * (0.55 * near_t + 0.1) + vec3(n3 - 0.5, 0.0, n4 - 0.5) * 0.12;
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(bump, 0.0)).xyz);
 	// 웅덩이 수면은 평평하게(잔물결만)
 	float rip = (vnoise(p * 6.0 + TIME * 0.4) - 0.5) * 0.04;
