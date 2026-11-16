@@ -10,9 +10,10 @@ const SPRINT := 7.2
 const JUMP := 5.6
 const EYE := 1.62
 const RADIUS := 0.38
-const START_TICKETS := 400
-const MATCH_TIME := 900.0
-const POINT_RATE := 0.014
+const START_TICKETS := 250
+const MATCH_TIME := 480.0
+const POINT_RATE := 0.022
+const BLEED_EVERY := 4.0
 const NPOINTS := 5
 const HUMANS_PER_TEAM := 3
 
@@ -96,6 +97,7 @@ var winner := -1  # -1 진행중, 0/1 승리 팀, 2 무승부
 var win_reason := ""
 var events: Array = []
 var tick_count := 0
+var bleed_t := 0.0
 var _grid := {}
 var _grid_t := 0.0
 
@@ -109,6 +111,7 @@ func setup(seed_v: int, per_team: int) -> void:
 ## 월드는 그대로 두고 유닛·거점·병력·시간을 처음 상태로 되돌린다(메뉴 배경 → 본 게임 전환용).
 func reset(per_team: int) -> void:
 	tickets = [START_TICKETS, START_TICKETS]
+	bleed_t = 0.0
 	time = 0.0
 	winner = -1
 	win_reason = ""
@@ -236,6 +239,7 @@ func step(dt: float) -> void:
 	for u in units:
 		_step_unit(u, dt)
 	_step_points(dt)
+	_bleed(dt)
 	_check_end()
 	if events.size() > 400:
 		events = events.slice(events.size() - 200)
@@ -451,7 +455,7 @@ func _spawn(u: Unit) -> void:
 	u.death_age = 0.0
 	if u.is_bot:
 		u.weapon = _bot_weapon()
-		u.role = 1 if rng.randf() < 0.28 else 0
+		u.role = 1 if rng.randf() < 0.18 else 0
 	else:
 		u.weapon = u.loadout
 	u.ammo = WEAPONS[u.weapon].mag
@@ -514,6 +518,19 @@ func _step_points(dt: float) -> void:
 				p.owner = 1
 		if p.owner != prev:
 			events.append({"t": "cap", "i": i, "o": p.owner, "prev": prev})
+
+
+## 거점을 더 많이 가진 팀이 4초마다 (거점 차이)만큼 상대 병력을 깎는다 — 전선이 굳어도 경기가 끝나게 한다.
+func _bleed(dt: float) -> void:
+	bleed_t += dt
+	if bleed_t < BLEED_EVERY:
+		return
+	bleed_t = 0.0
+	var d := owned_count(0) - owned_count(1)
+	if d > 0:
+		tickets[1] = maxi(0, tickets[1] - d)
+	elif d < 0:
+		tickets[0] = maxi(0, tickets[0] + d)
 
 
 func _check_end() -> void:
@@ -666,7 +683,7 @@ func _bot_ai(u: Unit, dt: float) -> void:
 		elif dist < 12.0:
 			fwd = -0.5
 		u.in_move = Vector2(u.strafe * 0.7, fwd)
-		u.bot_speed = 2.6
+		u.bot_speed = WALK
 		if u.fire_cd <= 0.0 and u.reload_t <= 0.0:
 			if u.ammo <= 0:
 				_start_reload(u)
@@ -704,7 +721,8 @@ func _bot_nav(u: Unit, dt: float) -> void:
 					break
 	u.yaw = _turn(u.yaw, hd, 8.0 * dt)
 	u.in_move = Vector2(0.0, 1.0)
-	u.bot_speed = 6.0 if dist > 40.0 else 4.6
+	# 플레이어와 같은 속도: 멀리 이동할 땐 달리기, 가까워지면 걷기
+	u.bot_speed = SPRINT if dist > 25.0 else WALK
 
 
 func _bot_fire(u: Unit, tgt: Unit, dist: float) -> void:

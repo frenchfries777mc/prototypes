@@ -228,3 +228,32 @@ static func mat_cloth_shader() -> ShaderMaterial:
 		_cloth_sm = ShaderMaterial.new()
 		_cloth_sm.shader = load("res://shaders/cloth.gdshader")
 	return _cloth_sm
+
+
+static var _cloth_clean: ShaderMaterial = null
+static var _wood_sm: ShaderMaterial = null
+static var _steel: StandardMaterial3D = null
+
+static func mat_cloth_clean() -> ShaderMaterial:
+	if _cloth_clean == null:
+		_cloth_clean = ShaderMaterial.new()
+		_cloth_clean.shader = load("res://shaders/cloth.gdshader")
+		_cloth_clean.set_shader_parameter("dirt_amount", 0.0)
+	return _cloth_clean
+
+
+static func mat_wood() -> ShaderMaterial:
+	if _wood_sm == null:
+		_wood_sm = ShaderMaterial.new()
+		_wood_sm.shader = load("res://shaders/wood.gdshader")
+	return _wood_sm
+
+
+static func mat_steel() -> StandardMaterial3D:
+	if _steel == null:
+		_steel = StandardMaterial3D.new()
+		_steel.vertex_color_use_as_albedo = true
+		_steel.roughness = 0.33
+		_steel.metallic = 0.72
+		_steel.metallic_specular = 0.6
+	return _steel
