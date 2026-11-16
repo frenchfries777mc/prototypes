@@ -6,7 +6,7 @@ extends RefCounted
 const TICK := 1.0 / 30.0
 const GRAV := 17.0
 const WALK := 4.8
-const SPRINT := 7.2
+const SPRINT := 5.8
 const JUMP := 5.6
 const EYE := 1.62
 const RADIUS := 0.38

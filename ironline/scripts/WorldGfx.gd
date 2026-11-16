@@ -96,11 +96,13 @@ static func props(w: World) -> Node3D:
 			6: _tent(g, mn, mx, rng)
 			7: _fieldgun(g, mn, mx, rng)
 			8: _plaster(g, mn, mx, rng)
+			10: _wagon(g, mn, mx, rng)
 			_: _timber(g, mn, mx)
 	_trees(chunks, w, rng)
 	_wire(chunks, w, rng)
 	_decor(chunks, w, rng)
 	_foliage(chunks, w, rng)
+	_poles_and_hay(chunks, w, rng)
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/props.gdshader")
 	var root := Node3D.new()
@@ -637,3 +639,79 @@ static func _house_visual(chunks: Dictionary, hs: Dictionary, w: World, rng: Ran
 			var leaf := Transform3D(Basis(Vector3.UP, -1.15), Vector3(u - wd * 0.5 + 0.3, gy + hgt * 0.5, fixed - 0.5))
 			g.box(Vector3(0.06, hgt - 0.1, 0.72), leaf, wood2)
 			g.box(Vector3(1.9, 0.14, 0.75), Transform3D(Basis.IDENTITY, Vector3(u, gy + 0.07, fixed - 0.55)), brick)
+
+
+static func _wagon(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
+	# 부서진 보급 마차: 짐칸, 한쪽만 남은 바퀴, 꺾인 끌채, 찢어진 천막
+	var c := (mn + mx) * 0.5
+	var y0 := mn.y + 0.35
+	var wood := _kind_col(Color(0.20, 0.14, 0.08), 3)
+	var wood2 := _kind_col(Color(0.27, 0.19, 0.11), 3)
+	var iron := Color(0.07, 0.07, 0.07, 5.0 / 16.0)
+	var canvas := _kind_col(Color(0.36, 0.33, 0.24), 5)
+	var tilt := Basis(Vector3(1, 0, 0), deg_to_rad(rng.randf_range(-7, 7)))
+	g.box(Vector3(3.2, 0.12, 1.5), Transform3D(tilt, Vector3(c.x, y0 + 0.78, c.z)), wood2)
+	for sz in [-1.0, 1.0]:
+		g.box(Vector3(3.2, 0.5, 0.07), Transform3D(tilt, Vector3(c.x, y0 + 1.05, c.z + sz * 0.72)), wood)
+	g.box(Vector3(0.07, 0.5, 1.5), Transform3D(tilt, Vector3(c.x - 1.56, y0 + 1.05, c.z)), wood)
+	# 바퀴(뒤 한 쪽만 온전, 앞 한 쪽은 부서져 바닥에 누움)
+	var wb := Basis(Vector3(1, 0, 0), PI * 0.5)
+	g.cone(0.62, 0.62, 0.07, Transform3D(wb, Vector3(c.x - 0.9, y0 + 0.62, c.z + 0.82)), wood, 0, 16, false)
+	g.cone(0.64, 0.64, 0.04, Transform3D(wb, Vector3(c.x - 0.9, y0 + 0.62, c.z + 0.82)), iron, 0, 16, false)
+	for k in 6:
+		var a := TAU * k / 6.0
+		var wc := Vector3(c.x - 0.9, y0 + 0.62, c.z + 0.82)
+		g.rod(wc, wc + Vector3(cos(a) * 0.6, sin(a) * 0.6, 0), 0.03, 0.03, wood, 0, 5)
+	g.cone(0.58, 0.58, 0.07, Transform3D(Basis(Vector3.UP, 0.4) * Basis(Vector3(1, 0, 0), deg_to_rad(80)), Vector3(c.x + 1.0, y0 + 0.2, c.z - 1.3)), wood, 0, 14, false)
+	g.rod(Vector3(c.x + 1.5, y0 + 0.78, c.z), Vector3(c.x + 3.0, y0 + 0.25, c.z + 0.5), 0.07, 0.06, wood, 0, 6)
+	# 천막 활대와 찢어진 천
+	for k in 3:
+		var x := c.x - 1.1 + k * 1.05
+		g.rod(Vector3(x, y0 + 0.95, c.z - 0.7), Vector3(x, y0 + 1.55, c.z), 0.03, 0.03, wood, 0, 5)
+		g.rod(Vector3(x, y0 + 1.55, c.z), Vector3(x, y0 + 0.95, c.z + 0.7), 0.03, 0.03, wood, 0, 5)
+	g.box(Vector3(1.1, 0.04, 0.95), Transform3D(Basis(Vector3(1, 0, 0), 0.7), Vector3(c.x - 0.5, y0 + 1.28, c.z - 0.37)), canvas)
+
+
+static func _poles_and_hay(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -> void:
+	var pole := Color(0.18, 0.13, 0.09, 4.0 / 16.0)
+	var wire := Color(0.05, 0.05, 0.05, 5.0 / 16.0)
+	var ins := Color(0.55, 0.62, 0.6, 5.0 / 16.0)
+	var prev: Array = []
+	var x := -178.0
+	while x <= 178.0:
+		var z := w.road_z(x) + 5.0
+		var y := w.height_at(x, z)
+		var g := _g(chunks, Vector3(x, y, z))
+		var top := Vector3(x, y + 6.6, z)
+		g.rod(Vector3(x, y - 0.3, z), top, 0.13, 0.09, pole, 0, 7)
+		g.box(Vector3(0.12, 0.12, 2.1), Transform3D(Basis.IDENTITY, top + Vector3(0, -0.45, 0)), pole)
+		var cur: Array = []
+		for k in 3:
+			var o := Vector3(0, -0.28, -0.8 + 0.8 * k)
+			g.rod(top + o + Vector3(0, -0.17, 0), top + o + Vector3(0, 0.02, 0), 0.03, 0.025, ins, 0, 5)
+			cur.append(top + o + Vector3(0, 0.02, 0))
+		if prev.size() == 3:
+			for k in 3:
+				var a: Vector3 = prev[k]
+				var b: Vector3 = cur[k]
+				var segs := 6
+				var last := a
+				for sgi in range(1, segs + 1):
+					var t := float(sgi) / segs
+					var p := a.lerp(b, t) + Vector3(0, -sin(t * PI) * 0.9, 0)
+					g.rod(last, p, 0.007, 0.007, wire, 0, 3)
+					last = p
+		prev = cur
+		x += 34.0
+	# 건초더미: 집 주변 마당
+	for hs in w.houses:
+		for k in 3:
+			var hx: float = hs.cx + rng.randf_range(-9.0, 9.0)
+			var hz: float = hs.cz + rng.randf_range(7.0, 13.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+			var hy := w.height_at(hx, hz)
+			if w.inside_box(Vector3(hx, hy + 0.5, hz)) or w.road_mask(hx, hz) > 0.1:
+				continue
+			var g := _g(chunks, Vector3(hx, hy, hz))
+			var straw := Color(0.55 + rng.randf() * 0.08, 0.44 + rng.randf() * 0.06, 0.2, 5.0 / 16.0)
+			var prof := [Vector2(0.0, 0.0), Vector2(1.05, 0.0), Vector2(1.12, 0.35), Vector2(0.95, 0.95), Vector2(0.6, 1.5), Vector2(0.2, 1.8), Vector2(0.0, 1.85)]
+			g.lathe(prof, 12, Transform3D(Basis(Vector3.UP, rng.randf() * TAU), Vector3(hx, hy - 0.05, hz)), straw, 0)
