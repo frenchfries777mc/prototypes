@@ -11,7 +11,7 @@ for (let d = 0; d < 3; d++) for (const hero of ['kael', 'ignis']) {
   const kinds = {};
   while (!api.G.over && api.G.t < 3600) { api.tick(1 / 30); for (const e of api.G.events) kinds[e.k] = (kinds[e.k] || 0) + 1; api.G.events.length = 0; }
   const G = api.G, p = G.player;
-  console.log(`diff ${d} ${hero}: ${G.over ? (G.over.winner === 0 ? 'WIN' : 'LOSS') : 'NO RESULT'} ${(G.t / 60).toFixed(1)}m score ${G.score} kills ${G.kills} | player ${p.kills}/${p.deaths}/${p.assists} sc${p.scores} | events ${JSON.stringify(kinds)}`);
+  console.log(`diff ${d} ${hero}: ${G.over ? (G.over.winner === 0 ? 'WIN' : 'LOSS') : 'NO RESULT'} ${(G.t / 60).toFixed(1)}m rounds ${G.score} kills ${G.kills} | player ${p.kills}/${p.deaths}/${p.assists} | events ${JSON.stringify(kinds)}`);
   if (!G.over) fail++;
 }
 process.exit(fail ? 1 : 0);

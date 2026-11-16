@@ -7,7 +7,7 @@
   var STEP = 1 / 60, KEYS = ['Q', 'E', 'R', 'F'], CODES = { KeyQ: 0, KeyE: 1, KeyR: 2, KeyF: 3 }, MOVEKEYS = { KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1, ArrowUp: 1, ArrowLeft: 1, ArrowDown: 1, ArrowRight: 1 };
   var cv = $('cv'), state = 'menu', sel = 'kael', diff = 1, P = null;
   var mouse = { px: 0, py: 0, x: 0, y: 0, inside: false, down: false }, aim = null, keys = {}, stick = { x: 0, y: 0 }, stickId = null, touchAtk = false, touchMode = false;
-  var clickBuf = 0, muted = false, last = 0, acc = 0, demoT = 0, demoH = null, annT = 0, throwTouch = false;
+  var clickBuf = 0, muted = false, last = 0, acc = 0, demoT = 0, demoH = null, annT = 0;
   var cache = {};
   function set(id, v) { if (cache[id] !== v) { cache[id] = v; $(id).textContent = v; } }
   function setW(id, f) { var v = (Math.max(0, Math.min(1, f)) * 100).toFixed(1) + '%'; if (cache['w' + id] !== v) { cache['w' + id] = v; $(id).style.width = v; } }
@@ -55,15 +55,11 @@
 
   /* ── 메뉴 ── */
   var KEYHELP = [
-    ['목표', '지도 한가운데에서 나오는 <b>성석</b>을 집어 우리 제단까지 운반하면 1점. 먼저 7점을 내면 승리, 10분이 지나면 점수가 높은 팀이 승리(동점이면 먼저 득점하는 팀).'],
-    ['성석', '밟으면 집습니다. 들고 있으면 느려지고 모두에게 위치가 보입니다. 죽으면 떨어뜨리고, 12초 동안 아무도 줍지 않으면 한가운데로 돌아갑니다.'],
-    ['<kbd>Space</kbd>', '성석 던지기. 커서 쪽으로 최대 950 날아가며, 동료가 밟으면 이어서 운반합니다. 던진 직후 0.6초는 본인이 다시 못 줍습니다.'],
-    ['<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>', '이동. 화살표 키도 됩니다. 움직이는 동안에도 공격과 스킬을 쓸 수 있습니다.'],
-    ['마우스', '커서 쪽을 바라봅니다. 왼쪽 버튼을 누르고 있으면 커서에 가장 가까운 적을 공격하고, 가만히 서 있으면 알아서 공격합니다.'],
-    ['<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd>', '스킬. 누르고 있으면 조준, 떼면 커서 쪽으로 시전합니다. <kbd>F</kbd> 궁극기는 쿨다운이 아니라 충전식입니다.'],
-    ['회복 구슬', '위·아래 길 여섯 곳. 밟으면 체력 45% 회복과 궁극기 충전, 20초 뒤 다시 나옵니다.'],
-    ['<kbd>Tab</kbd> · <kbd>M</kbd>', '전적 · 소리 켜고 끄기.'],
-    ['터치', '왼쪽 화면을 누른 채 끌면 이동, 오른쪽 아래 공격 버튼을 누르고 있으면 공격, 스킬은 아래 버튼, 성석을 들면 던지기 버튼이 나옵니다.']
+    ['<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>', '이동'],
+    ['마우스 왼쪽', '기본 공격 (클릭하거나 누르고 있기)'],
+    ['<kbd>Q</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>F</kbd>', '스킬. 누르고 있으면 조준, 떼면 시전. <kbd>F</kbd>는 충전식 궁극기'],
+    ['<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>', '라운드 사이 강화 고르기'],
+    ['<kbd>Tab</kbd> · <kbd>M</kbd>', '전적 · 소리']
   ];
   function fillKeys(dl) { dl.innerHTML = KEYHELP.map(function (k) { return '<dt>' + k[0] + '</dt><dd>' + k[1] + '</dd>'; }).join(''); }
   function buildMenu() {
@@ -81,7 +77,7 @@
       b.onclick = function () { diff = i; showDiff(); };
       df.appendChild(b);
     });
-    fillKeys($('menuKeys')); fillKeys(document.querySelector('#help .keys'));
+    fillKeys(document.querySelector('#help .keys'));
     showHero(); showDiff();
     $('startBtn').onclick = startGame;
     $('againBtn').onclick = function () { $('end').hidden = true; $('hud').hidden = true; $('menu').hidden = false; state = 'menu'; newGame({ noPlayer: true }); demoH = null; };
@@ -96,7 +92,7 @@
   }
 
   /* ── HUD 구성 ── */
-  var skEls = [];
+  var skEls = [], pickSig = '', prepN = -1;
   function buildHud() {
     var box = $('skills'); box.innerHTML = ''; skEls = [];
     P.def.skills.forEach(function (sk, i) {
@@ -110,7 +106,8 @@
       skEls.push({ b: b, cdm: b.querySelector('.cdm'), cdv: b.querySelector('.cdv'), k: '' });
     });
     Spr.portrait($('pcv'), P.defId);
-    cache = {};
+    ['pa', 'pb'].forEach(function (id) { var e = $(id); e.innerHTML = new Array(WIN_ROUNDS + 1).join('<i></i>'); });
+    cache = {}; pickSig = ''; prepN = -1;
   }
   function showTip(i) {
     var sk = P.def.skills[i], t = $('tip');
@@ -122,12 +119,10 @@
     audioOn();
     newGame({ heroId: sel, diff: diff });
     P = G.player;
-    R.cam.x = P.x + 300; R.cam.y = P.y; aim = null; keys = {}; stick.x = stick.y = 0; stickId = null; touchAtk = false; throwTouch = false;
+    R.cam.x = P.x + 300; R.cam.y = P.y; aim = null; keys = {}; stick.x = stick.y = 0; stickId = null; touchAtk = false;
     $('menu').hidden = true; $('end').hidden = true; $('hud').hidden = false;
-    $('score').hidden = true; $('help').hidden = true; $('dead').hidden = true; $('feed').innerHTML = '';
+    $('score').hidden = true; $('help').hidden = true; $('dead').hidden = true; $('pick').hidden = true; $('feed').innerHTML = '';
     buildHud(); R.resize(); state = 'play';
-    announce('한가운데의 성석을 집어 우리 제단으로 운반하세요', 'g', 5);
-    setTimeout(function () { if (state === 'play') announce(touchMode ? '왼쪽을 끌어 이동 · 공격 버튼으로 싸우세요' : 'WASD 이동 · 마우스로 조준 · 왼쪽 버튼 공격 · Space 성석 던지기', 'g', 4); }, 5400);
   }
 
   /* ── 알림 ── */
@@ -152,13 +147,8 @@
           else if (v === P) { sfx('death'); }
           break;
         }
-        case 'pickup': { var ph = heroById(e.id); feed(hname(ph) + ' 성석 획득', e.team === 0 ? 'a' : 'e'); if (e.team === 0) { announce(ph === P ? '성석을 들었습니다 — 제단으로!' : ph.name + ' 성석 획득', 'a', 2.2); sfx('pickup'); } else announce('적이 성석을 들었습니다', 'e', 2.4); break; }
-        case 'drop': { var dh = heroById(e.id); feed(hname(dh) + ' 성석을 떨어뜨림', e.team === 0 ? 'e' : 'a'); sfx('drop'); break; }
-        case 'throw': { var th = heroById(e.id); feed(hname(th) + ' 성석 던짐', e.team === 0 ? 'a' : 'e'); break; }
-        case 'score': { var sh = heroById(e.id); if (e.team === 0) { announce('득점! ' + sh.name, 'a', 3); sfx('score'); } else { announce('적 득점', 'e', 3); sfx('lost'); } feed('득점 ' + G.score[0] + ' : ' + G.score[1], e.team === 0 ? 'a' : 'e'); break; }
-        case 'spawn': announce('성석 등장', 'g', 2.4); break;
-        case 'return': feed('성석이 한가운데로 돌아갔습니다', ''); break;
-        case 'overtime': announce('연장전 — 먼저 득점하는 팀이 승리', 'g', 4); break;
+        case 'go': announce('전투 시작', 'g', 1.4); sfx('pickup'); break;
+        case 'round': if (e.winner === 0) { announce('라운드 승리', 'a', 2.6); sfx('score'); } else { announce('라운드 패배', 'e', 2.6); sfx('lost'); } feed(e.round + '라운드 · ' + G.score[0] + ' : ' + G.score[1], e.winner === 0 ? 'a' : 'e'); break;
         case 'pack': if (e.id === P.id) sfx('pack'); break;
         case 'cast': if (e.id === P.id) sfx('cast'); break;
         case 'atk': if (e.id === P.id) sfx('atk'); break;
@@ -167,38 +157,73 @@
     }
     evs.length = 0;
   }
+  function augChips(h) { return Object.keys(h.augs).map(function (id) { return AUGS[id].g + (h.augs[id] > 1 ? h.augs[id] : ''); }).join(' '); }
   function scoreRows() {
-    var hs = G.heroes.slice().sort(function (a, b) { return a.team - b.team || b.scores - a.scores || b.kills - a.kills; });
-    return '<tr><th>영웅</th><th>득점</th><th>처치</th><th>사망</th><th>도움</th><th>영웅 피해</th><th>치유</th></tr>' +
+    var hs = G.heroes.slice().sort(function (a, b) { return a.team - b.team || b.kills - a.kills; });
+    return '<tr><th>영웅</th><th>처치</th><th>사망</th><th>도움</th><th>영웅 피해</th><th>치유</th><th>강화</th></tr>' +
       hs.map(function (h) {
-        return '<tr class="' + (h.team === 0 ? 'a' : 'e') + (h === P ? ' me' : '') + (h.dead ? ' dead' : '') + '"><td><span class="dot" style="background:' + h.color + '"></span>' + h.name + (h.carry ? ' ◆' : '') +
-          (h.dead && !G.over ? ' (' + Math.ceil(h.respawnT) + ')' : '') + '</td><td>' + h.scores + '</td><td>' + h.kills + '</td><td>' + h.deaths + '</td><td>' + h.assists + '</td><td>' + Math.round(h.dmgDealt) + '</td><td>' + Math.round(h.healed) + '</td></tr>';
+        return '<tr class="' + (h.team === 0 ? 'a' : 'e') + (h === P ? ' me' : '') + (h.dead ? ' dead' : '') + '"><td><span class="dot" style="background:' + h.color + '"></span>' + h.name +
+          '</td><td>' + h.kills + '</td><td>' + h.deaths + '</td><td>' + h.assists + '</td><td>' + Math.round(h.dmgDealt) + '</td><td>' + Math.round(h.healed) + '</td><td>' + augChips(h) + '</td></tr>';
       }).join('');
   }
   function endGame(w) {
     state = 'end'; aim = null;
     var win = w === 0;
     $('endTitle').textContent = win ? '승리' : '패배'; $('endTitle').className = win ? 'win' : 'lose';
-    $('endSub').textContent = '점수 ' + G.score[0] + ' 대 ' + G.score[1] + (G.score[0] >= WIN_SCORE || G.score[1] >= WIN_SCORE ? ' (선취)' : G.overtime ? ' (연장)' : ' (시간 종료)') + ' · 경기 시간 ' + clock(G.t) + ' · 처치 ' + G.kills[0] + ' 대 ' + G.kills[1];
+    $('endSub').textContent = '라운드 ' + G.score[0] + ' 대 ' + G.score[1] + ' · 경기 시간 ' + clock(G.t) + ' · 처치 ' + G.kills[0] + ' 대 ' + G.kills[1];
     $('endT').innerHTML = scoreRows();
-    setTimeout(function () { $('end').hidden = false; $('score').hidden = true; }, 1600);
+    setTimeout(function () { $('end').hidden = false; $('score').hidden = true; $('pick').hidden = true; }, 1600);
     sfx(win ? 'win' : 'lose');
   }
   function clock(t) { t = Math.max(0, t); var m = Math.floor(t / 60), s = Math.floor(t % 60); return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
 
+  /* ── 강화 선택 (라운드 사이) ── */
+  function drawPick() {
+    var on = state === 'play' && G.phase === 'pick';
+    var sig = on ? G.round + '|' + (P.offer ? P.offer.join(',') : 'done') : '';
+    if (on) set('pickSub', (P.offer ? '강화를 하나 고르세요' : '선택 완료') + ' · 다음 라운드까지 ' + Math.ceil(G.phaseT) + '초');
+    if (sig === pickSig) return; pickSig = sig;
+    $('pick').hidden = !on; if (!on) return;
+    var won = G.lastWin === 0, t = $('pickTitle');
+    t.textContent = G.round + '라운드 ' + (won ? '승리' : '패배') + ' · ' + G.score[0] + ' : ' + G.score[1]; t.className = won ? 'win' : 'lose';
+    var box = $('pickOpts');
+    if (!P.offer) { Array.prototype.forEach.call(box.children, function (b) { b.disabled = true; }); return; }
+    box.innerHTML = '';
+    P.offer.forEach(function (id, i) {
+      var A = AUGS[id], have = P.augs[id] || 0;
+      var b = el('button', 'card', '<span class="g"><i>' + A.g + '</i></span><b>' + A.name + '</b><small>' + A.d + '</small><em>' + (have ? '보유 ' + have + ' / ' + AUG_MAX + ' · ' : '') + '<kbd>' + (i + 1) + '</kbd></em>');
+      b.type = 'button'; b.id = 'pick-' + i; b.onclick = function () { choose(i); };
+      box.appendChild(b);
+    });
+  }
+  function choose(i) {
+    if (state !== 'play' || G.phase !== 'pick' || !P.offer || !P.offer[i]) return;
+    var b = $('pick-' + i); if (b) b.classList.add('sel');
+    pickAug(P, i); sfx('pack'); cache.augs = null;
+  }
+
   /* ── HUD 갱신 ── */
   function updHud(dt) {
     if (annT > 0) { annT -= dt; if (annT <= 0) $('announce').className = ''; }
-    var i, st = G.stone;
-    set('clock', G.overtime ? '연장' : clock(G.timeLeft));
-    set('sa', G.score[0]); set('sb', G.score[1]);
-    var ss = '', sc = '';
-    if (st.state === 'carried') { var cr = st.carrier; ss = (cr.team === 0 ? '아군 ' : '적 ') + cr.name + ' 운반 중'; sc = cr.team === 0 ? 'a' : 'e'; }
-    else if (st.state === 'free') { ss = '성석 바닥 · ' + Math.ceil(st.freeT) + '초'; sc = 'g'; }
-    else if (st.state === 'flying') { ss = '성석 비행 중'; sc = 'g'; }
-    else if (st.state === 'wait') { ss = '성석 등장 ' + Math.ceil(st.waitT) + '초'; sc = ''; }
-    else { ss = '성석: 한가운데'; sc = 'g'; }
-    set('stoneSt', ss); if (cache.stc !== sc) { cache.stc = sc; $('stoneSt').className = sc; }
+    var i, k;
+    /* 준비 카운트다운 */
+    if (G.phase === 'prep') { var pn = Math.ceil(G.phaseT); if (pn !== prepN) { prepN = pn; announce(pn > 3 ? G.round + '라운드' : String(pn), 'g', 1.05); } } else prepN = -1;
+    var ct = G.phase === 'fight' ? clock(G.roundT) : G.phase === 'prep' ? '준비' : '정비';
+    set('clock', ct); var low = G.phase === 'fight' && G.roundT < 20; if (cache.low !== low) { cache.low = low; cls($('clock'), 'low', low); }
+    set('roundSt', G.round + '라운드 · ' + WIN_ROUNDS + '선승');
+    var al = aliveCount(0), el2 = aliveCount(1);
+    set('aa', '생존 ' + al); set('ab', '생존 ' + el2);
+    var ps = G.score[0] + ':' + G.score[1];
+    if (cache.ps !== ps) {
+      cache.ps = ps;
+      for (k = 0; k < WIN_ROUNDS; k++) { cls($('pa').children[k], 'on', k < G.score[0]); cls($('pb').children[WIN_ROUNDS - 1 - k], 'on', k < G.score[1]); }
+    }
+    var as = Object.keys(P.augs).map(function (id) { return id + P.augs[id]; }).join(',');
+    if (cache.augs !== as) {
+      cache.augs = as;
+      $('augs').innerHTML = Object.keys(P.augs).map(function (id) { var A = AUGS[id]; return '<span title="' + A.name + ' — ' + A.d + '">' + A.g + (P.augs[id] > 1 ? '<b>' + P.augs[id] + '</b>' : '') + '</span>'; }).join('');
+    }
+    drawPick();
     setW('hpf', P.hp / P.maxHp); set('hpt', Math.ceil(P.hp) + ' / ' + Math.round(P.maxHp));
     var stt = '<span>공격력</span><b>' + Math.round(P.ad) + '</b><span>주문력</span><b>' + Math.round(P.ap) + '</b><span>방어력</span><b>' + Math.round(P.armor) +
       '</b><span>이동</span><b>' + Math.round(P.ms) + '</b><span>처치</span><b>' + P.kills + '/' + P.deaths + '/' + P.assists + '</b>';
@@ -211,9 +236,8 @@
       s.cdv.textContent = ult ? (P.ult >= 100 ? '' : Math.floor(P.ult) + '%') : (cd > 0 ? (cd < 1 ? cd.toFixed(1) : Math.ceil(cd)) : '');
       cls(s.b, 'off', P.dead); cls(s.b, 'ready', ready && !P.dead); cls(s.b, 'aim', aim && aim.slot === i);
     }
-    var thr = $('throwBtn'); if (thr.hidden === !!P.carry) thr.hidden = !P.carry;
-    $('dead').hidden = !P.dead || state !== 'play';
-    if (P.dead) set('deadT', '부활까지 ' + Math.ceil(P.respawnT) + '초');
+    $('dead').hidden = !P.dead || state !== 'play' || G.phase !== 'fight';
+    if (P.dead) set('deadT', '아군 생존 ' + al + ' · 적 생존 ' + el2);
     if (!$('score').hidden) { var sg = Math.floor(G.t * 2); if (cache.sc !== sg) { cache.sc = sg; $('scoreT').innerHTML = scoreRows(); } }
   }
 
@@ -245,19 +269,11 @@
         u = G.heroes[k];
         if (u.dead || u.team === 0 || !u.vis[0]) continue;
         d = dist(P, u); if (d > reach) continue;
-        if (u.carry) d -= 3000;
         if (d < bs) { bs = d; best = u; }
       }
     }
     var x = best ? best.x : P.x + Math.cos(P.face) * 600, y = best ? best.y : P.y + Math.sin(P.face) * 600;
     if (!castSkill(P, i, x, y)) sfx('err');
-  }
-  /* 성석 던지기: 커서 쪽, 마우스가 없으면 바라보는 쪽 */
-  function throwNow() {
-    if (state !== 'play' || !P || P.dead || !P.carry) return;
-    var tx, ty;
-    if (mouse.inside && !touchMode) { tx = mouse.x; ty = mouse.y; } else { tx = P.x + Math.cos(P.face) * 800; ty = P.y + Math.sin(P.face) * 800; }
-    P.throwReq = { x: tx, y: ty };
   }
   function setTouch() { if (!touchMode) { touchMode = true; document.body.classList.add('touch'); } }
   try { if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) setTouch(); } catch (e) {}
@@ -309,7 +325,6 @@
   var atk = $('atkBtn');
   atk.addEventListener('pointerdown', function (e) { setTouch(); touchAtk = true; try { atk.setPointerCapture(e.pointerId); } catch (x) {} e.preventDefault(); });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) { atk.addEventListener(n, function () { touchAtk = false; }); });
-  $('throwBtn').addEventListener('click', throwNow);
 
   function toggle(id) { var e = $(id), on = e.hidden; ['score', 'help'].forEach(function (k) { $(k).hidden = true; }); e.hidden = !on; if (on && id === 'score') { cache.sc = -1; } }
   $('scoreBtn').onclick = function () { toggle('score'); };
@@ -326,7 +341,8 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (c === 'Tab') { e.preventDefault(); if (!e.repeat) { $('score').hidden = false; cache.sc = -1; } return; }
     if (c in MOVEKEYS) { keys[c] = true; e.preventDefault(); return; }
-    if (c === 'Space') { e.preventDefault(); if (!e.repeat) throwNow(); return; }
+    var dm = /^(?:Digit|Numpad)([1-3])$/.exec(c);
+    if (dm) { if (!e.repeat) choose(+dm[1] - 1); return; }
     if (c in CODES) {
       e.preventDefault();
       if (e.repeat) return;
@@ -355,7 +371,7 @@
 
   /* 매 프레임, 키보드·마우스·터치 입력을 영웅에게 전한다 */
   function feedInput() {
-    if (state !== 'play' || !P || P.dead) { if (P) { P.moveDir = null; P.atkHold = null; P.aimF = null; } return; }
+    if (state !== 'play' || !P || P.dead || G.phase !== 'fight') { if (P) { P.moveDir = null; P.atkHold = null; P.aimF = null; } return; }
     var mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + stick.x;
     var my = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + stick.y;
     P.moveDir = mx || my ? { x: mx, y: my } : null;
@@ -370,14 +386,16 @@
     var cam = R.cam;
     if (state === 'menu') {
       demoT -= dt;
-      if (!demoH || demoH.dead || demoT <= 0) { var hs = G.heroes.filter(function (h) { return !h.dead; }); demoH = G.stone.carrier || hs[(Math.random() * hs.length) | 0] || G.heroes[0]; demoT = 10; }
+      if (!demoH || demoH.dead || demoT <= 0) { var hs = G.heroes.filter(function (h) { return !h.dead; }); demoH = hs[(Math.random() * hs.length) | 0] || G.heroes[0]; demoT = 8; }
       var ox = cv.clientWidth > 900 ? -520 : 0;
       cam.x += (demoH.x + ox - cam.x) * Math.min(1, dt * 1.6); cam.y += (demoH.y - cam.y) * Math.min(1, dt * 1.6);
       return;
     }
     if (!P) return;
-    var tx = P.x, ty = P.y + 60, k = Math.min(1, dt * 8);
-    if (mouse.inside && !touchMode && !P.dead) {
+    var F = P;
+    if (P.dead) { for (var q = 0; q < G.heroes.length; q++) { var a = G.heroes[q]; if (a.team === 0 && !a.dead) { F = a; break; } } }
+    var tx = F.x, ty = F.y + 60, k = Math.min(1, dt * (F === P ? 8 : 4));
+    if (mouse.inside && !touchMode && !P.dead && G.phase === 'fight') {
       tx += Math.max(-320, Math.min(320, (mouse.x - P.x) * 0.22));
       ty += Math.max(-200, Math.min(200, (mouse.y - P.y) * 0.22));
     }

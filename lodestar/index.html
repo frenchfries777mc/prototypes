@@ -16,9 +16,9 @@
 
   <div id="hud" hidden>
     <div id="top">
-      <div class="sc ally"><small>아군</small><b id="sa">0</b></div>
-      <div id="midtop"><span id="clock">10:00</span><span id="stoneSt">성석 대기</span></div>
-      <div class="sc enemy"><b id="sb">0</b><small>적</small></div>
+      <div class="rs ally"><span class="pips" id="pa"></span><small id="aa"></small></div>
+      <div id="midtop"><span id="clock"></span><span id="roundSt"></span></div>
+      <div class="rs enemy"><small id="ab"></small><span class="pips" id="pb"></span></div>
     </div>
     <div id="tools">
       <button type="button" id="scoreBtn" title="전적 (Tab)">전적</button>
@@ -38,13 +38,18 @@
         <div id="skills"></div>
         <div class="vbar hp"><i id="hpf"></i><span id="hpt"></span></div>
       </div>
-      <div id="inv"><button type="button" id="throwBtn" hidden>던지기 <kbd>Space</kbd></button></div>
+      <div id="augs" aria-label="고른 강화"></div>
     </div>
 
+    <section id="pick" hidden>
+      <h2 id="pickTitle"></h2>
+      <p id="pickSub"></p>
+      <div id="pickOpts"></div>
+    </section>
     <div id="stick" hidden><i></i></div>
     <button type="button" id="atkBtn" aria-label="공격">공격</button>
     <div id="tip" hidden></div>
-    <div id="dead" hidden><strong>쓰러졌습니다</strong><span id="deadT"></span><small>곧 우물에서 다시 일어납니다. 성석을 들고 있었다면 그 자리에 떨어졌습니다.</small></div>
+    <div id="dead" hidden><strong>쓰러졌습니다</strong><span id="deadT"></span><small>이번 라운드는 아군을 지켜봅니다. 다음 라운드에 다시 싸웁니다.</small></div>
 
     <section id="score" class="sheet" hidden>
       <header><h2>전적</h2><button type="button" class="x" id="scoreX">닫기</button></header>
@@ -59,16 +64,15 @@
 
   <div id="menu">
     <div class="panel">
-      <p class="eyebrow">5 대 5 성석 운반전 · 봇 9명과 함께</p>
+      <p class="eyebrow">5 대 5 섬멸전</p>
       <h1>로드스타</h1>
-      <p class="lede">한가운데의 <b>성석</b>을 집어 우리 <b>제단</b>까지 운반하세요. <b>7점</b>을 먼저 내거나 10분 뒤 앞서면 승리. 레벨도 상점도 없습니다.</p>
+      <p class="lede">부활 없는 라운드전. 상대 팀을 전멸시키면 라운드를 가져가고, <b>다섯 판</b>을 먼저 따내면 이깁니다.</p>
       <div id="heroGrid" role="listbox" aria-label="영웅 선택"></div>
       <div id="heroInfo"></div>
       <div class="row">
         <div id="diff" role="radiogroup" aria-label="난이도"></div>
         <button type="button" id="startBtn">전투 시작</button>
       </div>
-      <dl class="keys" id="menuKeys"></dl>
     </div>
   </div>
 

@@ -10,7 +10,7 @@ var R = (function () {
     lane: '#34443f', road: '#43534b', river: '#1b4d63', river2: '#27708a', pit: '#243f4a',
     ally: '#4fe0d2', enemy: '#ff6b5e', neutral: '#b9a6ff', gold: '#ffd76a', me: '#f4f7c8', ink: '#e8f1ee'
   };
-  var trees = {}, TB = 500;
+  var trees = {}, decals = {}, TB = 500;
 
   function init(canvas, mini) {
     cv = canvas; ctx = cv.getContext('2d');
@@ -23,6 +23,13 @@ var R = (function () {
       if (MAP.isWalk(tx, ty) || MAP.isWalk(tx + 70, ty) || MAP.isWalk(tx - 70, ty) || MAP.isWalk(tx, ty + 70) || MAP.isWalk(tx, ty - 70)) continue;
       var k = ((tx / TB) | 0) + ',' + ((ty / TB) | 0);
       (trees[k] = trees[k] || []).push({ x: tx, y: ty, r: 48 + r() * 34 });
+    }
+    for (y = 40; y < MAP.H; y += 95) for (x = 40; x < MAP.W; x += 95) {
+      if (r() > 0.4) continue;
+      var dx = x + (r() - 0.5) * 80, dy = y + (r() - 0.5) * 80;
+      if (!MAP.isWalk(dx, dy) || !MAP.isWalk(dx + 40, dy) || !MAP.isWalk(dx - 40, dy)) continue;
+      var kk = r(), dk = ((dx / TB) | 0) + ',' + ((dy / TB) | 0);
+      (decals[dk] = decals[dk] || []).push({ x: dx, y: dy, k: kk < 0.62 ? 0 : kk < 0.9 ? 1 : 2, s: 7 + r() * 9 });
     }
     resize();
   }
@@ -89,6 +96,25 @@ var R = (function () {
     }
   }
 
+  function drawDecals(x0, y0, x1, y1) {
+    var list = [], bx, by, i, d;
+    for (by = (y0 / TB) | 0; by <= (y1 / TB) | 0; by++) for (bx = (x0 / TB) | 0; bx <= (x1 / TB) | 0; bx++) {
+      var t = decals[bx + ',' + by]; if (t) for (i = 0; i < t.length; i++) list.push(t[i]);
+    }
+    ctx.strokeStyle = 'rgba(96,132,108,0.55)'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { d = list[i]; if (d.k !== 0) continue; ctx.moveTo(d.x - 7, d.y); ctx.lineTo(d.x - 10, d.y - 13); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x, d.y - 17); ctx.moveTo(d.x + 7, d.y); ctx.lineTo(d.x + 11, d.y - 12); }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(20,30,30,0.45)'; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { d = list[i]; if (d.k !== 1) continue; ctx.moveTo(d.x + d.s, d.y); ctx.ellipse(d.x, d.y, d.s, d.s * 0.6, 0, 0, 6.2832); }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(126,146,138,0.5)'; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { d = list[i]; if (d.k !== 1) continue; ctx.moveTo(d.x + d.s * 0.7 - 2, d.y - 3); ctx.ellipse(d.x - 2, d.y - 3, d.s * 0.7, d.s * 0.4, 0, 0, 6.2832); }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(226,232,170,0.75)'; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { d = list[i]; if (d.k !== 2) continue; ctx.moveTo(d.x + 4, d.y); ctx.arc(d.x, d.y, 4, 0, 6.2832); ctx.moveTo(d.x + 13, d.y + 5); ctx.arc(d.x + 10, d.y + 5, 3, 0, 6.2832); ctx.moveTo(d.x - 5, d.y + 8); ctx.arc(d.x - 8, d.y + 8, 3, 0, 6.2832); }
+    ctx.fill();
+  }
+
   function drawTrees(x0, y0, x1, y1) {
     var list = [], bx, by, i;
     for (by = ((y0 - 100) / TB) | 0; by <= ((y1 + 100) / TB) | 0; by++) for (bx = ((x0 - 100) / TB) | 0; bx <= ((x1 + 100) / TB) | 0; bx++) {
@@ -99,6 +125,9 @@ var R = (function () {
     ctx.fill();
     ctx.fillStyle = C.tree2; ctx.beginPath();
     for (i = 0; i < list.length; i++) { var q = list[i].r * 0.62; ctx.moveTo(list[i].x + q - 8, list[i].y - 10); ctx.arc(list[i].x - 8, list[i].y - 10, q, 0, 6.2832); }
+    ctx.fill();
+    ctx.fillStyle = '#245046'; ctx.beginPath();
+    for (i = 0; i < list.length; i++) { var q2 = list[i].r * 0.3; ctx.moveTo(list[i].x + q2 - 16, list[i].y - 22); ctx.arc(list[i].x - 16, list[i].y - 22, q2, 0, 6.2832); }
     ctx.fill();
   }
 
@@ -144,7 +173,6 @@ var R = (function () {
     var mine = h.team === me, x = h.x, y = h.y, r = h.r, col = h.isPlayer ? C.me : teamCol(h, me), fy = y + r * 0.62;
     ctx.globalAlpha = h.stealth ? 0.4 : 1;
     foot(h, r, col, h.isPlayer ? 0.95 : 0.75);
-    if (h.carry) { ctx.strokeStyle = '#ffd76a'; ctx.lineWidth = 7; ctx.globalAlpha = 0.6 + Math.sin(t * 6) * 0.3; ctx.beginPath(); ctx.ellipse(x, fy, r + 30, (r + 30) * 0.42, 0, 0, 6.2832); ctx.stroke(); ctx.globalAlpha = h.stealth ? 0.4 : 1; }
     if (h.recallT > 0) { ctx.strokeStyle = '#bfe9ff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, fy, r + 26, -1.57, -1.57 + 6.2832 * (1 - h.recallT / 6)); ctx.stroke(); }
     if (h.shield > 0) { ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(x, fy, r + 16, (r + 16) * 0.4, 0, 0, 6.2832); ctx.stroke(); }
     var k = pose(h, t);
@@ -168,79 +196,32 @@ var R = (function () {
     ctx.globalAlpha = 1;
   }
 
-  /* 제단과 회복 구슬: 땅 위에 그린다 */
+  /* 회복 구슬: 땅 위에 그린다 */
   function drawWorld(me, t, x0, y0, x1, y1) {
-    var i, a, col;
-    for (i = 0; i < 2; i++) {
-      a = MAP.ALTAR[i]; col = i === me ? C.ally : C.enemy;
-      if (a.x + 400 < x0 || a.x - 400 > x1 || a.y + 500 < y0 || a.y - 500 > y1) continue;
-      ctx.save(); ctx.translate(a.x, a.y); ctx.scale(1, 0.62);
-      ctx.fillStyle = col; ctx.globalAlpha = 0.14; ctx.beginPath(); ctx.arc(0, 0, ALTAR_R, 0, 6.2832); ctx.fill();
-      ctx.globalAlpha = 0.6; ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.setLineDash([34, 22]); ctx.lineDashOffset = t * 24; ctx.beginPath(); ctx.arc(0, 0, ALTAR_R, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
-      ctx.restore();
-      var c = G.stone.carrier, near = c && c.team === i && Math.hypot(c.x - a.x, c.y - a.y) < ALTAR_R * 2.2;
-      ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(a.x, a.y + 10, 90, 30, 0, 0, 6.2832); ctx.fill();
-      ctx.fillStyle = '#101c1f'; ctx.strokeStyle = col; ctx.lineWidth = 6; ctx.lineJoin = 'round';
-      ctx.beginPath(); ctx.moveTo(a.x - 70, a.y + 6); ctx.lineTo(a.x - 42, a.y - 150); ctx.lineTo(a.x + 42, a.y - 150); ctx.lineTo(a.x + 70, a.y + 6); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#16282c'; ctx.beginPath(); ctx.ellipse(a.x, a.y - 150, 54, 18, 0, 0, 6.2832); ctx.fill(); ctx.stroke();
-      glowAt(a.x, a.y - 168, near ? 90 : 56, col, near ? 0.9 : 0.5);
-      label((i === me ? '아군 제단 ' : '적 제단 ') + G.score[i], a.x, a.y - 200, 26, col);
-    }
-    for (i = 0; i < G.packs.length; i++) {
+    for (var i = 0; i < G.packs.length; i++) {
       var p = G.packs[i];
-      if (p.x < x0 - 200 || p.x > x1 + 200 || p.y < y0 - 200 || p.y > y1 + 200) continue;
+      if (!p.ready || p.x < x0 - 200 || p.x > x1 + 200 || p.y < y0 - 200 || p.y > y1 + 200) continue;
+      var bob = Math.sin(t * 3 + i) * 7;
       ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 6, 38, 13, 0, 0, 6.2832); ctx.fill();
-      if (p.ready) {
-        var bob = Math.sin(t * 3 + i) * 7;
-        glowAt(p.x, p.y - 30 + bob, 54, '#9dffb0', 0.7);
-        ctx.fillStyle = '#0f2a1a'; ctx.strokeStyle = '#9dffb0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y - 30 + bob, 20, 0, 6.2832); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#d8ffe2'; ctx.fillRect(p.x - 3, p.y - 42 + bob, 6, 24); ctx.fillRect(p.x - 12, p.y - 33 + bob, 24, 6);
-      } else {
-        ctx.strokeStyle = 'rgba(157,255,176,0.45)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(p.x, p.y - 4, 26, -1.5708, -1.5708 + 6.2832 * (1 - p.t / PACK_T)); ctx.stroke();
-      }
+      glowAt(p.x, p.y - 30 + bob, 64, '#9dffb0', 0.75);
+      ctx.fillStyle = '#0f2a1a'; ctx.strokeStyle = '#9dffb0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y - 30 + bob, 22, 0, 6.2832); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#d8ffe2'; ctx.fillRect(p.x - 3.5, p.y - 43 + bob, 7, 26); ctx.fillRect(p.x - 13, p.y - 33.5 + bob, 26, 7);
     }
   }
   function glowAt(x, y, r, col, a) {
     var g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); ctx.restore();
   }
-  /* 성석: 바닥·하늘·운반자 머리 위. 어디에 있든 보이도록 빛기둥을 세운다 */
-  function drawStone(me, t) {
-    var s = G.stone, x = s.x, y = s.y, up, col = '#ffe9a8';
-    if (s.state === 'carried') { var c = s.carrier; x = c.x; y = c.y + c.r * 0.62 - 214; up = 0; col = c.team === me ? C.ally : C.enemy; }
-    else up = 38 + Math.sin(t * 2.4) * 8 + (s.z || 0);
-    var gy = s.state === 'carried' ? y : y - up;
-    if (s.state === 'wait') {
-      ctx.globalAlpha = 0.4 + Math.sin(t * 4) * 0.2; ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 5; ctx.setLineDash([16, 12]); ctx.beginPath(); ctx.ellipse(MAP.STONE.x, MAP.STONE.y, 120, 50, 0, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
-      label('성석 ' + Math.ceil(s.waitT), MAP.STONE.x, MAP.STONE.y - 40, 26, '#ffe9a8');
-      return;
-    }
-    if (s.state !== 'carried') { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(x, y + 8, 36, 12, 0, 0, 6.2832); ctx.fill(); }
-    /* 빛기둥 */
-    var bx = x, by = gy, g = ctx.createLinearGradient(0, by - 1500, 0, by);
-    g.addColorStop(0, 'rgba(255,233,168,0)'); g.addColorStop(1, 'rgba(255,233,168,0.32)');
-    ctx.fillStyle = g; ctx.fillRect(bx - 26, by - 1500, 52, 1500);
-    glowAt(x, gy, 90, col, 0.8);
-    ctx.save(); ctx.translate(x, gy); ctx.lineJoin = 'round';
-    ctx.fillStyle = '#fff6d8'; ctx.strokeStyle = '#0b1114'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(22, -8); ctx.lineTo(14, 26); ctx.lineTo(-14, 26); ctx.lineTo(-22, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffd76a'; ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(22, -8); ctx.lineTo(0, 4); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.moveTo(-12, -10); ctx.lineTo(-4, -22); ctx.lineTo(-4, 6); ctx.closePath(); ctx.fill();
+  /* 줄어드는 전장: 바깥은 붉게 물들고, 경계에는 불타는 띠가 돈다 */
+  function drawZone(t, x0, y0, x1, y1) {
+    var z = G.zone;
+    ctx.beginPath(); ctx.rect(x0 - 50, y0 - 50, x1 - x0 + 100, y1 - y0 + 100); ctx.arc(z.x, z.y, z.r, 0, 6.2832, true);
+    ctx.fillStyle = 'rgba(150,24,30,0.30)'; ctx.fill('evenodd');
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(255,90,60,0.35)'; ctx.lineWidth = 46; ctx.beginPath(); ctx.arc(z.x, z.y, z.r + 14, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = '#ff7a4a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = '#ffe0b0'; ctx.lineWidth = 4; ctx.setLineDash([60, 90]); ctx.lineDashOffset = -t * 160; ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
     ctx.restore();
-    if (s.state === 'free') { ctx.strokeStyle = 'rgba(255,233,168,0.8)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(x, y - 6, 56, -1.5708, -1.5708 + 6.2832 * (s.freeT / STONE_FREE_T)); ctx.stroke(); }
-  }
-  /* 화면 밖에 있는 성석을 가리키는 화살표 */
-  function drawStoneArrow(me) {
-    var s = G.stone; if (s.state === 'wait') return;
-    var sx = cw / 2 + (s.x - cam.x) * S, sy = ch / 2 + (s.y - cam.y) * S, m = 54 * dpr;
-    if (sx > m && sx < cw - m && sy > m * 1.6 && sy < ch - m) return;
-    var dx = sx - cw / 2, dy = sy - ch / 2, k = Math.min((cw / 2 - m) / Math.abs(dx || 1e-6), (ch / 2 - m * 1.4) / Math.abs(dy || 1e-6)), ax = cw / 2 + dx * k, ay = ch / 2 + dy * k, ang = Math.atan2(dy, dx);
-    var col = s.state === 'carried' ? (s.carrier.team === me ? C.ally : C.enemy) : '#ffe9a8';
-    ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
-    ctx.fillStyle = 'rgba(11,20,23,0.85)'; ctx.strokeStyle = col; ctx.lineWidth = 3 * dpr;
-    ctx.beginPath(); ctx.moveTo(26 * dpr, 0); ctx.lineTo(-10 * dpr, -20 * dpr); ctx.lineTo(-4 * dpr, 0); ctx.lineTo(-10 * dpr, 20 * dpr); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = '#fff6d8'; ctx.beginPath(); ctx.moveTo(ax, ay - 9 * dpr); ctx.lineTo(ax + 7 * dpr, ay); ctx.lineTo(ax, ay + 9 * dpr); ctx.lineTo(ax - 7 * dpr, ay); ctx.closePath(); ctx.fill();
   }
 
   function drawFx(t) {
@@ -395,13 +376,13 @@ var R = (function () {
     ctx.setTransform(S, 0, 0, S, cw / 2 - cam.x * S + shx, ch / 2 - cam.y * S + shy);
     var x0 = cam.x - cw / 2 / S, x1 = cam.x + cw / 2 / S, y0 = cam.y - ch / 2 / S, y1 = cam.y + ch / 2 / S;
     terrain(ctx, false);
-    /* 우물 */
-    for (var T = 0; T < 2; T++) {
-      var f = MAP.FOUNT[T], col = T === me ? C.ally : C.enemy;
-      ctx.strokeStyle = col; ctx.globalAlpha = 0.5; ctx.lineWidth = 6; ctx.setLineDash([30, 22]); ctx.lineDashOffset = t * 30;
-      ctx.beginPath(); ctx.arc(f.x, f.y, 300, 0, 6.2832); ctx.stroke(); ctx.setLineDash([]);
-      ctx.globalAlpha = 0.12; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(f.x, f.y, 300, 0, 6.2832); ctx.fill(); ctx.globalAlpha = 1;
-    }
+    /* 강물 반짝임 */
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(170,225,245,0.16)'; ctx.lineWidth = 18;
+    ctx.beginPath(); ctx.moveTo(MAP.river[0][0], MAP.river[0][1]); for (i = 1; i < MAP.river.length; i++) ctx.lineTo(MAP.river[i][0], MAP.river[i][1]);
+    ctx.setLineDash([70, 190]); ctx.lineDashOffset = -t * 46; ctx.stroke();
+    ctx.translate(90, 0); ctx.strokeStyle = 'rgba(210,240,255,0.12)'; ctx.lineWidth = 9; ctx.setLineDash([40, 150]); ctx.lineDashOffset = t * 30; ctx.stroke();
+    ctx.translate(-190, 0); ctx.lineDashOffset = -t * 22 + 80; ctx.stroke(); ctx.restore();
+    drawDecals(x0, y0, x1, y1);
     drawTrees(x0, y0, x1, y1);
     drawWorld(me, t, x0, y0, x1, y1);
     drawZones(me, t);
@@ -415,10 +396,10 @@ var R = (function () {
     }
     list.sort(function (a, b) { return a.y - b.y; });
     for (i = 0; i < list.length; i++) drawUnit(list[i], me, t);
-    drawStone(me, t);
     drawProj(me);
     drawFx(t);
     drawParts(x0, y0, x1, y1);
+    drawZone(t, x0, y0, x1, y1);
     if (view.aim && p && !p.dead) drawAim(view.aim, p);
     if (view.hover && !view.hover.dead) { ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(view.hover.x, view.hover.y, view.hover.r + 12, 0, 6.2832); ctx.stroke(); }
     /* 전장의 안개 */
@@ -442,7 +423,6 @@ var R = (function () {
       ctx.drawImage(fogCv, 0, 0, cw, ch);
       ctx.setTransform(S, 0, 0, S, cw / 2 - cam.x * S + shx, ch / 2 - cam.y * S + shy);
     }
-    ctx.setTransform(1, 0, 0, 1, 0, 0); drawStoneArrow(me); ctx.setTransform(S, 0, 0, S, cw / 2 - cam.x * S + shx, ch / 2 - cam.y * S + shy);
     /* 떠오르는 숫자 */
     for (i = 0; i < G.texts.length; i++) {
       var x = G.texts[i];
@@ -456,26 +436,19 @@ var R = (function () {
   }
 
   function drawMini(me, player) {
-    var c = miniCtx, sx = mw / MAP.W, sy = mh / MAP.H, i, u, t = performance.now() / 1000;
+    var c = miniCtx, sx = mw / MAP.W, sy = mh / MAP.H, i, u, z = G.zone;
     c.drawImage(miniBase, 0, 0);
+    c.beginPath(); c.rect(0, 0, mw, mh); c.arc(z.x * sx, z.y * sy, z.r * sx, 0, 6.2832, true); c.fillStyle = 'rgba(150,24,30,0.45)'; c.fill('evenodd');
+    c.strokeStyle = '#ff7a4a'; c.lineWidth = 1.5 * dpr; c.beginPath(); c.arc(z.x * sx, z.y * sy, z.r * sx, 0, 6.2832); c.stroke();
     for (i = 0; i < G.packs.length; i++) {
-      var p = G.packs[i];
-      c.fillStyle = p.ready ? '#9dffb0' : 'rgba(157,255,176,.3)'; c.beginPath(); c.arc(p.x * sx, p.y * sy, 3 * dpr, 0, 6.2832); c.fill();
-    }
-    for (i = 0; i < 2; i++) {
-      var a = MAP.ALTAR[i], w = 5 * dpr; c.fillStyle = i === me ? C.ally : C.enemy; c.fillRect(a.x * sx - w, a.y * sy - w, w * 2, w * 2); c.strokeStyle = '#061013'; c.lineWidth = dpr; c.strokeRect(a.x * sx - w, a.y * sy - w, w * 2, w * 2);
+      var p = G.packs[i]; if (!p.ready) continue;
+      c.fillStyle = '#9dffb0'; c.beginPath(); c.arc(p.x * sx, p.y * sy, 3 * dpr, 0, 6.2832); c.fill();
     }
     for (i = 0; i < G.heroes.length; i++) {
       u = G.heroes[i];
       if (u.dead || !u.vis[me]) continue;
       c.fillStyle = u.color; c.strokeStyle = u.isPlayer ? '#ffffff' : teamCol(u, me); c.lineWidth = (u.isPlayer ? 2.4 : 1.8) * dpr;
       c.beginPath(); c.arc(u.x * sx, u.y * sy, (u.isPlayer ? 5.5 : 4.5) * dpr, 0, 6.2832); c.fill(); c.stroke();
-    }
-    var s = G.stone;
-    if (s.state !== 'wait') {
-      var px = s.x * sx, py = s.y * sy, pr = (7 + Math.sin(t * 5) * 1.5) * dpr;
-      c.fillStyle = '#fff6d8'; c.strokeStyle = s.state === 'carried' ? (s.carrier.team === me ? C.ally : C.enemy) : '#ffd76a'; c.lineWidth = 2.5 * dpr;
-      c.beginPath(); c.moveTo(px, py - pr); c.lineTo(px + pr * 0.8, py); c.lineTo(px, py + pr); c.lineTo(px - pr * 0.8, py); c.closePath(); c.fill(); c.stroke();
     }
     c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = dpr;
     var vw = cw / S, vh = ch / S;

@@ -29,10 +29,12 @@ function ftext(u, txt, color, size) {
   if (G.texts.length < 80) G.texts.push({ x: u.x + (Math.random() - 0.5) * 50, y: u.y - u.r - 30, txt: txt, color: color, size: size || 26, t: 0 });
 }
 
-/* 성석 운반전: 점수 5점 또는 10분, 영웅은 처음부터 완성된 상태(레벨 7 능력치, 스킬 3·3·3·2랭크) */
-var WIN_SCORE = 7, MATCH_TIME = 600, RESPAWN_T = 7, FIXED_LEVEL = 7, SKILL_RANKS = [3, 3, 3, 2];
-var STONE_R = 75, ALTAR_R = 260, STONE_FREE_T = 12, STONE_WAIT_T = 10, CARRY_SLOW = 0.76, THROW_RANGE = 950, ULT_PASSIVE = 1.1, PACK_T = 20;
-var FOUNT_R = 650;
+/* 라운드 섬멸전: 부활 없음, 5라운드 선취. 영웅은 처음부터 완성된 상태(레벨 7 능력치, 스킬 3·3·3·2랭크) */
+var WIN_ROUNDS = 5, ROUND_TIME = 100, PREP_T = 4, PICK_T = 10, FIXED_LEVEL = 7, SKILL_RANKS = [3, 3, 3, 2], ULT_PASSIVE = 1.1;
+/* 전장: 반지름 3000 에서 시작해 12초부터 80초까지 650 으로, 그 뒤 100초까지 260 으로 줄어든다. 밖에 있으면 초당 최대 체력의 7% 피해 */
+var HP_SCALE = 1.3; /* 부활이 없으니 교전이 순식간에 끝나지 않게 체력을 올린다 */
+var ZONE_R0 = 3000, ZONE_R1 = 650, ZONE_R2 = 260, ZONE_DPS = 0.07;
+var ARENAS = [[5000, 3200], [5000, 800], [5000, 5600], [3700, 3200], [6300, 3200]];
 
 function mkUnit(type, team, x, y, o) {
   var u = {
@@ -58,7 +60,7 @@ function recalc(h) {
   var d = h.def, b = d.base, g = d.grow, L = h.level - 1;
   var it = { hp: 0, mp: 0, ad: 0, ap: 0, armor: 0, as: 0, ms: 0, ls: 0, haste: 0, mpr: 0 };
   var oh = h.maxHp, om = h.maxMp;
-  h.maxHp = b.hp + g.hp * L + it.hp;
+  h.maxHp = (b.hp + g.hp * L + it.hp) * HP_SCALE;
   h.maxMp = b.mp + g.mp * L + it.mp;
   h.bAd = b.ad + g.ad * L + it.ad;
   h.bAp = (g.ap || 0) * L + it.ap;
@@ -69,6 +71,11 @@ function recalc(h) {
   h.hpr = b.hpr + L * 0.6;
   h.mpr = (b.mpr + L * 0.4) * (1 + it.mpr);
   h.bLs = it.ls; h.haste = it.haste;
+  /* 강화 */
+  var A = { hpPct: 0, adPct: 0, skillPct: 0, msPct: 0, asPct: 0, armor: 0, ls: 0, haste: 0, ultPct: 0, exec: 0, lastStand: 0, regenPct: 0, openShield: 0, killHeal: 0, giant: 0 };
+  for (var id in h.augs) { var ag = AUGS[id], n = h.augs[id]; for (var k in A) if (ag[k]) A[k] += ag[k] * n; }
+  h.maxHp *= 1 + A.hpPct; h.bAd *= 1 + A.adPct; h.bMs *= 1 + A.msPct; h.bAs *= 1 + A.asPct; h.bArmor += A.armor; h.bLs += A.ls; h.haste += A.haste;
+  h.skillMul = 1 + A.skillPct; h.ultMul = 1 + A.ultPct; h.exec = A.exec; h.lastStand = A.lastStand; h.regenPct = A.regenPct; h.openShield = A.openShield; h.killHeal = A.killHeal; h.giant = A.giant;
   if (oh > 1) { h.hp += h.maxHp - oh; h.mp += h.maxMp - om; }
 }
 
@@ -76,7 +83,7 @@ function mkHero(defId, team, isPlayer, slot, role) {
   var d = HEROES[defId], sp = spawnPos(team, slot);
   var h = mkUnit('hero', team, sp.x, sp.y, {
     r: 42, def: d, defId: defId, name: d.name, isPlayer: isPlayer, slot: slot, role: role, ranged: !d.melee,
-    level: FIXED_LEVEL, items: [], ranks: SKILL_RANKS.slice(), cds: [0, 0, 0, 0], points: 0, ult: 0, carry: false, scores: 0, healed: 0,
+    level: FIXED_LEVEL, items: [], ranks: SKILL_RANKS.slice(), cds: [0, 0, 0, 0], points: 0, ult: 0, healed: 0, augs: {}, offer: null,
     mp: 0, maxMp: 0, kills: 0, deaths: 0, assists: 0, dmgDealt: 0,
     respawnT: 0, order: null, path: null, dash: null, sight: 1250, hitBy: {},
     empower: 0, gx: 0, gy: 0, repT: 0, aggroT: -99, aggroVictim: null, ai: null, bLs: 0, haste: 0, bAp: 0,
@@ -99,11 +106,11 @@ function newGame(opt) {
   opt = opt || {};
   UID = 1; _seed = (opt.seed || (Date.now() & 0x7fffffff)) | 0;
   G = {
-    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], kills: [0, 0], score: [0, 0], timeLeft: MATCH_TIME, overtime: false,
-    parts: [], shake: 0, flash: null, over: null, visT: 0, stratT: 1, focus: [0, 0], pickers: [[], []], player: null, diff: opt.diff === undefined ? 1 : opt.diff,
-    stone: { state: 'center', x: MAP.STONE.x, y: MAP.STONE.y, carrier: null, freeT: 0, waitT: 0, team: -1, thrower: null, lockT: 0, z: 0 },
-    packs: MAP.packs.map(function (p, i) { return { i: i, x: p.x, y: p.y, ready: true, t: 0 }; })
+    t: 0, units: [], heroes: [], proj: [], zones: [], fx: [], texts: [], events: [], kills: [0, 0], score: [0, 0],
+    round: 0, phase: 'prep', phaseT: 0, roundT: ROUND_TIME, zone: { x: 5000, y: 3200, r: ZONE_R0 }, packs: [], arenaOrder: [0, 1, 2, 3, 4],
+    parts: [], shake: 0, flash: null, over: null, visT: 0, stratT: 1, focus: [0, 0], player: null, diff: opt.diff === undefined ? 1 : opt.diff
   };
+  for (var ao = 4; ao > 0; ao--) { var aj = (rnd() * (ao + 1)) | 0, at = G.arenaOrder[ao]; G.arenaOrder[ao] = G.arenaOrder[aj]; G.arenaOrder[aj] = at; }
   var rolesA = opt.noPlayer ? ['top', 'mid', 'jungle', 'bot', 'sup'] : ['mid', 'top', 'jungle', 'bot', 'sup'];
   var rolesB = ['top', 'mid', 'jungle', 'bot', 'sup'];
   var usedA = {}, usedB = {};
@@ -114,7 +121,7 @@ function newGame(opt) {
     if (isP) G.player = h; else aiInit(h, role);
   });
   rolesB.forEach(function (role, i) { var h = mkHero(pickHero(role, usedB), 1, false, i, role); aiInit(h, role); });
-  updVision();
+  startRound();
   return G;
 }
 
@@ -141,7 +148,6 @@ function updStatus(u, dt) {
     if (b.shield > 0) sh += b.shield; if (b.dmgMul) dm += b.dmgMul; if (b.regen) rg += b.regen;
   }
   u.ms = u.bMs * (1 + ms) * (1 - slow);
-  if (u.carry) u.ms *= CARRY_SLOW;
   u.as = u.bAs * (1 + as);
   u.ad = u.bAd + ad;
   u.armor = u.bArmor + armor;
@@ -161,7 +167,13 @@ function healUnit(u, a) {
 function damage(src, tgt, amt, kind) {
   if (tgt.dead || tgt.invuln || amt <= 0) return 0;
   var a = amt;
-  if (src) a *= src.dmgMul || 1;
+  if (src) {
+    a *= src.dmgMul || 1;
+    if (kind === 'skill' && src.skillMul) a *= src.skillMul;
+    if (src.exec && tgt.hp / tgt.maxHp < 0.35) a *= 1 + src.exec;
+    if (src.giant && tgt.maxHp > src.maxHp) a *= 1 + src.giant;
+  }
+  if (tgt.lastStand && tgt.hp / tgt.maxHp < 0.3) a *= 1 - tgt.lastStand;
   if (kind !== 'true') a *= 100 / (100 + Math.max(0, tgt.armor));
   var dealt = a;
   if (tgt.shield > 0) {
@@ -179,7 +191,7 @@ function damage(src, tgt, amt, kind) {
   if (src) {
     tgt.lastAttacker = src;
     if (src.type === 'hero') {
-      if (tgt.type === 'hero') { tgt.hitBy[src.id] = G.t; src.aggroT = G.t; src.aggroVictim = tgt; src.dmgDealt += dealt; src.ult = Math.min(100, src.ult + dealt / 50); }
+      if (tgt.type === 'hero') { tgt.hitBy[src.id] = G.t; src.aggroT = G.t; src.aggroVictim = tgt; src.dmgDealt += dealt; src.ult = Math.min(100, src.ult + dealt / 50 * (src.ultMul || 1)); }
       if (kind === 'basic' && src.ls > 0 && !src.dead) healUnit(src, dealt * src.ls);
     }
     if (G.player && (src === G.player || tgt === G.player) && dealt >= 4) {
@@ -194,9 +206,7 @@ function kill(src, v) { if (!v.dead && v.type === 'hero') killHero(src, v); }
 
 function killHero(src, v) {
   v.dead = true; v.deaths++; v.hp = 0;
-  v.respawnT = RESPAWN_T;
-  v.buffs.length = 0; v.order = null; v.path = null; v.dash = null; v.stunT = 0; v.rootT = 0; v.empower = 0; v.ult *= 0.5;
-  if (v.carry) dropStone(v);
+  v.buffs.length = 0; v.order = null; v.path = null; v.dash = null; v.stunT = 0; v.rootT = 0; v.empower = 0;
   var killer = src && src.type === 'hero' ? src : null, ass = [], recent = null, rt = -1;
   G.heroes.forEach(function (h) {
     if (h.team === v.team) return;
@@ -205,25 +215,17 @@ function killHero(src, v) {
   });
   if (!killer) killer = recent;
   G.kills[1 - v.team]++;
-  if (killer) { killer.kills++; killer.ult = Math.min(100, killer.ult + 15); }
-  ass.forEach(function (a) { if (a !== killer) { a.assists++; a.ult = Math.min(100, a.ult + 8); } });
+  if (killer) { killer.kills++; killer.ult = Math.min(100, killer.ult + 15); if (ass.indexOf(killer) < 0) ass.push(killer); }
+  ass.forEach(function (a) {
+    if (a !== killer) { a.assists++; a.ult = Math.min(100, a.ult + 8); }
+    if (a.killHeal && !a.dead) healUnit(a, a.maxHp * a.killHeal);
+  });
   v.hitBy = {};
   fx({ type: 'burst', x: v.x, y: v.y, r: 260, dur: 0.7, color: v.color });
   fx({ type: 'shock', x: v.x, y: v.y, r: 460, dur: 0.6, color: v.color, w: 16 });
   sparks(v.x, v.y - 40, 38, 560, v.color, 12, 1.0, { g: 380, glow: true }); sparks(v.x, v.y - 40, 16, 420, '#ffffff', 8, 0.7, { g: 300, glow: true });
   if (nearP(v.x, v.y, 1500)) shake(10);
   ev('kill', { killer: killer ? killer.id : 0, victim: v.id, by: src ? src.type : '' });
-}
-
-function respawn(h) {
-  var sp = spawnPos(h.team, h.slot);
-  h.dead = false; h.x = sp.x; h.y = sp.y; h.hp = h.maxHp; h.order = null; h.path = null; h.vx = h.vy = 0;
-  h.face = h.team ? Math.PI : 0; h.lastDmgT = -99;
-  if (h.ai) h.ai.heal = false;
-  fx({ type: 'ring', x: h.x, y: h.y, r: 140, dur: 0.6, color: h.color });
-  fx({ type: 'pillar', x: h.x, y: h.y, w: 70, dur: 0.8, color: h.color });
-  sparks(h.x, h.y, 18, 300, h.color, 8, 0.8, { g: -140, glow: true });
-  if (h.isPlayer) ev('respawn');
 }
 
 /* ───────── 이동 ───────── */
@@ -413,7 +415,6 @@ function updDash(h, dt) {
 }
 
 /* ───────── 영웅 ───────── */
-function inFountain(h) { return dist(h, MAP.FOUNT[h.team]) < FOUNT_R; }
 function cmdMove(h, x, y) {
   h.order = { type: 'move', x: x, y: y }; h.gx = x; h.gy = y; h.repT = 5;
   h.path = MAP.los(h.x, h.y, x, y) ? [[x, y]] : MAP.findPath(h.x, h.y, x, y);
@@ -437,18 +438,16 @@ function chase(h, t, dt) {
   moveGoal(h, t.x, t.y, dt);
 }
 function updHero(h, dt) {
-  if (h.dead) { h.respawnT -= dt; if (h.respawnT <= 0) respawn(h); return; }
+  if (h.dead) return;
   if (Math.hypot(h.vx || 0, h.vy || 0) > 120 && Math.random() < dt * 8) part(h.x - Math.cos(h.face) * 14, h.y + h.r * 0.7, (Math.random() - 0.5) * 60, -20 - Math.random() * 30, 0.5, 9, 'rgba(210,200,180,0.55)', { dust: true, drag: 0.9 });
   for (var i = 0; i < 4; i++) if (h.cds[i] > 0) h.cds[i] -= dt;
-  h.ult = Math.min(100, h.ult + ULT_PASSIVE * dt);
-  var reg = h.hpr + (h.regenB || 0);
-  if (inFountain(h)) { reg += h.maxHp * 0.14; h.mp = Math.min(h.maxMp, h.mp + h.maxMp * 0.14 * dt); }
+  h.ult = Math.min(100, h.ult + ULT_PASSIVE * (h.ultMul || 1) * dt);
+  var reg = h.hpr + (h.regenB || 0) + h.maxHp * (h.regenPct || 0);
   if (h.hp < h.maxHp) h.hp = Math.min(h.maxHp, h.hp + reg * dt);
   if (h.mp < h.maxMp) h.mp = Math.min(h.maxMp, h.mp + h.mpr * dt);
-  if (dist(h, MAP.FOUNT[1 - h.team]) < 760) { damage(null, h, h.maxHp * 0.35 * dt, 'true'); if (h.dead) return; }
+  if (dist(h, G.zone) > G.zone.r) { damage(null, h, h.maxHp * ZONE_DPS * dt, 'true'); if (h.dead) return; }
   if (h.dash) { updDash(h, dt); return; }
   if (h.stunT > 0) return;
-  if (h.throwReq) { throwStone(h, h.throwReq.x, h.throwReq.y); h.throwReq = null; }
   var md = h.moveDir, moving = false;
   if (md && (md.x || md.y)) {
     var ml = Math.hypot(md.x, md.y);
@@ -573,9 +572,6 @@ function updVision() {
       v.vis[T] = true;
     }
   }
-  /* 성석을 든 영웅은 양 팀 모두에게 보인다 */
-  var cr = G.stone.carrier;
-  if (cr && !cr.dead) { cr.vis[0] = true; cr.vis[1] = true; }
 }
 
 /* ───────── 밀어내기 ───────── */
@@ -602,121 +598,105 @@ function separate() {
 }
 function nudge(u, dx, dy) { if (MAP.isWalk(u.x + dx, u.y + dy)) { u.x += dx; u.y += dy; } }
 
-/* ───────── 성석 ───────── */
+/* ───────── 라운드 ───────── */
 function finish(w) { if (G.over) return; G.over = { winner: w, t: G.t }; ev('over', { winner: w }); }
-function dropStone(h) {
-  var s = G.stone; if (s.carrier !== h) return;
-  h.carry = false; s.carrier = null; s.state = 'free'; s.x = h.x; s.y = h.y; s.freeT = STONE_FREE_T; s.thrower = null; s.team = -1;
-  sparks(h.x, h.y - 50, 18, 380, '#ffe9a8', 9, 0.7, { g: 260, glow: true });
-  ev('drop', { id: h.id, team: h.team });
+function aliveCount(T) { var n = 0; for (var i = 0; i < G.heroes.length; i++) if (G.heroes[i].team === T && !G.heroes[i].dead) n++; return n; }
+function startRound() {
+  G.round++;
+  var a = ARENAS[G.arenaOrder[(G.round - 1) % ARENAS.length]];
+  G.zone = { x: a[0], y: a[1], r: ZONE_R0 };
+  G.phase = 'prep'; G.phaseT = PREP_T; G.roundT = ROUND_TIME; G.proj.length = 0; G.zones.length = 0;
+  G.packs = [0, -900, 900].map(function (dx, i) { var q = MAP.nearestWalk(a[0] + dx, a[1]); return { i: i, x: q[0], y: q[1], ready: true }; });
+  G.heroes.forEach(function (h) {
+    if (h.offer) pickAug(h, 0);
+    /* 길 폭(±240) 안에 두 줄로 세운다 */
+    var q = MAP.nearestWalk(a[0] + (h.team ? 1 : -1) * (1900 + (h.slot % 2) * 130), a[1] + (h.slot - 2) * 85);
+    h.dead = false; h.x = h.px = q[0]; h.y = h.py = q[1]; h.vx = h.vy = 0; h.hp = h.maxHp; h.buffs.length = 0; h.cds = [0, 0, 0, 0];
+    h.order = null; h.path = null; h.dash = null; h.stunT = 0; h.rootT = 0; h.empower = 0; h.hitBy = {}; h.lastDmgT = -99; h.face = h.team ? Math.PI : 0;
+    if (h.ai) h.ai.heal = false;
+  });
+  updVision();
+  ev('roundStart', { round: G.round });
 }
-function throwStone(h, tx, ty) {
-  var s = G.stone; if (s.carrier !== h || h.dead) return false;
-  var dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, rng = Math.min(THROW_RANGE, Math.max(350, d)), lx = h.x, ly = h.y;
-  for (var k = 40; k <= rng; k += 40) { var px = h.x + ux * k, py = h.y + uy * k; if (!MAP.isWalk(px, py)) break; lx = px; ly = py; }
-  h.carry = false; s.carrier = null; s.state = 'flying'; s.sx = h.x; s.sy = h.y; s.tx = lx; s.ty = ly; s.fT = 0;
-  s.fDur = 0.3 + Math.hypot(lx - h.x, ly - h.y) / 1800; s.thrower = h; s.lockT = 0.6; s.team = h.team;
-  ev('throw', { id: h.id, team: h.team });
-  return true;
+function endRound(w) {
+  G.score[w]++; G.lastWin = w;
+  ev('round', { winner: w, round: G.round });
+  if (G.score[w] >= WIN_ROUNDS) { finish(w); return; }
+  G.phase = 'pick'; G.phaseT = PICK_T;
+  G.heroes.forEach(function (h) { h.offer = rollAugs(h); h.order = null; h.path = null; h.dash = null; });
 }
-function takeStone(h) {
-  var s = G.stone;
-  s.state = 'carried'; s.carrier = h; s.team = h.team; h.carry = true; s.thrower = null;
-  breakStealth(h); h.dash = null;
-  fx({ type: 'ring', x: h.x, y: h.y, r: 150, dur: 0.5, color: '#ffe9a8' });
-  fx({ type: 'shock', x: h.x, y: h.y, r: 280, dur: 0.5, color: '#ffe9a8', w: 12 });
-  sparks(h.x, h.y - 60, 24, 460, '#ffe9a8', 9, 0.8, { g: -60, glow: true });
-  ev('pickup', { id: h.id, team: h.team });
-}
-function scorePoint(h) {
-  var s = G.stone, T = h.team;
-  G.score[T]++; h.scores++; h.carry = false; s.carrier = null; s.state = 'wait'; s.waitT = STONE_WAIT_T; s.team = -1; s.x = MAP.STONE.x; s.y = MAP.STONE.y;
-  G.heroes.forEach(function (a) { if (a.team === T) a.ult = Math.min(100, a.ult + 25); });
-  var A = MAP.ALTAR[T], tc = T === 0 ? '#4fe0d2' : '#ff6b5e';
-  fx({ type: 'burst', x: A.x, y: A.y, r: 620, dur: 1.1, color: tc }); fx({ type: 'shock', x: A.x, y: A.y, r: 760, dur: 1.0, color: tc, w: 22 });
-  fx({ type: 'pillar', x: A.x, y: A.y - 140, w: 120, dur: 1.4, color: tc });
-  for (var fw = 0; fw < 7; fw++) sparks(A.x + (Math.random() - 0.5) * 600, A.y - 160 - Math.random() * 300, 30, 620, fw % 2 ? tc : '#ffe9a8', 11, 1.2, { g: 260, glow: true });
-  if (nearP(A.x, A.y, 2200)) { shake(8); flash(tc, 0.22); }
-  ev('score', { team: T, id: h.id });
-  if (G.score[T] >= WIN_SCORE || G.overtime) finish(T);
-}
-function updStone(dt) {
-  var s = G.stone, C = MAP.STONE;
-  if (s.lockT > 0) s.lockT -= dt;
-  if (s.state === 'wait') {
-    s.waitT -= dt;
-    if (s.waitT <= 0) { s.state = 'center'; fx({ type: 'pillar', x: C.x, y: C.y, w: 100, dur: 1.2, color: '#ffe9a8' }); fx({ type: 'shock', x: C.x, y: C.y, r: 420, dur: 0.8, color: '#ffe9a8', w: 16 }); sparks(C.x, C.y - 40, 36, 520, '#ffe9a8', 10, 1, { g: -80, glow: true }); ev('spawn'); }
+function updRound(dt) {
+  if (G.phase === 'prep') {
+    G.phaseT -= dt;
+    if (G.phaseT <= 0) {
+      G.phase = 'fight';
+      G.heroes.forEach(function (h) { if (h.openShield) addBuff(h, { id: 'aug:guard', t: 8, shield: h.maxHp * h.openShield }); });
+      ev('go');
+    }
     return;
   }
-  if (s.state === 'flying') {
-    s.fT += dt; var k = Math.min(1, s.fT / s.fDur);
-    s.x = s.sx + (s.tx - s.sx) * k; s.y = s.sy + (s.ty - s.sy) * k; s.z = Math.sin(k * Math.PI) * 140;
-    part(s.x, s.y - 40 - s.z, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, 0.45, 8, '#ffe9a8', { glow: true });
-    if (k >= 1) { s.state = 'free'; s.freeT = STONE_FREE_T; s.z = 0; }
-    return;
+  if (G.phase === 'pick') { G.phaseT -= dt; if (G.phaseT <= 0) startRound(); return; }
+  G.roundT -= dt;
+  var e = ROUND_TIME - G.roundT, z = G.zone;
+  z.r = e < 12 ? ZONE_R0 : e < 80 ? ZONE_R0 + (ZONE_R1 - ZONE_R0) * (e - 12) / 68 : ZONE_R1 + (ZONE_R2 - ZONE_R1) * Math.min(1, (e - 80) / 20);
+  var a = aliveCount(0), b = aliveCount(1);
+  if (a === 0 || b === 0) { endRound(a > 0 ? 0 : b > 0 ? 1 : (rnd() < 0.5 ? 0 : 1)); return; }
+  if (G.roundT <= 0) {
+    /* 시간 종료: 살아남은 수, 그다음 남은 체력 합 */
+    var ha = 0, hb = 0;
+    G.heroes.forEach(function (h) { if (!h.dead) { if (h.team === 0) ha += h.hp / h.maxHp; else hb += h.hp / h.maxHp; } });
+    endRound(a !== b ? (a > b ? 0 : 1) : (ha >= hb ? 0 : 1));
   }
-  if (s.state === 'carried') {
-    var c = s.carrier; s.x = c.x; s.y = c.y; s.z = 0;
-    var A = MAP.ALTAR[c.team];
-    if (Math.hypot(c.x - A.x, c.y - A.y) < ALTAR_R) scorePoint(c);
-    return;
-  }
-  if (Math.random() < dt * 14) part(s.x + (Math.random() - 0.5) * 60, s.y - 20, 0, -70 - Math.random() * 70, 1.0, 6, '#ffe9a8', { glow: true, drag: 0.98 });
-  if (s.state === 'free') { s.freeT -= dt; if (s.freeT <= 0) { s.state = 'center'; s.x = C.x; s.y = C.y; ev('return'); } }
-  var best = null, bd = 1e9;
-  for (var i = 0; i < G.heroes.length; i++) {
-    var h = G.heroes[i];
-    if (h.dead || h.stunT > 0 || (s.thrower === h && s.lockT > 0)) continue;
-    var d = Math.hypot(h.x - s.x, h.y - s.y);
-    if (d < STONE_R + h.r && d < bd) { bd = d; best = h; }
-  }
-  if (best) takeStone(best);
 }
 
-/* ───────── 회복 구슬 ───────── */
-function updPacks(dt) {
+/* ───────── 강화 ───────── */
+function rollAugs(h) {
+  var pool = AUG_IDS.filter(function (id) { return (h.augs[id] || 0) < AUG_MAX; }), out = [];
+  while (out.length < 3 && pool.length) { var k = (rnd() * pool.length) | 0; out.push(pool[k]); pool.splice(k, 1); }
+  return out;
+}
+function pickAug(h, idx) {
+  if (!h.offer || !h.offer[idx]) return false;
+  var id = h.offer[idx];
+  h.augs[id] = (h.augs[id] || 0) + 1; h.offer = null; recalc(h); h.hp = h.maxHp;
+  return true;
+}
+
+/* ───────── 회복 구슬 (라운드마다 세 개, 한 번씩) ───────── */
+function updPacks() {
   for (var i = 0; i < G.packs.length; i++) {
     var p = G.packs[i];
-    if (!p.ready) { p.t -= dt; if (p.t <= 0) p.ready = true; continue; }
-    if (Math.random() < dt * 2.5) part(p.x + (Math.random() - 0.5) * 40, p.y - 20, 0, -50 - Math.random() * 40, 1.0, 5, '#9dffb0', { glow: true, drag: 0.98 });
+    if (!p.ready) continue;
+    if (Math.random() < 0.04) part(p.x + (Math.random() - 0.5) * 40, p.y - 20, 0, -50 - Math.random() * 40, 1.0, 5, '#9dffb0', { glow: true, drag: 0.98 });
     for (var k = 0; k < G.heroes.length; k++) {
       var h = G.heroes[k];
-      if (h.dead || Math.hypot(h.x - p.x, h.y - p.y) > 95 || (h.hp > h.maxHp * 0.97 && h.ult >= 100)) continue;
-      healUnit(h, h.maxHp * 0.45); h.ult = Math.min(100, h.ult + 20);
-      p.ready = false; p.t = PACK_T;
+      if (h.dead || Math.hypot(h.x - p.x, h.y - p.y) > 95 || h.hp > h.maxHp * 0.97) continue;
+      healUnit(h, h.maxHp * 0.4); h.ult = Math.min(100, h.ult + 15);
+      p.ready = false;
       sparks(p.x, p.y - 30, 24, 420, '#9dffb0', 9, 0.9, { g: -100, glow: true }); fx({ type: 'shock', x: p.x, y: p.y, r: 220, dur: 0.5, color: '#9dffb0', w: 10 });
-      fx({ type: 'ring', x: p.x, y: p.y, r: 130, dur: 0.5, color: '#9dffb0', fill: true });
       ev('pack', { id: h.id, i: i });
       break;
     }
   }
 }
 
-/* ───────── 팀 단위 판단 (3초마다) ───────── */
+/* ───────── 팀 단위 판단 ───────── */
 function strategy() {
-  var st = G.stone;
   for (var T = 0; T < 2; T++) {
-    /* 집중 공격 대상: 성석을 든 적을 가장 먼저, 그다음 약하고 가까운 적 */
+    /* 집중 공격 대상: 약하고 가깝고 아군이 몰려 있는 적 */
     var fb = null, fs = -1e9, cx = 0, cy = 0, cn = 0;
     G.heroes.forEach(function (a) { if (a.team === T && !a.dead) { cx += a.x; cy += a.y; cn++; } });
     if (cn) {
       cx /= cn; cy /= cn;
       G.heroes.forEach(function (e) {
         if (e.team === T || e.dead || !e.vis[T]) return;
-        var d = Math.hypot(e.x - cx, e.y - cy); if (d > 2800 && !e.carry) return;
+        var d = Math.hypot(e.x - cx, e.y - cy); if (d > 2800) return;
         var near = 0; G.heroes.forEach(function (a) { if (a.team === T && !a.dead && dist(a, e) < 1500) near++; });
-        var sc = (1 - e.hp / e.maxHp) * 800 + (e.armor < 35 ? 150 : 0) - e.hp * 0.12 + near * 140 - d * 0.1 + (e.carry ? 1800 : 0);
+        var sc = (1 - e.hp / e.maxHp) * 800 + (e.armor < 35 ? 150 : 0) - e.hp * 0.12 + near * 140 - d * 0.1;
         if (sc > fs) { fs = sc; fb = e; }
       });
     }
     G.focus[T] = fb ? fb.id : 0;
-    /* 성석이 바닥에 있으면 가장 가까운 둘이 줍는다 */
-    G.pickers[T] = [];
-    if (st.state === 'center' || st.state === 'free' || st.state === 'flying') {
-      var al = G.heroes.filter(function (a) { return a.team === T && !a.dead; });
-      al.sort(function (a, b) { return Math.hypot(a.x - st.x, a.y - st.y) - Math.hypot(b.x - st.x, b.y - st.y); });
-      G.pickers[T] = al.slice(0, 2).map(function (a) { return a.id; });
-    }
   }
 }
 
@@ -724,26 +704,28 @@ function strategy() {
 function tick(dt) {
   if (G.over) { ageFx(dt); return; }
   G.t += dt;
-  if (!G.overtime) {
-    G.timeLeft -= dt;
-    if (G.timeLeft <= 0) {
-      G.timeLeft = 0;
-      if (G.score[0] !== G.score[1]) finish(G.score[0] > G.score[1] ? 0 : 1);
-      else { G.overtime = true; ev('overtime'); }
-    }
-  }
+  updRound(dt);
+  if (G.over) return;
   G.visT -= dt; if (G.visT <= 0) { G.visT = 0.15; updVision(); }
-  G.stratT -= dt; if (G.stratT <= 0) { G.stratT = 1.5; strategy(); }
   var us = G.units, n = us.length, i;
+  if (G.phase !== 'fight') {
+    /* 준비·강화 선택 중에는 영웅이 멈춘다. 봇은 이때 강화를 고른다 */
+    for (i = 0; i < n; i++) { var q = us[i]; q.px = q.x; q.py = q.y; q.vx = q.vy = 0; if (q.ai) aiUpdate(q, dt); }
+    ageFx(dt);
+    return;
+  }
+  G.stratT -= dt; if (G.stratT <= 0) { G.stratT = 1.5; strategy(); }
+  /* 처리 순서가 한 팀에 유리하지 않도록 틱마다 앞뒤를 바꾼다 */
+  var rev = (G.tickN = (G.tickN || 0) + 1) & 1;
   for (i = 0; i < n; i++) {
-    var u = us[i];
+    var u = us[rev ? n - 1 - i : i];
     u.px = u.x; u.py = u.y;
     if (!u.dead) { updStatus(u, dt); u.atkCd -= dt; }
     if (u.ai) aiUpdate(u, dt);
     updHero(u, dt);
-    if (G.over) break;
+    if (G.over || G.phase !== 'fight') break;
   }
-  updStone(dt); updPacks(dt);
+  updPacks();
   separate();
   for (i = 0; i < us.length; i++) { var w = us[i]; w.vx = (w.x - w.px) / dt; w.vy = (w.y - w.py) / dt; }
   updProj(dt); updZones(dt); ageFx(dt);

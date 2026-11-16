@@ -159,6 +159,32 @@ var ROLE_PREF = {
   sup: ['sera', 'brom', 'morgen', 'garr']
 };
 
+/* 강화: 라운드가 끝날 때마다 세 장 중 한 장을 고른다. 같은 강화는 세 번까지 겹친다 */
+var AUGS = {
+  heart:  { name: '강철 심장', g: '심', d: '최대 체력 +16%', hpPct: 0.16 },
+  edge:   { name: '예리한 날', g: '날', d: '공격력 +16%', adPct: 0.16 },
+  arcane: { name: '비전 증폭', g: '비', d: '스킬 피해 +14%', skillPct: 0.14 },
+  swift:  { name: '질풍', g: '풍', d: '이동 속도 +7%', msPct: 0.07 },
+  flurry: { name: '연타', g: '연', d: '공격 속도 +18%', asPct: 0.18 },
+  hide:   { name: '두꺼운 가죽', g: '갑', d: '방어력 +22', armor: 22 },
+  leech:  { name: '흡혈', g: '흡', d: '기본 공격 피해의 10%만큼 회복', ls: 0.10 },
+  haste:  { name: '가속', g: '속', d: '스킬 재사용 대기 15% 단축', haste: 18 },
+  charge: { name: '충전기', g: '충', d: '궁극기 충전 속도 +30%', ultPct: 0.30 },
+  exec:   { name: '처형인', g: '처', d: '체력 35% 이하인 적에게 피해 +20%', exec: 0.20 },
+  stand:  { name: '불굴', g: '굴', d: '체력 30% 이하일 때 받는 피해 22% 감소', lastStand: 0.22 },
+  regen:  { name: '재생', g: '재', d: '초당 최대 체력의 1% 회복', regenPct: 0.01 },
+  guard:  { name: '선제 방벽', g: '벽', d: '라운드 시작 때 8초 동안 최대 체력 18%의 보호막', openShield: 0.18 },
+  feast:  { name: '승부사', g: '승', d: '처치에 관여하면 최대 체력의 20% 회복', killHeal: 0.20 },
+  giant:  { name: '거인 사냥', g: '거', d: '나보다 최대 체력이 높은 적에게 피해 +12%', giant: 0.12 }
+};
+var AUG_IDS = Object.keys(AUGS), AUG_MAX = 3;
+/* 봇이 직업별로 선호하는 강화 */
+var AUG_PREF = {
+  fighter: ['heart', 'edge', 'leech', 'hide', 'feast'], tank: ['heart', 'hide', 'stand', 'regen', 'guard'],
+  carry: ['edge', 'flurry', 'leech', 'exec', 'swift'], mage: ['arcane', 'haste', 'charge', 'exec', 'guard'],
+  assassin: ['edge', 'exec', 'swift', 'feast', 'arcane'], support: ['haste', 'charge', 'heart', 'regen', 'arcane']
+};
+
 /* react: 날아오는 스킬을 보고 피하는 확률, lead: 움직이는 상대를 얼마나 앞질러 맞추는지 */
 var DIFFS = [
   { name: '쉬움', think: 1.9, lead: 0, react: 0.2 },
