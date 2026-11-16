@@ -90,9 +90,9 @@ static func props(w: World) -> Node3D:
 		match int(b.kind):
 			0: _wall(g, mn, mx, rng)
 			1: _sandbags(g, mn, mx, rng)
-			2: _crate(g, mn, mx, rng)
+			2: if not ModelLib.available(): _crate(g, mn, mx, rng)
 			3: _timber(g, mn, mx)
-			5: _barrel(g, mn, mx, rng)
+			5: if not ModelLib.available(): _barrel(g, mn, mx, rng)
 			6: _tent(g, mn, mx, rng)
 			7: _fieldgun(g, mn, mx, rng)
 			8: _plaster(g, mn, mx, rng)
@@ -117,6 +117,7 @@ static func props(w: World) -> Node3D:
 		mi.visibility_range_end = 280.0
 		mi.visibility_range_end_margin = 20.0
 		root.add_child(mi)
+	_models(root, w, rng)
 	return root
 
 
@@ -774,3 +775,48 @@ static func _rocks_and_logs(chunks: Dictionary, w: World, rng: RandomNumberGener
 			var bp := p0.lerp(p1, t)
 			g.rod(bp, bp + Vector3(rng.randf_range(-0.4, 0.4), rng.randf_range(0.3, 0.6), rng.randf_range(-0.4, 0.4)), 0.05, 0.02, bark, 0, 5)
 		logs += 1
+
+
+## 실제(스캔) CC0 모델로 통·상자·탄약 상자·제리캔을 배치한다. 충돌 상자는 그대로 두고 겉모습만 교체한다.
+static func _models(root: Node3D, w: World, rng: RandomNumberGenerator) -> void:
+	if not ModelLib.available():
+		return
+	var mr := Node3D.new()
+	mr.name = "Models"
+	root.add_child(mr)
+	for b in w.boxes:
+		var mn: Vector3 = b.mn
+		var mx: Vector3 = b.mx
+		var c := (mn + mx) * 0.5
+		var kind: int = b.kind
+		var base := Vector3(c.x, mn.y + 0.35, c.z)
+		if kind == 5:
+			var m := ModelLib.make("barrel_03", base, rng.randf() * TAU, mx.y - mn.y - 0.35)
+			if m != null:
+				ModelLib.tint(m, Color(0.55, 0.52, 0.48))
+				mr.add_child(m)
+		elif kind == 2:
+			var sx := mx.x - mn.x
+			var sz := mx.z - mn.z
+			var h := mx.y - mn.y - 0.35
+			var big := maxf(sx, sz) > 1.45
+			var name := "old_military_crate" if big else "wooden_crate_02"
+			var bb := ModelLib.bounds(name)
+			var long_side := maxf(bb.size.x, bb.size.z)
+			var k := maxf(sx, sz) / long_side
+			var layer := bb.size.y * k
+			var n := maxi(1, int(round(h / layer)))
+			var yaw0 := rng.randf_range(-0.12, 0.12) + (PI * 0.5 if sx < sz else 0.0)
+			for i in n:
+				var m := ModelLib.make(name, base + Vector3(0, layer * i, 0), yaw0 + (0.0 if i % 2 == 0 else rng.randf_range(-0.2, 0.2)), 0.0, k)
+				if m != null:
+					mr.add_child(m)
+		elif kind == 6:
+			# 천막 옆 보급품
+			for q in 2:
+				var a := rng.randf() * TAU
+				var off := Vector3(cos(a), 0, sin(a)) * (((mx - mn).x * 0.5) + 0.9)
+				var p := Vector3(c.x + off.x, w.height_at(c.x + off.x, c.z + off.z), c.z + off.z)
+				var m := ModelLib.make("ammo_box", p, rng.randf() * TAU, 0.0, 1.6) if q == 0 else ModelLib.make("metal_jerrycan_green", p, rng.randf() * TAU, 0.55)
+				if m != null:
+					mr.add_child(m)
