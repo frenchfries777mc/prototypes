@@ -9,6 +9,7 @@ uniform float bloom = 0.55;
 uniform vec2 sun_uv = vec2(0.5, 0.2);
 uniform float sun_vis = 0.0;
 uniform float fx_level = 2.0;
+uniform vec2 cam_motion = vec2(0.0);
 
 float h21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -21,6 +22,14 @@ void fragment() {
 	vec2 px = vec2(1.0) / vec2(textureSize(screen_tex, 0));
 	vec2 dir = uv - 0.5;
 	vec3 c0 = texture(screen_tex, uv).rgb;
+	if (fx_level > 1.5 && dot(cam_motion, cam_motion) > 1e-8) {
+		// 카메라 회전 방향으로 아주 약한 모션 블러
+		vec3 acc = c0;
+		for (int i = 1; i <= 4; i++) {
+			acc += texture(screen_tex, uv - cam_motion * (float(i) * 0.25)).rgb;
+		}
+		c0 = acc / 5.0;
+	}
 	vec3 c = c0;
 	if (fx_level > 0.5) {
 		// 가장자리 색수차
@@ -54,6 +63,20 @@ void fragment() {
 			illum *= 0.94;
 		}
 		c += rays * 0.055 * sun_vis * vec3(1.0, 0.93, 0.8);
+	}
+	if (fx_level > 1.5 && sun_vis > 0.05) {
+		// 렌즈 플레어: 해와 화면 중심을 잇는 선 위의 고스트 고리들
+		vec2 axis = vec2(0.5) - sun_uv;
+		vec3 fl = vec3(0.0);
+		for (int i = 0; i < 4; i++) {
+			float k = 0.35 + float(i) * 0.5;
+			vec2 gp = sun_uv + axis * k;
+			float r = 0.045 + 0.02 * float(i);
+			float d = length((uv - gp) * vec2(1.0, 0.56));
+			float ring = smoothstep(r, r - 0.012, d) - smoothstep(r - 0.012, r - 0.03, d);
+			fl += ring * mix(vec3(1.0, 0.7, 0.4), vec3(0.5, 0.7, 1.0), float(i) / 3.0) * (0.07 - 0.012 * float(i));
+		}
+		c += fl * sun_vis;
 	}
 	// 색보정: 따뜻한 그림자 / 차가운 하이라이트 + 채도 + 가벼운 S커브
 	float l = dot(c, vec3(0.299, 0.587, 0.114));
