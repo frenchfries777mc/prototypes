@@ -136,6 +136,7 @@ func apply_quality(q: int) -> void:
 	sun.shadow_enabled = q >= 1
 	grass_root.visible = q >= 1
 	fx.fire_lights = q >= 1
+	fx.set_mist_visible(q >= 2)
 	if fx.motes != null:
 		fx.motes.visible = q >= 1
 	sun.directional_shadow_max_distance = 150.0 if q >= 2 else 90.0
@@ -186,6 +187,10 @@ func _build_smoke() -> void:
 	for hs in w.houses:
 		fx.fire(Vector3(hs.cx, w.height_at(hs.cx, hs.cz) + 0.5, hs.cz), 1.2)
 	fx.ensure_motes()
+	for tx in World.TRENCH_X:
+		for zz in [-62.0, -20.0, 22.0, 64.0]:
+			var mx: float = w.trench_center(tx, zz)
+			fx.mist(Vector3(mx, w.height_at(mx, zz) + 0.5, zz))
 
 
 func _build_units() -> void:
@@ -359,7 +364,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		cp += cam.basis * Vector3(0.9 * tp_dist / 3.2, 0.5 * tp_dist / 3.2, tp_dist)
 	cam.position = cp
 	ads_t = move_toward(ads_t, 1.0 if (me.alive and me.in_ads) else 0.0, dt * 7.0)
-	cam.fov = lerpf(75.0 + (6.0 if (me.alive and me.speed_now > 6.0) else 0.0), 52.0, ads_t)
+	cam.fov = lerpf(75.0 + (6.0 if (me.alive and me.speed_now > 5.0) else 0.0), 52.0, ads_t)
 	# 1인칭 총
 	_set_viewmodel(me.weapon)
 	vm.visible = me.alive and not debug_3p
@@ -375,7 +380,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	var hip := Vector3(0.165 + sway, -0.185 - lift + breath, -0.33 + kick * 0.07)
 	var aim := Vector3(0.0, -sight_y * 0.9 - 0.002 + breath * 0.3, -0.24 + kick * 0.05)
 	vm.position = hip.lerp(aim, ads_t)
-	vm.rotation = Vector3(kick * 0.08 * (1.0 - ads_t * 0.6) + (0.05 if me.speed_now > 6.0 else 0.0), lerpf(0.035, 0.0, ads_t), sway * 1.2 * (1.0 - ads_t))
+	vm.rotation = Vector3(kick * 0.08 * (1.0 - ads_t * 0.6) + (0.05 if me.speed_now > 5.0 else 0.0), lerpf(0.035, 0.0, ads_t), sway * 1.2 * (1.0 - ads_t))
 	if me.reload_t > 0.0:
 		vm.rotation.x = -0.55
 		vm.position.y -= 0.1
@@ -397,7 +402,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	vm_flash.scale = Vector3.ONE * randf_range(0.8, 1.3)
 	if me.alive and me.on_ground and me.speed_now > 0.8:
 		step_acc += me.speed_now * dt
-		var stride := 2.1 if me.speed_now < 5.5 else 2.9
+		var stride := 2.1 if me.speed_now < 5.2 else 2.7
 		if step_acc >= stride:
 			step_acc = 0.0
 			sfx.step_sound(me.speed_now)
@@ -514,6 +519,7 @@ func consume(events: Array, local_id: int) -> void:
 					var gy := w.height_at(b.x, b.z)
 					if w.inside_box(b + Vector3(0, -0.05, 0)) or b.y > gy + 1.2:
 						fx.burst("wall", b, Vector3.UP)
+						fx.burst("spark", b, Vector3.UP)
 					else:
 						fx.burst("dust", b, Vector3.UP)
 				if e.id == local_id:
