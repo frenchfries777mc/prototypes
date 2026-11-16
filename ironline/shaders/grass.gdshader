@@ -16,6 +16,8 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = COLOR.rgb * mix(0.5, 1.12, hh);
+	ALBEDO = COLOR.rgb;
 	ROUGHNESS = 1.0;
+	// 역광에서 잎이 비쳐 보이는 느낌
+	BACKLIGHT = vec3(0.30, 0.34, 0.10) * hh;
 }

@@ -2,7 +2,7 @@ class_name View
 extends Node3D
 ## 시뮬레이션 상태를 3D 장면으로 그린다(읽기 전용). 조명·그림자·스키닝 캐릭터·이펙트·사운드를 담당한다.
 
-const HAZE := Color(0.74, 0.72, 0.66)
+const HAZE := Color(0.80, 0.69, 0.56)
 const COL_A := Color(0.36, 0.58, 1.0)
 const COL_B := Color(1.0, 0.78, 0.3)
 const COL_N := Color(0.82, 0.82, 0.82)
@@ -17,6 +17,7 @@ class UG:
 	var sk: Skeleton3D
 	var mi: MeshInstance3D
 	var flash: MeshInstance3D
+	var blob: MeshInstance3D
 	var st := {}
 	var weapon := -1
 	var flash_t := 0.0
@@ -41,6 +42,7 @@ var vm: MeshInstance3D
 var vm_weapon := -1
 var kick := 0.0
 var shake := 0.0
+var shake_amt := 0.5
 var bob := 0.0
 var debug_3p := false
 var tp_dist := 3.2
@@ -50,6 +52,8 @@ var flash_quad: QuadMesh
 var cam_pos := Vector3.ZERO
 var frame_budget_shots := 0
 var grass_root: Node3D
+var blob_mesh: PlaneMesh
+var idle_t := 0.0
 var shell_t := 4.0
 var ads_t := 0.0
 var sun_uv := Vector2(0.5, 0.2)
@@ -82,41 +86,48 @@ func setup(s: Sim) -> void:
 
 
 func _build_env() -> void:
+	# 해가 낮게 걸린 늦은 오후: 따뜻한 직사광 + 차가운 그늘, 짙은 연무
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sm := ShaderMaterial.new()
 	sm.shader = load("res://shaders/sky.gdshader")
+	sm.set_shader_parameter("top_col", Color(0.13, 0.26, 0.52))
+	sm.set_shader_parameter("mid_col", Color(0.46, 0.57, 0.72))
+	sm.set_shader_parameter("horizon_col", Color(0.93, 0.74, 0.54))
+	sm.set_shader_parameter("ground_col", Color(0.36, 0.31, 0.26))
+	sm.set_shader_parameter("cloud_cover", 0.52)
 	sky.sky_material = sm
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.52, 0.56, 0.64)
-	env.ambient_light_energy = 0.9
+	env.ambient_light_color = Color(0.50, 0.54, 0.66)
+	env.ambient_light_energy = 1.05
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
-	env.tonemap_white = 5.0
+	env.tonemap_exposure = 1.0
+	env.tonemap_white = 5.5
 	env.fog_enabled = true
 	env.fog_light_color = HAZE
-	env.fog_density = 0.0042
-	env.fog_sun_scatter = 0.25
+	env.fog_density = 0.0036
+	env.fog_sun_scatter = 0.45
 	env.fog_sky_affect = 0.0
 	env.adjustment_enabled = true
-	env.adjustment_contrast = 1.06
-	env.adjustment_saturation = 1.08
+	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 1.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-38.0, 42.0, 0.0)
-	sun.light_color = Color(1.0, 0.9, 0.76)
-	sun.light_energy = 1.55
+	sun.rotation_degrees = Vector3(-23.0, 150.0, 0.0)
+	sun.light_color = Color(1.0, 0.79, 0.56)
+	sun.light_energy = 2.1
 	sun.shadow_enabled = true
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 120.0
-	sun.directional_shadow_split_1 = 0.25
+	sun.directional_shadow_split_1 = 0.22
 	sun.shadow_bias = 0.05
-	sun.shadow_normal_bias = 1.2
-	sun.shadow_blur = 1.3
+	sun.shadow_normal_bias = 1.4
+	sun.shadow_blur = 1.2
 	add_child(sun)
 
 
@@ -127,7 +138,9 @@ func apply_quality(q: int) -> void:
 	fx.fire_lights = q >= 1
 	if fx.motes != null:
 		fx.motes.visible = q >= 1
-	sun.directional_shadow_max_distance = 120.0 if q >= 2 else 80.0
+	sun.directional_shadow_max_distance = 150.0 if q >= 2 else 90.0
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if q >= 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	RenderingServer.directional_shadow_atlas_set_size(4096 if q >= 2 else 2048, true)
 	var vp := get_viewport()
 	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][clampi(q, 0, 2)]
 	if q == 0:
@@ -187,6 +200,15 @@ func _build_units() -> void:
 	flash_mat.albedo_color = Color(1.0, 0.82, 0.45, 1.0)
 	flash_mat.albedo_texture = fx._soft
 	flash_quad.material = flash_mat
+	blob_mesh = PlaneMesh.new()
+	blob_mesh.size = Vector2(1.5, 1.5)
+	var bmat := StandardMaterial3D.new()
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bmat.albedo_color = Color(0.0, 0.0, 0.0, 0.5)
+	bmat.albedo_texture = fx._soft
+	bmat.disable_fog = true
+	blob_mesh.material = bmat
 	var skin := Rig.skin()
 	for u in sim.units:
 		var ug := UG.new()
@@ -209,6 +231,11 @@ func _build_units() -> void:
 		ug.flash.visible = false
 		ug.flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		ba.add_child(ug.flash)
+		ug.blob = MeshInstance3D.new()
+		ug.blob.mesh = blob_mesh
+		ug.blob.position = Vector3(0, 0.05, 0)
+		ug.blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		ug.root.add_child(ug.blob)
 		ug.st = Rig.new_state()
 		ug.root.visible = false
 		add_child(ug.root)
@@ -289,7 +316,7 @@ func _shells(dt: float, shake_scale: float) -> void:
 	fx.blast(p)
 	get_tree().create_timer(minf(d / 340.0, 1.6)).timeout.connect(func(): sfx.boom_at(p))
 	if shake_scale > 0.0 and d < 100.0:
-		shake = maxf(shake, (1.0 - d / 100.0) * 1.6 * shake_scale)
+		shake = maxf(shake, (1.0 - d / 100.0) * 0.8 * shake_scale)
 
 
 func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt: float) -> void:
@@ -311,8 +338,8 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	# 카메라
 	var sh := Vector3.ZERO
 	if shake > 0.0:
-		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * shake * 0.03
-	shake = maxf(0.0, shake - dt * 3.0)
+		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * minf(shake, 1.0) * shake_amt * 0.02
+	shake = maxf(0.0, shake - dt * 5.0)
 	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
 	if spectating:
 		var tu: Sim.Unit = sim.units[spec_id]
@@ -341,9 +368,14 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	var amp := minf(1.0, me.speed_now * 0.25)
 	var sway := sin(bob) * 0.008 * amp
 	var lift := absf(cos(bob)) * 0.006 * amp
-	vm.scale = Vector3.ONE * 0.85
-	vm.position = Vector3(0.19 + sway, -0.2 - lift, -0.42 + kick * 0.07).lerp(Vector3(0.0, -0.118, -0.36 + kick * 0.05), ads_t)
-	vm.rotation = Vector3(kick * 0.09 + (0.04 if me.speed_now > 6.0 else 0.0), 0.0, sway * 1.2)
+	idle_t += dt
+	var breath := sin(idle_t * 1.3) * 0.0022
+	var sight_y: float = [0.054, 0.05, 0.082][clampi(me.weapon, 0, 2)]
+	vm.scale = Vector3.ONE * 0.9
+	var hip := Vector3(0.165 + sway, -0.185 - lift + breath, -0.33 + kick * 0.07)
+	var aim := Vector3(0.0, -sight_y * 0.9 - 0.002 + breath * 0.3, -0.24 + kick * 0.05)
+	vm.position = hip.lerp(aim, ads_t)
+	vm.rotation = Vector3(kick * 0.08 * (1.0 - ads_t * 0.6) + (0.05 if me.speed_now > 6.0 else 0.0), lerpf(0.035, 0.0, ads_t), sway * 1.2 * (1.0 - ads_t))
 	if me.reload_t > 0.0:
 		vm.rotation.x = -0.55
 		vm.position.y -= 0.1
@@ -360,7 +392,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 		vm.rotation.x -= bm * 0.06
 	vm_flash_t = maxf(0.0, vm_flash_t - dt)
 	vm_flash.visible = vm_flash_t > 0.0 and me.alive
-	vm_flash.position = Vector3(0.0, 0.02, -1.06 if me.weapon != 1 else -0.58)
+	vm_flash.position = Vector3(0.0, 0.02, [-1.1, -0.56, -1.02][clampi(me.weapon, 0, 2)])
 	vm_flash.rotation.z = randf() * TAU
 	vm_flash.scale = Vector3.ONE * randf_range(0.8, 1.3)
 	if me.alive and me.on_ground and me.speed_now > 0.8:
@@ -453,6 +485,7 @@ func _update_unit(u: Sim.Unit, ug: UG, alpha: float, dt: float, local_id: int) -
 		b = b * Basis(Vector3.RIGHT, fall * (PI * 0.5 - 0.1))
 		p.y += fall * 0.12
 	ug.root.transform = Transform3D(b, p)
+	ug.blob.visible = dist < 70.0
 	var want_shadow := dist < SHADOW_DIST and quality >= 1
 	if want_shadow != ug.shadow:
 		ug.shadow = want_shadow
@@ -485,7 +518,7 @@ func consume(events: Array, local_id: int) -> void:
 						fx.burst("dust", b, Vector3.UP)
 				if e.id == local_id:
 					kick = 1.0
-					shake += 0.35
+					shake += 0.12
 					vm_flash_t = 0.045
 					if shooter.weapon == 0:
 						bolt_t = 0.8
@@ -505,12 +538,12 @@ func consume(events: Array, local_id: int) -> void:
 							var dd := cp2.distance_to(cam_pos)
 							if dd < 3.5 and e.a.distance_to(cam_pos) > 6.0:
 								sfx.whiz_at(cp2)
-								shake += 0.15
+								shake += 0.04
 			"hit":
 				if e.a == local_id:
 					sfx.play2d(sfx.tick, -4.0, 1.4 if e.head else 1.0)
 				if e.v == local_id:
-					shake += 1.0
+					shake += 0.6
 					sfx.play2d(sfx.thump, -2.0)
 			"kill":
 				if e.k == local_id:

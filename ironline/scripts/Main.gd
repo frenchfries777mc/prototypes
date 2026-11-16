@@ -475,6 +475,7 @@ func _play(dt: float) -> void:
 	hud.show_score = Input.is_key_pressed(KEY_TAB)
 	hud.look_yaw = look_yaw
 	hud.spec_id = view.spec_id
+	view.shake_amt = menu.shake_amt
 	var captured: bool = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or bool(cfg.nomouse)
 	hud.captured = captured
 	acc += dt
