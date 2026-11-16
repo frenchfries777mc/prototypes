@@ -848,5 +848,144 @@ if p2 hits flag
   add 5 to p2.score
   after 1 sec
     win
+`,
+  'Haunted Manor': `title "Haunted Manor"
+background night
+lives 3
+music chill
+found = []
+wind right 40
+
+map
+  ................Q.......#.....Q.....Q.............#.......Q.............
+  ........................#.........................#.....................
+  ........................#.........................#.....................
+  ...................G....#.......G.................#.....G...............
+  ..................===...#......===................#....===..............
+  ........................#.........................#.....................
+  ........C.C.C...........#.........................#.........CCCC........
+  ...P..........S.........#...R...M.......S...R.....#.....M.....R.....F...
+  ########################################################################
+
+player.jumps 2
+
+label "keys {len(found)} / 3" at center top
+
+if player hits gem
+  gem.sparkle
+  add "key" to found
+  score +10
+
+if player hits star
+  star.sparkle
+  player.power ghost 6
+  banner "GHOST!" 1 sec
+
+if player hits spider
+  player.respawn
+  lives -1
+
+if player hits crab
+  player.respawn
+  lives -1
+
+if player hits mushroom
+  player.respawn
+  lives -1
+
+if player hits coin
+  coin.sparkle
+  score +5
+
+every 6 sec
+  g = make ghost at random top
+  g.phase
+  g.chase player 80 900
+  g.life 14
+
+if player hits ghost
+  ghost.explode
+  lives -1
+
+every 7 sec
+  if chance(50)
+    wind left 90
+  else
+    wind right 90
+
+if player hits flag
+  if len(found) >= 3
+    banner "탈출!" 2 sec
+    win
+  else
+    banner "열쇠 3개를 모아 오세요" 2 sec
+`,
+  'Split Duel': `title "Split Duel"
+background forest
+lives 5
+music happy
+
+map
+  ................................................................
+  ................................................................
+  ..C..C..........C.C..........Q.........C.C...............G......
+  ................=====......=====.......=====.......#............
+  .P......M.....................R..........M........###...F.......
+  .........###......T...<<<<<<..............T.....#####...........
+  ################################################################
+
+p2 = make hero at player
+  control platformer wasd
+  color pink
+player.control platformer arrows
+player.jumps 2
+p2.jumps 2
+camera split player and p2
+
+if player hits coin
+  coin.sparkle
+  add 1 to player.score
+
+if p2 hits coin
+  coin.sparkle
+  add 1 to p2.score
+
+if player hits gem
+  gem.sparkle
+  add 5 to player.score
+
+if p2 hits gem
+  gem.sparkle
+  add 5 to p2.score
+
+if player hits spider
+  player.respawn
+
+if p2 hits spider
+  p2.respawn
+
+if player hits crab
+  player.respawn
+
+if p2 hits crab
+  p2.respawn
+
+if player stomps mushroom
+  mushroom.explode
+  add 3 to player.score
+
+if p2 stomps mushroom
+  mushroom.explode
+  add 3 to p2.score
+
+if player hits flag
+  banner "P1 승리!" 2 sec
+  after 1 sec
+    win
+
+if p2 hits flag
+  banner "P2 승리!" 2 sec
+  after 1 sec
+    win
 `
 };
