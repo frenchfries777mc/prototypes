@@ -26,7 +26,9 @@ func _init() -> void:
 	print("  월드 생성 %.0f ms, 상자 %d개" % [(Time.get_ticks_usec() - t_build) / 1000.0, sim.world.boxes.size()])
 
 	# 사람 슬롯 하나를 직접 조종해 입력 경로도 검사한다
-	sim.claim_slot(0, 1)
+	var human := not (args.size() > 3 and args[3] == "bots")
+	if human:
+		sim.claim_slot(0, 1)
 
 	var ticks := int(secs / Sim.TICK)
 	var worst := 0.0
@@ -36,7 +38,8 @@ func _init() -> void:
 	var caps := 0
 	var bad := false
 	for i in ticks:
-		sim.set_input(0, Vector2(0, 1), 0.0, 0.0, i % 20 < 5, i % 90 == 0, false, false)
+		if human:
+			sim.set_input(0, Vector2(0, 1), 0.0, 0.0, i % 20 < 5, i % 90 == 0, false, false)
 		var t0 := Time.get_ticks_usec()
 		sim.step(Sim.TICK)
 		var dt := (Time.get_ticks_usec() - t0) / 1000.0
@@ -75,7 +78,10 @@ func _init() -> void:
 	for u in sim.units:
 		if u.alive:
 			alive += 1
-	check(alive > per_team, "생존자가 충분함 (%d)" % alive)
+	if sim.winner < 0:
+		check(alive > per_team, "생존자가 충분함 (%d)" % alive)
+	else:
+		check(sim.time < 420.0, "경기가 7분 안에 끝남 (%.0f초)" % sim.time)
 
 	# 순차 점령 규칙: 상대 본진 옆 거점을 안 가진 채로는 본진을 건드릴 수 없다
 	var s2 := Sim.new()
