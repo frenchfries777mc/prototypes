@@ -31,7 +31,7 @@ const GLOBAL := [
 ]
 
 const TEAM := [
-	{"coat": Color(0.20, 0.27, 0.35), "coat2": Color(0.16, 0.22, 0.29), "pants": Color(0.15, 0.19, 0.25),
+	{"coat": Color(0.17, 0.21, 0.27), "coat2": Color(0.135, 0.17, 0.22), "pants": Color(0.13, 0.16, 0.2),
 	 "helmet": Color(0.22, 0.25, 0.28), "wrap": Color(0.20, 0.23, 0.26), "mark": Color(0.55, 0.68, 0.88)},
 	{"coat": Color(0.33, 0.29, 0.13), "coat2": Color(0.27, 0.23, 0.10), "pants": Color(0.27, 0.23, 0.11),
 	 "helmet": Color(0.30, 0.26, 0.12), "wrap": Color(0.31, 0.27, 0.13), "mark": Color(0.88, 0.76, 0.42)},
@@ -302,24 +302,164 @@ static func death_pose(sk: Skeleton3D) -> void:
 
 # ---------------------------------------------------------------- 1인칭 총과 팔
 
+## Z 축 방향으로 뻗는 타원 단면 관(프로파일 = (반지름, 시작점에서의 거리)).
+## back=false 면 origin 에서 총구(-Z) 쪽으로, true 면 개머리판(+Z) 쪽으로 자란다. pitch 로 위아래 기울임.
+static func _tube(g: Geo, prof: Array, origin: Vector3, back: bool, pitch: float, sx: float, sy: float,
+		col: Color, segs: int = 14) -> void:
+	var rot := Basis(Vector3.RIGHT, pitch) * Basis(Vector3.RIGHT, PI * 0.5 if back else -PI * 0.5)
+	g.lathe(prof, segs, Transform3D(rot * Basis.from_scale(Vector3(sx, 1.0, sy)), origin), col, 0)
+
+
+## 손: 손바닥 + 두 마디 손가락 4개 + 엄지. 로컬 축: x=손가락 관절 줄, y=손등 방향, -z=손가락 방향, -y=쥐는 방향.
+static func _hand(g: Geo, xf: Transform3D, curl: float, col: Color) -> void:
+	g.sphere(1.0, xf * Transform3D(Basis.from_scale(Vector3(0.046, 0.02, 0.05)), Vector3(0, 0, 0)), col, 0, Vector3.ONE, 6, 10)
+	for i in 4:
+		var kx := -0.033 + 0.022 * i
+		var ln := 0.036 if (i == 0 or i == 3) else 0.042
+		var k := Vector3(kx, 0.004, -0.044)
+		var p1 := k + Vector3(0, -0.012 * curl, -ln)
+		var p2 := p1 + Vector3(0, -ln * 0.85 * curl, -ln * (1.0 - curl) * 0.8 + 0.006 * curl)
+		var p3 := p2 + Vector3(0, -0.012 * curl, 0.022 * curl)
+		g.limb(xf * k, xf * p1, 0.0105, 0.0098, col, 0, 7)
+		g.limb(xf * p1, xf * p2, 0.0098, 0.009, col, 0, 7)
+		g.limb(xf * p2, xf * p3, 0.009, 0.008, col * 0.95, 0, 6)
+		g.sphere(0.0118, xf * Transform3D(Basis.IDENTITY, k), col * 0.93, 0, Vector3.ONE, 4, 7)
+	# 엄지
+	var t0 := Vector3(0.04, -0.004, 0.012)
+	var t1 := t0 + Vector3(0.02, -0.012 * curl, -0.034)
+	var t2 := t1 + Vector3(-0.004, -0.02 * curl, -0.03)
+	g.limb(xf * t0, xf * t1, 0.0135, 0.0115, col, 0, 7)
+	g.limb(xf * t1, xf * t2, 0.0115, 0.0098, col * 0.96, 0, 7)
+
+
+## 1인칭 전용 고해상도 총기. cg=천/피부, wg=목재, mg=강철. 총구 -Z, 원점은 리시버.
+static func _weapon_fp(wg: Geo, mg: Geo, w: int) -> void:
+	var blue := Color(0.07, 0.075, 0.085)
+	var worn := Color(0.16, 0.165, 0.17)
+	var wood := Color(0.20, 0.105, 0.045)
+	var wood2 := Color(0.16, 0.08, 0.035)
+	var X := func(p: Vector3) -> Transform3D: return Transform3D(Basis.IDENTITY, p)
+	match w:
+		0:
+			# --- 총열과 총구, 가늠쇠
+			mg.rod(Vector3(0, 0.02, -0.26), Vector3(0, 0.02, -1.06), 0.0105, 0.0088, blue, 0, 12)
+			mg.rod(Vector3(0, 0.02, -1.06), Vector3(0, 0.02, -1.075), 0.0098, 0.0098, worn, 0, 12)
+			mg.cone(0.014, 0.014, 0.02, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 0.02, -1.0)), blue, 0, 12, true)
+			mg.box(Vector3(0.004, 0.022, 0.006), X.call(Vector3(0, 0.043, -1.01)), worn)
+			for sx in [-1.0, 1.0]:
+				mg.box(Vector3(0.003, 0.02, 0.016), X.call(Vector3(0.0085 * sx, 0.04, -1.01)), blue)
+			# --- 앞 손잡이(목재): 타원 단면
+			_tube(wg, [Vector2(0.0, 0.0), Vector2(0.021, 0.004), Vector2(0.024, 0.05), Vector2(0.0235, 0.42), Vector2(0.02, 0.5), Vector2(0.0, 0.505)], Vector3(0, 0.004, -0.27), false, 0.0, 1.0, 1.28, wood)
+			_tube(wg, [Vector2(0.0, 0.0), Vector2(0.016, 0.003), Vector2(0.0165, 0.33), Vector2(0.0, 0.335)], Vector3(0, 0.03, -0.36), false, 0.0, 1.05, 0.7, wood2)
+			# 총열 고정띠 2개 + 착검 돌기
+			for bz in [-0.56, -0.78]:
+				mg.cone(0.0262, 0.0262, 0.016, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5) * Basis.from_scale(Vector3(1.0, 1.0, 1.3)), Vector3(0, 0.006, bz)), worn, 0, 14, false)
+			mg.rod(Vector3(0, -0.018, -0.77), Vector3(0, -0.018, -0.9), 0.004, 0.004, blue, 0, 6)
+			# --- 리시버(둥근 몸통) + 노리쇠 + 가늠자
+			mg.rod(Vector3(0, 0.014, 0.05), Vector3(0, 0.014, -0.27), 0.0195, 0.0195, blue, 0, 14)
+			mg.rod(Vector3(0, 0.016, 0.085), Vector3(0, 0.016, 0.05), 0.012, 0.014, worn, 0, 10)
+			mg.rod(Vector3(0.012, 0.018, -0.02), Vector3(0.05, -0.006, -0.012), 0.0055, 0.0055, worn, 0, 8)
+			mg.sphere(0.0125, X.call(Vector3(0.056, -0.012, -0.011)), worn, 0, Vector3.ONE, 6, 10)
+			mg.box(Vector3(0.02, 0.006, 0.07), X.call(Vector3(0, 0.036, -0.21)), blue)
+			mg.box(Vector3(0.016, 0.014, 0.004), X.call(Vector3(0, 0.044, -0.178)), blue)
+			mg.box(Vector3(0.004, 0.006, 0.005), X.call(Vector3(0, 0.049, -0.178)), Color(0.02, 0.02, 0.02))
+			# --- 몸통 목재, 손목, 개머리판(뒤로 갈수록 굵어지고 아래로 처짐)
+			_tube(wg, [Vector2(0.0, 0.0), Vector2(0.024, 0.004), Vector2(0.0262, 0.06), Vector2(0.0262, 0.32), Vector2(0.0, 0.325)], Vector3(0, -0.006, 0.05), false, 0.0, 1.0, 1.25, wood)
+			_tube(wg, [Vector2(0.021, 0.0), Vector2(0.0185, 0.05), Vector2(0.019, 0.1), Vector2(0.027, 0.2), Vector2(0.036, 0.33), Vector2(0.037, 0.375), Vector2(0.0, 0.38)], Vector3(0, -0.008, 0.04), true, -0.2, 0.62, 1.7, wood)
+			mg.cone(0.0375, 0.0375, 0.006, Transform3D(Basis(Vector3.RIGHT, -0.2) * Basis(Vector3.RIGHT, PI * 0.5) * Basis.from_scale(Vector3(0.62, 1.0, 1.7)), Vector3(0, -0.084, 0.413)), worn, 0, 14, true)
+			# --- 방아쇠울과 방아쇠, 탄창 바닥
+			mg.box(Vector3(0.008, 0.004, 0.085), X.call(Vector3(0, -0.058, 0.0)), blue)
+			mg.rod(Vector3(0, -0.04, -0.045), Vector3(0, -0.058, -0.04), 0.004, 0.004, blue, 0, 6)
+			mg.rod(Vector3(0, -0.058, 0.04), Vector3(0, -0.04, 0.05), 0.004, 0.004, blue, 0, 6)
+			mg.rod(Vector3(0, -0.035, 0.012), Vector3(0, -0.052, 0.006), 0.003, 0.0025, worn, 0, 6)
+			mg.box(Vector3(0.022, 0.03, 0.075), X.call(Vector3(0, -0.047, -0.095)), blue)
+		1:
+			# --- 구멍 뚫린 총열 덮개
+			mg.rod(Vector3(0, 0.014, -0.1), Vector3(0, 0.014, -0.48), 0.0235, 0.0235, blue, 0, 16)
+			for row in 6:
+				var a := TAU * row / 6.0 + 0.3
+				for k in 7:
+					mg.sphere(1.0, Transform3D(Basis.from_scale(Vector3(0.0062, 0.0062, 0.0085)), Vector3(cos(a) * 0.0232, 0.014 + sin(a) * 0.0232, -0.15 - 0.047 * k)), Color(0.01, 0.01, 0.012), 0, Vector3.ONE, 4, 6)
+			mg.rod(Vector3(0, 0.014, -0.48), Vector3(0, 0.014, -0.5), 0.0245, 0.02, worn, 0, 16)
+			mg.rod(Vector3(0, 0.014, -0.5), Vector3(0, 0.014, -0.535), 0.0095, 0.0095, blue, 0, 10)
+			mg.box(Vector3(0.004, 0.02, 0.006), X.call(Vector3(0, 0.046, -0.46)), worn)
+			# --- 리시버 관 + 장전 손잡이 + 가늠자
+			mg.rod(Vector3(0, 0.014, 0.17), Vector3(0, 0.014, -0.1), 0.0225, 0.0225, blue, 0, 16)
+			mg.rod(Vector3(0, 0.014, 0.185), Vector3(0, 0.014, 0.17), 0.019, 0.0225, worn, 0, 12)
+			mg.rod(Vector3(0.02, 0.016, 0.02), Vector3(0.048, 0.016, 0.02), 0.005, 0.005, worn, 0, 8)
+			mg.sphere(0.0095, X.call(Vector3(0.052, 0.016, 0.02)), worn, 0, Vector3.ONE, 5, 8)
+			mg.box(Vector3(0.014, 0.012, 0.004), X.call(Vector3(0, 0.044, 0.06)), blue)
+			# --- 왼쪽으로 뻗은 탄창
+			mg.box(Vector3(0.05, 0.03, 0.05), X.call(Vector3(-0.04, 0.012, -0.11)), blue)
+			mg.box(Vector3(0.2, 0.026, 0.04), Transform3D(Basis(Vector3(0, 0, 1), 0.12), Vector3(-0.15, 0.0, -0.11)), worn)
+			# --- 목재 몸통과 개머리판
+			_tube(wg, [Vector2(0.0, 0.0), Vector2(0.025, 0.004), Vector2(0.028, 0.05), Vector2(0.028, 0.3), Vector2(0.0, 0.305)], Vector3(0, -0.012, 0.11), false, 0.0, 1.0, 1.2, wood)
+			_tube(wg, [Vector2(0.022, 0.0), Vector2(0.019, 0.05), Vector2(0.02, 0.09), Vector2(0.028, 0.18), Vector2(0.036, 0.29), Vector2(0.037, 0.33), Vector2(0.0, 0.335)], Vector3(0, -0.014, 0.1), true, -0.2, 0.62, 1.7, wood)
+			mg.box(Vector3(0.008, 0.004, 0.08), X.call(Vector3(0, -0.062, 0.05)), blue)
+			mg.rod(Vector3(0, -0.04, 0.062), Vector3(0, -0.056, 0.056), 0.003, 0.0025, worn, 0, 6)
+		_:
+			# --- 굵은 냉각 통과 나팔형 총구
+			mg.rod(Vector3(0, 0.018, -0.16), Vector3(0, 0.018, -0.92), 0.034, 0.034, blue, 0, 18)
+			mg.rod(Vector3(0, 0.018, -0.92), Vector3(0, 0.018, -0.99), 0.034, 0.042, worn, 0, 18)
+			mg.rod(Vector3(0, 0.018, -0.985), Vector3(0, 0.018, -0.99), 0.03, 0.012, Color(0.01, 0.01, 0.01), 0, 14)
+			for k in 4:
+				mg.cone(0.0355, 0.0355, 0.012, Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 0.018, -0.25 - 0.19 * k)), worn, 0, 18, false)
+			mg.box(Vector3(0.005, 0.03, 0.008), X.call(Vector3(0, 0.066, -0.9)), worn)
+			# --- 리시버와 원반 탄창(방사형 돌기)
+			mg.box(Vector3(0.054, 0.066, 0.4), X.call(Vector3(0, 0.006, 0.03)), blue)
+			mg.cone(0.1, 0.1, 0.03, X.call(Vector3(0, 0.04, -0.07)), worn, 0, 22, true)
+			mg.cone(0.035, 0.035, 0.012, X.call(Vector3(0, 0.07, -0.07)), blue, 0, 12, true)
+			for k in 12:
+				var a := TAU * k / 12.0
+				mg.box(Vector3(0.006, 0.006, 0.06), Transform3D(Basis(Vector3.UP, a), Vector3(sin(a) * 0.062, 0.073, -0.07 + cos(a) * 0.062)), blue)
+			mg.box(Vector3(0.014, 0.014, 0.004), X.call(Vector3(0, 0.05, 0.19)), blue)
+			# --- 권총 손잡이와 개머리판
+			wg.box(Vector3(0.034, 0.1, 0.045), Transform3D(Basis(Vector3.RIGHT, 0.3), Vector3(0, -0.075, 0.1)), wood)
+			_tube(wg, [Vector2(0.024, 0.0), Vector2(0.026, 0.1), Vector2(0.034, 0.24), Vector2(0.036, 0.3), Vector2(0.0, 0.305)], Vector3(0, 0.0, 0.23), true, -0.12, 0.7, 1.6, wood)
+			mg.box(Vector3(0.008, 0.004, 0.07), X.call(Vector3(0, -0.05, 0.07)), blue)
+			# --- 접은 양각대
+			mg.rod(Vector3(0.02, -0.02, -0.7), Vector3(0.05, -0.05, -0.3), 0.005, 0.005, worn, 0, 6)
+			mg.rod(Vector3(-0.02, -0.02, -0.7), Vector3(-0.05, -0.05, -0.3), 0.005, 0.005, worn, 0, 6)
+
+
 static func viewmodel_mesh(weapon: int) -> ArrayMesh:
 	var key := 100 + weapon
 	if _mesh_cache.has(key):
 		return _mesh_cache[key]
+	Geo.lod = 1.4
 	var cg := Geo.new()
+	var wg := Geo.new()
 	var mg := Geo.new()
-	var coat: Color = TEAM[0].coat
-	_weapon(cg, mg, weapon, Transform3D.IDENTITY, 0)
-	# 오른손(그립)과 소매
-	var hr := Vector3(0.0, -0.05, 0.03)
-	cg.sphere(0.036, Geo.xf_at(hr), SKIN, 0, Vector3(1.0, 0.9, 1.2))
-	cg.limb(hr + Vector3(0.0, -0.01, 0.04), Vector3(0.10, -0.26, 0.40), 0.04, 0.05, coat, 0)
-	# 왼손(받침)과 소매
-	var hl := Vector3(-0.005, -0.048, -0.47)
-	cg.sphere(0.04, Geo.xf_at(hl), SKIN, 0, Vector3(1.0, 0.85, 1.3))
-	cg.limb(hl + Vector3(-0.01, -0.01, 0.05), Vector3(-0.17, -0.20, -0.08), 0.043, 0.05, coat, 0)
+	var coat := Color(0.15, 0.18, 0.22)
+	var cuff := Color(0.10, 0.125, 0.155)
+	_weapon_fp(wg, mg, weapon)
+	# 오른손: 손목(개머리판 목)을 오른쪽에서 감싸 쥔다. 손등이 오른쪽, 손가락은 아래로 내려가 왼쪽으로 감긴다.
+	var grip_z := 0.1 if weapon == 0 else (0.16 if weapon == 1 else 0.1)
+	var grip_y := -0.03 if weapon != 2 else -0.075
+	var rb := Basis(Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 1, 0)) * Basis(Vector3.UP, 0.0)
+	rb = Basis(Vector3(0, 0, 1), deg_to_rad(-18)) * rb
+	var rpos := Vector3(0.03, grip_y, grip_z)
+	_hand(cg, Transform3D(rb, rpos), 1.0, SKIN)
+	var rw := rpos + Vector3(0.012, -0.012, 0.055)
+	var re := Vector3(0.15, -0.27, 0.5)
+	cg.limb(rw, re, 0.034, 0.052, coat, 0, 14)
+	cg.cone(0.044, 0.046, 0.045, Transform3D(cg._basis_y(re - rw), rw + (re - rw).normalized() * 0.01), cuff, 0, 14, false)
+	mg.sphere(0.006, Transform3D(Basis.IDENTITY, rw + (re - rw).normalized() * 0.03 + Vector3(0.04, 0.02, 0.0)), BRASS, 0, Vector3.ONE, 4, 6)
+	# 왼손: 앞 손잡이를 아래에서 받친다. 손등이 아래, 손가락은 오른쪽으로 돌아 위로 감긴다.
+	var fz := -0.5 if weapon == 0 else (-0.3 if weapon == 1 else -0.45)
+	var fy := -0.03 if weapon != 2 else -0.022
+	var lb := Basis(Vector3(0, 0, -1), Vector3(0, -1, 0), Vector3(-1, 0, 0))
+	lb = Basis(Vector3(0, 0, 1), deg_to_rad(14)) * lb
+	var lpos := Vector3(-0.006, fy - 0.012, fz)
+	_hand(cg, Transform3D(lb, lpos), 0.85, SKIN)
+	var lw := lpos + Vector3(-0.055, -0.02, 0.035)
+	var le := Vector3(-0.3, -0.3, -0.12)
+	cg.limb(lw, le, 0.034, 0.052, coat, 0, 14)
+	cg.cone(0.044, 0.046, 0.045, Transform3D(cg._basis_y(le - lw), lw + (le - lw).normalized() * 0.01), cuff, 0, 14, false)
 	var mesh := ArrayMesh.new()
-	cg.commit_to(mesh, Geo.mat_cloth())
-	mg.commit_to(mesh, Geo.mat_gear())
+	cg.commit_to(mesh, Geo.mat_cloth_clean())
+	wg.commit_to(mesh, Geo.mat_wood())
+	mg.commit_to(mesh, Geo.mat_steel())
+	Geo.lod = 1.0
 	_mesh_cache[key] = mesh
 	return mesh
