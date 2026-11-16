@@ -115,6 +115,14 @@ void fragment() {
 		col = mix(plaster, brickc, flake);
 		col *= 0.78 + 0.22 * clamp((wpos.y + 1.0) * 0.6, 0.0, 1.0);
 		rough = 0.95;
+	} else if (kind > 11.5 && kind < 12.5) {
+		// 바위: 덩어리진 노이즈 + 이끼 + 풍화된 줄무늬
+		float rn = fbm(wpos.xz * 2.2 + wpos.y * 2.7);
+		float rn2 = vnoise(wpos.xz * 9.0 + wpos.y * 7.0);
+		col = base * (0.55 + 0.85 * rn) * (0.88 + 0.24 * rn2);
+		float moss = smoothstep(0.55, 0.9, wnrm.y) * smoothstep(0.35, 0.7, rn);
+		col = mix(col, vec3(0.16, 0.22, 0.08), moss * 0.55);
+		rough = 0.95;
 	} else if (kind > 8.5 && kind < 9.5) {
 		// 기와
 		vec2 uv = vec2(wpos.x / 0.26, wpos.z / 0.34);

@@ -52,6 +52,9 @@ var flash_quad: QuadMesh
 var cam_pos := Vector3.ZERO
 var frame_budget_shots := 0
 var grass_root: Node3D
+var cam_motion := Vector2.ZERO
+var _last_yaw := 0.0
+var _last_pitch := 0.0
 var blob_mesh: PlaneMesh
 var idle_t := 0.0
 var shell_t := 4.0
@@ -345,6 +348,14 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	if shake > 0.0:
 		sh = Vector3(randf() - 0.5, randf() - 0.5, 0.0) * minf(shake, 1.0) * shake_amt * 0.02
 	shake = maxf(0.0, shake - dt * 5.0)
+	var dyaw := wrapf(look_yaw - _last_yaw, -PI, PI)
+	var dpitch := look_pitch - _last_pitch
+	_last_yaw = look_yaw
+	_last_pitch = look_pitch
+	var fovr := deg_to_rad(cam.fov)
+	var mv := Vector2(dyaw / (fovr * 1.7), -dpitch / fovr) * 0.55
+	mv = mv.limit_length(0.018)
+	cam_motion = cam_motion.lerp(mv if me.alive else Vector2.ZERO, minf(1.0, dt * 14.0))
 	cam.basis = Basis.from_euler(Vector3(look_pitch + sh.y, look_yaw + sh.x, 0.0))
 	if spectating:
 		var tu: Sim.Unit = sim.units[spec_id]
