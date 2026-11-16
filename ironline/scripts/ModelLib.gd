@@ -81,7 +81,7 @@ static func _apply_range(n: Node, far: float) -> void:
 static func tint(n: Node, col: Color) -> void:
 	if n is MeshInstance3D:
 		var mi := n as MeshInstance3D
-		for i in mi.get_surface_count():
+		for i in mi.get_surface_override_material_count():
 			var m := mi.get_active_material(i)
 			if m is StandardMaterial3D:
 				var d := (m as StandardMaterial3D).duplicate() as StandardMaterial3D
