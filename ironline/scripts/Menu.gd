@@ -46,6 +46,7 @@ var player_name := "병사"
 var quality := 3
 var bots := 30
 var sens := 1.0
+var shake_amt := 0.5
 var pref_team := -1
 var loadout := 0
 var multi_ok := false
@@ -149,12 +150,17 @@ func _load_settings() -> void:
 		quality = int(c.get_value("p", "q", quality))
 		bots = int(c.get_value("p", "bots", bots))
 		sens = float(c.get_value("p", "sens", sens))
+		shake_amt = float(c.get_value("p", "shake", shake_amt))
 		pref_team = int(c.get_value("p", "team", pref_team))
 		loadout = int(c.get_value("p", "loadout", loadout))
 		for k in stats:
 			stats[k] = int(c.get_value("stats", k, 0))
 	else:
 		player_name = "병사%d" % (randi() % 900 + 100)
+	if OS.has_feature("web"):
+		var acc := str(JavaScriptBridge.eval("String((function(){try{var a=window.parent.FFAuth;return (a&&a.user())?(a.nickname()||''):''}catch(e){return ''}})())", true))
+		if acc != "" and acc != "null" and acc != "undefined":
+			player_name = acc.substr(0, 12)
 
 
 func save_settings() -> void:
@@ -163,6 +169,7 @@ func save_settings() -> void:
 	c.set_value("p", "q", quality)
 	c.set_value("p", "bots", bots)
 	c.set_value("p", "sens", sens)
+	c.set_value("p", "shake", shake_amt)
 	c.set_value("p", "team", pref_team)
 	c.set_value("p", "loadout", loadout)
 	for k in stats:
@@ -562,8 +569,8 @@ func _build_settings() -> void:
 	p.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	p.offset_left = -240
 	p.offset_right = 240
-	p.offset_top = -190
-	p.offset_bottom = 190
+	p.offset_top = -215
+	p.offset_bottom = 215
 	p.add_theme_stylebox_override("panel", _flat(Color(0.05, 0.06, 0.07, 0.97), BRASS, 2, 0))
 	settings_ui.add_child(p)
 	var v := VBoxContainer.new()
@@ -608,6 +615,19 @@ func _build_settings() -> void:
 	sens_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sens_slider.value_changed.connect(func(x): sens = x; save_settings())
 	sr.add_child(sens_slider)
+	var shr := HBoxContainer.new()
+	v.add_child(shr)
+	var shl := _label("화면 흔들림", 15, KHAKI, font_cd)
+	shl.custom_minimum_size = Vector2(130, 0)
+	shr.add_child(shl)
+	var shake_slider := HSlider.new()
+	shake_slider.min_value = 0.0
+	shake_slider.max_value = 1.0
+	shake_slider.step = 0.05
+	shake_slider.value = shake_amt
+	shake_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shake_slider.value_changed.connect(func(x): shake_amt = x; save_settings())
+	shr.add_child(shake_slider)
 	v.add_child(_label("진영", 15, KHAKI, font_cd))
 	var tr := HBoxContainer.new()
 	tr.add_theme_constant_override("separation", 8)
