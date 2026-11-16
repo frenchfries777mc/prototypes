@@ -262,6 +262,31 @@ var ENEMY = {
       '<ellipse cx="50" cy="50" rx="3.6" ry="10" fill="#08020f"/><circle cx="45" cy="44" r="2.6" fill="#fff" opacity=".9"/>' +
       '<path d="M24 50 Q50 20 76 50" fill="none" stroke="#07040c" stroke-width="3" opacity=".7"/>';
   },
+  acolyte: function () {
+    var g = G('#9a4a3c', '#3a1612');
+    return defs(g) + shadow(26) +
+      '<circle cx="82" cy="46" r="18" fill="#ff7a3c" opacity=".2"/><line x1="82" y1="94" x2="82" y2="52" stroke="#7a5a3a" stroke-width="3.4" stroke-linecap="round"/>' +
+      '<circle cx="82" cy="44" r="8.4" fill="#ff7a3c"' + OL + '/><circle cx="79.500" cy="41.500" r="2.800" fill="#ffe8b0"/>' +
+      path('M46 22 Q18 32 20 72 L12 92 L80 92 L74 72 Q74 32 46 22Z', g[1]) +
+      '<ellipse cx="47" cy="42" rx="13" ry="15" fill="#120808"/>' + eye(42, 42, 2.6, '#ffb347') + eye(52, 42, 2.6, '#ffb347') +
+      path('M38 62 L47 76 L56 62Z', '#e8b04a') + '<path d="M30 80 Q47 86 64 80" stroke="#07080c" stroke-opacity=".35" stroke-width="2" fill="none"/>' +
+      '<path d="M70 58 Q76 56 80 52" stroke="' + '#6a2a22' + '" stroke-width="5" stroke-linecap="round" fill="none"/>';
+  },
+  warden: function () {
+    var g = G('#7488aa', '#2a3550'), h = G('#a8bad6', '#5a6e92');
+    return defs(g, h) + '<circle cx="50" cy="50" r="42" fill="#5cc8ff" opacity=".08"/>' + shadow(32) +
+      path('M30 92 L26 54 Q50 42 74 54 L70 92Z', g[1]) +
+      '<path d="M50 56 V90 M36 70 H64" stroke="#e8e6df" stroke-opacity=".45" stroke-width="2.200"/>' +
+      '<circle cx="76" cy="52" r="10" fill="' + h[1] + '"' + OL + '/>' +
+      path('M36 38 Q36 14 50 14 Q64 14 64 38 L60 46 L40 46Z', h[1]) +
+      '<rect x="40" y="26" width="20" height="7" rx="2" fill="#0a0e18"/>' + eye(45, 29.500, 2, '#5cc8ff') + eye(55, 29.500, 2, '#5cc8ff') +
+      '<path d="M50 14 V6" stroke="#5cc8ff" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M4 52 L30 50 L32 78 Q18 94 6 78Z" fill="#33446a"' + OL + '/><path d="M18 58 V80 M8 68 H28" stroke="#e8b04a" stroke-width="2.600" stroke-linecap="round"/>' +
+      '<rect x="80" y="66" width="12" height="16" rx="3" fill="#ffc24a" fill-opacity=".85" stroke="#7a5a1a" stroke-width="1.500"/><line x1="86" y1="60" x2="86" y2="66" stroke="#7a5a1a" stroke-width="2"/>';
+  },
+  brood: function () {
+    return shadow(16) + '<g transform="translate(50 66) scale(.56) translate(-50 -62)">' + spider(['#7a5a9a', '#2a1838', '#c8a0e8', '#4a3060', '#ff5a5a'], false) + '</g>';
+  },
   storm: function () {
     var f = G('#5a6ca0', '#1a2240');
     return defs(f) + '<circle cx="50" cy="46" r="48" fill="#ffd84a" opacity=".07"/>' +

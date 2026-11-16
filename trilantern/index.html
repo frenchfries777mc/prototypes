@@ -149,10 +149,10 @@ button{font:inherit;color:inherit;cursor:pointer}
 .enemy{flex:1;max-width:240px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:14px;
   border:2px solid transparent;transition:opacity .4s}
 .enemy.targetable{cursor:pointer;border-color:rgba(232,176,74,.6);background:rgba(232,176,74,.08);animation:pulse 1s infinite}
-.enemy.dead{opacity:0;pointer-events:none}
+.enemy.dead{opacity:0;pointer-events:none;flex:0 0 0;min-width:0;max-width:0;padding:0;margin:0 -4px;overflow:visible}
 .intent{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;font-family:var(--disp);font-size:17px;min-height:28px;align-items:center;
   background:rgba(8,10,14,.7);border:1px solid #3a4456;border-radius:12px;padding:2px 10px}
-.intent .atk{color:#ff9d9d}.intent .def{color:var(--blk)}.intent .buff{color:#8ff0b5}.intent .debuff{color:#d6a5ff}
+.intent .charge{color:#ffd27a}.intent .atk{color:#ff9d9d}.intent .def{color:var(--blk)}.intent .buff{color:#8ff0b5}.intent .debuff{color:#d6a5ff}
 .eicon{width:clamp(78px,24vw,132px);aspect-ratio:1;animation:bob 3.2s ease-in-out var(--bd,0s) infinite}
 .eicon.elite{width:clamp(92px,28vw,150px)}.eicon.boss{width:clamp(120px,38vw,210px)}
 .eicon svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 8px 10px rgba(0,0,0,.55))}
@@ -163,6 +163,9 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes enter{from{opacity:0;transform:translateY(-40px) scale(.7)}}
 @keyframes flashw{0%{filter:brightness(3) saturate(.2)}100%{filter:brightness(1)}}
 .ename{font-family:var(--disp);font-size:14px;color:#c4c9d4;white-space:nowrap}
+.aff{display:flex;gap:5px;justify-content:center;min-height:19px}
+.aff span{font-size:12px;padding:0 6px;border-radius:8px;background:rgba(8,10,14,.7);border:1px solid #3a4456;white-space:nowrap}
+.aff .w{color:#ffe08a;border-color:rgba(255,216,74,.55)}.aff .r{color:#9aa2b4}
 .hpbar{position:relative;width:100%;max-width:150px;height:17px;background:#07080b;border:1px solid #3a4456;border-radius:9px;overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,.6)}
 .hpbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(#ff6a6f,#c93036);transition:width .25s;border-radius:9px 0 0 9px}
 .hpbar.blk{border-color:var(--blk);box-shadow:0 0 10px rgba(110,168,255,.55),inset 0 2px 4px rgba(0,0,0,.6)}
@@ -209,6 +212,13 @@ button{font:inherit;color:inherit;cursor:pointer}
 .hand .card.sel{transform:translateY(-34px) scale(1.18);z-index:60;box-shadow:0 0 0 2px #fff,0 12px 30px rgba(0,0,0,.7)}
 .hand .card+.card{margin-left:min(8px,calc((100% - var(--n) * var(--cw)) / (var(--n) - 1)))}
 .hand .card.new{animation:drawin .22s ease-out}
+.card .wk{position:absolute;left:-6px;bottom:14px;z-index:3;font-size:11px;font-weight:700;padding:1px 6px;border-radius:8px;background:#ffd84a;color:#2a1f00;border:1px solid #0a0c11}
+.card .wk.rs{background:#6a7284;color:#e8e6df}
+.card .pin{position:absolute;right:-7px;bottom:12px;z-index:4;width:26px;height:26px;border-radius:50%;padding:0;font-size:13px;line-height:1;display:none;place-items:center;background:#1d2430;border:1px solid #4a5670}
+.card .pin:hover{border-color:var(--acc)}
+.hand .card:hover .pin,.hand .card.sel .pin,.hand .card.held .pin{display:grid}
+.hand .card.held{box-shadow:0 0 0 2px var(--acc),0 0 18px rgba(232,176,74,.55)}
+.hand .card.held .pin{background:var(--acc);border-color:var(--acc2)}
 @keyframes drawin{from{opacity:0;transform:translateY(40px)}}
 @media (hover:hover){
   .hand .card:hover{transform:translateY(-24px) scale(1.1);z-index:50}
@@ -238,6 +248,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* 효과 */
 #fxlayer{position:fixed;inset:0;pointer-events:none;z-index:200;overflow:hidden}
 .float{position:absolute;font-family:var(--disp);font-size:26px;text-shadow:0 2px 4px #000,0 0 2px #000;transform:translate(-50%,-50%);animation:floatup .9s ease-out forwards;white-space:nowrap}
+.float.weak{color:#ffd84a;font-size:34px;text-shadow:0 0 14px rgba(255,216,74,.8),0 2px 4px #000}.float.resist{color:#9aa2b4;font-size:20px}
 .float.hit{color:#ff6b6b}.float.blocked{color:#9fb3cc;font-size:18px}.float.block{color:var(--blk);font-size:20px}
 .float.heal{color:#6ee7a4}.float.st{color:#e6d3ff;font-size:18px}.float.say{color:var(--acc);font-size:20px}
 .hurt{animation:shake .28s}
