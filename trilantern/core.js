@@ -52,16 +52,24 @@ function calc(base, aSt, dSt, chillMul) {
   if (dSt && dSt.shock > 0) d *= 1.5;
   return Math.max(0, Math.floor(d));
 }
-function damageEnemy(S, e, d) {
+var CYC = ['f', 'i', 's'];
+function elMul(e, el) {
+  if (!el || el === 'n') return 1;
+  if (e.weak === el) return 1.5;
+  if (e.res === el) return 0.5;
+  return 1;
+}
+function damageEnemy(S, e, d, tag) {
   var blocked = Math.min(e.block, d);
-  e.block -= blocked; e.hp -= d - blocked;
+  e.block -= blocked; e.hp -= d - blocked; e.hurt = (e.hurt || 0) + d;
   S.stats.dmg += d - blocked;
-  fx(S, { t: 'hit', who: eid(S, e), n: d - blocked, blocked: blocked });
+  fx(S, { t: 'hit', who: eid(S, e), n: d - blocked, blocked: blocked, w: tag || '' });
   if (e.hp <= 0) { e.hp = 0; e.block = 0; fx(S, { t: 'die', who: eid(S, e) }); }
 }
 function hit(S, e, base) {
   if (!e || e.hp <= 0) return;
-  damageEnemy(S, e, calc(base, S.combat.st, e.st));
+  var m = elMul(e, S.combat.curEl);
+  damageEnemy(S, e, Math.floor(calc(base, S.combat.st, e.st) * m), m > 1 ? 'w' : m < 1 ? 'r' : '');
 }
 function hitAll(S, base) { alive(S).forEach(function (e) { hit(S, e, base); }); }
 function hitRand(S, base) { var a = alive(S); if (a.length) hit(S, pick(S, a), base); }
@@ -285,57 +293,65 @@ function rollRelic(S) {
 /* ---------- 적 ----------
  * 의도: a 피해, x 횟수, b 방어도, str 힘, st 플레이어에게 거는 상태, soot 그을음, heal 회복 */
 var ENEMIES = {
-  rat: { n: '재 쥐', i: '🐀', hp: [13, 17], rnd: 1, pat: [{ a: 5 }, { a: 5 }, { a: 3, str: 1 }] },
-  golem: { n: '석탄 골렘', i: '🪨', hp: [36, 42], pat: [{ a: 6, b: 6 }, { a: 11 }, { str: 2, b: 4 }] },
-  bat: { n: '동굴 박쥐', i: '🦇', hp: [19, 23], rnd: 1, pat: [{ a: 3, x: 2 }, { st: { shock: 2 } }, { a: 4, x: 2 }] },
-  spore: { n: '포자 버섯', i: '🍄', hp: [25, 29], pat: [{ a: 4, st: { chill: 2 } }, { a: 8 }, { soot: 1, b: 5 }] },
-  thief: { n: '도굴꾼', i: '🥷', hp: [29, 33], pat: [{ a: 9 }, { a: 6, b: 6 }, { a: 12 }] },
-  turtle: { n: '용암 거북', i: '🐢', hp: [68, 72], pat: [{ b: 12, str: 1 }, { a: 14 }, { a: 7, x: 2 }] },
-  wraith: { n: '쌍둥이 망령', i: '👻', hp: [32, 36], rnd: 1, pat: [{ a: 7, st: { chill: 1 } }, { st: { shock: 2 } }, { a: 10 }] },
-  queen: { n: '등불 삼키미', i: '🕷️', hp: [115, 115], pat: [{ soot: 1, b: 8 }, { a: 7, x: 2 }, { a: 15 }, { str: 1, b: 8 }] },
+  /* weak 약점 원소(+50%), res 저항 원소(-50%).  ch: 충전 — 그 턴에 이만큼 피해를 받으면 기절해서 다음 행동을 건너뛴다 */
+  rat: { n: '재 쥐', i: '🐀', hp: [13, 17], rnd: 1, weak: 's', pat: [{ a: 5 }, { a: 5 }, { a: 3, str: 1 }] },
+  golem: { n: '석탄 골렘', i: '🪨', hp: [36, 42], weak: 'i', res: 'f', pat: [{ a: 6, b: 6 }, { ch: 10 }, { a: 20 }, { str: 2, b: 4 }] },
+  bat: { n: '동굴 박쥐', i: '🦇', hp: [19, 23], rnd: 1, weak: 'f', res: 's', pat: [{ a: 3, x: 2 }, { st: { shock: 2 } }, { a: 4, x: 2 }] },
+  spore: { n: '포자 버섯', i: '🍄', hp: [25, 29], weak: 'f', res: 'i', pat: [{ a: 4, st: { chill: 2 } }, { a: 8 }, { soot: 1, b: 5 }] },
+  thief: { n: '도굴꾼', i: '🥷', hp: [29, 33], weak: 'i', pat: [{ a: 9 }, { a: 6, b: 6 }, { a: 12 }] },
+  turtle: { n: '용암 거북', i: '🐢', hp: [68, 72], weak: 'i', res: 'f', pat: [{ b: 12, str: 1 }, { a: 10 }, { ch: 14 }, { a: 28 }] },
+  wraith: { n: '쌍둥이 망령', i: '👻', hp: [32, 36], rnd: 1, weak: 's', res: 'i', pat: [{ a: 7, st: { chill: 1 } }, { st: { shock: 2 } }, { a: 10 }] },
+  queen: { n: '등불 삼키미', i: '🕷️', hp: [120, 120], weak: 'f', res: 's', pat: [{ soot: 1, b: 8 }, { a: 7, x: 2 }, { ch: 16 }, { a: 28 }, { summon: 'brood' }, { str: 1, b: 8 }] },
+  acolyte: { n: '불씨 사제', i: '🧙', hp: [24, 28], weak: 'f', pat: [{ buffAll: 1 }, { a: 5, b: 5 }, { healAlly: 8 }, { a: 7 }] },
+  brood: { n: '새끼 거미', i: '🕷️', hp: [8, 10], weak: 'f', pat: [{ a: 4 }, { a: 3, x: 2 }] },
 
-  sprite: { n: '얼음 정령', i: '🧊', hp: [44, 50], pat: [{ a: 10, st: { chill: 1 } }, { a: 7, b: 10 }, { a: 14 }] },
-  wolf: { n: '서리 늑대', i: '🐺', hp: [38, 42], rnd: 1, pat: [{ a: 5, x: 2 }, { str: 1, b: 5 }, { a: 6, x: 2 }] },
-  owl: { n: '눈 올빼미', i: '🦉', hp: [34, 38], pat: [{ st: { shock: 2 } }, { a: 12 }, { a: 5, x: 3 }] },
-  troll: { n: '동굴 트롤', i: '🧌', hp: [70, 78], pat: [{ a: 16 }, { b: 12, str: 2 }, { a: 20 }] },
-  spider: { n: '얼음 거미', i: '🕸️', hp: [38, 42], pat: [{ soot: 2 }, { a: 11 }, { a: 8, st: { chill: 2 } }] },
-  sentinel: { n: '수정 파수꾼', i: '💎', hp: [118, 124], pat: [{ b: 15 }, { a: 22 }, { a: 10, x: 2, st: { shock: 2 } }, { str: 3 }] },
-  shaman: { n: '설인 주술사', i: '🧙', hp: [96, 102], pat: [{ st: { chill: 3 }, soot: 1 }, { a: 15 }, { heal: 10, b: 10 }, { a: 9, x: 2 }] },
-  lord: { n: '서리 군주', i: '🥶', hp: [175, 175], pat: [{ b: 12, st: { chill: 2 } }, { a: 10, x: 2 }, { a: 22 }, { str: 2, soot: 2 }] },
+  sprite: { n: '얼음 정령', i: '🧊', hp: [44, 50], weak: 'f', res: 'i', pat: [{ a: 10, st: { chill: 1 } }, { a: 7, b: 10 }, { a: 14 }] },
+  wolf: { n: '서리 늑대', i: '🐺', hp: [38, 42], rnd: 1, weak: 's', res: 'i', pat: [{ a: 5, x: 2 }, { str: 1, b: 5 }, { a: 6, x: 2 }] },
+  owl: { n: '눈 올빼미', i: '🦉', hp: [34, 38], weak: 'f', res: 's', pat: [{ st: { shock: 2 } }, { a: 12 }, { a: 5, x: 3 }] },
+  troll: { n: '동굴 트롤', i: '🧌', hp: [70, 78], weak: 's', pat: [{ a: 12 }, { ch: 16 }, { a: 28 }, { b: 12, str: 2 }] },
+  spider: { n: '얼음 거미', i: '🕸️', hp: [38, 42], weak: 'f', res: 'i', pat: [{ soot: 2 }, { a: 11 }, { a: 8, st: { chill: 2 } }] },
+  sentinel: { n: '수정 파수꾼', i: '💎', hp: [118, 124], weak: 's', res: 'i', pat: [{ b: 15 }, { ch: 18 }, { a: 32 }, { a: 10, x: 2, st: { shock: 2 } }, { str: 3 }] },
+  shaman: { n: '설인 주술사', i: '🧙', hp: [96, 102], weak: 'f', pat: [{ st: { chill: 3 }, soot: 1 }, { a: 15 }, { heal: 10, b: 10 }, { a: 9, x: 2 }] },
+  lord: { n: '서리 군주', i: '🥶', hp: [175, 175], weak: 'f', res: 'i', pat: [{ b: 12, st: { chill: 2 } }, { a: 10, x: 2 }, { ch: 20 }, { a: 32 }, { str: 2, soot: 2 }] },
 
-  serpent: { n: '번개 뱀', i: '🐍', hp: [58, 64], pat: [{ a: 6, x: 2, st: { shock: 2 } }, { a: 15 }, { str: 2, b: 8 }] },
-  hawk: { n: '폭풍 매', i: '🦅', hp: [50, 54], rnd: 1, pat: [{ a: 4, x: 3 }, { a: 7, st: { shock: 2 } }, { a: 13 }] },
-  magma: { n: '용암 정령', i: '🌋', hp: [68, 74], pat: [{ a: 8, st: { burn: 4 } }, { a: 20 }, { a: 10, b: 14 }] },
-  automaton: { n: '강철 자동인형', i: '🤖', hp: [92, 98], pat: [{ b: 16 }, { a: 24 }, { a: 12, x: 2 }, { str: 3 }] },
-  drake: { n: '뇌룡의 새끼', i: '🐲', hp: [165, 175], pat: [{ a: 14, x: 2 }, { str: 3, b: 14 }, { a: 30 }, { st: { shock: 2 }, soot: 2 }] },
-  eye: { n: '심연의 눈', i: '👁️', hp: [148, 156], pat: [{ st: { chill: 2, shock: 2 } }, { a: 9, x: 3 }, { a: 26 }, { heal: 15, str: 2 }] },
-  storm: { n: '꺼지지 않는 폭풍', i: '🌪️', hp: [270, 270], enrage: { at: 0.5, str: 3 },
-    pat: [{ b: 16, str: 1 }, { a: 9, x: 3 }, { a: 28 }, { soot: 2, st: { shock: 2 } }, { a: 13, x: 2, st: { chill: 2 } }] }
+  serpent: { n: '번개 뱀', i: '🐍', hp: [58, 64], weak: 'i', res: 's', pat: [{ a: 6, x: 2, st: { shock: 2 } }, { a: 15 }, { str: 2, b: 8 }] },
+  hawk: { n: '폭풍 매', i: '🦅', hp: [50, 54], rnd: 1, weak: 'i', res: 's', pat: [{ a: 4, x: 3 }, { a: 7, st: { shock: 2 } }, { a: 13 }] },
+  magma: { n: '용암 정령', i: '🌋', hp: [68, 74], weak: 'i', res: 'f', pat: [{ a: 8, st: { burn: 4 } }, { a: 20 }, { a: 10, b: 14 }] },
+  automaton: { n: '강철 자동인형', i: '🤖', hp: [92, 98], weak: 's', res: 'i', pat: [{ b: 16 }, { ch: 20 }, { a: 34 }, { a: 12, x: 2 }, { str: 3 }] },
+  warden: { n: '심연 감시자', i: '🛡️', hp: [60, 66], weak: 'i', pat: [{ buffAll: 1, b: 8 }, { a: 9 }, { healAlly: 14 }, { a: 12, x: 2 }] },
+  drake: { n: '뇌룡의 새끼', i: '🐲', hp: [165, 175], weak: 'i', res: 's', pat: [{ a: 14, x: 2 }, { str: 3, b: 14 }, { ch: 22 }, { a: 36 }, { st: { shock: 2 }, soot: 2 }] },
+  eye: { n: '심연의 눈', i: '👁️', hp: [148, 156], weak: 's', res: 'f', pat: [{ st: { chill: 2, shock: 2 } }, { a: 9, x: 3 }, { a: 26 }, { heal: 15, str: 2 }] },
+  storm: { n: '꺼지지 않는 폭풍', i: '🌪️', hp: [270, 270], rot: 1, enrage: { at: 0.5, str: 3 },
+    pat: [{ b: 16, str: 1 }, { a: 9, x: 3 }, { ch: 26 }, { a: 38 }, { soot: 2, st: { shock: 2 } }, { a: 13, x: 2, st: { chill: 2 } }] }
 };
 var ACTS = [
   { name: '잿빛 갱도', easy: [['rat', 'rat'], ['bat', 'rat'], ['thief']],
-    fights: [['rat', 'rat', 'rat'], ['golem'], ['spore', 'rat'], ['bat', 'bat'], ['thief', 'rat'], ['spore', 'bat']],
+    fights: [['rat', 'rat', 'rat'], ['golem'], ['spore', 'rat'], ['bat', 'bat'], ['thief', 'rat'], ['spore', 'bat'], ['acolyte', 'bat'], ['acolyte', 'thief']],
     elites: [['turtle'], ['wraith', 'wraith']], boss: ['queen'] },
   { name: '서리 동굴', easy: [['wolf', 'wolf'], ['sprite', 'owl']],
-    fights: [['sprite', 'wolf'], ['troll'], ['owl', 'spider'], ['sprite', 'spider'], ['owl', 'wolf'], ['wolf', 'wolf', 'spider']],
+    fights: [['sprite', 'wolf'], ['troll'], ['owl', 'spider'], ['sprite', 'spider'], ['owl', 'wolf'], ['wolf', 'wolf', 'spider'], ['acolyte', 'wolf', 'owl'], ['acolyte', 'sprite']],
     elites: [['sentinel'], ['shaman']], boss: ['lord'] },
   { name: '뇌운 심연', easy: [['serpent', 'hawk'], ['automaton']],
-    fights: [['magma', 'hawk'], ['serpent', 'magma'], ['hawk', 'hawk', 'serpent'], ['automaton', 'hawk'], ['magma', 'magma']],
+    fights: [['magma', 'hawk'], ['serpent', 'magma'], ['hawk', 'hawk', 'serpent'], ['automaton', 'hawk'], ['magma', 'magma'], ['warden', 'serpent'], ['warden', 'magma', 'hawk'], ['warden', 'automaton']],
     elites: [['drake'], ['eye']], boss: ['storm'] }
 ];
 var STEPS = 8; // 막마다 0..7, 7 이 보스
 
+var HPM = 1.3; // 전체 난이도 조절
 function mkEnemy(S, key, kind) {
   var d = ENEMIES[key], a = S.asc || 0;
   var hp = ri(S, d.hp[0], d.hp[1]);
-  hp = Math.round(hp * (1 + (a >= 1 ? 0.08 : 0) + (a >= 3 && kind && kind !== 'combat' ? 0.15 : 0)));
-  var e = { key: key, hp: hp, maxHp: hp, block: 0, st: a >= 2 ? { str: 1 } : {}, pi: d.rnd ? ri(S, 0, d.pat.length - 1) : 0 };
+  hp = Math.round(hp * HPM * (1 + (a >= 1 ? 0.08 : 0) + (a >= 3 && kind && kind !== 'combat' ? 0.15 : 0)));
+  var e = { key: key, hp: hp, maxHp: hp, block: 0, hurt: 0, weak: d.weak || null, res: d.res || null, rk: 0, st: a >= 2 ? { str: 1 } : {}, pi: d.rnd ? ri(S, 0, d.pat.length - 1) : 0 };
+  if (d.rot) { e.weak = CYC[0]; e.res = CYC[1]; }
   e.intent = d.pat[e.pi % d.pat.length];
   return e;
 }
 /* 화면에 보여줄 의도 요약 */
 function intentView(S, e) {
   var it = e.intent, C = S.combat, parts = [];
+  if (e.skip) return [{ i: '😵', t: '기절', k: 'buff', tip: '기절: 이번 행동을 건너뜁니다' }];
+  if (it.ch) parts.push({ i: '⏳', t: (e.hurt || 0) + '/' + it.ch, k: 'charge', tip: '충전 중: 이 턴에 피해 ' + it.ch + ' 이상을 주면 기절합니다' });
   if (it.a) {
     var d = calc(it.a, e.st, C.st, has(S, 'crystal') ? 0.6 : 0.75);
     parts.push({ i: '⚔️', t: d + (it.x > 1 ? '×' + it.x : ''), k: 'atk', dmg: d * (it.x || 1) });
@@ -345,12 +361,15 @@ function intentView(S, e) {
   if (it.heal) parts.push({ i: '💚', t: '+' + it.heal, k: 'buff' });
   if (it.st) Object.keys(it.st).forEach(function (k) { parts.push({ i: ST[k].icon, t: '' + it.st[k], k: 'debuff' }); });
   if (it.soot) parts.push({ i: '🌫️', t: '' + it.soot, k: 'debuff' });
+  if (it.buffAll) parts.push({ i: '📣', t: '+' + it.buffAll, k: 'buff', tip: '모든 아군의 힘 +' + it.buffAll });
+  if (it.healAlly) parts.push({ i: '✚', t: '+' + it.healAlly, k: 'buff', tip: '가장 다친 아군을 ' + it.healAlly + ' 회복' });
+  if (it.summon) parts.push({ i: '🕸️', t: '소환', k: 'debuff', tip: '새끼 거미를 부릅니다' });
   return parts;
 }
 function incoming(S) {
   var C = S.combat, sum = 0;
   alive(S).forEach(function (e) {
-    if (e.intent.a) sum += calc(e.intent.a, e.st, C.st, has(S, 'crystal') ? 0.6 : 0.75) * (e.intent.x || 1);
+    if (!e.skip && e.intent.a) sum += calc(e.intent.a, e.st, C.st, has(S, 'crystal') ? 0.6 : 0.75) * (e.intent.x || 1);
   });
   return sum;
 }
@@ -384,7 +403,7 @@ function startTurn(S) {
   if (C.turn > 0) C.block = C.pow.perma ? Math.floor(C.block / 2) : 0;
   C.turn++; C.phase = 'player';
   C.energy = 3 + (has(S, 'core') ? 1 : 0) + (has(S, 'crown') ? 1 : 0) + C.nextE;
-  C.nextE = 0; C.chain = { el: null, n: 0 }; C.played = 0; C.flags = {};
+  C.nextE = 0; C.chain = { el: null, n: 0 }; C.played = 0; C.flags = {}; C.hold = null;
   if (C.st.burn > 0) { loseHp(S, C.st.burn); C.st.burn--; if (checkEnd(S)) return; }
   if (C.pow.furnace) applyAll(S, 'burn', C.pow.furnace);
   draw(S, 5 + (C.pow.surge || 0) + (has(S, 'tome') ? 1 : 0) + (C.turn === 1 && has(S, 'coil') ? 2 : 0));
@@ -413,13 +432,15 @@ function playCard(S, hi, ti) {
   var tesla = C.pow.tesla || 0;
   C.played++; S.stats.cards++;
   fx(S, { t: 'play', el: d.el, type: d.t });
+  C.curEl = d.el;
   d.fx(S, v, t, { r: p.r, shift: p.shift, d: (v.d || 0) + p.r * (v.rd || 0), b: (v.b || 0) + p.r * (v.rb || 0) });
+  C.curEl = null;
   if (p.shift) {
     fx(S, { t: 'shift' });
     if (C.pow.rod) hitRand(S, C.pow.rod);
     if (has(S, 'lens') && !C.flags.lens) { C.flags.lens = 1; draw(S, 1); }
   }
-  if (tesla && d.el === 's' && d.t !== 'pow') hitRand(S, tesla);
+  if (tesla && d.el === 's' && d.t !== 'pow') { C.curEl = 's'; hitRand(S, tesla); C.curEl = null; }
   if (p.r > 0) fx(S, { t: 'res', n: C.chain.n });
   if (has(S, 'fork') && C.chain.n >= 3 && !C.flags.fork) { C.flags.fork = 1; C.energy++; fx(S, { t: 'relic', id: 'fork' }); }
   if (has(S, 'gears') && C.played === 4) { fx(S, { t: 'relic', id: 'gears' }); alive(S).forEach(function (e) { damageEnemy(S, e, 6); }); }
@@ -429,12 +450,20 @@ function playCard(S, hi, ti) {
   checkEnd(S);
   return true;
 }
+function toggleHold(S, hi) {
+  var C = S.combat;
+  if (!C || S.phase !== 'combat' || C.phase !== 'player' || !C.hand[hi]) return false;
+  C.hold = C.hold === C.hand[hi].uid ? null : C.hand[hi].uid;
+  return true;
+}
 function endTurn(S) {
   var C = S.combat;
   if (!C || S.phase !== 'combat' || C.phase !== 'player') return false;
   if (C.pow.armor) block(S, C.pow.armor);
   if (has(S, 'battery') && C.energy > 0) block(S, 4 * C.energy);
-  C.disc = C.disc.concat(C.hand); C.hand = [];
+  var held = C.hold;
+  C.disc = C.disc.concat(C.hand.filter(function (c) { return c.uid !== held; }));
+  C.hand = C.hand.filter(function (c) { return c.uid === held; });
   dec(C.st, 'chill'); dec(C.st, 'shock');
   C.phase = 'enemy'; C.ei = 0;
   return true;
@@ -456,15 +485,30 @@ function enemyStep(S) {
   if (C.ei >= C.en.length) { startTurn(S); return false; }
   var e = C.en[C.ei++], def = ENEMIES[e.key], it = e.intent;
   e.block = 0;
+  if (e.sick) { e.sick = 0; fx(S, { t: 'say', who: eid(S, e), s: '준비 중' }); return true; }
   if (e.st.burn > 0) {
     var b = e.st.burn; e.st.burn--;
-    e.hp -= b; S.stats.dmg += b;
+    e.hp -= b; S.stats.dmg += b; e.hurt = (e.hurt || 0) + b;
     fx(S, { t: 'hit', who: eid(S, e), n: b, blocked: 0, burn: 1 });
     if (e.hp <= 0) { e.hp = 0; fx(S, { t: 'die', who: eid(S, e) }); return !checkEnd(S); }
   }
   if (def.enrage && !e.enr && e.hp <= e.maxHp * def.enrage.at) {
     e.enr = 1; e.st.str = (e.st.str || 0) + def.enrage.str;
     fx(S, { t: 'say', who: eid(S, e), s: '격노!' });
+  }
+  var step = function () {
+    dec(e.st, 'chill'); dec(e.st, 'shock');
+    e.pi++; e.intent = def.pat[e.pi % def.pat.length]; e.hurt = 0;
+    if (def.rot) {
+      e.rk = (e.rk + 1) % 3; e.weak = CYC[e.rk]; e.res = CYC[(e.rk + 1) % 3];
+      fx(S, { t: 'say', who: eid(S, e), s: '약점이 바뀐다!' });
+    }
+  };
+  if (e.skip) { e.skip = 0; fx(S, { t: 'say', who: eid(S, e), s: '기절!' }); step(); return !checkEnd(S); }
+  if (it.ch) {
+    if ((e.hurt || 0) >= it.ch) { e.skip = 1; fx(S, { t: 'say', who: eid(S, e), s: '기절!' }); }
+    else fx(S, { t: 'say', who: eid(S, e), s: '충전 완료' });
+    step(); return !checkEnd(S);
   }
   if (it.a) {
     for (var k = 0; k < (it.x || 1); k++) {
@@ -482,8 +526,16 @@ function enemyStep(S) {
       for (var q = 0; q < it.soot; q++) C.disc.push({ id: 'soot', up: 0, uid: 's' + (S.uid++) });
       fx(S, { t: 'say', who: 'p', s: '그을음 +' + it.soot });
     }
-    dec(e.st, 'chill'); dec(e.st, 'shock');
-    e.pi++; e.intent = def.pat[e.pi % def.pat.length];
+    if (it.buffAll) alive(S).forEach(function (a) { a.st.str = (a.st.str || 0) + it.buffAll; fx(S, { t: 'st', who: eid(S, a), st: 'str', n: it.buffAll }); });
+    if (it.healAlly) {
+      var low = alive(S).filter(function (a) { return a !== e; }).sort(function (x, y) { return x.hp / x.maxHp - y.hp / y.maxHp; })[0];
+      if (low) { low.hp = Math.min(low.maxHp, low.hp + it.healAlly); fx(S, { t: 'heal', who: eid(S, low), n: it.healAlly }); }
+    }
+    if (it.summon && alive(S).length < 4) {
+      var kid = mkEnemy(S, it.summon, 'combat'); kid.sick = 1; C.en.push(kid);
+      fx(S, { t: 'say', who: eid(S, e), s: '새끼가 태어났다' });
+    }
+    step();
   }
   if (checkEnd(S)) return false;
   return true;
@@ -800,7 +852,7 @@ function newRun(seed, o) {
   o = o || {};
   var asc = o.asc || 0;
   var S = {
-    v: 2, rs: seed | 0, seed: seed | 0, uid: 1, phase: 'start', asc: asc, unlocked: o.unlocks || [], pos: null, path: [], map: null, opts: [],
+    v: 3, rs: seed | 0, seed: seed | 0, uid: 1, phase: 'start', asc: asc, unlocked: o.unlocks || [], pos: null, path: [], map: null, opts: [],
     hp: asc >= 4 ? 64 : 72, maxHp: asc >= 4 ? 64 : 72, gold: asc >= 4 ? 30 : 60, deck: [], relics: ['lamp'],
     act: 0, step: 0, floor: 1, fights: 0, lastFight: '', removes: 0, seen: [],
     doors: [], combat: null, reward: null, shop: null, event: null, pick: null,
@@ -831,6 +883,7 @@ var API = {
   buyCard: buyCard, buyRelic: buyRelic, shopRemove: shopRemove, leaveShop: leaveShop,
   eventChoose: eventChoose, eventDone: eventDone,
   vals: vals, costOf: costOf, cardName: cardName, cardText: cardText, prospect: prospect,
+  toggleHold: toggleHold, elMul: elMul,
   nodeAt: nodeAt, currentNodes: currentNodes, makeDoors: makeDoors,
   unlockList: function () { return Object.keys(CARDS).filter(function (id) { return CARDS[id].lock; }); },
   intentView: intentView, incoming: incoming, alive: alive, has: has, calc: calc
