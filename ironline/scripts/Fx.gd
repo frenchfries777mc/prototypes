@@ -31,6 +31,7 @@ func _ready() -> void:
 	_make_pool("wall", 14, 10, Color(0.62, 0.6, 0.56, 0.7), 0.7, 1.5, 3.5, 0.8, Vector3(0, -2.0, 0), 0.8)
 	_make_pool("blood", 10, 8, Color(0.55, 0.04, 0.03, 0.95), 0.5, 1.0, 3.2, 0.34, Vector3(0, -9.0, 0), 0.6)
 	_make_pool("flash", 6, 5, Color(1.0, 0.85, 0.5, 0.95), 0.1, 0.5, 1.5, 0.7, Vector3.ZERO, 0.8)
+	_make_pool("spark", 8, 7, Color(1.0, 0.82, 0.4, 1.0), 0.35, 3.0, 7.0, 0.05, Vector3(0, -12.0, 0), 0.3, true)
 	_make_pool("casing", 8, 1, Color(0.8, 0.6, 0.2, 1.0), 1.1, 2.2, 3.6, 0.045, Vector3(0, -9.8, 0), 0.0)
 	_make_pool("blast", 4, 30, Color(0.26, 0.20, 0.14, 0.9), 2.4, 7.0, 13.0, 2.2, Vector3(0, -7.0, 0), 0.7)
 	_make_pool("blastsmoke", 4, 18, Color(0.2, 0.19, 0.18, 0.7), 5.0, 1.5, 3.5, 4.0, Vector3(0.3, 0.6, 0), 0.4)
@@ -61,7 +62,7 @@ func _ready() -> void:
 
 
 func _make_pool(key: String, count: int, amount: int, col: Color, life: float, v0: float, v1: float,
-		size: float, grav: Vector3, damp: float) -> void:
+		size: float, grav: Vector3, damp: float, additive: bool = false) -> void:
 	var arr: Array = []
 	for i in count:
 		var p := CPUParticles3D.new()
@@ -97,7 +98,7 @@ func _make_pool(key: String, count: int, amount: int, col: Color, life: float, v
 		mat.albedo_texture = _soft
 		mat.particles_anim_h_frames = 1
 		mat.particles_anim_v_frames = 1
-		if key == "flash":
+		if key == "flash" or additive:
 			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		qm.material = mat
 		p.mesh = qm
@@ -298,3 +299,26 @@ func follow(cam_pos: Vector3) -> void:
 		var l: OmniLight3D = f.light
 		l.visible = fire_lights
 		l.light_energy = 1.5 + 0.55 * sin(clock * 13.0 + f.phase) + 0.3 * sin(clock * 29.0 + f.phase * 2.0)
+
+
+var mist_nodes: Array = []
+
+## 참호 위에 낮게 깔린 옅은 안개. 채우기 비용이 커서 '높음' 품질에서만 보인다.
+func mist(pos: Vector3) -> void:
+	var m := _emitter(Color(0.92, 0.82, 0.68, 0.11), 6, 14.0, 0.1, 0.35, 9.0, Vector3(0.25, 0.0, 0.05), false)
+	m.position = pos
+	m.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	m.emission_box_extents = Vector3(3.0, 0.3, 14.0)
+	m.direction = Vector3(1, 0, 0)
+	m.spread = 90.0
+	var sc := Curve.new()
+	sc.add_point(Vector2(0, 0.6))
+	sc.add_point(Vector2(1, 1.1))
+	m.scale_amount_curve = sc
+	add_child(m)
+	mist_nodes.append(m)
+
+
+func set_mist_visible(v: bool) -> void:
+	for m in mist_nodes:
+		m.visible = v
