@@ -13,5 +13,5 @@ void fragment() {
 	float t = clamp((hy + height * 0.5) / height, 0.0, 1.0);
 	float edge = abs(dot(normalize(NORMAL), normalize(VIEW))) ;
 	ALBEDO = col;
-	ALPHA = (1.0 - t) * (1.0 - t) * 0.5 * (0.35 + 0.65 * edge);
+	ALPHA = (1.0 - t) * (1.0 - t) * 0.2 * (0.35 + 0.65 * edge);
 }

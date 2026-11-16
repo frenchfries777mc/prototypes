@@ -3,107 +3,138 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#000000">
 <title>Prototypes</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0d10'/%3E%3Cpath d='M16 5 27 16 16 27 5 16Z' fill='none' stroke='%23e8b04a' stroke-width='3' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23e8b04a'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e0e0e'/%3E%3Cpath d='M16 5 27 16 16 27 5 16Z' fill='none' stroke='%23d9b45f' stroke-width='3' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23d9b45f'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@800;900&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap">
 <style>
-:root{--bg:#0b0d10;--panel:#14181d;--line:#232a32;--text:#e9edf1;--dim:#8a94a0;--acc:#e8b04a}
+:root{--bg:#000000;--panel:#0d0d0d;--line:#262626;--text:#ffffff;--dim:#9a9a9a;--fry:#ffd54a;--acc:#ffd54a;
+--disp:'Oswald','Noto Sans KR',sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace;color-scheme:dark}
+/* the light theme turns the whole page over with a filter, so the colours stay the dark ones */
+html[data-ff-theme]:root{--bg:#000000!important;--panel:#0d0d0d!important;--line:#262626!important;--text:#ffffff!important;--dim:#9a9a9a!important;--fry:#ffd54a!important}
+html[data-ff-theme=light] .card{filter:invert(1) hue-rotate(180deg)}
+html[data-ff-theme=light] .card img{filter:none}
+html[data-ff-theme=light] .rail a.nav.on,html[data-ff-theme=light] .rail a.nav.on:hover{background:#965a00;color:#fff}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
-body{display:flex;flex-direction:column}
-#home{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;gap:28px}
-h1{display:flex;align-items:center;gap:14px;margin:0;font-size:clamp(28px,6vw,44px);letter-spacing:.06em;font-weight:800}
-h1 b{background:linear-gradient(90deg,#f3c869,#e8b04a 50%,#d98b2b);-webkit-background-clip:text;background-clip:text;color:transparent}
-h1 svg{width:1.1em;height:1.1em;flex:none;filter:drop-shadow(0 0 14px #e8b04a66)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;width:100%;max-width:1080px}
-.card{display:flex;flex-direction:column;gap:10px;padding:0 0 18px;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;cursor:pointer;text-align:left;font:inherit}
-.card{--c:var(--acc);transition:transform .2s,border-color .2s,box-shadow .2s}
-.card:nth-child(2){--c:#6fb3ff}
-.card:nth-child(3){--c:#7be0c3}
-.card:nth-child(3){animation-delay:.2s}
-.card:hover,.card:focus-visible{border-color:var(--c);outline:none;transform:translateY(-4px);box-shadow:0 14px 34px -12px var(--c)}
-.card:hover span b{transform:translateX(5px)}
-.card img{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;background:#000;border-bottom:1px solid var(--line);transition:transform .25s}
-.card:hover img{transform:scale(1.03)}
-.card .im{overflow:hidden}
-.card h2,.card p,.card span{margin:0 20px}
-.card h2{font-size:22px;margin-top:6px}
-.card p{word-break:keep-all;color:var(--dim);font-size:15px;line-height:1.5}
-.card span{margin-top:auto;color:var(--c);font-size:14px;font-weight:600}
-.card span b{display:inline-block;transition:transform .2s;font-weight:400}
-.tags{display:flex;gap:6px;margin:0 20px}
-.tags i{font-style:normal;font-size:12px;color:var(--c);border:1px solid color-mix(in srgb,var(--c) 35%,var(--line));background:color-mix(in srgb,var(--c) 8%,transparent);border-radius:99px;padding:2px 9px}
-#home{position:relative;overflow:auto;justify-content:safe center;background:radial-gradient(ellipse at 50% 0,#1a212b 0,var(--bg) 60%)}
-#home:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(#ffffff08 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,#ffffff08 1px,transparent 1px) 0 0/44px 44px;-webkit-mask-image:radial-gradient(ellipse at 50% 30%,#000 0,transparent 70%);mask-image:radial-gradient(ellipse at 50% 30%,#000 0,transparent 70%)}
-#home:after{content:"";position:fixed;left:50%;top:-20%;width:90vmin;height:90vmin;margin-left:-45vmin;pointer-events:none;background:radial-gradient(circle,#e8b04a1c,transparent 65%);animation:glow 9s ease-in-out infinite alternate}
-#home>*{position:relative;z-index:1}
-@keyframes glow{to{transform:translateY(8%) scale(1.15);opacity:.7}}
-@keyframes up{from{opacity:0;transform:translateY(14px)}}
-.card{animation:up .5s both}
-.card:nth-child(2){animation-delay:.1s}
-h1{animation:up .5s both}
-@media(prefers-reduced-motion:reduce){#home:after,.card,h1{animation:none}}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;min-height:100%}
+body.run{height:100vh;height:100dvh;display:flex;flex-direction:column}
+a{color:inherit;text-decoration:none}
+.shell{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.rail{position:sticky;top:0;height:100vh;overflow-y:auto;padding:24px 16px;background:#000000;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.logo{display:block;padding:4px 10px 22px;font-family:var(--disp);font-size:21px;line-height:1;letter-spacing:.03em;white-space:nowrap}
+.logo b{font-weight:700;color:var(--fry)}
+.logo span{font-weight:500}
+.rail a.nav{display:flex;align-items:center;gap:11px;padding:10px 16px;border-radius:999px;color:#9a9a9a;font-size:15px;font-weight:500}
+.rail a.nav svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.rail a.nav:hover{background:#0d0d0d;color:#fff}
+.rail a.nav.on,.rail a.nav.on:hover{background:#ffd54a;color:#000;font-weight:700}
+.main{position:relative;min-width:0}
+.top{--fry:#d9b45f;--fry2:#b8923a;position:absolute;z-index:3;top:20px;right:clamp(16px,3vw,40px);display:flex;gap:10px;align-items:center}
+.hero{position:relative;height:clamp(300px,46vh,430px);overflow:hidden;background:linear-gradient(#150f2a 0,#2d1a4a 30%,#6b2f62 55%,#c25a4a 72%,#e8a05a 80%,#241a2a 80.2%,#1a1424 100%)}
+.stars{position:absolute;inset:0 0 40%;background:radial-gradient(1.5px 1.5px at 8% 18%,#fff9,transparent),radial-gradient(1.5px 1.5px at 22% 40%,#fff8,transparent),radial-gradient(2px 2px at 35% 12%,#ffe9a8,transparent),radial-gradient(1.5px 1.5px at 51% 30%,#fff8,transparent),radial-gradient(1.5px 1.5px at 63% 10%,#fff9,transparent),radial-gradient(2px 2px at 77% 26%,#ffe9a8,transparent),radial-gradient(1.5px 1.5px at 90% 16%,#fff8,transparent),radial-gradient(1.5px 1.5px at 44% 50%,#fff6,transparent),radial-gradient(1.5px 1.5px at 84% 46%,#fff6,transparent)}
+.sun{position:absolute;left:62%;bottom:20%;width:150px;height:75px;border-radius:150px 150px 0 0;background:linear-gradient(#ffd98a,#f3a24b)}
+.glint{position:absolute;left:calc(62% + 62px);bottom:0;width:26px;height:20%;background:repeating-linear-gradient(#f3b66a 0 3px,transparent 3px 8px);opacity:.6}
+.mtn{position:absolute;left:0;right:0;bottom:20%;height:42%;width:100%}
+.fade{position:absolute;inset:0;background:linear-gradient(90deg,#000000aa 0,transparent 55%),linear-gradient(transparent 55%,var(--bg))}
+.hero .txt{position:absolute;left:0;right:0;bottom:0;padding:0 clamp(16px,3vw,40px) 34px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;color:#ffd54a}
+h1{margin:6px 0 10px;font-family:var(--disp);font-weight:700;font-size:clamp(52px,7vw,96px);line-height:.95;letter-spacing:.01em}
+.sub{margin:0;font-size:clamp(15px,1.6vw,19px);color:#f1e9d6}
+.body{padding:44px clamp(16px,3vw,40px) 64px}
+h2{margin:0 0 18px;font-family:var(--disp);font-weight:600;font-size:28px;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px}
+.card{--c:var(--fry);position:relative;display:block;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line);transition:transform .2s,border-color .2s}
+.card:hover,.card:focus-visible{transform:translateY(-3px);border-color:var(--c);outline:none}
+.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.card:after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 28%,#000c 100%)}
+.card .in{position:absolute;z-index:1;left:0;right:0;bottom:0;padding:0 22px 20px}
+.pill{display:inline-block;margin-bottom:8px;padding:3px 10px;border-radius:99px;background:var(--c);color:#111;font-size:12px;font-weight:700}
+.card h3{margin:0;font-weight:900;font-size:clamp(28px,4vw,50px);line-height:1;letter-spacing:.01em;text-transform:uppercase;font-family:'Inter','Noto Sans KR',sans-serif}
+.card p{margin:6px 0 0;color:#e6dfcf;font-size:14px}
+.card i{position:absolute;z-index:2;left:0;right:0;bottom:0;height:5px;background:var(--c)}
+.badge{position:absolute;z-index:2;top:12px;right:12px;padding:3px 10px;border-radius:6px;background:#000a;color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em}
+.badge:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--fry);margin-right:6px}
+.perks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.perk{padding:22px;border-radius:14px;background:#0d0d0de0;border:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.perk b{font-size:17px}
+.perk span{font-size:14px;line-height:1.65;color:var(--dim)}
+body.run .shell{display:none}
+#view{display:none;flex:1;flex-direction:column;min-height:0}
+body.run #view{display:flex}
+.bar{display:flex;align-items:center;gap:8px;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid #ffd54a55;box-shadow:0 1px 0 #ffd54a22}
+.bar b{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar button,.bar a{font:inherit;font-size:14px;color:var(--text);background:#1f1d19;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.bar button:hover,.bar a:hover{border-color:var(--acc)}
+.bar [data-ff-account]{display:flex}
+.bar .ffa-hub{display:none!important}
+.stage{position:relative;flex:1;display:flex;min-height:0}
+iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 #load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:12px;background:#000;color:var(--dim);font-size:15px;transition:opacity .3s}
 #load.off{opacity:0;pointer-events:none}
 #load:before{content:"";width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
-.stage{position:relative;flex:1;display:flex;min-height:0}
-@media(max-width:600px){.bar{gap:6px;padding:4px 8px}.bar button,.bar a{padding:5px 10px;font-size:13px}}
-#view{display:none;flex:1;flex-direction:column;min-height:0}
-body.run #home{display:none}
-body.run #view{display:flex}
-.bar{border-bottom-color:#e8b04a55!important;box-shadow:0 1px 0 #e8b04a22;display:flex;align-items:center;gap:8px;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--panel);border-bottom:1px solid var(--line)}
-.bar b{flex:1;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar button,.bar a{font:inherit;font-size:14px;color:var(--text);background:#1c222a;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;text-decoration:none}
-.bar button:hover,.bar a:hover{border-color:var(--acc)}
-iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
+@media(max-width:860px){
+ .shell{display:block}
+ .rail{z-index:5;height:auto;flex-direction:row;align-items:center;padding:8px 12px;gap:4px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto;overflow-y:hidden}
+ .logo{padding:0 10px 0 4px}
+ .rail a.nav{white-space:nowrap}
+ .hero{height:300px}.sun{width:100px;height:50px}.glint{left:calc(62% + 37px)}
+ .top{top:12px}
+ .top .ffa-hub{display:none!important}
+}
+@media(max-width:600px){.bar{gap:6px;padding:4px 8px}.bar button,.bar a{padding:5px 10px;font-size:13px}.bar b{display:none}.bar [data-ff-account]{margin-left:auto}}
+@media(prefers-reduced-motion:reduce){.card{transition:none}}
 </style>
+<link rel="stylesheet" href="https://frenchfries777.com/ff-themes.css?v=1">
+<script src="https://frenchfries777.com/games/ff-lang.js?v=20261114a"></script>
+<script src="https://frenchfries777.com/games/ff-auth.js?v=20261116b"></script>
 </head>
 <body>
-<main id="home">
-  <h1><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.5 28.5 16 16 28.5 3.5 16Z" fill="none" stroke="#e8b04a" stroke-width="3.2" stroke-linejoin="round"/><circle cx="16" cy="16" r="3.4" fill="#e8b04a"/></svg><span>PROTO<b>TYPES</b></span></h1>
-  <div class="grid">
-    <a class="card" href="#ironline">
-      <div class="im"><img src="img/ironline.jpg" alt=""></div>
-      <h2>Ironline</h2>
-      <p>1인칭 3D 거점 점령전. 3v3 + 봇.</p>
-      <div class="tags"><i>3D</i><i>멀티플레이</i></div>
-      <span>실행 <b>→</b></span>
-    </a>
-    <a class="card" href="#ffscript">
-      <div class="im"><img src="img/ffscript.jpg" alt=""></div>
-      <h2>FF Script</h2>
-      <p>스크립트를 쓰면 바로 게임이 돌아가는 편집기.</p>
-      <div class="tags"><i>편집기</i><i>게임 제작</i></div>
-      <span>실행 <b>→</b></span>
-    </a>
-    <a class="card" href="#lodestar">
-      <div class="im"><img src="img/lodestar.jpg" alt=""></div>
-      <h2>로드스타</h2>
-      <p>한가운데의 성석을 제단까지 운반하는 5대5 쟁탈전. 레벨도 상점도 없다.</p>
-      <div class="tags"><i>2D</i><i>쟁탈전</i></div>
-      <span>실행 <b>→</b></span>
-    </a>
-    <a class="card" href="#resonance">
-      <div class="im"><img src="img/resonance.jpg" alt=""></div>
-      <h2>잔향의 탑</h2>
-      <p>종 네 개와 문 하나. 아는 만큼만 열리는 1인칭 퍼즐 탑.</p>
-      <div class="tags"><i>3D</i><i>퍼즐</i></div>
-      <span>실행 →</span>
-    </a>
-    <a class="card" href="#trilantern">
-      <div class="im"><img src="img/trilantern.jpg" alt=""></div>
-      <h2>삼원의 등불</h2>
-      <p>불·서리·번개 카드를 엮어 심연을 내려가는 덱 빌딩 로그라이크.</p>
-      <div class="tags"><i>2D</i><i>덱 빌딩</i></div>
-      <span>실행 <b>→</b></span>
-    </a>
-  </div>
-</main>
+<div class="shell">
+ <nav class="rail" aria-label="사이트">
+  <a class="logo" href="https://frenchfries777.com/"><span>FRENCHFRIES</span><b>777</b></a>
+  <a class="nav" href="https://frenchfries777.com/"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Hub</a>
+  <a class="nav" href="https://frenchfries777.com/games/"><svg viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="11" rx="4"/><path d="M7 10v5M4.5 12.5h5M16 11.5h.01M18.5 13.5h.01"/></svg>Games</a>
+  <a class="nav" href="https://frenchfries777.com/educations/"><svg viewBox="0 0 24 24"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11.5V16c0 1.5 3 3 6 3s6-1.5 6-3v-4.5"/></svg>Educations</a>
+  <a class="nav" href="https://frenchfries777.com/tools/"><svg viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5L3 18l3 3 6.5-6.5a4 4 0 0 0 5-5l-3 3-2.5-2.5z"/></svg>Tools</a>
+  <a class="nav" href="https://frenchfries777.com/wiki/"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg>위키</a>
+  <a class="nav" href="https://frenchfries777.com/community/"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>커뮤니티</a>
+  <a class="nav" href="https://frenchfries777.com/lounge/"><svg viewBox="0 0 24 24"><path d="M5 12V9a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v3"/><path d="M3 12a2 2 0 0 1 2 2v2h14v-2a2 2 0 0 1 4 0v4H1v-4a2 2 0 0 1 2-2zM5 20v1.5M19 20v1.5"/></svg>라운지</a>
+  <a class="nav on" href="#"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7.5 15h9"/></svg>Prototypes</a>
+  <a class="nav" href="https://frenchfries777.com/settings/"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></svg>설정</a>
+ </nav>
+ <main class="main" id="home">
+  <div class="top"><span data-ff-account data-ff-nohub></span></div>
+  <header class="hero">
+   <div class="stars"></div><div class="sun"></div><div class="glint"></div>
+   <svg class="mtn" viewBox="0 0 1200 300" preserveAspectRatio="none" aria-hidden="true"><polygon fill="#2a1840" points="0,300 0,190 90,120 170,175 290,70 400,170 500,130 610,200 720,90 830,180 930,120 1040,190 1130,140 1200,175 1200,300"/><polygon fill="#1a1028" points="0,300 0,235 120,195 230,230 360,170 470,225 600,205 700,240 840,185 960,230 1080,200 1200,235 1200,300"/></svg>
+   <div class="fade"></div>
+   <div class="txt"><div class="eyebrow">PROTOTYPES · <span id="cnt">5</span>개</div><h1>Prototypes</h1><p class="sub">링크만 열면 바로 해볼 수 있어요.</p></div>
+  </header>
+  <section class="body">
+   <h2>전체 프로토타입</h2>
+   <div class="grid">
+    <a class="card" href="#ironline" style="--c:#e8b04a"><img src="img/ironline.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">3D 점령전</span><h3>Ironline</h3><p>1인칭 3D 거점 점령전. 3v3 + 봇.</p></div><i></i></a>
+    <a class="card" href="#ffscript" style="--c:#6fb3ff"><img src="img/ffscript.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">편집기</span><h3>FF Script</h3><p>스크립트를 쓰면 바로 게임이 돌아가는 편집기.</p></div><i></i></a>
+    <a class="card" href="#lodestar" style="--c:#35e0c4"><img src="img/lodestar.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">2D 쟁탈전</span><h3>로드스타</h3><p>한가운데의 성석을 제단까지 운반하는 5대5 쟁탈전.</p></div><i></i></a>
+    <a class="card" href="#resonance" style="--c:#b79cff"><img src="img/resonance.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">3D 퍼즐</span><h3>잔향의 탑</h3><p>종 네 개와 문 하나. 아는 만큼만 열리는 1인칭 퍼즐 탑.</p></div><i></i></a>
+    <a class="card" href="#kitchendefense" style="--c:#ffd36a"><img src="img/kitchendefense.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">2D 디펜스</span><h3>주방 사수대</h3><p>반란을 일으킨 식재료들로부터 냉장고를 지켜요.</p></div><i></i></a>
+    <a class="card" href="#trilantern" style="--c:#ff7a3c"><img src="img/trilantern.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">2D 덱 빌딩</span><h3>삼원의 등불</h3><p>불·서리·번개 카드를 엮어 심연을 내려가는 덱 빌딩 로그라이크.</p></div><i></i></a>
+   </div>
+   <h2 style="margin-top:44px">이런 점이 좋아요</h2>
+   <div class="perks">
+    <div class="perk"><b>무료, 광고 없음</b><span>돈도 광고도 없이 바로 써요.</span></div>
+    <div class="perk"><b>계정 하나로</b><span>계정 하나로 모든 곳에 로그인돼요.</span></div>
+    <div class="perk"><b>설치 필요 없음</b><span>브라우저에서 열면 바로 시작해요.</span></div>
+   </div>
+  </section>
+ </main>
+</div>
 <section id="view">
   <div class="bar">
     <button id="back" type="button">← 목록</button>
     <b id="title"></b>
+    <span data-ff-account></span>
     <a id="tab" target="_blank" rel="noopener">새 탭</a>
     <button id="fs" type="button">전체화면</button>
   </div>
@@ -114,8 +145,9 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},trilantern:{t:'삼원의 등불',u:'trilantern/'}};
+  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},kitchendefense:{t:'주방 사수대',u:'kitchendefense/'},trilantern:{t:'삼원의 등불',u:'trilantern/'}};
   var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
+  document.getElementById('cnt').textContent=Object.keys(APPS).length;
   frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
   var join=new URLSearchParams(location.search).get('join');
   if(join&&!location.hash)location.hash='#ironline';
@@ -143,5 +175,6 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
   route();
 })();
 </script>
+<script src="https://frenchfries777.com/games/ff-sidemenu.js?v=1" defer></script>
 </body>
 </html>
