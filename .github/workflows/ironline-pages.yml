@@ -10,6 +10,7 @@ on:
       - "ffscript/**"
       - "lodestar/**"
       - "resonance/**"
+      - "kitchendefense/**"
       - "trilantern/**"
       - "site/**"
       - ".github/workflows/ironline-pages.yml"
@@ -43,13 +44,14 @@ jobs:
           ls -la build/web
       - name: Assemble site
         run: |
-          mkdir -p _site/ironline _site/ffscript _site/lodestar/js _site/resonance _site/trilantern
+          mkdir -p _site/ironline _site/ffscript _site/lodestar/js _site/resonance _site/kitchendefense _site/trilantern
           cp -r site/. _site/
           cp -r ironline/build/web/. _site/ironline/
           cp ffscript/index.html _site/ffscript/index.html
           cp lodestar/index.html lodestar/style.css _site/lodestar/
           cp lodestar/js/*.js _site/lodestar/js/
           cp resonance/index.html _site/resonance/index.html
+          cp kitchendefense/index.html kitchendefense/logo.svg _site/kitchendefense/
           cp trilantern/index.html trilantern/core.js trilantern/art.js trilantern/fx.js trilantern/ui.js _site/trilantern/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3

@@ -3,14 +3,14 @@ render_mode diffuse_burley, specular_schlick_ggx;
 // 지형: 고도·경사·노이즈로 풀/마른 풀/흙/진흙/바위를 섞고, 비포장 도로(바큇자국), 야생화, 물웅덩이를 그린다.
 // 정점 색: R = 공동(cavity) AO, G = 도로 마스크, B = 도로 중심선 기준 옆 오프셋(0.5 = 중심)
 
-uniform vec3 grass_a : source_color = vec3(0.15, 0.22, 0.07);
-uniform vec3 grass_b : source_color = vec3(0.28, 0.34, 0.11);
+uniform vec3 grass_a : source_color = vec3(0.12, 0.17, 0.06);
+uniform vec3 grass_b : source_color = vec3(0.22, 0.26, 0.09);
 uniform vec3 dry     : source_color = vec3(0.42, 0.38, 0.22);
 uniform vec3 dirt    : source_color = vec3(0.21, 0.17, 0.12);
 uniform vec3 mud     : source_color = vec3(0.17, 0.13, 0.10);
 uniform vec3 rock    : source_color = vec3(0.34, 0.32, 0.29);
 uniform vec2 points[5];
-uniform vec3 sky_refl : source_color = vec3(0.34, 0.42, 0.52);
+uniform vec3 sky_refl : source_color = vec3(0.50, 0.46, 0.44);
 
 varying vec3 wpos;
 varying vec3 wnrm;
