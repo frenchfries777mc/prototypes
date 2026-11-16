@@ -19,6 +19,7 @@ function evaluate(S) {
     var b = e.st.burn || 0;
     sc += Math.min(e.hp, b * (b + 1) / 2) * 0.75;
     sc += (e.st.shock || 0) * 1.5 + (e.st.chill || 0) * 2.5;
+    if (e.intent.ch) sc += (e.hurt >= e.intent.ch ? 34 : Math.min(e.hurt, e.intent.ch) * 0.8);
   });
   sc += C.hand.length * 0.6 + C.energy * 0.2 + C.nextE * 3;
   var p = C.pow;

@@ -4,7 +4,7 @@
 var TL = window.TL, ART = window.ART, FX = window.FX;
 var $ = function (id) { return document.getElementById(id); };
 var elTop = $('top'), elMain = $('main'), elFx = $('fxlayer'), elModal = $('modal'), elToast = $('toast');
-var SAVE = 'trilantern_save_v2', META = 'trilantern_meta_v1';
+var SAVE = 'trilantern_save_v3', META = 'trilantern_meta_v1';
 
 var S = null;        // 진행 중인 판
 var sel = -1;        // 고른 손패 위치
@@ -37,7 +37,7 @@ function save() {
 }
 function loadSave() {
   var s = fetchStore(SAVE);
-  if (!s || s.v !== 2 || !s.deck || !s.phase || !s.map) return null;
+  if (!s || s.v !== 3 || !s.deck || !s.phase || !s.map) return null;
   s.fx = [];
   return s;
 }
@@ -88,10 +88,16 @@ function cardHTML(card, o) {
     '<div class="cart">' + ART.card(card.id, d.el) + '</div>' +
     '<div class="ctype">' + TL.EL[d.el].icon + ' ' + TL.TYPE_NAME[d.t] + '</div>' +
     '<div class="ctext">' + TL.cardText(card, o.combat ? S : null) + '</div>' +
-    '<div class="gem"></div>' +
+    (o.extra || '') + '<div class="gem"></div>' +
     (o.tag ? '<div class="tag">' + o.tag + '</div>' : '') +
     (o.price !== undefined ? '<div class="price">' + ART.icon(o.picon || 'coin') + o.price + '</div>' : '') +
     '</div>';
+}
+function affHTML(e) {
+  var h = '';
+  if (e.weak) h += '<span class="w" title="약점: ' + TL.EL[e.weak].name + ' 피해 +50%">▲' + TL.EL[e.weak].icon + '</span>';
+  if (e.res) h += '<span class="r" title="저항: ' + TL.EL[e.res].name + ' 피해 -50%">▼' + TL.EL[e.res].icon + '</span>';
+  return '<div class="aff">' + h + '</div>';
 }
 function stsHTML(st, blockN, pow) {
   var h = '';
@@ -236,10 +242,10 @@ function renderCombat() {
 
   var en = C.en.map(function (e, i) {
     var d = TL.ENEMIES[e.key], dead = e.hp <= 0;
-    var intent = dead ? '' : TL.intentView(S, e).map(function (p) { return '<span class="' + p.k + '">' + p.i + p.t + '</span>'; }).join('');
+    var intent = dead ? '' : TL.intentView(S, e).map(function (p) { return '<span class="' + p.k + '"' + (p.tip ? ' title="' + esc(p.tip) + '"' : '') + '>' + p.i + p.t + '</span>'; }).join('');
     return '<div class="enemy' + (dead ? ' dead' : '') + (fresh ? ' enter' : '') + (needTarget && !dead ? ' targetable' : '') + '" id="e' + i + '" data-a="enemy" data-i="' + i + '">' +
       '<div class="intent" title="다음 행동">' + intent + '</div>' +
-      '<div class="eicon' + (C.kind === 'boss' ? ' boss' : C.kind === 'elite' ? ' elite' : '') + '" style="--bd:-' + (((performance.now() / 1000) + i * 0.9) % 3.2).toFixed(2) + 's">' + ART.enemy(e.key) + '</div><div class="ename">' + d.n + '</div>' +
+      '<div class="eicon' + (C.kind === 'boss' ? ' boss' : C.kind === 'elite' ? ' elite' : '') + '" style="--bd:-' + (((performance.now() / 1000) + i * 0.9) % 3.2).toFixed(2) + 's">' + ART.enemy(e.key) + '</div><div class="ename">' + d.n + '</div>' + affHTML(e) +
       '<div class="hpbar' + (e.block > 0 ? ' blk' : '') + '"><i style="width:' + (100 * e.hp / e.maxHp) + '%"></i><span>' + e.hp + '/' + e.maxHp + '</span></div>' +
       '<div class="sts">' + stsHTML(e.st, e.block) + '</div></div>';
   }).join('');
@@ -261,8 +267,13 @@ function renderCombat() {
     if (p.r > 0) cls += ' res'; else if (p.shift) cls += ' shift';
     if (i === sel) cls += ' sel';
     if (!seenUids[c.uid]) { cls += ' new'; seenUids[c.uid] = 1; }
-    var t = i - (n - 1) / 2;
-    return cardHTML(c, { a: 'card', i: i, cls: cls, combat: true, r: p.r, style: '--rot:' + (t * 2.4).toFixed(2) + 'deg;--ly:' + (Math.pow(Math.abs(t), 1.7) * 2.2).toFixed(1) + 'px' });
+    var t = i - (n - 1) / 2, el = TL.CARDS[c.id].el, chip = '';
+    if (el !== 'n') {
+      if (alive.some(function (e) { return e.weak === el; })) chip = '<div class="wk" title="약점인 적이 있습니다">▲</div>';
+      else if (alive.length && alive.every(function (e) { return e.res === el; })) chip = '<div class="wk rs" title="모든 적이 저항합니다">▼</div>';
+    }
+    if (C.hold === c.uid) cls += ' held';
+    return cardHTML(c, { a: 'card', i: i, cls: cls, combat: true, extra: chip + '<button class="pin" data-a="hold" data-i="' + i + '" title="다음 턴으로 가져가기">📌</button>', r: p.r, style: '--rot:' + (t * 2.4).toFixed(2) + 'deg;--ly:' + (Math.pow(Math.abs(t), 1.7) * 2.2).toFixed(1) + 'px' });
   }).join('');
   var keep = {}; C.hand.forEach(function (c) { keep[c.uid] = 1; }); seenUids = keep;
 
@@ -490,10 +501,11 @@ function playFx() {
     var txt = '', cls = f.t;
     if (f.t === 'hit') {
       if (f.n > 0) {
-        txt = '-' + f.n + (f.burn ? '🔥' : ''); bump(el, 'hurt'); (f.who === 'p' ? SFX.hurt : SFX.hit)();
+        txt = (f.w === 'w' ? '약점! ' : f.w === 'r' ? '저항 ' : '') + '-' + f.n + (f.burn ? '🔥' : ''); if (f.w === 'w') cls = 'hit weak'; else if (f.w === 'r') cls = 'hit resist'; bump(el, 'hurt'); (f.who === 'p' ? SFX.hurt : SFX.hit)();
         var hp = iconPos(f.who);
         if (f.who === 'p' && hp) { FX.burst(hp.x, hp.y, 'r', Math.min(2.2, 0.6 + f.n / 14)); FX.shake(Math.min(11, 3 + f.n / 3), 280); FX.vignette('rgba(255,50,50,.95)', Math.min(1, f.n / 18)); }
         else if (f.burn && hp) FX.burst(hp.x, hp.y, 'f', 0.5);
+        if (f.w === 'w' && hp) { FX.ring(hp.x, hp.y, '#ffd84a', 10, 64, 0.32, 3.5); tone(880, 0.1, 'triangle', 0.07, 1320); }
       } else if (f.blocked > 0) { txt = '막음'; cls = 'blocked'; SFX.block(); }
       else return;
     } else if (f.t === 'block') {
@@ -613,6 +625,10 @@ var HELP =
   '<p>적 머리 위에는 <b>다음 행동</b>이 보입니다. ⚔️ 는 공격, 🛡️ 는 방어, 💪 는 강화입니다. <b>방어도</b>는 피해를 대신 받고, 내 다음 턴이 시작되면 사라집니다.</p>' +
   '<h3>공명과 전환</h3><p>한 턴 안에서 <b>같은 원소</b> 카드를 이어 내면 <b>공명</b>이 쌓입니다. "공명마다 +N" 이라고 적힌 카드는 앞서 이어 낸 같은 원소 카드 수만큼 강해집니다.</p>' +
   '<p>직전 카드와 <b>다른 원소</b>를 내면 <b>전환</b>입니다. 공명은 1부터 다시 시작하지만, "전환:" 효과가 발동합니다. ◇ 무속성 카드는 공명을 끊지 않습니다.</p>' +
+  '<h3>약점과 저항</h3><p>적 이름 아래의 <b>▲</b>는 약점(그 원소 피해 +50%), <b>▼</b>는 저항(-50%)입니다. 손패 카드에 <b>▲</b>가 붙어 있으면 약점인 적이 있다는 뜻입니다. 공명은 한 원소를 이어야 강하지만 적의 약점은 제각각이라, 밀어붙일지 갈아탈지를 매 턴 정해야 합니다.</p>' +
+  '<h3>충전과 기절</h3><p>정예와 보스는 큰 공격 전에 <b>⏳ 충전</b>합니다. 그 턴에 표시된 수치 이상의 피해(화상 포함)를 주면 <b>기절</b>해서 다음 큰 공격이 통째로 사라집니다. 못 끊겠다면 방어를 쌓으세요.</p>' +
+  '<h3>카드 보관</h3><p>카드에 마우스를 올리면(터치는 한 번 눌러 확대) <b>📌</b>가 나옵니다. 누르면 그 카드 한 장을 다음 턴으로 가져갑니다. 콤보를 한 턴 앞서 준비하세요.</p>' +
+  '<h3>지원 적</h3><p>📣 아군 강화나 ✚ 치료를 하는 적이 섞여 있으면 먼저 처치할지 고민해야 합니다.</p>' +
   '<h3>세 원소</h3>' +
   '<p><b class="f">🔥 불 · 화상</b> — 턴이 시작될 때 수치만큼 피해를 주고(방어도 무시) 1 줄어듭니다. 쌓일수록 무섭습니다.</p>' +
   '<p><b class="i">❄️ 서리 · 한기</b> — 한기에 걸린 쪽은 주는 피해가 25% 줄어듭니다. 서리 카드는 방어에 강합니다.</p>' +
@@ -670,6 +686,7 @@ var ACT = {
     else showCards('버린 카드', C.disc);
   },
   deck: function () { showCards('내 덱', S.deck); },
+  hold: function (d) { if (busy) return; act(function () { return TL.toggleHold(S, +d.i); }); },
   relic: function (d) { var r = TL.RELICS[d.id]; toast(r.i + ' <b>' + r.n + '</b><br>' + r.x, 2600); },
   menu: function () {
     openModal('메뉴', '<div class="col" style="margin:0 auto">' +
