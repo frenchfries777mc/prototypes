@@ -56,6 +56,9 @@ static func terrain(w: World) -> MeshInstance3D:
 	for i in 5:
 		pts.append(Vector2(World.POINT_X[i], World.POINT_Z[i]))
 	mat.set_shader_parameter("points", pts)
+	for pair in [["g", "forrest_ground_01"], ["d", "forest_ground_04"], ["m", "brown_mud_03"], ["r", "mossy_rock"]]:
+		mat.set_shader_parameter(pair[0] + "_d", load("res://assets/textures/%s_diff.jpg" % pair[1]))
+		mat.set_shader_parameter(pair[0] + "_n", load("res://assets/textures/%s_nor.jpg" % pair[1]))
 	m.surface_set_material(0, mat)
 	var mi := MeshInstance3D.new()
 	mi.mesh = m
@@ -104,8 +107,7 @@ static func props(w: World) -> Node3D:
 	_foliage(chunks, w, rng)
 	_poles_and_hay(chunks, w, rng)
 	_rocks_and_logs(chunks, w, rng)
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/props.gdshader")
+	var mat := prop_material()
 	var root := Node3D.new()
 	root.name = "Props"
 	for key in chunks:
@@ -276,10 +278,19 @@ static func flag(color: Color) -> ArrayMesh:
 		var wave := sin(float(i) * 0.9) * 0.09 * float(i) / seg
 		g.box(Vector3(cw * 1.02, 1.5, 0.03), Transform3D(Basis(Vector3.UP, wave * 1.5), Vector3(0.08 + cw * (i + 0.5), 6.4, wave)), Color(color.r, color.g, color.b, 5.0 / 16.0))
 	var mesh := ArrayMesh.new()
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/props.gdshader")
+	var mat := prop_material()
 	g.commit_to(mesh, mat)
 	return mesh
+
+
+static func prop_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/props.gdshader")
+	for pair in [["brick", "red_brick_03"], ["plaster", "plaster_grey_04"], ["roof", "ceramic_roof_01"],
+			["plank", "weathered_planks"], ["bark", "bark_brown_02"], ["rock", "mossy_rock"]]:
+		mat.set_shader_parameter(pair[0] + "_d", load("res://assets/textures/%s_diff.jpg" % pair[1]))
+		mat.set_shader_parameter(pair[0] + "_n", load("res://assets/textures/%s_nor.jpg" % pair[1]))
+	return mat
 
 
 static func zone_disc(radius: float) -> MeshInstance3D:
