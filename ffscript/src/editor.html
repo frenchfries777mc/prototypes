@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="ff-build" content="/*@BUILD*/">
 <title>FF Script</title>
 <style>
 :root{--bg:#0e0f1a;--panel:#161828;--line:#262a44;--text:#e8eaf6;--dim:#8b90b0;--accent:#6fb3ff;--err:#ff6b81;--ok:#5be3a0}
@@ -16,6 +17,10 @@ select,button{font:inherit;color:var(--text);background:#20243d;border:1px solid
 button:hover,select:hover{border-color:var(--accent)}
 .spacer{flex:1}
 #status{font-size:13px;color:var(--dim)}
+#ver{font-size:11px;color:var(--dim);opacity:.65;margin-left:-4px;white-space:nowrap}
+#stale{background:#2a2250;color:#ffd93d;text-align:center;padding:6px 10px;font-size:13px}
+#stale[hidden]{display:none}
+#stale button{margin-left:8px}
 #status.ok{color:var(--ok)}
 main{flex:1;display:grid;grid-template-columns:minmax(320px,42%) 1fr;min-height:0}
 .left{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
@@ -50,6 +55,7 @@ header button.ic{padding:7px 10px}
 #conv{display:none;position:absolute;inset:10px;z-index:6;flex-direction:column;gap:8px;background:#161a33f5;border:1px solid #3a4070;border-radius:12px;padding:12px;box-shadow:0 14px 40px #000b}
 #conv textarea{flex:1;resize:none;background:#0e1022;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;outline:0}
 #conv div{display:flex;gap:8px;justify-content:flex-end}
+#convMsg{margin-right:auto;align-self:center;font-size:13px;color:var(--dim)}
 #err{display:none;margin:0;padding:12px 16px;background:#3a1522;color:#ffc2cc;border-top:1px solid #6b2a3d;font-size:14px;line-height:1.5;white-space:pre-wrap;max-height:34%;overflow:auto}
 #err b{color:#fff}
 .right{display:flex;align-items:center;justify-content:center;padding:16px;min-width:0;min-height:0;background:radial-gradient(circle at 50% 40%,#1a1d33,#0b0c16)}
@@ -60,7 +66,7 @@ button,select{white-space:nowrap}
 </head>
 <body>
 <header>
-  <h1>FF <b>Script</b></h1>
+  <h1>FF <b>Script</b></h1><span id="ver" title="이 화면의 빌드 시각. 옛 화면이면 Ctrl+F5">/*@BUILD*/</span>
   <select id="ex"></select>
   <button id="restart">다시 시작</button>
   <button id="save" class="ic" title="내 게임으로 저장">💾</button>
@@ -74,17 +80,20 @@ button,select{white-space:nowrap}
   <button id="full" class="ic" title="전체화면">⛶</button>
   <button id="export">HTML로 저장</button>
 </header>
+<div id="stale" hidden>새 버전이 나왔어요. 지금 화면은 옛 버전이라 최신 기능이 안 보일 수 있어요. <button id="staleBtn">새로고침</button></div>
 <main>
   <section class="left">
     <div id="tut"></div>
     <div class="ed"><div id="gutter"></div><div class="wrap"><pre id="hl"></pre><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea><div id="ac"></div></div>
       <button id="helpBtn">📖 명령어</button><div id="help"></div>
-      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
+      <div id="conv"><textarea id="convIn" spellcheck="false" placeholder="HTML이나 JavaScript 코드를 붙여 넣으세요"></textarea><div><span id="convMsg"></span><button id="convClose">닫기</button><button id="convGo">변환</button></div></div></div>
     <pre id="err"></pre>
   </section>
   <section class="right"><canvas id="game" width="960" height="540"></canvas></section>
 </main>
 <script type="text/plain" id="rt-src">/*@RUNTIME_TEXT*/</script>
+<script type="text/plain" id="cv-src">/*@COMPILER_TEXT*/
+;/*@CONVERTER_TEXT*/</script>
 <script>/*@RUNTIME*/</script>
 <script>/*@COMPILER*/</script>
 <script>/*@CONVERTER*/</script>
@@ -115,7 +124,7 @@ button,select{white-space:nowrap}
   const L = FFScript.lists, hl = $('hl'), ac = $('ac'), help = $('help');
   const SETS = {
     k: new Set(L.statements), c: new Set(L.cmds), l: new Set(L.looks),
-    w: new Set([...L.backs, ...L.colors, ...L.controls, ...L.sounds, ...L.dirs, ...L.musics, ...L.pos, ...L.sides, ...L.words, ...L.waves, ...L.weathers, ...L.powers, ...L.pshapes, 'any', 'ring', 'spread', 'up', 'follow', 'space', 'enter', 'click', 'sec', 'scene'])
+    w: new Set([...L.backs, ...L.colors, ...L.controls, ...L.sounds, ...L.dirs, ...L.musics, ...L.pos, ...L.sides, ...L.words, ...L.waves, ...L.weathers, ...L.powers, ...L.pshapes, 'any', 'ring', 'spread', 'each', 'in', 'split', ...(L.listfns || []), 'up', 'follow', 'space', 'enter', 'click', 'sec', 'scene'])
   };
   const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const TOKRE = /(\/\/.*|#(?:\s.*)?$)|("(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?)|(\d+\.?\d*)|([\p{L}_][\p{L}\p{N}_]*)|([^\s\p{L}\p{N}_]+)|(\s+)/gu;
@@ -145,7 +154,7 @@ button,select{white-space:nowrap}
     return out;
   }
   const dyn = { looks: new Set(), funcs: new Set(), scenes: [], sounds: [], parts: [] };
-  const RAWCOL = { '#': '#c9a27a', '=': '#8df08f', C: '#ffd93d', G: '#5ee7ff', S: '#ffe680', H: '#ff7a8a', '^': '#c9cfe0', F: '#ff4d5e', P: '#6fb3ff', E: '#7ee08a', B: '#9aa0b4', K: '#4ade80', L: '#e0a96d', W: '#5aa8ff', D: '#ffcb3d', I: '#9fe3ff', T: '#ff7a8a', V: '#bfe8ff', '<': '#ffd93d', '>': '#ffd93d', X: '#d0a070', A: '#b48cff' };
+  const RAWCOL = { '#': '#c9a27a', '=': '#8df08f', C: '#ffd93d', G: '#5ee7ff', S: '#ffe680', H: '#ff7a8a', '^': '#c9cfe0', F: '#ff4d5e', P: '#6fb3ff', E: '#7ee08a', B: '#9aa0b4', K: '#4ade80', L: '#e0a96d', W: '#5aa8ff', D: '#ffcb3d', I: '#9fe3ff', T: '#ff7a8a', V: '#bfe8ff', '<': '#ffd93d', '>': '#ffd93d', X: '#d0a070', A: '#b48cff', Q: '#a98ad6', R: '#ff8a6a', M: '#ff6a5e' };
   const ARTCOL = { '#': '#e8eaf6', k: '#6b6f8a', w: '#ffffff', r: '#ff4d5e', o: '#ff9a3c', y: '#ffd93d', g: '#4ade80', b: '#4d8dff', p: '#a66bff', c: '#5ee7ff', n: '#a86b45', m: '#ff7ac6', d: '#9aa0b4' };
   const hlRaw = (line, art) => [...line].map(ch => { const c = (art ? ARTCOL : RAWCOL)[ch]; return c ? `<span style="color:${c}">${esc(ch)}</span>` : esc(ch); }).join('');
   function scanDyn() {
@@ -155,17 +164,42 @@ button,select{white-space:nowrap}
     dyn.parts = [...code.value.matchAll(/^particle\s+([\p{L}_][\p{L}\p{N}_]*)/gmu)].map(m => m[1]);
     dyn.sounds = [...code.value.matchAll(/^sound\s+([\p{L}_][\p{L}\p{N}_]*)\s*(?:=|\n\s)/gmu)].map(m => m[1]);
   }
-  function highlight() {
-    scanDyn();
+  ['FFScript', 'FFRuntime'].forEach(k => { const v = window[k]; if (v) Object.defineProperty(window, k, { get: () => v, set() { }, configurable: false }); });
+  (function () {
+    const cur = (document.querySelector('meta[name=ff-build]') || {}).content;
+    $('staleBtn').addEventListener('click', () => { const u = new URL(location.href); u.searchParams.set('v', Date.now()); location.replace(u.href); });
+    if (!cur || !/^https?:$/.test(location.protocol)) return;
+    fetch(location.href.split('#')[0], { cache: 'no-store', headers: { Range: 'bytes=0-2000' } }).then(r => r.text()).then(t => {
+      const m = t.match(/name="ff-build" content="([^"]+)"/);
+      if (m && m[1] !== cur) $('stale').hidden = false;
+    }).catch(() => { });
+  })();
+  const BIG = 400000;
+  const HLWIN = 30000;
+  let hlWinA = -1, hlWinB = -1, hlRaf = 0;
+  function highlight(scrollOnly) {
+    const v = code.value;
+    if (v.length > BIG) { hl.textContent = v + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    const lines = v.split('\n');
+    let a = 0, b = lines.length;
+    if (v.length > HLWIN) {
+      a = Math.max(0, Math.floor(code.scrollTop / 22) - 40); b = Math.min(lines.length, Math.ceil((code.scrollTop + code.clientHeight) / 22) + 40);
+      while (a > 0 && /^\s/.test(lines[a])) a--;
+      if (scrollOnly && a >= hlWinA && b <= hlWinB && hlWinA >= 0) { hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; return; }
+    }
+    if (!scrollOnly) scanDyn();
+    hlWinA = a; hlWinB = b;
     let raw = null;
-    const out = code.value.split('\n').map(line => {
+    const out = [];
+    for (let i = a; i < b; i++) {
+      const line = lines[i];
       const ind = line.match(/^ */)[0].length;
-      if (raw) { if (!line.trim()) return ''; if (ind > raw.ind) return hlRaw(line, raw.art); raw = null; }
+      if (raw) { if (!line.trim()) { out.push(''); continue; } if (ind > raw.ind) { out.push(hlRaw(line, raw.art)); continue; } raw = null; }
       const t = line.trim().replace(/\s*:$/, '');
       if (/^map(\s+\S+)?$/.test(t)) raw = { ind, art: false }; else if (/^art\s+\S/.test(t)) raw = { ind, art: true };
-      return hlLine(line);
-    });
-    hl.innerHTML = out.join('\n') + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
+      out.push(hlLine(line));
+    }
+    hl.innerHTML = '\n'.repeat(a) + out.join('\n') + '\n'.repeat(lines.length - b) + '\n'; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft;
   }
 
   const mctx = document.createElement('canvas').getContext('2d');
@@ -205,7 +239,12 @@ button,select{white-space:nowrap}
     if (/^move\s+$/.test(t)) return L.dirs;
     if (/^go\s+$/.test(t)) return ['to'];
     if (/^go\s+to\s+$/.test(t)) return dyn.scenes;
-    if (/^camera\s+$/.test(t)) return ['follow', 'off'];
+    if (/^camera\s+$/.test(t)) return ['follow', 'split', 'off'];
+    if (/^camera\s+split\s+\S+\s+$/.test(t)) return ['and'];
+    if (/^camera\s+split\s+\S+\s+and\s+$/.test(t)) return varNames();
+    if (/^wind\s+$/.test(t)) return [...L.dirs, 'off'];
+    if (/^loop\s+$/.test(t)) return ['each'];
+    if (/^loop\s+each\s+\S+\s+$/.test(t)) return ['in'];
     if (/^camera\s+follow\s+$/.test(t) || /^(chase|flee)\s+$/.test(t)) return [...varNames(), ...allLooks(), 'mouse'];
     if (/^weather\s+$/.test(t)) return L.weathers;
     if (/^map\s+$/.test(t)) return ['topdown'];
@@ -268,9 +307,9 @@ button,select{white-space:nowrap}
   const HELP = [
     ['시작하기', [['title "내 게임"', '제목'], ['background space', 'space night sky sea sunset forest lava snow grid / 색'], ['lives 3', '목숨'], ['music chill', 'chill happy action off']]],
     ['만들기', [['player = make ship at center bottom', '이름 붙이기 (spawn, create도 같아요)'], ['make rock from top', 'top bottom left right'], ['make "🐸" at 200 300', '이모지·글자도 그림'], ['make coin at random top', '위치: left center right / top middle bottom / random / 숫자 / 이름']]],
-    ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag block', '플랫포머용'], ['water door boss', '물·문·보스'], ['ice spring belt waterfall crumble', '얼음·트램펄린·컨베이어·폭포·무너지는 블록'], ['bat bee', '날아다니는 적'], ['gem bomb ghost fish cloud tree', '']]],
+    ['모양', [['ship rock coin star enemy bullet', ''], ['heart ball box hero slime', ''], ['platform spike flag block', '플랫포머용'], ['water door boss', '물·문·보스'], ['ice spring belt waterfall crumble', '얼음·트램펄린·컨베이어·폭포·무너지는 블록'], ['bat bee spider crab mushroom', '적'], ['gem bomb ghost fish cloud tree', '']]],
     ['움직임 (make 아래 또는 이름.명령)', [['  move down 200', 'up down left right'], ['  toward player 150 follow', '따라가기'], ['  control arrows', 'arrows wasd leftright mouse platformer'], ['  speed 300', ''], ['  size 60', ''], ['  spin 90', ''], ['  bounce 0.8', '벽에서 튕김'], ['  color red', ''], ['  look "🐸"', '모양 바꾸기'], ['  gravity 1800', ''], ['  jump 700', ''], ['  solid', ''], ['  patrol 100 80', '좌우 왕복'], ['  wander 80', '제멋대로 돌아다님'], ['  wrap', '반대쪽으로 나옴'], ['  stay', '화면 안에 가둠'], ['  life 5 sec', '시간이 지나면 사라짐'], ['  trail', '꼬리 효과'], ['  glow', '빛나기'], ['  fade 0.5', '투명도'], ['  hide', 'show 도 있어요'], ['  flip', '좌우 뒤집기'], ['  health 5', '체력 (막대 자동)'], ['  jumps 2', '이단 점프'], ['  control platformer wasd', '2인용 (다른 쪽은 arrows)'], ['player.dash', '대시 (if key shift 안에)'], ['player.power fast 5', 'fast big small shield magnet jump'], ['  hurt 1', 'heal 도 있어요'], ['  stop', '']]],
-    ['지도 · 그림 (맨 왼쪽 줄)', [['map\n  ..........\n  .P..C..F..\n  ##########', '# 땅 = 얇은 발판 C 코인 G 보석 S 별 H 하트 ^ 가시 B 폭탄 F 깃발 E 슬라임 K 체크포인트 L 사다리 W 물 D 문 I 얼음 T 트램펄린 < > 컨베이어 V 폭포 X 무너지는 블록 A 박쥐 P 플레이어'], ['door.open', '문 열기'], ['art cat orange\n  #.#\n  ###\n  #k#', '# 기본색 k w r o y g b p c n m d 색깔'], ['art bird yellow\n  #.#\n  .#.\n  ---\n  ...\n  ###', '--- 줄로 나누면 움직이는 그림'], ['art coin yellow\n  .#.\n  ###\n  .#.', '원래 모양 이름이면 그 모양이 바뀜']]],
+    ['지도 · 그림 (맨 왼쪽 줄)', [['map\n  ..........\n  .P..C..F..\n  ##########', '# 땅 = 얇은 발판 C 코인 G 보석 S 별 H 하트 ^ 가시 B 폭탄 F 깃발 E 슬라임 K 체크포인트 L 사다리 W 물 D 문 I 얼음 T 트램펄린 < > 컨베이어 V 폭포 X 무너지는 블록 A 박쥐 Q 거미 R 게 M 버섯 P 플레이어'], ['door.open', '문 열기'], ['art cat orange\n  #.#\n  ###\n  #k#', '# 기본색 k w r o y g b p c n m d 색깔'], ['art bird yellow\n  #.#\n  .#.\n  ---\n  ...\n  ###', '--- 줄로 나누면 움직이는 그림'], ['art coin yellow\n  .#.\n  ###\n  .#.', '원래 모양 이름이면 그 모양이 바뀜']]],
     ['장면 · 저장 · 대사', [['scene menu\n  label "시작!" at center\n  if key space\n    go to play', '장면 만들기 (첫 장면부터 시작)'], ['go to play', '장면 바꾸기'], ['if scene is "play"', '지금 장면'], ['save coins', '브라우저에 저장'], ['load coins', '저장한 값 불러오기'], ['forget coins', '저장 지우기'], ['talk "할아버지" "어서 오너라"', '대사창 (스페이스·클릭으로 넘김)'], ['if talk ends', '대사가 다 끝났을 때'], ['ask "무엇을 살까?" "칼" "방패"', '선택지 창'], ['if answered', '골랐을 때 (answer 에 담겨요)'], ['countdown 60', '제한 시간 (끝나면 게임 오버)'], ['if countdown ends', '시간이 다 됐을 때'], ['give "🔑"', '가방에 넣기 (take 로 빼기)'], ['if has("🔑") > 0', '가방에 있는지']]],
     ['카메라 · 큰 지도 · AI', [['camera follow player', '화면이 따라감 (camera off)'], ['map topdown\n  #####\n  #P.E#\n  #####', '위에서 보는 지도 (벽에 막힘)'], ['  patrol up 100 60', '위아래 왕복 (움직이는 발판)'], ['  chase player 120 300', '가까우면 쫓아옴'], ['  flee player 150 200', '가까우면 도망'], ['enemy.shoot player 300', '총알 쏘기 (if player hits shot)'], ['player.respawn', '시작점·체크포인트로 돌아가기'], ['boss.shoot ring 12', '빙 둘러 쏘기 (spread 5 는 부채꼴)'], ['minimap', '미니맵 (minimap off)'], ['boss.charge player 800', '돌진'], ['boss.summon slime 3', '소환'], ['if player stomps slime', '위에서 밟았을 때'], ['camera follow p1 and p2', '두 명 사이를 따라감'], ['add 10 to p1.score', '사람마다 점수']]],
     ['소리 만들기 · 날씨', [['tone 440 0.2', '높이(Hz) 길이'], ['tone 300 to 900 0.3 saw', 'sine square triangle saw'], ['play "C E G C5"', '음 이름 (도 레 미 도 됨), - 쉼표'], ['play "도 레 미" 0.3', '한 음 길이'], ['weather rain', 'rain snow leaves petals off'], ['sound boing = tone 200 to 900 0.15', '효과음 만들기 (sound boing 으로 재생)']]],
@@ -279,6 +318,7 @@ button,select{white-space:nowrap}
     ['점수·상태', [['add 10 to score', ''], ['remove 1 from lives', ''], ['set score to 0', ''], ['level up', 'level 로 읽기'], ['win', ''], ['gameover', '']]],
     ['효과', [['rock.explode', '폭발'], ['coin.sparkle', '반짝이며 사라짐'], ['bullet.remove', '없애기'], ['player.say "HP {player.hp}"', '말풍선'], ['burst 30 gold at player', '불꽃'], ['confetti', ''], ['flash red', '화면 번쩍'], ['slowmo 1 sec', ''], ['banner "READY?" 2 sec', '큰 글자'], ['shake', ''], ['sound coin', 'boom coin shoot hit jump power pop laser click magic hurt whoosh splash spring'], ['label "점수 {score}" at left 110', '{} 안은 실시간으로 바뀌어요'], ['particle fire\n  color orange red\n  count 30\n  speed 50 200\n  gravity -200\n  shape star', 'life size direction spread drag rate'], ['burst fire at player', '만든 파티클 터뜨리기'], ['player.emit fire', '계속 뿜기 (emit off)']]],
     ['조건·변수', [['if x > 3', '블록 안에서는 일반 조건문 (else 가능)'], ['x = 5', 'x += 1'], ['random(1, 10)', ''], ['choose("a", "b")', '아무거나 하나'], ['chance(30)', '30% 확률로 참'], ['distance(player, rock)', ''], ['count(rock)', '개수'], ['mouse.x', 'mouse.y, key.left, time'], ['is  is not  and  or  not', '']]]
+    ,['목록 · 바람 · 벽 통과', [['items = [1, 2, 3]', 'items[0], items.length'], ['add 4 to items', 'remove 4 from items'], ['loop each x in items', '하나씩'], ['len(items)', 'contains(items, 2) last(items) shuffle(items) sort(items)'], ['camera split p1 and p2', '화면을 반씩 나눠 따로 보여 줌'], ['wind right 150', '바람 (wind off)'], ['ghost.phase', '벽 통과 (phase off)'], ['player.power ghost 5', '잠깐 유령'], ['spider.dangle 120', '줄에 매달려 오르내림']]]
   ];
   help.innerHTML = HELP.map(([h, rows]) => `<h3>${esc(h)}</h3>` + rows.map(([c, d]) => `<div class="row" data-c="${esc(c).replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}"><code>${esc(c)}</code><span>${esc(d)}</span></div>`).join('')).join('') + '<p>줄을 누르면 커서 위치에 들어가요.</p>';
   $('helpBtn').addEventListener('click', () => { help.style.display = help.style.display === 'block' ? 'none' : 'block'; });
@@ -295,11 +335,15 @@ button,select{white-space:nowrap}
   G.autostart = true;
   let current = null, errLine = 0;
 
+  let gN = -1, gErr = -1;
   function drawGutter() {
-    const n = code.value.split('\n').length;
-    let h = '';
-    for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
-    gutter.innerHTML = h; gutter.scrollTop = code.scrollTop; highlight();
+    let n = 1; for (let i = code.value.indexOf('\n'); i >= 0; i = code.value.indexOf('\n', i + 1)) n++;
+    if (n !== gN || errLine !== gErr) {
+      let h = '';
+      if (n <= 30000) for (let i = 1; i <= n; i++) h += `<div${i === errLine ? ' class="bad"' : ''}>${i}</div>`;
+      gutter.innerHTML = h; gN = n; gErr = errLine;
+    }
+    gutter.scrollTop = code.scrollTop; highlight();
   }
   function showError(line, msg) {
     errLine = line; err.style.display = 'block';
@@ -308,24 +352,35 @@ button,select{white-space:nowrap}
   }
   function clearError() { errLine = 0; err.style.display = 'none'; drawGutter(); }
 
-  G.onError = e => { showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e)); };
+  G.onError = e => {
+    let hint = '';
+    const nm = String(e && e.message || '').match(/^(\S+) is not defined$/), ln = code.value.split('\n')[(G.ln || 0) - 1] || '';
+    if (nm && /^\s*JS\b/.test(ln)) hint = `\nJS 코드 안에서 '${nm[1]}'를 못 찾았어요. 옛 변환기로 바꾼 코드일 수 있어요.\n원본을 위쪽 🔄 JS→FF로 다시 변환해 보세요.`;
+    showError(G.ln || 0, '실행 중에 문제가 생겼어요: ' + FFScript.explain(e) + hint);
+  };
 
   let jsLock = false;
   function run(keep) {
     if (jsLock && /^\s*JS\b/m.test(code.value)) { G.load(() => { }, false); showError(0, '링크로 받은 코드에 JS가 들어 있어요. 믿을 수 있는 코드면 다시 시작을 눌러 실행하세요.'); return; }
     const r = FFScript.compileSafe(code.value);
-    if (!r.ok) { showError(r.line, r.message); return; }
+    if (!r.ok) { showError(r.line, /^\s*<(!doctype|html|head|body|script)\b/i.test(code.value) ? 'HTML 코드예요. FF Script 문법이 아니에요.\n위쪽 🔄 JS→FF 버튼에 붙여 넣으면 FF Script로 바꿔 줘요.' : r.message); return; }
     clearError();
-    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; status.textContent = '실행 중'; status.className = 'ok'; }
+    try { G.load(FFScript.toFunction(r.code), keep); current = r.code; if (!errLine) { status.textContent = '실행 중'; status.className = 'ok'; } }
     catch (e) { showError(G.ln || 0, FFScript.explain(e)); }
   }
 
-  let timer = 0;
+  let timer = 0, saveT = 0;
+  const saveNow = () => { clearTimeout(saveT); saveT = 0; store.set('ff-code', code.value); };
+  const saveCode = () => { if (code.value.length <= HLWIN) { saveNow(); return; } clearTimeout(saveT); saveT = setTimeout(saveNow, 600); };
+  addEventListener('pagehide', () => { if (saveT) saveNow(); });
+  document.addEventListener('visibilitychange', () => { if (saveT) saveNow(); });
   code.addEventListener('input', () => {
-    drawGutter(); store.set('ff-code', code.value); if (!sel.value.startsWith('my:')) sel.value = '';
-    clearTimeout(timer); timer = setTimeout(() => run(true), 350);
+    drawGutter(); saveCode(); if (!sel.value.startsWith('my:')) sel.value = '';
+    clearTimeout(timer);
+    if (code.value.length > BIG) { status.textContent = '코드가 커서 자동 실행은 쉬어요. 다시 시작을 눌러 주세요'; status.className = ''; return; }
+    timer = setTimeout(() => run(true), 350 + Math.min(1500, code.value.length / 100));
   });
-  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); });
+  code.addEventListener('scroll', () => { gutter.scrollTop = code.scrollTop; hl.scrollTop = code.scrollTop; hl.scrollLeft = code.scrollLeft; closeAc(); if (code.value.length > HLWIN && code.value.length <= BIG && !hlRaf) hlRaf = requestAnimationFrame(() => { hlRaf = 0; highlight(true); }); });
   code.addEventListener('input', () => openAc());
   code.addEventListener('blur', () => setTimeout(closeAc, 100));
   code.addEventListener('click', closeAc);
@@ -370,14 +425,51 @@ button,select{white-space:nowrap}
   const conv = $('conv'), convIn = $('convIn');
   $('convBtn').addEventListener('click', () => { conv.style.display = conv.style.display === 'flex' ? 'none' : 'flex'; if (conv.style.display === 'flex') convIn.focus(); });
   $('convClose').addEventListener('click', () => { conv.style.display = 'none'; });
-  $('convGo').addEventListener('click', () => {
+  code.addEventListener('paste', e => {
+    const t = e.clipboardData && e.clipboardData.getData('text');
+    if (!t) return;
+    const html = /^\s*<(!doctype|html|head|body|script)\b/i.test(t);
+    if (t.length > 60000 || (html && t.length > 3000)) {
+      e.preventDefault();
+      convIn.value = t; conv.style.display = 'flex'; convIn.focus();
+      toast(html ? 'HTML이네요. 코드 칸 대신 변환기에 넣었어요. 변환을 눌러 주세요' : '너무 긴 코드라서 변환기에 넣었어요. 변환을 눌러 주세요');
+    }
+  });
+  let convJob = null;
+  const convMsg = $('convMsg'), convGo = $('convGo');
+  function convertAsync(text, onP) {
+    return new Promise(resolve => {
+      let w = null, done = false, timer = null, url = null;
+      const fin = r => { if (done) return; done = true; clearTimeout(timer); if (w) w.terminate(); if (url) URL.revokeObjectURL(url); resolve(r); };
+      convJob = { cancel: () => fin({ cancelled: true }) };
+      const sync = () => setTimeout(() => { try { fin(FFConvert.convert(text, { budgetMs: 4000 })); } catch (e) { fin({ ok: false, error: '바꾸는 중에 문제가 생겼어요.' }); } }, 30);
+      try {
+        const body = $('cv-src').textContent + '\nonmessage=function(e){var r;try{r=FFConvert.convert(e.data.src,{budgetMs:e.data.budget,onProgress:function(p){postMessage({p:p})}});}catch(err){r={ok:false,error:"바꾸는 중에 문제가 생겼어요.",code:"",js:0};}postMessage({r:r});};';
+        url = URL.createObjectURL(new Blob([body], { type: 'text/javascript' }));
+        w = new Worker(url);
+        w.onmessage = e => { if (e.data.p) onP(e.data.p); else fin(e.data.r); };
+        w.onerror = () => { if (done) return; w.terminate(); w = null; sync(); };
+        timer = setTimeout(() => fin({ ok: false, error: '90초가 지나도 끝나지 않아서 멈췄어요. 코드를 나눠서 다시 해 보세요.' }), 90000);
+        w.postMessage({ src: text, budget: 30000 });
+      } catch (e) { sync(); }
+    });
+  }
+  convGo.addEventListener('click', async () => {
+    if (convJob) { convJob.cancel(); return; }
     if (!convIn.value.trim()) return;
-    const r = FFConvert.convert(convIn.value);
+    const text = convIn.value;
+    convGo.textContent = '취소'; convMsg.textContent = '시작하는 중…';
+    const r = await convertAsync(text, p => { convMsg.textContent = p.stage + (p.total > 1 ? ` ${Math.min(100, Math.round(p.done / p.total * 100))}%` : '…'); });
+    convJob = null; convGo.textContent = '변환'; convMsg.textContent = '';
+    if (r.cancelled) { toast('취소했어요'); return; }
     if (!r.ok) { toast(r.error || '바꾸지 못했어요'); return; }
     jsLock = false; conv.style.display = 'none';
-    code.focus(); code.select(); document.execCommand('insertText', false, r.code);
-    sel.value = ''; store.set('ff-code', code.value); drawGutter(); run(false);
-    toast(r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
+    code.focus(); code.select();
+    const big = r.code.length > BIG, mostly = r.share > 0.7 && r.code.length > 2000, warn = '대부분 변환할 수 없었어요 (JS가 ' + Math.round(r.share * 100) + '%). 이런 코드는 그대로 HTML 파일로 쓰는 편이 나아요';
+    if (r.code.length > 30000) { code.value = r.code; code.dispatchEvent(new Event('input')); } else document.execCommand('insertText', false, r.code);
+    sel.value = ''; store.set('ff-code', code.value); drawGutter(); if (big) { toast(mostly ? warn : '변환했어요. 코드가 커서 다시 시작을 눌러야 실행돼요', mostly ? 9000 : 0); return; } run(false);
+    if (mostly) toast(warn, 9000);
+    else toast(r.whole ? '너무 커서 전체를 JS로 감싸서 가져왔어요 (게임은 그대로 돌아가요)' : r.timedOut ? `시간이 걸려서 뒷부분은 JS로 남겼어요 · JS ${r.js}곳` : r.js ? `변환했어요 · JS로 남은 곳 ${r.js}` : '변환했어요');
   });
 
   $('export').addEventListener('click', () => {
@@ -397,7 +489,7 @@ button,select{white-space:nowrap}
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   });
 
-  const toast = msg => { status.textContent = msg; status.className = 'ok'; setTimeout(() => { if (status.textContent === msg) status.textContent = errLine ? '고쳐야 할 곳이 있어요' : '실행 중'; }, 2200); };
+  const toast = (msg, ms) => { status.textContent = msg; status.className = 'ok'; setTimeout(() => { if (status.textContent === msg) status.textContent = errLine ? '고쳐야 할 곳이 있어요' : '실행 중'; }, ms || 2200); };
   $('share').addEventListener('click', async () => {
     const b64 = btoa(unescape(encodeURIComponent(code.value))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const url = location.href.split('#')[0] + '#c=' + b64;
