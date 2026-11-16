@@ -29,6 +29,15 @@ float fbm(vec2 p) {
 }
 
 void vertex() {
+	// 나뭇잎 뭉치는 울퉁불퉁하게 부풀리고 바람에 살짝 흔든다
+	float kv = floor(COLOR.a * 16.0 + 0.5);
+	if (kv > 6.5 && kv < 7.5) {
+		vec3 wp0 = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		float bn = vnoise(wp0.xz * 1.1 + wp0.y * 0.9);
+		float bn2 = vnoise(wp0.xz * 3.1 - wp0.y * 2.3);
+		VERTEX += NORMAL * ((bn - 0.5) * 0.8 + (bn2 - 0.5) * 0.3);
+		VERTEX.x += sin(TIME * 0.9 + wp0.x * 0.25 + wp0.y * 0.6) * 0.06;
+	}
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vcol = COLOR;

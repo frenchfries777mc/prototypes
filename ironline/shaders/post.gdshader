@@ -57,8 +57,9 @@ void fragment() {
 	}
 	// 색보정: 따뜻한 그림자 / 차가운 하이라이트 + 채도 + 가벼운 S커브
 	float l = dot(c, vec3(0.299, 0.587, 0.114));
-	c = mix(vec3(l), c, 1.1);
-	c = mix(c * vec3(1.05, 1.0, 0.92), c * vec3(0.95, 1.0, 1.06), smoothstep(0.2, 0.9, l));
+	c = mix(vec3(l), c, 1.04);
+	// 그늘은 청록 쪽, 밝은 곳은 호박색 쪽으로 (영화풍 분리 톤)
+	c = mix(c * vec3(0.90, 1.0, 1.08), c * vec3(1.06, 1.0, 0.92), smoothstep(0.12, 0.75, l));
 	c = mix(c, c * c * (3.0 - 2.0 * c), 0.28);
 	float v = smoothstep(0.85, 0.2, length(dir * vec2(1.0, 0.85)));
 	c *= mix(1.0 - vignette, 1.0, v);
