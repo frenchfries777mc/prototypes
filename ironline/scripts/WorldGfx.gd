@@ -172,7 +172,7 @@ static func _sandbags(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerat
 				var u := -length * 0.5 + (k + 0.5) * step + off - (step * 0.25 if r % 2 == 1 else 0.0)
 				if absf(u) > length * 0.5 - 0.1:
 					continue
-				var tan := Color(0.52 + rng.randf() * 0.1, 0.43 + rng.randf() * 0.08, 0.27 + rng.randf() * 0.06)
+				var tan := Color(0.33 + rng.randf() * 0.07, 0.29 + rng.randf() * 0.06, 0.21 + rng.randf() * 0.04)
 				var yaw := rng.randf_range(-0.12, 0.12) + (0.0 if along_x else PI * 0.5)
 				var pos := Vector3(cx + (u if along_x else lat), y, cz + (lat if along_x else u))
 				var sc := Vector3(0.27, 0.15, 0.19 + 0.02 * rng.randf())
@@ -182,7 +182,7 @@ static func _sandbags(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerat
 static func _crate(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
 	var size := mx - mn
 	var c := (mn + mx) * 0.5
-	var col := _kind_col(Color(0.36, 0.24, 0.12) * rng.randf_range(0.85, 1.15), 2)
+	var col := _kind_col(Color(0.27, 0.19, 0.11) * rng.randf_range(0.85, 1.15), 2)
 	var rot := Basis(Vector3.UP, rng.randf_range(-0.08, 0.08))
 	g.box(size - Vector3(0.0, 0.35, 0.0) + Vector3(0, 0, 0), Transform3D(rot, Vector3(c.x, mn.y + 0.35 + (size.y - 0.35) * 0.5, c.z)), col)
 	var post := Color(0.28, 0.18, 0.09, 2.0 / 16.0)
@@ -422,31 +422,38 @@ static func grass(w: World) -> Node3D:
 
 static func _tuft(d: Dictionary, c: Vector3, rng: RandomNumberGenerator, mask: float) -> void:
 	var lush := clampf(0.5 + mask, 0.0, 1.0)
-	var dry := Color(0.40, 0.36, 0.17)
-	var green := Color(0.22, 0.33, 0.09)
-	var top_col := green.lerp(dry, rng.randf() * 0.55).lerp(Color(0.34, 0.44, 0.14), lush * 0.4)
-	var blades := 8
-	var height := rng.randf_range(0.22, 0.52) * (0.8 + lush * 0.5)
+	var dry := Color(0.36, 0.31, 0.15)
+	var green := Color(0.16, 0.22, 0.07)
+	var top_col := green.lerp(dry, rng.randf() * 0.6).lerp(Color(0.25, 0.31, 0.10), lush * 0.45)
+	var blades := 7
+	var height := rng.randf_range(0.2, 0.5) * (0.8 + lush * 0.6)
 	for b in blades:
 		var a := rng.randf() * TAU
-		var r := rng.randf() * 0.3
+		var r := rng.randf() * 0.32
 		var base := c + Vector3(cos(a) * r, 0.0, sin(a) * r)
-		var wd := rng.randf_range(0.04, 0.07)
+		var wd := rng.randf_range(0.022, 0.04)
 		var dir := Vector3(cos(a + 1.57), 0.0, sin(a + 1.57))
-		var hh := height * rng.randf_range(0.65, 1.15)
-		var lean := Vector3(cos(a), 0.0, sin(a)) * rng.randf_range(0.04, 0.2)
+		var hh := height * rng.randf_range(0.6, 1.2)
+		var lean := Vector3(cos(a), 0.0, sin(a)) * rng.randf_range(0.05, 0.26) * hh * 2.0
+		# 두 마디로 휘어진 잎: 밑동 2점, 중간 2점, 끝 1점
+		var mid := base + Vector3(0, hh * 0.58, 0) + lean * 0.3
+		var tip := base + Vector3(0, hh, 0) + lean
 		var i0: int = d.v.size()
 		d.v.append(base - dir * wd)
 		d.v.append(base + dir * wd)
-		d.v.append(base + Vector3(0, hh, 0) + lean)
-		for k in 3:
+		d.v.append(mid - dir * wd * 0.62)
+		d.v.append(mid + dir * wd * 0.62)
+		d.v.append(tip)
+		for k in 5:
 			d.n.append(Vector3.UP)
-		d.c.append(Color(top_col.r * 0.8, top_col.g * 0.8, top_col.b * 0.8, 0.0))
-		d.c.append(Color(top_col.r * 0.8, top_col.g * 0.8, top_col.b * 0.8, 0.0))
-		d.c.append(Color(top_col.r, top_col.g, top_col.b, 1.0))
-		d.i.append(i0)
-		d.i.append(i0 + 1)
-		d.i.append(i0 + 2)
+		var low := Color(top_col.r * 0.6, top_col.g * 0.6, top_col.b * 0.6, 0.0)
+		var midc := Color(top_col.r * 0.9, top_col.g * 0.9, top_col.b * 0.9, 0.58)
+		d.c.append(low)
+		d.c.append(low)
+		d.c.append(midc)
+		d.c.append(midc)
+		d.c.append(Color(top_col.r * 1.15, top_col.g * 1.15, top_col.b * 1.05, 1.0))
+		d.i.append_array([i0, i0 + 1, i0 + 2, i0 + 1, i0 + 3, i0 + 2, i0 + 2, i0 + 3, i0 + 4])
 
 
 static func _fieldgun(g: Geo, mn: Vector3, mx: Vector3, rng: RandomNumberGenerator) -> void:
@@ -505,8 +512,8 @@ static func _foliage(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -
 		for k in n:
 			var o := Vector3(rng.randf_range(-1.8, 1.8), rng.randf_range(-0.6, 1.5), rng.randf_range(-1.8, 1.8))
 			var r := rng.randf_range(1.2, 2.2)
-			var gcol := Color(0.13 + rng.randf() * 0.07, 0.22 + rng.randf() * 0.1, 0.07 + rng.randf() * 0.04, leaf_kind)
-			g.sphere(r, Transform3D(Basis.IDENTITY, crown + o), gcol, 0, Vector3(1.0, 0.8, 1.0), 4, 7)
+			var gcol := Color(0.11 + rng.randf() * 0.06, 0.17 + rng.randf() * 0.07, 0.05 + rng.randf() * 0.03, leaf_kind)
+			g.sphere(r, Transform3D(Basis.IDENTITY, crown + o), gcol, 0, Vector3(1.0, 0.8, 1.0), 6, 10)
 		placed += 1
 	# 덤불: 필드 곳곳
 	var bushes := 0
@@ -529,7 +536,7 @@ static func _foliage(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -
 		for k in n:
 			var o := Vector3(rng.randf_range(-0.7, 0.7), 0.0, rng.randf_range(-0.7, 0.7))
 			var r := rng.randf_range(0.35, 0.7)
-			var gcol := Color(0.15 + rng.randf() * 0.08, 0.23 + rng.randf() * 0.09, 0.07 + rng.randf() * 0.03, leaf_kind)
+			var gcol := Color(0.12 + rng.randf() * 0.07, 0.18 + rng.randf() * 0.07, 0.06 + rng.randf() * 0.03, leaf_kind)
 			g.sphere(r, Transform3D(Basis.IDENTITY, Vector3(x, y + r * 0.45, z) + o), gcol, 0, Vector3(1.0, 0.7, 1.0), 4, 7)
 		bushes += 1
 
