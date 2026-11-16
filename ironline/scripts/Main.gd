@@ -410,6 +410,7 @@ func _process(dt: float) -> void:
 	var me: Sim.Unit = sim.units[local_id]
 	pm.set_shader_parameter("sun_uv", view.sun_uv)
 	pm.set_shader_parameter("sun_vis", view.sun_vis)
+	pm.set_shader_parameter("cam_motion", view.cam_motion if st == St.PLAYING else Vector2.ZERO)
 	pm.set_shader_parameter("fx_level", float(fx_level))
 	pm.set_shader_parameter("hurt", clampf(hud.hurt_t / 0.6, 0.0, 1.0) if st == St.PLAYING else 0.0)
 	pm.set_shader_parameter("low_hp", clampf((45.0 - me.hp) / 45.0, 0.0, 1.0) if (st == St.PLAYING and me.alive) else 0.0)

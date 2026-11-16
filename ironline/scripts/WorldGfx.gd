@@ -103,6 +103,7 @@ static func props(w: World) -> Node3D:
 	_decor(chunks, w, rng)
 	_foliage(chunks, w, rng)
 	_poles_and_hay(chunks, w, rng)
+	_rocks_and_logs(chunks, w, rng)
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/props.gdshader")
 	var root := Node3D.new()
@@ -715,3 +716,61 @@ static func _poles_and_hay(chunks: Dictionary, w: World, rng: RandomNumberGenera
 			var straw := Color(0.55 + rng.randf() * 0.08, 0.44 + rng.randf() * 0.06, 0.2, 5.0 / 16.0)
 			var prof := [Vector2(0.0, 0.0), Vector2(1.05, 0.0), Vector2(1.12, 0.35), Vector2(0.95, 0.95), Vector2(0.6, 1.5), Vector2(0.2, 1.8), Vector2(0.0, 1.85)]
 			g.lathe(prof, 12, Transform3D(Basis(Vector3.UP, rng.randf() * TAU), Vector3(hx, hy - 0.05, hz)), straw, 0)
+
+
+static func _rocks_and_logs(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -> void:
+	var rock_kind := 12.0 / 16.0
+	var bark := Color(0.2, 0.15, 0.11, 4.0 / 16.0)
+	var placed := 0
+	var tries := 0
+	while placed < 110 and tries < 1500:
+		tries += 1
+		var x := rng.randf_range(-195.0, 195.0)
+		var z := rng.randf_range(-110.0, 110.0)
+		var y := w.height_at(x, z)
+		if y < -0.4 or w._near_point(x, z, World.POINT_R + 2.0) or w.road_mask(x, z) > 0.2:
+			continue
+		if w.inside_box(Vector3(x, y + 0.3, z)):
+			continue
+		var skip := false
+		for tx in World.TRENCH_X:
+			if absf(x - w.trench_center(tx, z)) < 4.5:
+				skip = true
+		if skip:
+			continue
+		var g := _g(chunks, Vector3(x, y, z))
+		var base := Color(0.30, 0.28, 0.25) * rng.randf_range(0.8, 1.15)
+		var col := Color(base.r, base.g, base.b, rock_kind)
+		var big := rng.randf() < 0.18
+		var n := rng.randi_range(2, 4)
+		for k in n:
+			var sz := Vector3(rng.randf_range(0.25, 0.7), rng.randf_range(0.18, 0.45), rng.randf_range(0.25, 0.65)) * (1.7 if big else 1.0)
+			var rb := Basis(Vector3.UP, rng.randf() * TAU) * Basis(Vector3.RIGHT, rng.randf_range(-0.4, 0.4)) * Basis(Vector3.BACK, rng.randf_range(-0.4, 0.4))
+			var off := Vector3(rng.randf_range(-0.35, 0.35), 0.0, rng.randf_range(-0.35, 0.35))
+			g.box(sz, Transform3D(rb, Vector3(x, y + sz.y * 0.32, z) + off), col)
+		placed += 1
+	# 쓰러진 통나무
+	var logs := 0
+	tries = 0
+	while logs < 14 and tries < 400:
+		tries += 1
+		var x := rng.randf_range(-190.0, 190.0)
+		var z := rng.randf_range(-105.0, 105.0)
+		var y := w.height_at(x, z)
+		if y < -0.4 or w._near_point(x, z, World.POINT_R + 3.0) or w.road_mask(x, z) > 0.2 or w.inside_box(Vector3(x, y + 0.3, z)):
+			continue
+		var g := _g(chunks, Vector3(x, y, z))
+		var a := rng.randf() * PI
+		var d := Vector3(cos(a), 0.0, sin(a)) * rng.randf_range(1.4, 2.2)
+		var r := rng.randf_range(0.2, 0.3)
+		var p0 := Vector3(x, y + r * 0.8, z) - d
+		var p1 := Vector3(x, y + r * 0.8, z) + d
+		p0.y = w.height_at(p0.x, p0.z) + r * 0.85
+		p1.y = w.height_at(p1.x, p1.z) + r * 0.85
+		g.rod(p0, p1, r, r * 0.8, bark, 0, 9)
+		g.sphere(r * 0.82, Transform3D(Basis.IDENTITY, p1), Color(0.35, 0.27, 0.18, 4.0 / 16.0), 0, Vector3.ONE, 4, 8)
+		for k in 2:
+			var t := rng.randf_range(0.2, 0.8)
+			var bp := p0.lerp(p1, t)
+			g.rod(bp, bp + Vector3(rng.randf_range(-0.4, 0.4), rng.randf_range(0.3, 0.6), rng.randf_range(-0.4, 0.4)), 0.05, 0.02, bark, 0, 5)
+		logs += 1
