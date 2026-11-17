@@ -198,7 +198,12 @@ static func soldier_mesh(team: int, weapon: int, low: bool = false) -> ArrayMesh
 		cg.sphere(0.024, SC.call(Vector3(0.05 * sx, 1.612, -0.07), Vector3(1.0, 0.7, 0.9)), SKIN * 0.88, HEAD, Vector3.ONE, 4, 8)
 	cg.box(Vector3(0.05, 0.007, 0.012), X.call(Vector3(0, 1.607, -0.093)), Color(0.28, 0.1, 0.08), HEAD)
 	cg.box(Vector3(0.072, 0.017, 0.022), X.call(Vector3(0, 1.625, -0.093)), Color(0.07, 0.04, 0.02), HEAD)
-	if team == 0:
+	var hparts: Array = ModelLib.mesh_parts("imperial_helmet" if team == 0 else "hsat_helmet") if fine else []
+	if hparts.size() > 0:
+		# CC-BY 외부 모델(assets/models/LICENSES.md): A팀 뾰족 철모, B팀 브로디형 철모. 앞쪽이 모델 -X 라서 -90° 돌린다.
+		mg.add_model(hparts, Vector3(0, 1.618 if team == 0 else 1.60, 0.005), -PI * 0.5, 0.23 if team == 0 else 0.25, HEAD, p.helmet * 1.5, 0.72, 0.14 if team == 0 else 0.2)
+		mg.box(Vector3(0.026, 0.02, 0.012), X.call(Vector3(0, 1.725, -0.136)), mark, HEAD)
+	elif team == 0:
 		var prof := [Vector2(0.0, 0.14), Vector2(0.065, 0.136), Vector2(0.105, 0.115), Vector2(0.126, 0.082), Vector2(0.131, 0.04), Vector2(0.168, 0.026), Vector2(0.172, 0.018), Vector2(0.12, 0.022)]
 		prof.reverse()
 		cg.lathe(prof, 18, X.call(Vector3(0, 1.625, 0)), p.helmet, HEAD)

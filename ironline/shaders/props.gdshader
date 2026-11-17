@@ -156,6 +156,10 @@ void fragment() {
 		float lf2 = vnoise(wpos.xz * 7.0 - wpos.y * 5.0);
 		col = base * (0.55 + 0.75 * lf) * (0.85 + 0.3 * lf2);
 		rough = 0.9;
+	} else if (kind > 12.5 && kind < 13.5) {
+		// 외부 모델(소총·철모·삽 등): 정점 색에 구워 둔 원본 색을 그대로 쓰고 때만 얹는다
+		col = base * (0.85 + 0.25 * grime);
+		rough = 0.62;
 	} else {
 		float weave = 0.5 + 0.5 * sin(q.x * 70.0) * sin(q.y * 70.0);
 		col = base * (0.88 + 0.2 * grime) * (0.94 + 0.1 * weave);
