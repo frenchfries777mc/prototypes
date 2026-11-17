@@ -107,6 +107,7 @@ static func props(w: World) -> Node3D:
 	_foliage(chunks, w, rng)
 	_poles_and_hay(chunks, w, rng)
 	_rocks_and_logs(chunks, w, rng)
+	_litter(chunks, w, rng)
 	var mat := prop_material()
 	var root := Node3D.new()
 	root.name = "Props"
@@ -831,3 +832,46 @@ static func _models(root: Node3D, w: World, rng: RandomNumberGenerator) -> void:
 				var m := ModelLib.make("ammo_box", p, rng.randf() * TAU, 0.0, 1.6) if q == 0 else ModelLib.make("metal_jerrycan_green", p, rng.randf() * TAU, 0.55)
 				if m != null:
 					mr.add_child(m)
+
+
+## 출처가 여러 군데인 모델(CC-BY 포함, assets/models/LICENSES.md 참고)을 정점 색으로 구워 소품 청크 메시에 합친다.
+## 참호 바닥의 소총·철모·석유 랜턴, 참호 둔덕의 야전삽, 상자 위 쌍안경. 충돌은 없는 장식이고, 별도 노드·재질이 늘지 않는다.
+static func _litter(chunks: Dictionary, w: World, rng: RandomNumberGenerator) -> void:
+	var parts := {}
+	for n in ["lebel", "stahlhelm", "hsat_helmet", "old_shovel", "petrol_lamp", "binoculars"]:
+		parts[n] = ModelLib.mesh_parts(n)
+		if (parts[n] as Array).size() == 0:
+			return
+	var K := 13.0 / 16.0
+	var none := Color(0, 0, 0)
+	var lay := Basis(Vector3.RIGHT, deg_to_rad(90.0))
+	for tx in World.TRENCH_X:
+		var z := -84.0
+		while z < 84.0:
+			z += rng.randf_range(9.0, 18.0)
+			var cx := w.trench_center(tx, z)
+			if w._near_point(cx, z, World.POINT_R + 4.0):
+				continue
+			var side := -1.0 if rng.randf() < 0.5 else 1.0
+			var roll := rng.randf()
+			var yaw := rng.randf() * TAU
+			var px := cx + side * rng.randf_range(0.4, 1.3)
+			var g := _g(chunks, Vector3(px, 0, z))
+			if roll < 0.40:
+				# 바닥에 놓인 소총(1.3m): 트렌치 방향으로 길게
+				g.add_model(parts["lebel"], Vector3(px, w.height_at(px, z) + 0.03, z), PI * 0.5 + rng.randf_range(-0.5, 0.5), 1.3, 0, none, 0.0, 0.0, Basis.IDENTITY, false, K)
+			elif roll < 0.62:
+				g.add_model(parts["stahlhelm" if rng.randf() < 0.5 else "hsat_helmet"], Vector3(px, w.height_at(px, z) - 0.01, z), yaw, 0.17, 0, none, 0.0, 0.0, Basis.IDENTITY, true, K)
+			elif roll < 0.82:
+				# 참호 흙벽(둔덕)에 비스듬히 꽂힌 야전삽: 길이축(Z)을 세우고 기울인다
+				var sx := cx + side * 2.35
+				var pre := Basis(Vector3.BACK, rng.randf_range(-0.35, 0.35)) * lay.inverse()
+				g.add_model(parts["old_shovel"], Vector3(sx, w.height_at(sx, z) - 0.28, z), yaw, 1.0, 0, none, 0.0, 0.0, pre, false, K)
+			else:
+				g.add_model(parts["petrol_lamp"], Vector3(px, w.height_at(px, z), z), yaw, 0.34, 0, none, 0.0, 0.0, Basis.IDENTITY, true, K)
+	# 상자 위 쌍안경
+	for b in w.boxes:
+		if int(b.kind) == 2 and rng.randf() < 0.22:
+			var top := Vector3((b.mn.x + b.mx.x) * 0.5, b.mx.y, (b.mn.z + b.mx.z) * 0.5)
+			var g := _g(chunks, top)
+			g.add_model(parts["binoculars"], top, rng.randf() * TAU, 0.2, 0, none, 0.0, 0.0, lay, false, K)
