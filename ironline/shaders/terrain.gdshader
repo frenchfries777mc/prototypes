@@ -12,13 +12,9 @@ uniform vec3 rock    : source_color = vec3(0.34, 0.32, 0.29);
 uniform vec2 points[5];
 // Poly Haven CC0 PBR 텍스처(질감 구조만 쓰고 색은 우리 팔레트를 유지한다)
 uniform sampler2D g_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D g_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D d_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D d_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D m_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D m_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D r_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D r_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 const vec3 AVG_G = vec3(0.291, 0.248, 0.119);
 const vec3 AVG_D = vec3(0.150, 0.106, 0.061);
 const vec3 AVG_M = vec3(0.092, 0.073, 0.048);
@@ -139,15 +135,7 @@ void fragment() {
 
 	// 가짜 요철: 노이즈 기울기로 법선을 살짝 흔든다
 	// 텍스처 법선: 가중치에 따라 풀/흙/진흙/바위 법선을 섞는다
-	float w_mud = clamp(low, 0.0, 1.0);
-	float w_dirt = clamp(trod * 0.5 + road + smoothstep(0.1, 0.45, slope) * 0.6, 0.0, 1.0);
-	float w_rock = smoothstep(0.5, 0.8, slope);
-	vec2 ng = texture(g_n, uvg).xy * 2.0 - 1.0;
-	vec2 nd = texture(d_n, wpos.xz * 0.3).xy * 2.0 - 1.0;
-	vec2 nm = texture(m_n, wpos.xz * 0.26).xy * 2.0 - 1.0;
-	vec2 nr = texture(r_n, wpos.xz * 0.35).xy * 2.0 - 1.0;
-	vec2 nmix = mix(mix(mix(ng, nd, w_dirt), nm, w_mud), nr, w_rock);
-	vec3 bump = vec3(nmix.x, 0.0, nmix.y) * (0.55 * near_t + 0.1) + vec3(n3 - 0.5, 0.0, n4 - 0.5) * 0.12;
+	vec3 bump = vec3(n3 - 0.5, 0.0, n4 - 0.5) * 0.3 * (0.4 + 0.6 * near_t);
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(bump, 0.0)).xyz);
 	// 웅덩이 수면은 평평하게(잔물결만)
 	float rip = (vnoise(p * 6.0 + TIME * 0.4) - 0.5) * 0.04;

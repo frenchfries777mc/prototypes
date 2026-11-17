@@ -77,5 +77,5 @@ scripts/Main.gd        조립, 입력, 고정 틱 + 보간
 ## 라이선스
 
 3D 모델(통·상자·탄약 상자·제리캔)은 Poly Haven 의 **CC0**, 병사 철모·소총·야전삽·랜턴·쌍안경은 Objaverse 에 올라온 **CC-BY 4.0** 모델이다 — 출처·작가·변경점은 [`assets/models/LICENSES.md`](assets/models/LICENSES.md).
-PBR 텍스처(땅·벽돌·회반죽·기와·목재·껍질·바위)도 Poly Haven **CC0** — [`assets/textures/LICENSES.md`](assets/textures/LICENSES.md).
+텍스처(땅·벽돌·회반죽·기와·목재·껍질·바위)도 Poly Haven **CC0** — [`assets/textures/LICENSES.md`](assets/textures/LICENSES.md).
 글꼴 Gothic A1(한글 2350자 + 라틴 서브셋)은 SIL OFL 1.1 (`assets/fonts/OFL.txt`). 코드는 처음부터 새로 작성했고 다른 게임의 코드를 포함하지 않는다.

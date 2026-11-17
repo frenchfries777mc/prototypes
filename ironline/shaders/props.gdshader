@@ -2,20 +2,14 @@ shader_type spatial;
 render_mode diffuse_burley, specular_schlick_ggx;
 // 소품: 정점 색의 알파로 재질 종류를 고른다 (알파 = 종류/16).
 //  0 벽돌  1 모래주머니  2 나무 상자  3 목재  4 나무줄기  5 천/기타  7 나뭇잎  8 회반죽+벽돌  9 기와  12 바위
-// 벽돌·회반죽·기와·목재·껍질·바위는 Poly Haven CC0 PBR 텍스처(색 + 법선)를 쓴다.
+// 벽돌·회반죽·기와·목재·껍질·바위는 Poly Haven CC0 텍스처(색만)를 쓴다. 샘플러 수가 많으면 일부 GPU 에서 셰이더가 링크되지 않아 법선 맵은 쓰지 않는다.
 
 uniform sampler2D brick_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D brick_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D plaster_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D plaster_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D roof_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D roof_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D plank_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D plank_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D bark_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D bark_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D rock_d : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform sampler2D rock_n : hint_normal, filter_linear_mipmap_anisotropic, repeat_enable;
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -88,7 +82,6 @@ void fragment() {
 		vec3 t = texture(brick_d, uv).rgb;
 		col = t * (0.55 + 0.75 * grime) * mix(vec3(1.0), base * 2.3, 0.35);
 		col *= 0.82 + 0.2 * clamp((wpos.y + 0.5) * 0.5, 0.0, 1.0);
-		bump = texture(brick_n, uv).xy * 2.0 - 1.0;
 		bump_k = 0.9;
 		rough = 0.92;
 	} else if (kind < 1.5) {
@@ -109,7 +102,6 @@ void fragment() {
 		vec2 uv = q * vec2(0.55, 0.55);
 		vec3 t = texture(plank_d, uv).rgb;
 		col = t * (0.7 + 0.6 * grime) * mix(vec3(1.0), base * 3.2, 0.3);
-		bump = texture(plank_n, uv).xy * 2.0 - 1.0;
 		bump_k = 0.7;
 		rough = 0.82;
 	} else if (kind < 4.5) {
@@ -117,7 +109,6 @@ void fragment() {
 		vec2 uv = vec2((wpos.x + wpos.z) * 0.9, wpos.y * 0.45);
 		vec3 t = texture(bark_d, uv).rgb;
 		col = t * mix(vec3(1.0), base * 4.5, 0.3);
-		bump = texture(bark_n, uv).xy * 2.0 - 1.0;
 		bump_k = 1.0;
 		rough = 0.95;
 	} else if (kind > 7.5 && kind < 8.5) {
@@ -128,9 +119,6 @@ void fragment() {
 		vec3 br = texture(brick_d, q * 0.85).rgb * (0.55 + 0.75 * grime);
 		col = mix(pl, br, flake);
 		col *= 0.8 + 0.2 * clamp((wpos.y + 1.0) * 0.6, 0.0, 1.0);
-		vec2 np = texture(plaster_n, q * 0.55).xy * 2.0 - 1.0;
-		vec2 nb = texture(brick_n, q * 0.85).xy * 2.0 - 1.0;
-		bump = mix(np, nb, flake);
 		bump_k = mix(0.5, 0.9, flake);
 		rough = 0.95;
 	} else if (kind > 8.5 && kind < 9.5) {
@@ -138,14 +126,12 @@ void fragment() {
 		vec2 uv = vec2(wpos.x * 0.7, wpos.z * 0.7);
 		vec3 t = texture(roof_d, uv).rgb;
 		col = t * (0.7 + 0.5 * grime) * mix(vec3(1.0), base * 2.6, 0.25);
-		bump = texture(roof_n, uv).xy * 2.0 - 1.0;
 		bump_k = 0.9;
 		rough = 0.85;
 	} else if (kind > 11.5 && kind < 12.5) {
 		// 바위 (실사 텍스처) + 위쪽 면에 이끼
 		vec3 t = texture(rock_d, q * 0.9).rgb;
 		col = t * mix(vec3(1.0), base * 3.2, 0.3) * (0.7 + 0.5 * grime);
-		bump = texture(rock_n, q * 0.9).xy * 2.0 - 1.0;
 		bump_k = 1.0;
 		float moss = smoothstep(0.55, 0.9, wnrm.y) * smoothstep(0.35, 0.7, grime);
 		col = mix(col, vec3(0.14, 0.2, 0.07), moss * 0.5);
