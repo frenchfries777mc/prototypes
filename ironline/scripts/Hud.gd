@@ -100,7 +100,7 @@ func consume(events: Array) -> void:
 			"cap":
 				if e.o >= 0:
 					var mine: bool = e.o == me.team
-					_say("거점 %d 점령 — %s" % [e.i + 1, "아군" if mine else "적군"], 3.2)
+					_say("거점 %d 점령: %s" % [e.i + 1, "아군" if mine else "적군"], 3.2)
 				else:
 					_say("거점 %d 중립화" % [e.i + 1], 2.6)
 
