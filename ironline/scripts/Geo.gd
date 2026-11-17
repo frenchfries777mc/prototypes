@@ -184,6 +184,82 @@ func rod(p0: Vector3, p1: Vector3, r0: float, r1: float, col: Color, bone: int =
 	cone(r0, r1, d.length(), Transform3D(_basis_y(d), p0), col, bone, segs, true)
 
 
+## 외부 모델(ModelLib.mesh_parts 결과)을 이 메시에 굽는다. pre 로 먼저 회전한 뒤 크기를 맞추고(by_height 이면 높이가, 아니면 가장 긴 변이 size(m)),
+## 바닥 중심을 base 에 놓으며 yaw 만큼 돌린다. 바닥에서 cut 비율 아래의 삼각형(턱끈 등)은 버린다.
+## 색은 원본 재질의 알베도 텍스처를 정점 UV 로 읽어 정점 색으로 굽고, tint 를 tint_w 비율로 섞는다. a 는 정점 색 알파(소품 셰이더의 재질 종류).
+func add_model(parts: Array, base: Vector3, yaw: float, size: float, bone: int, tint: Color, tint_w: float, cut: float = 0.0, pre: Basis = Basis.IDENTITY, by_height: bool = true, a: float = 1.0) -> void:
+	var lo := Vector3(1e9, 1e9, 1e9)
+	var hi := Vector3(-1e9, -1e9, -1e9)
+	var pxf := Transform3D(pre, Vector3.ZERO)
+	for pt in parts:
+		var m: Mesh = pt.mesh
+		var xf: Transform3D = pxf * (pt.xf as Transform3D)
+		for si in m.get_surface_count():
+			var arr := m.surface_get_arrays(si)
+			for pv in (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array):
+				var q := xf * pv
+				lo = lo.min(q)
+				hi = hi.max(q)
+	var ext := hi - lo
+	var ref := ext.y if by_height else maxf(ext.x, maxf(ext.y, ext.z))
+	if ref < 0.00001:
+		return
+	var sc := size / ref
+	var h := ext.y
+	var ctr := Vector3((lo.x + hi.x) * 0.5, lo.y, (lo.z + hi.z) * 0.5)
+	var rot := Basis(Vector3.UP, yaw)
+	for pt in parts:
+		var m: Mesh = pt.mesh
+		var xf: Transform3D = pxf * (pt.xf as Transform3D)
+		for si in m.get_surface_count():
+			var arr := m.surface_get_arrays(si)
+			var pvs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			var pns := PackedVector3Array()
+			if arr[Mesh.ARRAY_NORMAL] != null:
+				pns = arr[Mesh.ARRAY_NORMAL]
+			var puv := PackedVector2Array()
+			if arr[Mesh.ARRAY_TEX_UV] != null:
+				puv = arr[Mesh.ARRAY_TEX_UV]
+			var pidx := PackedInt32Array()
+			if arr[Mesh.ARRAY_INDEX] != null:
+				pidx = arr[Mesh.ARRAY_INDEX]
+			else:
+				for k in pvs.size():
+					pidx.append(k)
+			var src := Color(0.5, 0.5, 0.5)
+			var img: Image = null
+			var mat := m.surface_get_material(si)
+			if mat is BaseMaterial3D:
+				src = (mat as BaseMaterial3D).albedo_color
+				var tex := (mat as BaseMaterial3D).albedo_texture
+				if tex != null and puv.size() == pvs.size():
+					img = tex.get_image()
+					if img != null and img.is_compressed():
+						img.decompress()
+			var remap := {}
+			for t in range(0, pidx.size() - 2, 3):
+				var ymid := 0.0
+				for j in 3:
+					ymid += (xf * pvs[pidx[t + j]]).y / 3.0
+				if (ymid - lo.y) < cut * h:
+					continue
+				for j in 3:
+					var vi: int = pidx[t + j]
+					if not remap.has(vi):
+						var wpos: Vector3 = xf * pvs[vi]
+						var wn: Vector3 = (xf.basis * pns[vi]) if pns.size() > vi else Vector3.UP
+						var col := src
+						if img != null:
+							var uv := puv[vi]
+							var px := clampi(int(floorf(fposmod(uv.x, 1.0) * img.get_width())), 0, img.get_width() - 1)
+							var py := clampi(int(floorf(fposmod(uv.y, 1.0) * img.get_height())), 0, img.get_height() - 1)
+							col = src * img.get_pixel(px, py).srgb_to_linear()
+						col = col.lerp(tint, tint_w)
+						col.a = a
+						remap[vi] = _add(base + rot * ((wpos - ctr) * sc), rot * wn, col, bone)
+					idx.append(remap[vi])
+
+
 func commit_to(mesh: ArrayMesh, mat: Material) -> void:
 	if v.size() == 0:
 		return

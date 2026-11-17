@@ -14,6 +14,8 @@ static func available() -> bool:
 static func scene(name: String) -> PackedScene:
 	if not _scenes.has(name):
 		var path := "res://assets/models/%s/%s.gltf" % [name, name]
+		if not ResourceLoader.exists(path):
+			path = "res://assets/models/%s/%s.glb" % [name, name]
 		_scenes[name] = load(path) if ResourceLoader.exists(path) else null
 	return _scenes[name]
 
@@ -67,6 +69,28 @@ static func make(name: String, base: Vector3, yaw: float, height: float = 0.0, s
 	root.rotation.y = yaw
 	_apply_range(root, far)
 	return root
+
+
+## 모델의 메시를 (변환 포함) 모아 돌려준다: [{"mesh": Mesh, "xf": Transform3D}]
+static func mesh_parts(name: String) -> Array:
+	var out: Array = []
+	var ps := scene(name)
+	if ps == null:
+		return out
+	var inst := ps.instantiate()
+	_collect_meshes(inst, Transform3D.IDENTITY, out)
+	inst.free()
+	return out
+
+
+static func _collect_meshes(n: Node, xf: Transform3D, out: Array) -> void:
+	var t := xf
+	if n is Node3D:
+		t = xf * (n as Node3D).transform
+	if n is MeshInstance3D and (n as MeshInstance3D).mesh != null:
+		out.append({"mesh": (n as MeshInstance3D).mesh, "xf": t})
+	for c in n.get_children():
+		_collect_meshes(c, t, out)
 
 
 static func _apply_range(n: Node, far: float) -> void:
