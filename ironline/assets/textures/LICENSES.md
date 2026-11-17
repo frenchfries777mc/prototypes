@@ -1,6 +1,6 @@
 # 텍스처 출처
 
-모두 [Poly Haven](https://polyhaven.com) 의 **CC0 (퍼블릭 도메인)** PBR 텍스처다. 색(diffuse)과 법선(normal, GL)만 쓰고
+모두 [Poly Haven](https://polyhaven.com) 의 **CC0 (퍼블릭 도메인)** PBR 텍스처다. 색(diffuse)만 쓰고(법선 맵은 일부 GPU 의 텍스처 유닛 한도 때문에 제외)
 크기를 줄여(땅 1024px, 나머지 512px) JPG 로 재압축했다. 귀속 표시 의무는 없지만 작가를 밝혀 둔다.
 
 | 파일 | 이름 | 작가 | 쓰임 |

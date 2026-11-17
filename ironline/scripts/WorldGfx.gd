@@ -58,7 +58,6 @@ static func terrain(w: World) -> MeshInstance3D:
 	mat.set_shader_parameter("points", pts)
 	for pair in [["g", "forrest_ground_01"], ["d", "forest_ground_04"], ["m", "brown_mud_03"], ["r", "mossy_rock"]]:
 		mat.set_shader_parameter(pair[0] + "_d", load("res://assets/textures/%s_diff.jpg" % pair[1]))
-		mat.set_shader_parameter(pair[0] + "_n", load("res://assets/textures/%s_nor.jpg" % pair[1]))
 	m.surface_set_material(0, mat)
 	var mi := MeshInstance3D.new()
 	mi.mesh = m
@@ -290,7 +289,6 @@ static func prop_material() -> ShaderMaterial:
 	for pair in [["brick", "red_brick_03"], ["plaster", "plaster_grey_04"], ["roof", "ceramic_roof_01"],
 			["plank", "weathered_planks"], ["bark", "bark_brown_02"], ["rock", "mossy_rock"]]:
 		mat.set_shader_parameter(pair[0] + "_d", load("res://assets/textures/%s_diff.jpg" % pair[1]))
-		mat.set_shader_parameter(pair[0] + "_n", load("res://assets/textures/%s_nor.jpg" % pair[1]))
 	return mat
 
 
