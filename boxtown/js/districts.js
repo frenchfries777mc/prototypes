@@ -41,6 +41,7 @@ export function buildDistricts(h) {
     return null;
   };
   // 나무 잔교: (x,z)에서 yaw 방향으로 len만큼
+  const DOCK_NAMES = { resortDock: '동쪽 해변', lakeDock: '호수 마을', gullDock: '갈매기섬', fortDock: '요새섬', woodsDock: '고요숲 섬', millDock: '풍차섬', twinDock: '쌍둥이섬' };
   const dock = (id, x, z, yaw, len, w = 3.2) => {
     const s = Math.sin(yaw), c = Math.cos(yaw);
     const y = 0.5;
@@ -50,6 +51,7 @@ export function buildDistricts(h) {
     }
     // 잔교 끝 옆에 탈 수 있는 배를 한 척 댄다.
     h.boatSpots.push({ x: x + s * (len - 4) + c * (w / 2 + 2.3), z: z + c * (len - 4) - s * (w / 2 + 2.3), yaw });
+    h.docks.push({ id, name: DOCK_NAMES[id] || id, x: x + s * (len - 2), z: z + c * (len - 2), y: y + 0.15 });
     return { x: x + s * len, z: z + c * len, y: y + 0.15 };
   };
   const lighthouse = (id, x, z, colA = '#f4f1ea', colB = '#e5553f') => {

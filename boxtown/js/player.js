@@ -283,9 +283,13 @@ export class Player {
     const dx = tx - hx, dz = tz - hz, dl = Math.hypot(dx, dz);
     if (dl <= acc) { hx = tx; hz = tz; } else { hx += (dx / dl) * acc; hz += (dz / dl) * acc; }
     let vy = v.y;
-    if (this.grounded) vy = -7; // 내리막에서 떠오르지 않도록 바닥 쪽으로 눌러 준다
+    if (this.grounded) {
+      // 땅 위에서는 비탈면을 따라 움직인다: 내리막에서는 바닥을 따라 내려가고, 가만히 서 있으면 미끄러지지 않는다.
+      const n = sup.averageSurfaceNormal;
+      vy = n && n.y > 0.3 ? clamp(-(hx * n.x + hz * n.z) / n.y, -12, 12) : 0;
+    }
     else vy = Math.max(vy + GRAVITY * dt, -45);
-    if (this.jumpBuf > 0 && (this.grounded || this.airT < 0.12) && vy <= 0.5) {
+    if (this.jumpBuf > 0 && (this.grounded || this.airT < 0.12)) {
       vy = JUMP_V; this.jumpBuf = 0; this.jumped = true; this.airT = 1; this.grounded = false; this.jumpGrace = 0.18;
     }
     this.vel.set(hx, vy, hz);

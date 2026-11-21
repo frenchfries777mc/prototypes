@@ -1,6 +1,6 @@
 // 부팅: 엔진, 물리, 조명, 후처리, 월드 조립.
 import { Assets } from './assets.js';
-import { buildTerrain, buildWater, buildSky, height } from './terrain.js';
+import { buildTerrain, buildWater, buildSky, height, initGrid } from './terrain.js';
 import { buildTown, groundY, ROAD_Y } from './town.js';
 import { modelKeys, carKeys, SPAWN, PARKED, CELL } from './mapdata.js';
 import { Garage } from './vehicles.js';
@@ -15,6 +15,10 @@ const $ = (id) => document.getElementById(id);
 const setProgress = (p, text) => { $('bar').style.width = Math.round(p * 100) + '%'; if (text) $('loadText').textContent = text; };
 
 async function boot() {
+  // 로딩 단계별 걸린 시간(ms). 콘솔에서 __game.timing 으로 볼 수 있다.
+  const timing = {}, t0 = performance.now();
+  let tPrev = t0;
+  const mark = (k) => { const n = performance.now(); timing[k] = Math.round(n - tPrev); tPrev = n; };
   const canvas = $('game');
   const isTouch = matchMedia('(pointer: coarse)').matches;
   const params = new URLSearchParams(location.search);
@@ -54,21 +58,29 @@ async function boot() {
   sun.diffuse = B.Color3.FromHexString('#fff1d6');
   sun.specular = B.Color3.FromHexString('#fff1d6');
 
+  mark('engine');
   setProgress(0.06, '에셋 불러오는 중');
   const assets = new Assets(scene);
   await assets.load(modelKeys(), (p) => setProgress(0.06 + p * 0.55));
   await Promise.all(carKeys().map((k) => assets.loadCar(k)));
   setProgress(0.66);
 
+  mark('assets');
   setProgress(0.68, '섬과 바다 만드는 중');
   await new Promise((r) => setTimeout(r, 0));
-  for (const chunk of buildTerrain(scene)) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  initGrid();
+  mark('heightGrid');
+  const chunks = buildTerrain(scene);
+  mark('terrainMesh');
+  for (const chunk of chunks) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  mark('terrainPhysics');
   buildSky(scene, env);
   buildWater(scene, env);
 
   setProgress(0.82, '마을 세우는 중');
   await new Promise((r) => setTimeout(r, 0));
-  const town = buildTown(scene, assets);
+  const town = buildTown(scene, assets, mark);
+  mark('town.rest');
 
   const character = new Character(scene);
   const input = new Input(canvas);
@@ -98,11 +110,12 @@ async function boot() {
   assets.cull(player.cam.position, rl, fixedCasters);
   let cullT = 0;
 
-  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   player.onUse = () => jobs.use();
+  mark('actors');
   const map = new MapView(() => ({
     x: player.feet.x, z: player.feet.z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
-    pads: jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color })),
+    pads: jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
   }));
 
   // 후처리: 구석 그늘(SSAO), 밝은 곳 번짐, 대비와 색감.
@@ -187,8 +200,11 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing };
+  mark('map+fx');
   await scene.whenReadyAsync();
+  mark('shaders');
+  timing.total = Math.round(performance.now() - t0);
   engine.runRenderLoop(() => scene.render());
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');
