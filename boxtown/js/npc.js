@@ -42,6 +42,14 @@ function ringS(r, x, z) {
   return 2 * w + h + clamp(r.z1 - z, 0, h);
 }
 
+// 불량배와 경찰관은 옷차림으로 구분된다.
+const THUG = { shirt: '#22202b', pants: '#3b3b4d', shoes: '#b8322a', head: 'beanie', hat: '#b8322a', brim: '#22202b' };
+const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' };
+function lookFor(kind, seed) {
+  const base = randomLook(seed);
+  return kind === 'thug' ? { ...base, ...THUG } : kind === 'cop' ? { ...base, ...COP } : base;
+}
+
 export class Residents {
   constructor(scene, groundY, walkers = 16) {
     this.groundY = groundY;
@@ -49,9 +57,10 @@ export class Residents {
     this.meshes = [];
     const r = rng(31337);
     for (let i = 0; i < walkers; i++) {
-      const chr = new Character(scene, randomLook(1000 + i * 7));
+      const kind = i === 2 || i === 9 ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
+      const chr = new Character(scene, lookFor(kind, 1000 + i * 7));
       const ring = i % RINGS.length;
-      const n = { chr, mode: 'walk', ring, s: r() * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
+      const n = { chr, kind, mode: 'walk', ring, s: r() * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
         pos: new B.Vector3(), vel: new B.Vector3(), vy: 0, lie: 0, t: 0, r: rng(500 + i) };
       const [x, z] = ringPoint(RINGS[ring], n.s);
       n.pos.set(x, groundY(x, z), z);
@@ -60,9 +69,10 @@ export class Residents {
       this.meshes.push(...chr.meshes);
     }
     SPOTS.forEach(([x, z, yaw], i) => {
-      const chr = new Character(scene, randomLook(4000 + i * 13));
+      const kind = i === 5 || i === 6 || i === 7 ? 'thug' : 'citizen'; // 부두 구석에 모여 선 불량배
+      const chr = new Character(scene, lookFor(kind, 4000 + i * 13));
       chr.heading = yaw;
-      const n = { chr, mode: 'stand', home: [x, z, yaw], pos: new B.Vector3(x, groundY(x, z), z), vel: new B.Vector3(), vy: 0, lie: 0, t: r() * 5, look: 0, r: rng(900 + i) };
+      const n = { chr, kind, mode: 'stand', home: [x, z, yaw], pos: new B.Vector3(x, groundY(x, z), z), vel: new B.Vector3(), vy: 0, lie: 0, t: r() * 5, look: 0, r: rng(900 + i) };
       this.list.push(n);
       this.meshes.push(...chr.meshes);
     });
@@ -86,6 +96,7 @@ export class Residents {
   launch(n, dx = 0, dz = 0) {
     if (n.mode === 'sky') return;
     n.mode = 'sky'; n.t = 0; n.vy = 16; n.gone = false; n.hp = 0;
+    if (this.onDefeat) this.onDefeat(n);
     n.vel.set(dx * 5, 0, dz * 5);
     n.chr.wave = 0;
   }
