@@ -120,6 +120,8 @@ async function boot() {
   player.onUse = () => interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.weapons = weapons;
+  interiors.weapons = weapons;
+  weapons.toast = (text, good) => jobs.toast(text, good);
   weapons.onCrime = (amount) => police.report(amount);
   mark('actors');
   const map = new MapView(() => ({

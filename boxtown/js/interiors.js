@@ -57,6 +57,12 @@ const ROOMS = {
   hotel: { name: '호텔', w: 16, d: 12, floor: '#e6d9b8', wall: '#f7f0e0', clerk: [0, 4.2], items: [
     ['#8b5d3a', 7, 1.2, 1.2, 0, 2.8], ['#f4f1ea', 7.2, 0.1, 1.4, 0, 2.8, 1.2, 0], ['*#ffd84a', 0.4, 0.3, 0.4, 2.6, 2.8, 1.3, 0], ['#b8322a', 3.4, 0.04, 9, 0, -1.6, 0, 0], ['#4f6fb0', 3.4, 0.7, 1.3, -5.6, -1], ['#4f6fb0', 3.4, 1.3, 0.4, -5.6, -0.4, 0, 0], ['#4f6fb0', 3.4, 0.7, 1.3, 5.6, -1], ['#4f6fb0', 3.4, 1.3, 0.4, 5.6, -0.4, 0, 0],
     ['#8b5d3a', 1.4, 0.6, 1.4, -5.6, -3], ['#8b5d3a', 1.4, 0.6, 1.4, 5.6, -3], ['#3fa868', 0.7, 1.8, 0.7, -7.2, 5], ['#3fa868', 0.7, 1.8, 0.7, 7.2, 5], ['#d8dcec', 2, 2.8, 0.3, -5, 5.8], ['#d8dcec', 2, 2.8, 0.3, 5, 5.8], ['*#ffe9a8', 1.2, 0.3, 1.2, 0, 0, 4.7, 0]] },
+  arms: { name: '무기 상점', w: 13, d: 10, floor: '#3a3d4d', wall: '#55693f', clerk: [0, 3.4], items: [
+    ['#2c2c36', 8, 1.1, 1, 0, 2.2], ['#8f95a8', 8.2, 0.1, 1.2, 0, 2.2, 1.1, 0], ['#8b5d3a', 10, 2.6, 0.5, 0, 4.7],
+    ['#c79a5b', 0.16, 1.0, 0.16, -4.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, -4.6, -1], ['#2a2c36', 0.5, 0.2, 0.16, -1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, -1.6, -1],
+    ['#2a2c36', 0.9, 0.22, 0.18, 1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 1.6, -1], ['#55693f', 1.3, 0.3, 0.3, 4.6, -1, 0.9, 0], ['#d9473c', 0.3, 0.22, 0.22, 5.3, -1, 0.94, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 4.6, -1],
+    ['#2a2c36', 0.5, 0.2, 0.1, -3, 4.4, 1.6, 0], ['#2a2c36', 0.9, 0.2, 0.1, 0, 4.4, 1.9, 0], ['#55693f', 1.3, 0.3, 0.1, 3, 4.4, 1.5, 0]],
+    buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6]] },
   home: { w: 13, d: 10, floor: '#d8b98a', wall: '#f3ead6', items: [
     ['#4f6fb0', 3.6, 0.7, 1.4, -3.6, -1.6], ['#4f6fb0', 3.6, 1.3, 0.4, -3.6, -2.4, 0, 0], ['#e5553f', 4.4, 0.04, 3, -3.6, 0.2, 0, 0], ['#8b5d3a', 1.6, 0.5, 1, -3.6, 0.4], ['#2c2c36', 3, 0.9, 0.5, -3.6, 2.6], ['#22202b', 2.6, 1.5, 0.14, -3.6, 2.6, 1.0, 0], ['*#7fb8e0', 2.3, 1.2, 0.04, -3.6, 2.52, 1.15, 0],
     ['#f4f1ea', 4.4, 1, 0.9, 4, 4.4], ['#8f95a8', 4.6, 0.1, 1, 4, 4.4, 1, 0], ['#d8dcec', 1.1, 2.3, 0.9, 1.2, 4.4], ['#b9814f', 1.8, 0.9, 1.2, 3.2, 1.4], ['#c79a5b', 0.5, 0.5, 0.5, 3.2, 0.3], ['#c79a5b', 0.5, 0.5, 0.5, 3.2, 2.5],
@@ -127,6 +133,7 @@ export function buildInteriors(h) {
     { id: 'store', key: 'commercial/building-a', x: 24, z: 2.02 * 12, yaw: FACE.S, bg: '#2f7d4f' },
     { id: 'cafe', key: 'commercial/building-d', x: 24, z: 6.02 * 12, yaw: FACE.N, bg: '#8a5a2b' },
     { id: 'hotel', key: 'commercial/building-n', x: 456, z: 154, yaw: 0, bg: '#34456f' },
+    { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
     const f = frontOf(s.key, s.x, s.z, s.yaw, 1.1), y = h.groundY(f.x, f.z);
@@ -178,10 +185,18 @@ export function buildInteriors(h) {
       for (const d of doors) { const dist = Math.hypot(d.x - p.x, d.z - p.z); if (dist < bd && Math.abs(d.y - p.y) < 2) { bd = dist; best = d; } }
       return best;
     },
+    // 무기 상점 안에서 가까이 선 진열대: [무기, 값, x, 이름]
+    atStand() {
+      const r = this.inside && rooms[this.inside.room], buy = r && ROOMS[r.key].buy, p = this.player.feet;
+      if (!buy) return null;
+      const NAME = { bat: '방망이', pistol: '권총', smg: '기관단총', rocket: '로켓 발사기' };
+      for (const b of buy) if (Math.hypot(r.cx + b[2] - p.x, r.cz - 1 - p.z) < 1.9) return [b[0], b[1], b[2], NAME[b[0]]];
+      return null;
+    },
     atExit() { const r = this.inside && rooms[this.inside.room], p = this.player.feet; return r && Math.hypot(r.out.x - p.x, r.out.z - p.z) < 1.7; },
     prompt() {
       if (this.player.vehicle) return '';
-      if (this.inside) return this.atExit() ? '나가기' : '';
+      if (this.inside) { const b = this.atStand(); return this.atExit() ? '나가기' : b ? (this.weapons.owned.has(b[0]) ? `${b[3]} (이미 있음)` : `${b[3]} 사기 (${won(b[1])}원)`) : ''; }
       const d = this.near();
       if (!d) return '';
       if (d.house && !owned.has(d.id)) return `${d.name} 사기 (${won(d.price)}원)`;
@@ -191,6 +206,14 @@ export function buildInteriors(h) {
     use() {
       const P = this.player;
       if (this.inside) {
+        const b = this.atStand();
+        if (b && !this.atExit()) {
+          // 무기 상점 진열대
+          if (this.weapons.owned.has(b[0])) return true;
+          if (!this.jobs.spend(b[1])) { this.jobs.toast(`돈이 모자라요 (${won(b[1])}원 필요)`); return true; }
+          this.weapons.unlock(b[0], '', '샀어요');
+          return true;
+        }
         if (!this.atExit()) return false;
         const d = this.inside;
         this.inside = null; P.inside = false; P.dist = 6.8;
