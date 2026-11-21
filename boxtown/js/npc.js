@@ -6,7 +6,7 @@ const B = window.BABYLON;
 
 // 블록을 한 바퀴 도는 인도(블록 터 가장자리에서 0.75m 바깥). 좌표는 mapdata의 도로 격자에서 나온다.
 const E = 0.75;
-const RINGS = [
+export const RINGS = [
   { x0: 18 - E, x1: 54 + E, z0: 18 - E, z1: 42 + E }, // A
   { x0: 66 - E, x1: 114 + E, z0: 18 - E, z1: 42 + E }, // B
   { x0: 18 - E, x1: 54 + E, z0: 54 - E, z1: 78 + E }, // C
@@ -21,10 +21,10 @@ const CROSSINGS = [
   { a: 2, b: 3, pa: [54 + E, 60], pb: [66 - E, 60] },
 ];
 // 서서 쉬는 주민 자리: [x, z, 바라보는 방향]
-const SPOTS = [[83.6, 68.6, -1.9], [72.5, 61, 0.6], [80.6, 60.4, -0.6], [74, -44, 3.0], [69, -45.5, 2.6], [80.5, -1.5, 3.3], [44, 3.5, 2.8], [100, 4, 3.1]];
+const SPOTS = [[83.6, 68.6, -1.9], [72.5, 61, 0.6], [80.6, 60.4, -0.6], [74, -44, 3.0], [69, -45.5, 2.6], [88, 3.6, 3.3], [44, 3.5, 2.8], [100, 4, 3.1]];
 
 const perim = (r) => 2 * (r.x1 - r.x0 + r.z1 - r.z0);
-function ringPoint(r, s) {
+export function ringPoint(r, s) {
   const w = r.x1 - r.x0, h = r.z1 - r.z0, P = 2 * (w + h);
   s = ((s % P) + P) % P;
   if (s < w) return [r.x0 + s, r.z0];
