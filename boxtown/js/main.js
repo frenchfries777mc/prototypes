@@ -5,6 +5,7 @@ import { buildTown, groundY, ROAD_Y } from './town.js';
 import { modelKeys, carKeys, SPAWN, PARKED, CELL } from './mapdata.js';
 import { Garage } from './vehicles.js';
 import { Residents } from './npc.js';
+import { Jobs } from './jobs.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -92,6 +93,9 @@ async function boot() {
   const rl = csm.getShadowMap().renderList;
   for (const m of [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes]) rl.push(m);
 
+  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, addShadow: (ms) => ms.forEach((m) => rl.push(m)) });
+  player.onUse = () => jobs.use();
+
   // 후처리: 구석 그늘(SSAO), 밝은 곳 번짐, 대비와 색감.
   let ssao = null;
   if (quality !== 'low' && params.get('ssao') !== '0') {
@@ -116,12 +120,13 @@ async function boot() {
     garage.frame();
     const car = player.vehicle;
     residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);
-    const text = car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '';
+    jobs.update(dt);
+    const text = jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
       $('promptText').textContent = text;
-      $('btnUse').textContent = text || '타기';
+      $('btnUse').textContent = text.length > 5 ? text.slice(0, 5) : text || '타기';
       $('btnUse').style.visibility = text ? 'visible' : 'hidden';
       document.body.classList.toggle('driving', !!car);
     }
@@ -147,7 +152,7 @@ async function boot() {
   }, 2000);
 
   addEventListener('resize', () => engine.resize());
-  addEventListener('keydown', (e) => { if (e.code === 'KeyF') $('fps').hidden = !$('fps').hidden; });
+  addEventListener('keydown', (e) => { if (e.code === 'KeyP') $('fps').hidden = !$('fps').hidden; });
   setInterval(() => { if (!$('fps').hidden) $('fps').textContent = engine.getFps().toFixed(0) + ' fps'; }, 500);
 
   // 디버그·자동 시험용: 화면을 그리지 않고 seconds초만큼 게임을 진행한다.
@@ -170,7 +175,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town };
   await scene.whenReadyAsync();
   engine.runRenderLoop(() => scene.render());
   setProgress(1, '준비 완료');

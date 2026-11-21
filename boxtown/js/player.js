@@ -11,6 +11,7 @@ export class Input {
     this.stick = { x: 0, y: 0 };
     this.jumpQueued = false;
     this.useQueued = false;
+    this.touchUse = false;
     this.jumpHeld = false;
     this.touchRun = false;
     this.locked = false;
@@ -76,7 +77,11 @@ export class Input {
       jump.addEventListener('touchstart', (e) => { e.preventDefault(); this.jumpQueued = true; this.jumpHeld = true; }, { passive: false });
       jump.addEventListener('touchend', () => { this.jumpHeld = false; });
     }
-    if (use) use.addEventListener('touchstart', (e) => { e.preventDefault(); this.useQueued = true; }, { passive: false });
+    if (use) {
+      use.addEventListener('touchstart', (e) => { e.preventDefault(); this.useQueued = true; this.touchUse = true; }, { passive: false });
+      use.addEventListener('touchend', () => { this.touchUse = false; });
+      use.addEventListener('touchcancel', () => { this.touchUse = false; });
+    }
     if (run) run.addEventListener('touchstart', (e) => { e.preventDefault(); this.touchRun = !this.touchRun; run.classList.toggle('on', this.touchRun); }, { passive: false });
   }
 
@@ -89,6 +94,7 @@ export class Input {
     if (l > 1) { x /= l; y /= l; }
     return { x, y };
   }
+  get useHeld() { return this.keys.has('KeyE') || this.touchUse; }
   get brake() { return this.keys.has('Space') || this.jumpHeld; }
   get sprint() { return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.touchRun; }
 }
@@ -103,6 +109,7 @@ export class Player {
     this.vehicle = null; // 타고 있는 차
     this.nearCar = null; // 탈 수 있을 만큼 가까운 차
     this.lookIdle = 9; // 마우스로 시점을 안 건드린 시간
+    this.onUse = null; // E를 눌렀을 때 먼저 불리는 함수(직업 시스템이 건다)
     this.cc = new B.PhysicsCharacterController(new B.Vector3(spawn.x, spawn.y + CAP_H / 2 + 0.2, spawn.z), { capsuleHeight: CAP_H, capsuleRadius: CAP_R }, scene);
     this.cc.maxSlopeCosine = Math.cos(50 * Math.PI / 180);
     this.cc.characterMass = 70;
@@ -178,7 +185,8 @@ export class Player {
       }
     }
     this.nearCar = this.garage.nearest(this.feet, 2.6);
-    if (use && this.nearCar) { this.enter(this.nearCar); this.feet.copyFrom(this.vehicle.pos); return; }
+    // E: 직업 쪽에서 먼저 쓸 일이 있으면 그쪽이 우선이고, 아니면 차에 탄다.
+    if (use && !(this.onUse && this.onUse()) && this.nearCar) { this.enter(this.nearCar); this.feet.copyFrom(this.vehicle.pos); return; }
     const sup = cc.checkSupport(dt, this.down);
     const was = this.grounded;
     this.jumpGrace -= dt;

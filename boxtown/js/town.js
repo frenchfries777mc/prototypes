@@ -1,7 +1,8 @@
 // mapdata.js의 설계 데이터와 지형 규칙으로 월드를 실제로 세운다.
-import { CELL, GRID, BUILDINGS, PROPS, DYNAMIC, BOATS, PIER, LIGHTHOUSE } from './mapdata.js';
+import { CELL, GRID, BUILDINGS, PROPS, DYNAMIC, BOATS, PIER, LIGHTHOUSE, JOB_SITES } from './mapdata.js';
 import { height, slope, SEA, WORLD } from './terrain.js';
 import { rng, makeNoise, flatMat } from './util.js';
+import { buildJobSites } from './jobsites.js';
 const B = window.BABYLON;
 
 const FACE = { S: 0, W: Math.PI / 2, N: Math.PI, E: (3 * Math.PI) / 2 };
@@ -24,6 +25,8 @@ const cellAt = (x, z) => {
 };
 // 발밑 높이: 도로/보도, 공원 잔디, 그 밖은 지형.
 export function groundY(x, z) {
+  // 잔교 위
+  if (z < -6 && ((Math.abs(x - PIER.x) < PIER.w / 2 && z > PIER.z1 - 0.6) || (Math.abs(x - PIER.x) < 8.5 && z < PIER.z1 + 1 && z > PIER.z1 - 4))) return SLAB_Y;
   const c = cellAt(x, z);
   if (c === 'g') return LAWN_Y;
   if (c === '#' || c === 'x') {
@@ -196,6 +199,7 @@ export function buildTown(scene, assets) {
     for (const [cx, cz] of spots) {
       const x = cx * CELL, z = cz * CELL;
       if (cellAt(x, z) !== 'p') continue;
+      if (JOB_SITES.some((j) => Math.abs(j.cx * CELL - x) < 7 && Math.abs(j.cz * CELL - z) < 9)) continue; // 가게 정면은 비워 둔다
       assets.place(cx % 2 < 1 ? 'suburban/tree-large' : 'suburban/tree-small', x, SLAB_Y, z, 0, 0.75);
       addBox(x, 2, z, 0.5, 4, 0.5);
     }
@@ -278,6 +282,9 @@ export function buildTown(scene, assets) {
     }
   }
 
+  // ---------- 직업 건물 ----------
+  const jobSites = buildJobSites({ scene, box, addBox, casters, groundY, updaters });
+
   assets.flush();
 
   // ---------- 고정 충돌체 등록 ----------
@@ -334,7 +341,7 @@ export function buildTown(scene, assets) {
     }
   });
 
-  return { casters, update: (dt) => updaters.forEach((u) => u(dt)) };
+  return { casters, jobSites, update: (dt) => updaters.forEach((u) => u(dt)) };
 }
 
 // 규칙 기반 배치: 높이·경사·마을과의 거리를 보고 나무, 바위, 풀을 뿌린다.
