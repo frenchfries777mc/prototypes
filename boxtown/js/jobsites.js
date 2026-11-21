@@ -146,3 +146,58 @@ export function buildJobSites(h) {
   }
   return out;
 }
+
+// 마을 밖 직업 사무소: 작은 매표소 모양의 부스. 색, 간판, 지붕 위 표식이 직업마다 다르다.
+export const OUTPOSTS = [
+  { id: 'farmer', x: -340, z: 178, f: 'S', title: '농장 일꾼', wall: '#f6e7b8', trim: '#8a5a2b', a: '#e3a53a', b: '#fff7e6' },
+  { id: 'cargo', x: 286, z: 240, f: 'S', title: '공단 화물', wall: '#c9d2e6', trim: '#34456f', a: '#4f6fb0', b: '#f4f1ea' },
+  { id: 'mail', x: 160, z: 538, f: 'N', title: '호수 우체국', wall: '#fbe3df', trim: '#b8322a', a: '#e5553f', b: '#fff7e6' },
+  { id: 'ferry', x: 324, z: -346, f: 'S', title: '섬 나룻배', wall: '#cfeaf7', trim: '#1f6f95', a: '#3f9fd0', b: '#f4f1ea' },
+  { id: 'race', x: 444, z: 139, f: 'S', title: '해변 레이싱', wall: '#2c2c36', trim: '#f2644b', a: '#f2644b', b: '#f4f1ea' },
+  { id: 'guard', x: 474, z: 30, f: 'N', title: '인명 구조대', wall: '#fff7e6', trim: '#d9473c', a: '#ffd84a', b: '#d9473c', shore: true },
+  { id: 'treasure', x: 780, z: -341, f: 'N', title: '보물 사냥', wall: '#e9d2a0', trim: '#5a3d24', a: '#8a5a2b', b: '#ffd84a' },
+  { id: 'ranger', x: 222, z: 746, f: 'S', title: '산림 감시소', wall: '#cfe6c8', trim: '#2f6b3a', a: '#3fa868', b: '#f4f1ea' },
+];
+
+export function buildOutposts(h) {
+  const { scene } = h;
+  const mats = new Map();
+  const mat = (hex, opts) => { const k = hex + JSON.stringify(opts || {}); if (!mats.has(k)) mats.set(k, flatMat('out_' + k, hex, scene, opts)); return mats.get(k); };
+  const out = {};
+  for (const o of OUTPOSTS) {
+    let { x, z } = o;
+    // 바닷가 부스는 물에 잠기지 않는 곳까지 뭍 쪽으로 옮긴다.
+    if (o.shore) for (let i = 0; i < 40 && h.groundY(x, z) < 0.4; i++) z += 2;
+    const gy = h.groundY(x, z), yaw = FACE[o.f], c = Math.cos(yaw), s = Math.sin(yaw);
+    if (gy < -1) { console.error('직업 부스가 물속입니다:', o.id); continue; }
+    h.bucket('outpost_' + o.id, x, z);
+    const W = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
+    const put = (name, w, hh, d, lx, ly, lz, m, opts = {}) => { const [px, pz] = W(lx, lz); return h.box(o.id + '_' + name, w, hh, d, px, gy + ly, pz, m, { ...opts, yaw }); };
+    put('floor', 5.6, 0.2, 4.6, 0, 0.1, 0, mat(o.trim), { noShadow: true });
+    put('body', 4.6, 3.0, 3.4, 0, 1.5, 0, mat(o.wall), { collide: true });
+    put('roof', 5.6, 0.36, 4.6, 0, 3.18, -0.3, mat(o.trim));
+    put('window', 2.8, 1.1, 0.16, 0, 1.75, -1.72, mat('#2f4a5e'), { noShadow: true });
+    put('counter', 3.2, 0.16, 0.8, 0, 1.12, -2.0, mat(o.trim));
+    for (let i = 0; i < 5; i++) put('awn' + i, 0.96, 0.16, 1.3, -1.92 + i * 0.96, 2.72, -2.3, mat(i % 2 ? o.a : o.b), { noShadow: true });
+    put('signBack', 4.8, 1.2, 0.24, 0, 4.0, -1.5, mat(o.trim));
+    put('flagPole', 0.16, 2.6, 0.16, 2.1, 4.5, 1.2, mat('#f4f1ea'));
+    put('flag', 1.2, 0.7, 0.08, 2.75, 5.4, 1.2, mat(o.a));
+    const tex = new B.DynamicTexture('outSign_' + o.id, { width: 768, height: 176 }, scene, true);
+    const ctx = tex.getContext();
+    ctx.fillStyle = o.trim; ctx.fillRect(0, 0, 768, 176);
+    ctx.fillStyle = '#fff7e6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '900 104px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+    const tw = ctx.measureText(o.title).width;
+    if (tw > 700) ctx.font = `900 ${Math.floor(104 * 700 / tw)}px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+    ctx.fillText(o.title, 384, 94);
+    tex.update();
+    const sm = new B.StandardMaterial('outSignMat_' + o.id, scene);
+    sm.diffuseTexture = tex; sm.emissiveTexture = tex; sm.emissiveColor = new B.Color3(0.45, 0.45, 0.45); sm.specularColor = B.Color3.Black();
+    const plane = B.MeshBuilder.CreatePlane('outSignPlane', { width: 4.6, height: 1.05 }, scene);
+    const [sx, sz] = W(0, -1.64);
+    plane.position.set(sx, gy + 4.0, sz); plane.rotation.y = yaw; plane.material = sm; plane.isPickable = false; plane.freezeWorldMatrix();
+    const [mx, mz] = W(0, -4.4);
+    out[o.id] = { x: mx, z: mz, y: h.groundY(mx, mz), yaw, site: o };
+  }
+  return out;
+}

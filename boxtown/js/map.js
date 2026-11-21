@@ -112,7 +112,18 @@ export class MapView {
       ctx.lineWidth = 3.5 * dpr; ctx.strokeStyle = 'rgba(22,34,58,0.85)'; ctx.fillStyle = p.big ? '#ffe98a' : '#fff';
       ctx.strokeText(p.name, mx(p.x) * k, mz(p.z) * k); ctx.fillText(p.name, mx(p.x) * k, mz(p.z) * k);
     }
-    for (const p of I.pads) { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(mx(p.x) * k, mz(p.z) * k, 4 * dpr, 0, 7); ctx.fill(); ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke(); }
+    for (const p of I.pads) {
+      const x = mx(p.x) * k, y = mz(p.z) * k;
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 4 * dpr, 0, 7); ctx.fill(); ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
+      // 마을 밖 직업은 이름도 적는다(마을 안은 다섯 곳이 붙어 있어 겹친다).
+      if (Math.hypot(p.x - 66, p.z - 48) > 150) {
+        ctx.font = `800 ${10.5 * dpr}px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
+        ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(22,34,58,0.9)'; ctx.fillStyle = p.color;
+        ctx.textAlign = 'left';
+        ctx.strokeText(p.name, x + 6 * dpr, y - 13 * dpr); ctx.fillText(p.name, x + 6 * dpr, y - 13 * dpr);
+        ctx.textAlign = 'center';
+      }
+    }
     if (I.target) this.diamond(ctx, mx(I.target.x) * k, mz(I.target.z) * k, 6 * dpr, '#ffd84a');
     this.arrow(ctx, mx(I.x) * k, mz(I.z) * k, I.yaw, 9 * dpr);
   }
