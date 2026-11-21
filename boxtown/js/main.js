@@ -7,6 +7,7 @@ import { Garage } from './vehicles.js';
 import { Residents } from './npc.js';
 import { Jobs } from './jobs.js';
 import { MapView } from './map.js';
+import { Weapons } from './weapons.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -112,6 +113,7 @@ async function boot() {
 
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   player.onUse = () => jobs.use();
+  const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   mark('actors');
   const map = new MapView(() => ({
     x: player.feet.x, z: player.feet.z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
@@ -146,6 +148,7 @@ async function boot() {
     residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);
     jobs.update(dt);
     map.update(dt);
+    weapons.update(dt, map.open);
     const text = jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
@@ -200,7 +203,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

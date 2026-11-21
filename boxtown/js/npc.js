@@ -68,13 +68,56 @@ export class Residents {
     });
   }
 
+  // ----- 공격 받기 -----
+  alive(n) { return n.mode !== 'sky'; }
+  // 피해를 준다. (dx, dz)는 맞은 방향. 체력이 다하면 하늘로 날아간다.
+  damage(n, amount, dx = 0, dz = 0) {
+    if (n.mode === 'sky') return false;
+    if (n.hp === undefined) n.hp = 100;
+    n.hp -= amount;
+    const l = Math.hypot(dx, dz) || 1;
+    n.chr.bump(dx / l, dz / l, 2);
+    if (n.hp <= 0) { this.launch(n, dx / l, dz / l); return true; }
+    // 아직 버틸 만하면 뒤로 밀리고 달아난다.
+    n.pos.x += (dx / l) * 0.3; n.pos.z += (dz / l) * 0.3;
+    if (n.mode !== 'fly' && n.mode !== 'down') { n.mode = 'flee'; n.t = 3.8; n.stagger = 0.75; }
+    return false;
+  }
+  launch(n, dx = 0, dz = 0) {
+    if (n.mode === 'sky') return;
+    n.mode = 'sky'; n.t = 0; n.vy = 16; n.gone = false; n.hp = 0;
+    n.vel.set(dx * 5, 0, dz * 5);
+    n.chr.wave = 0;
+  }
+  // 총소리에 놀라 달아나게 한다.
+  scare(x, z, radius) {
+    for (const n of this.list) {
+      if (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return') {
+        if (Math.hypot(n.pos.x - x, n.pos.z - z) < radius) { n.mode = 'flee'; n.t = 2.5 + n.r() * 2; }
+      }
+    }
+  }
+  // 광선(o + d*t)에 가장 먼저 맞는 주민. 몸통을 구 하나로 본다.
+  rayHit(o, d, maxT) {
+    let best = null, bt = maxT;
+    for (const n of this.list) {
+      if (n.mode === 'sky') continue;
+      const cx = n.pos.x - o.x, cy = n.pos.y + 1.0 - o.y, cz = n.pos.z - o.z;
+      const t = cx * d.x + cy * d.y + cz * d.z;
+      if (t < 0 || t > bt) continue;
+      const ex = cx - d.x * t, ey = cy - d.y * t, ez = cz - d.z * t;
+      if (ex * ex + ey * ey + ez * ez < 0.8 * 0.8) { bt = t; best = n; }
+    }
+    return best ? { n: best, t: bt } : null;
+  }
+
   // player: { pos, vel, active }  cars: Vehicle 배열
   update(dt, player, cars) {
     for (const n of this.list) {
       const chr = n.chr, p = n.pos;
       let wish = null, landed = 0, lookYaw = 0, grounded = true;
       // --- 차에 치였는지 ---
-      if (n.mode !== 'fly' && n.mode !== 'down') {
+      if (n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky') {
         for (const c of cars) {
           const dx = p.x - c.pos.x, dz = p.z - c.pos.z;
           if (Math.abs(dx) > 6 || Math.abs(dz) > 6 || Math.abs(p.y - c.pos.y) > 2.5) continue;
@@ -99,9 +142,41 @@ export class Residents {
         }
       }
       const pdx = player.pos.x - p.x, pdz = player.pos.z - p.z, pd = Math.hypot(pdx, pdz);
+      const pdx0 = pdx, pdz0 = pdz, pd0 = pd;
       const near = player.active && pd < 4.5 && Math.abs(player.pos.y - p.y) < 2;
 
-      if (n.mode === 'fly') {
+      if (n.mode === 'sky') {
+        // 체력이 다하면 하늘로 뿅 날아가 별이 되고, 잠시 뒤 제자리에 다시 나타난다.
+        n.t += dt;
+        grounded = false;
+        if (n.t < 1.5) {
+          n.vy += 46 * dt;
+          p.y += n.vy * dt; p.x += n.vel.x * dt; p.z += n.vel.z * dt;
+          n.lie += 13 * dt;
+          chr.root.scaling.setAll(Math.max(0.08, 1 - n.t / 1.5));
+        } else if (!n.gone) {
+          n.gone = true;
+          chr.setVisible(false);
+          if (this.onStar) this.onStar(p.x, p.y, p.z);
+        } else if (n.t > 8) {
+          const [x, z] = n.home ? n.home : ringPoint(RINGS[n.ring], n.s);
+          p.set(x, this.groundY(x, z), z);
+          n.vel.set(0, 0, 0); n.lie = 0; n.hp = 100; n.gone = false; n.vy = 0;
+          chr.root.scaling.setAll(1); chr.setVisible(true); chr.sSquash.v += 4; // 뿅 하고 돌아온다
+          n.mode = n.home ? 'stand' : 'walk';
+        }
+      } else if (n.mode === 'flee') {
+        // 놀라서 플레이어 반대쪽으로 달아난다.
+        n.t -= dt;
+        if (n.stagger > 0) n.stagger -= dt; // 맞은 직후에는 잠깐 비틀거린다
+        const d = pd0 || 1, sp = n.stagger > 0 ? 0 : 5.2;
+        n.vel.set((-pdx0 / d) * sp, 0, (-pdz0 / d) * sp);
+        const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
+        if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; } else n.vel.set(0, 0, 0); // 물가에서는 멈춘다
+        wish = Math.atan2(-pdx0, -pdz0);
+        chr.wave = 0;
+        if (n.t <= 0) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
+      } else if (n.mode === 'fly') {
         n.vy -= 24 * dt;
         p.x += n.vel.x * dt; p.z += n.vel.z * dt; p.y += n.vy * dt;
         n.lie += n.spin * dt;
@@ -174,7 +249,7 @@ export class Residents {
       }
 
       // --- 플레이어와 겹치면 밀려난다 ---
-      if (player.active && pd < 0.85 && n.mode !== 'fly' && n.mode !== 'down' && Math.abs(player.pos.y - p.y) < 1.6) {
+      if (player.active && pd < 0.85 && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && Math.abs(player.pos.y - p.y) < 1.6) {
         const k = (0.85 - pd) / (pd || 1);
         p.x -= pdx * k; p.z -= pdz * k;
         const pv = Math.hypot(player.vel.x, player.vel.z);
@@ -183,7 +258,7 @@ export class Residents {
       n.bumped = Math.max(0, (n.bumped || 0) - dt);
 
       // 가까이 오면 고개를 돌려 보고 손을 흔든다
-      if (near && n.mode !== 'fly' && n.mode !== 'down') {
+      if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
         chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
       } else chr.wave = damp(chr.wave, 0, 8, dt);

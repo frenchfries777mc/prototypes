@@ -371,5 +371,5 @@ export function buildTown(scene, assets, mark = () => {}) {
     }
   });
 
-  return { casters, jobSites, boatSpots, docks, update: (dt) => updaters.forEach((u) => u(dt)) };
+  return { casters, jobSites, boatSpots, docks, dynamics, update: (dt) => updaters.forEach((u) => u(dt)) };
 }

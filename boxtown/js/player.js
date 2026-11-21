@@ -13,6 +13,7 @@ export class Input {
     this.useQueued = false;
     this.touchUse = false;
     this.driving = false;
+    this.attackHeld = false; this.attackQueued = false; this.weaponPick = -1; this.weaponNext = false;
     this.wheel = 0; this.gas = 0; this.pedalBrake = 0;
     this.jumpHeld = false;
     this.touchRun = false;
@@ -22,6 +23,7 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (e.code === 'Space' && !e.repeat) this.jumpQueued = true;
       if (e.code === 'KeyE' && !e.repeat) this.useQueued = true;
+      if (/^Digit[1-9]$/.test(e.code)) this.weaponPick = +e.code.slice(5) - 1;
       this.keys.add(e.code);
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -29,8 +31,9 @@ export class Input {
     canvas.addEventListener('click', () => { if (!this.isTouch && !this.locked && canvas.requestPointerLock) canvas.requestPointerLock(); });
     document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === canvas; });
     let dragging = false;
-    canvas.addEventListener('mousedown', () => { dragging = true; });
-    addEventListener('mouseup', () => { dragging = false; });
+    // 마우스가 고정된 상태에서 왼쪽 버튼은 공격이다.
+    canvas.addEventListener('mousedown', (e) => { dragging = true; if (this.locked && e.button === 0) { this.attackHeld = true; this.attackQueued = true; } });
+    addEventListener('mouseup', () => { dragging = false; this.attackHeld = false; });
     addEventListener('mousemove', (e) => {
       if (this.locked || dragging) { this.lookX += e.movementX; this.lookY += e.movementY; }
     });
@@ -123,6 +126,11 @@ export class Input {
       el.addEventListener('touchend', set(0));
       el.addEventListener('touchcancel', set(0));
     };
+    // 공격과 무기 바꾸기 버튼
+    const atk = document.getElementById('btnAttack'), wp = document.getElementById('btnWeapon');
+    atk.addEventListener('touchstart', (e) => { e.preventDefault(); this.attackHeld = true; this.attackQueued = true; atk.classList.add('on'); }, { passive: false });
+    for (const ev of ['touchend', 'touchcancel']) atk.addEventListener(ev, () => { this.attackHeld = false; atk.classList.remove('on'); });
+    wp.addEventListener('touchstart', (e) => { e.preventDefault(); this.weaponNext = true; }, { passive: false });
     pedal('btnGas', 'gas');
     pedal('btnBrake', 'pedalBrake');
     // 터치가 한 번이라도 들어오면 터치 조작 화면으로 바꾼다(터치 되는 노트북·태블릿 대응).
@@ -169,7 +177,10 @@ export class Player {
     this.vehicle = null; // 타고 있는 차
     this.nearCar = null; // 탈 수 있을 만큼 가까운 차
     this.lookIdle = 9; // 마우스로 시점을 안 건드린 시간
-    this.onUse = null; // E를 눌렀을 때 먼저 불리는 함수(직업 시스템이 건다)
+    this.onUse = null;
+    this.faceT = 0; this.faceYaw = 0; this.kick = null;
+    this.shoulder = 0; this.shoulderK = 0; // 총을 들면 카메라가 어깨 너머로 옮겨 간다
+    this.shake = 0; // E를 눌렀을 때 먼저 불리는 함수(직업 시스템이 건다)
     this.cc = new B.PhysicsCharacterController(new B.Vector3(spawn.x, spawn.y + CAP_H / 2 + 0.2, spawn.z), { capsuleHeight: CAP_H, capsuleRadius: CAP_R }, scene);
     this.cc.maxSlopeCosine = Math.cos(50 * Math.PI / 180);
     this.cc.characterMass = 70;
@@ -280,6 +291,9 @@ export class Player {
     // 땅에서는 빠르게 붙고, 공중에서는 살짝만 방향을 바꿀 수 있다.
     const acc = (this.grounded ? (mag > 0.05 ? 46 : 38) : 14) * dt;
     let hx = v.x, hz = v.z;
+    // 폭발 등으로 밀려날 때
+    const kick = this.kick;
+    this.kick = null;
     const dx = tx - hx, dz = tz - hz, dl = Math.hypot(dx, dz);
     if (dl <= acc) { hx = tx; hz = tz; } else { hx += (dx / dl) * acc; hz += (dz / dl) * acc; }
     let vy = v.y;
@@ -292,10 +306,12 @@ export class Player {
     if (this.jumpBuf > 0 && (this.grounded || this.airT < 0.12)) {
       vy = JUMP_V; this.jumpBuf = 0; this.jumped = true; this.airT = 1; this.grounded = false; this.jumpGrace = 0.18;
     }
+    if (kick) { hx += kick.x; hz += kick.z; vy = kick.y; this.grounded = false; this.jumpGrace = 0.25; this.airT = 1; }
     this.vel.set(hx, vy, hz);
     cc.setVelocity(this.vel);
     cc.integrate(dt, sup, this.grav);
     this.wishHeading = mag > 0.1 ? Math.atan2(wx, wz) : null;
+    if (this.faceT > 0) { this.faceT -= dt; this.wishHeading = this.faceYaw; } // 공격 중에는 겨눈 쪽을 본다
 
     const p = cc.getPosition();
     // 물에 빠지면 마지막으로 땅을 딛고 있던 곳으로 돌아간다.
@@ -325,12 +341,17 @@ export class Player {
       this.cam.setTarget(this.freeCam.target);
       return;
     }
-    const t = this.target;
+    let t = this.target;
     t.x = damp(t.x, this.feet.x, 18, dt);
     t.z = damp(t.z, this.feet.z, 18, dt);
     t.y = damp(t.y, this.feet.y + 1.45, 9, dt); // 높이는 천천히 따라가서 점프가 덜 어지럽다
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const dir = new B.Vector3(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
+    // 어깨 너머 시점: 조준점이 캐릭터에 가리지 않도록 카메라를 오른쪽 위로 옮긴다.
+    this.shoulderK = damp(this.shoulderK, this.shoulder, 8, dt);
+    const base = t;
+    t = base.add(new B.Vector3(Math.cos(this.yaw) * 0.95 * this.shoulderK, 0.3 * this.shoulderK, -Math.sin(this.yaw) * 0.95 * this.shoulderK));
+    if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt * 2.2); t.addInPlaceFromFloats((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake); }
     // 카메라와 캐릭터 사이에 벽이 있으면 벽 앞까지 당긴다.
     let want = this.dist;
     const phys = this.scene.getPhysicsEngine();
