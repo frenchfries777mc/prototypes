@@ -25,3 +25,15 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #c3e2f2; fon
 body.touch .pad { display: block; }
 body.touch .hint.desk { display: none; }
 body.touch .hint.mob { display: block; }
+
+.hint.drive { display: none; }
+body.driving .hint.desk.walk { display: none; }
+body.driving:not(.touch) .hint.desk.drive { display: block; }
+#prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); padding: 8px 16px 8px 8px; border-radius: 10px; background: rgba(22, 34, 58, .7); font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+#prompt[hidden] { display: none; }
+#prompt b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; background: #f2644b; }
+body.touch #prompt { display: none; }
+#speed { position: absolute; right: 22px; bottom: 60px; font: 900 44px/1 inherit; text-shadow: 0 3px 0 rgba(20, 40, 80, .45); text-align: right; }
+#speed small { display: block; font-size: 13px; font-weight: 700; opacity: .9; }
+body.touch #speed { right: auto; left: 22px; bottom: auto; top: 44px; text-align: left; }
+#btnUse { bottom: calc(max(34px, env(safe-area-inset-bottom)) + 184px); width: 68px; height: 68px; right: max(30px, env(safe-area-inset-right)); font-size: 14px; background: #f2644b; }

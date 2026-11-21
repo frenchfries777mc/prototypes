@@ -1,5 +1,5 @@
 // mapdata.js의 설계 데이터와 지형 규칙으로 월드를 실제로 세운다.
-import { CELL, GRID, BUILDINGS, PROPS, PARKED, DYNAMIC, BOATS, PIER, LIGHTHOUSE } from './mapdata.js';
+import { CELL, GRID, BUILDINGS, PROPS, DYNAMIC, BOATS, PIER, LIGHTHOUSE } from './mapdata.js';
 import { height, slope, SEA, WORLD } from './terrain.js';
 import { rng, makeNoise, flatMat } from './util.js';
 const B = window.BABYLON;
@@ -9,7 +9,6 @@ const DEG = Math.PI / 180;
 export const SLAB_Y = 0.24; // 보도 윗면 높이
 export const ROAD_Y = 0.12; // 아스팔트 윗면 높이
 const LAWN_Y = 0.34;
-const CAR_YAW = 0; // 자동차 모델의 기본 방향 보정
 // 자연 팩은 나무 크기에 맞춰 키웠기 때문에 꽃·풀·덤불은 따로 줄인다.
 const SMALL = (key) => (key.includes('flower') ? 0.38 : key.includes('grass') ? 0.5 : 0.62);
 
@@ -27,7 +26,13 @@ const cellAt = (x, z) => {
 export function groundY(x, z) {
   const c = cellAt(x, z);
   if (c === 'g') return LAWN_Y;
-  if (c === '#' || c === 'x') return ROAD_Y;
+  if (c === '#' || c === 'x') {
+    // 도로 칸의 가장자리 1.2m는 보도다(이웃이 도로가 아닌 쪽, 그리고 네 귀퉁이).
+    const cx = Math.round(x / CELL), cz = Math.round(z / CELL), dx = x - cx * CELL, dz = z - cz * CELL;
+    const ex = Math.abs(dx) > 4.8, ez = Math.abs(dz) > 4.8;
+    if ((ex && ez) || (ex && !isRoad(cx + Math.sign(dx), cz)) || (ez && !isRoad(cx, cz + Math.sign(dz)))) return SLAB_Y;
+    return ROAD_Y;
+  }
   if (c === 'p' || c === 'q') return SLAB_Y;
   return height(x, z);
 }
@@ -87,11 +92,11 @@ export function buildTown(scene, assets) {
       if (cnt === 2 && c === '#' && (cx + cz) % 2 === 0) {
         const side = (cx + cz) % 4 === 0 ? 1 : -1;
         if (e && w) {
-          assets.place('roads/light-square', x, SLAB_Y, z + side * 5.2, side > 0 ? 0 : Math.PI);
-          addBox(x, 2, z + side * 5.2, 0.45, 4, 0.45);
+          assets.place('roads/light-square', x, SLAB_Y, z + side * 5.85, side > 0 ? 0 : Math.PI);
+          addBox(x, 2, z + side * 5.85, 0.45, 4, 0.45);
         } else if (n && s) {
-          assets.place('roads/light-square', x + side * 5.2, SLAB_Y, z, side > 0 ? Math.PI / 2 : -Math.PI / 2);
-          addBox(x + side * 5.2, 2, z, 0.45, 4, 0.45);
+          assets.place('roads/light-square', x + side * 5.85, SLAB_Y, z, side > 0 ? Math.PI / 2 : -Math.PI / 2);
+          addBox(x + side * 5.85, 2, z, 0.45, 4, 0.45);
         }
       }
     }
@@ -115,12 +120,6 @@ export function buildTown(scene, assets) {
     assets.place(p.m, x, y, z, yaw, p.s || 1);
     collideModel(p.m, x, y, z, yaw, p.s || 1, p.m.includes('parasol') ? 0.15 : 0.95);
   }
-  for (const p of PARKED) {
-    const x = p.cx * CELL, z = p.cz * CELL, yaw = (p.r || 0) * DEG + CAR_YAW;
-    assets.place(p.m, x, ROAD_Y, z, yaw);
-    collideModel(p.m, x, ROAD_Y, z, yaw, 1, 0.94);
-  }
-
   // ---------- 공원 ----------
   const M = {
     lawn: flatMat('lawn', '#6cc35a', scene),

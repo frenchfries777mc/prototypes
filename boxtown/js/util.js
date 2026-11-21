@@ -93,8 +93,8 @@ export function roundedBox(name, w, h, d, r, scene, seg = 3) {
     for (let j = 0; j < cv.length - 1; j++) {
       for (let i = 0; i < W - 1; i++) {
         const a = base + j * W + i, b = a + 1, c = a + W, e = c + 1;
-        if (sign > 0) idx.push(a, b, e, a, e, c);
-        else idx.push(a, e, b, a, c, e);
+        // 여섯 면 모두 (u × v)가 바깥을 향하도록 축을 골랐으므로 감는 방향은 하나로 통일한다.
+        idx.push(a, e, b, a, c, e);
       }
     }
   }

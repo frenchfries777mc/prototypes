@@ -36,6 +36,7 @@ export class Assets {
     this.mats = {};
     this.shadowCasters = [];
     this.pending = new Map(); // 틀 -> 행렬 배열 (thin instance)
+    this.carTemplates = new Map();
   }
 
   mat(kit) {
@@ -71,7 +72,8 @@ export class Assets {
     await Promise.all(Array.from({ length: 6 }, worker));
   }
 
-  async _loadOne(key) {
+  // GLB 하나를 읽어 부품별로 "월드 변환을 구운" 독립 메시 목록을 만든다.
+  async _extract(key) {
     const [kit, name] = key.split('/');
     const cfg = KITS[kit];
     const c = await B.SceneLoader.LoadAssetContainerAsync(`${this.base}${kit}/`, `${name}.glb`, this.scene);
@@ -79,7 +81,6 @@ export class Assets {
     const S = B.Matrix.Scaling(cfg.scale, cfg.scale, cfg.scale);
     // 1단계: 변환을 먼저 전부 구해 둔다. 같은 부품을 여러 번 쓰는 모델(인스턴스)은
     // 부품마다 독립된 지오메트리로 풀어야 변환이 겹쳐 적용되지 않는다.
-    const temps = [];
     const items = raw.map((m) => {
       m.computeWorldMatrix(true);
       const w = m.getWorldMatrix().multiply(S);
@@ -87,11 +88,15 @@ export class Assets {
       const mesh = src.clone(m.name + '_part', null, true);
       mesh.makeGeometryUnique();
       mesh.material = src.material;
-      temps.push(mesh);
-      return { mesh, w };
+      // 바퀴처럼 따로 움직일 부품인지 알 수 있도록, 이름이 붙은 조상 노드를 찾아 둔다.
+      let group = null;
+      for (let n = m; n; n = n.parent) if (/^wheel-(front|back)-(left|right)/.test(n.name)) { group = n; break; }
+      let pivot = null;
+      if (group) { group.computeWorldMatrix(true); pivot = B.Vector3.TransformCoordinates(B.Vector3.Zero(), group.getWorldMatrix().multiply(S)); }
+      return { mesh, w, group: group ? group.name : null, pivot };
     });
-    const parts = [];
-    for (const { mesh: m, w } of items) {
+    for (const it of items) {
+      const m = it.mesh;
       if (!cfg.tex) {
         // 재질 색 -> 정점 색. 팩 전체가 재질 하나를 공유하게 된다.
         const col = (m.material && (m.material.albedoColor || m.material.diffuseColor)) || B.Color3.White();
@@ -110,21 +115,59 @@ export class Assets {
       m.position.set(0, 0, 0);
       m.rotation.set(0, 0, 0);
       m.scaling.set(1, 1, 1);
-      m.bakeTransformIntoVertices(w);
       m.material = null;
-      parts.push(m);
     }
-    const merged = B.Mesh.MergeMeshes(parts, false, true, undefined, false, false); // 새 지오메트리를 만들어 컨테이너와 분리한다
-    merged.name = key;
-    merged.material = this.mat(kit);
-    merged.useVertexColors = !cfg.tex;
-    merged.isPickable = false;
-    merged.receiveShadows = true;
-    merged.setEnabled(false);
-    merged.refreshBoundingInfo();
-    temps.forEach((t) => t.dispose());
-    c.dispose();
-    this.templates.set(key, merged);
+    const finish = (parts, label) => {
+      const merged = B.Mesh.MergeMeshes(parts, false, true, undefined, false, false); // 새 지오메트리를 만들어 컨테이너와 분리한다
+      merged.name = label;
+      merged.material = this.mat(kit);
+      merged.useVertexColors = !cfg.tex;
+      merged.isPickable = false;
+      merged.receiveShadows = true;
+      merged.setEnabled(false);
+      merged.refreshBoundingInfo();
+      return merged;
+    };
+    const cleanup = () => { items.forEach((it) => it.mesh.dispose()); c.dispose(); };
+    return { items, finish, cleanup };
+  }
+
+  async _loadOne(key) {
+    const { items, finish, cleanup } = await this._extract(key);
+    for (const it of items) it.mesh.bakeTransformIntoVertices(it.w);
+    this.templates.set(key, finish(items.map((it) => it.mesh), key));
+    cleanup();
+  }
+
+  // 자동차: 차체와 바퀴 네 개를 따로 움직일 수 있게 나눠서 불러온다.
+  async loadCar(key) {
+    if (this.carTemplates.has(key)) return;
+    const { items, finish, cleanup } = await this._extract(key);
+    const groups = new Map();
+    for (const it of items) {
+      // 바퀴는 자기 중심이 원점이 되도록 굽는다.
+      const w = it.pivot ? it.w.multiply(B.Matrix.Translation(-it.pivot.x, -it.pivot.y, -it.pivot.z)) : it.w;
+      it.mesh.bakeTransformIntoVertices(w);
+      const g = it.group || 'body';
+      if (!groups.has(g)) groups.set(g, { parts: [], pivot: it.pivot });
+      groups.get(g).parts.push(it.mesh);
+    }
+    const out = { body: null, wheels: [] };
+    for (const [g, v] of groups) {
+      const mesh = finish(v.parts, key + ':' + g);
+      if (g === 'body') out.body = mesh;
+      else out.wheels.push({ mesh, pos: v.pivot.clone() });
+    }
+    this.carTemplates.set(key, out);
+    cleanup();
+  }
+
+  spawnCar(key) {
+    const t = this.carTemplates.get(key);
+    if (!t) throw new Error('불러오지 않은 자동차: ' + key);
+    const dup = (m) => { const c = m.clone(m.name + '_car'); c.setEnabled(true); this.shadowCasters.push(c); return c; };
+    const bb = t.body.getBoundingInfo().boundingBox;
+    return { body: dup(t.body), wheels: t.wheels.map((w) => ({ mesh: dup(w.mesh), pos: w.pos.clone() })), min: bb.minimum.clone(), max: bb.maximum.clone() };
   }
 
   tpl(key) {
