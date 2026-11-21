@@ -1,15 +1,16 @@
 // 마을 설계 데이터. 여기가 "손으로 짜는" 부분이다.
 // 격자 한 칸은 12m. 칸 (cx, cz)의 중심은 월드 좌표 (cx*12, cz*12). +Z가 북쪽, 바다는 남쪽.
+import { NATURE_KEYS, DISTRICT_KEYS } from './world.js';
 export const CELL = 12;
 
 // 북쪽 줄부터 적는다(화면에서 본 지도와 같은 방향).
 //  # 도로   x 횡단보도   p 보도블록(상가 터)   g 잔디   q 부두   . 자연 지형
 const ROWS_NORTH_FIRST = [
-  '............', // 8  주택가
+  '.#..........', // 8  주택가 (북쪽 길로 나가는 출구)
   '.##########.', // 7  뒷길
   '.#ppp#ggpp#.', // 6
   '.#pppxggpp#.', // 5
-  '.##x##x##x##', // 4  중앙로
+  '###x##x##x##', // 4  중앙로 (동서로 마을 밖 길과 이어진다)
   '.#ppp#pppp#.', // 3
   '.#pppxpppp#.', // 2
   '.##x##x####.', // 1  해안로
@@ -34,7 +35,7 @@ export const BUILDINGS = [
   // D 블록: 공원 옆 고층
   { m: 'commercial/building-skyscraper-d', cx: 8.05, cz: 5.5, f: 'S' },
   // 뒷길 북쪽 주택가
-  { m: 'suburban/building-type-a', cx: 1.2, cz: 8.05, f: 'S' },
+  { m: 'suburban/building-type-a', cx: -0.6, cz: 8.05, f: 'S' },
   { m: 'suburban/building-type-d', cx: 2.85, cz: 8.05, f: 'S' },
   { m: 'suburban/building-type-k', cx: 4.3, cz: 8.05, f: 'S' },
   { m: 'suburban/building-type-f', cx: 5.75, cz: 8.15, f: 'S' },
@@ -88,10 +89,6 @@ export const PROPS = [
   { m: 'suburban/fence-1x3', cx: 6.55, cz: 8.6, r: 180 },
   { m: 'suburban/fence-1x4', cx: 8.15, cz: 8.6, r: 180 },
   // 표지판
-  { m: 'roads/sign-highway-wide', cx: 10.62, cz: 4.0, r: 0 },
-  { m: 'roads/construction-barrier', cx: 11.35, cz: 3.8, r: 0 },
-  { m: 'roads/construction-barrier', cx: 11.35, cz: 4.2, r: 0 },
-  { m: 'roads/construction-light', cx: 11.3, cz: 4.0, r: 0 },
 ];
 
 // 길가에 세워 둔 차(전부 탈 수 있다). r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
@@ -126,8 +123,6 @@ export const DYNAMIC = [
   { m: 'cars/cone', cx: 4.3, cz: 1.3, mass: 1.5 },
   { m: 'cars/cone', cx: 4.6, cz: 1.3, mass: 1.5 },
   { m: 'cars/cone', cx: 4.9, cz: 1.3, mass: 1.5 },
-  { m: 'cars/cone', cx: 10.9, cz: 3.75, mass: 1.5 },
-  { m: 'cars/cone', cx: 10.9, cz: 4.25, mass: 1.5 },
   { m: 'cars/box', cx: 6.5, cz: 4.6, mass: 3 },
   { m: 'pirate/barrel', cx: 9.3, cz: 0.2, mass: 9 },
   { m: 'pirate/crate', cx: 6.02, cz: -2.2, mass: 6 },
@@ -137,9 +132,7 @@ export const DYNAMIC = [
 // 정박한 배. 파도에 맞춰 흔들린다.
 export const BOATS = [
   { m: 'watercraft/boat-fishing-small', x: 66.0, z: -17, r: 0 },
-  { m: 'watercraft/boat-speed-a', x: 78.2, z: -24, r: 180 },
   { m: 'watercraft/boat-sail-a', x: 65.8, z: -33, r: 5 },
-  { m: 'watercraft/boat-tug-a', x: 78.4, z: -38, r: 180 },
   { m: 'watercraft/boat-row-small', x: 30, z: -11, r: 80 },
   { m: 'watercraft/boat-sail-b', x: 118, z: -46, r: 120 },
   { m: 'watercraft/ship-cargo-a', x: 20, z: -62, r: 100, s: 2.1 },
@@ -158,17 +151,20 @@ export function modelKeys() {
   [
     'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
     'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
-    'suburban/tree-large', 'suburban/tree-small',
-    'nature/tree_blocks', 'nature/tree_blocks_dark', 'nature/tree_default', 'nature/tree_oak', 'nature/tree_fat',
-    'nature/tree_detailed', 'nature/tree_pineRoundA', 'nature/tree_pineTallA_detailed', 'nature/tree_simple',
-    'nature/tree_blocks_fall', 'nature/tree_plateau',
-    'nature/stone_largeA', 'nature/stone_largeB', 'nature/stone_largeD', 'nature/stone_largeF', 'nature/stone_tallA', 'nature/stone_tallC',
-    'nature/plant_bush', 'nature/plant_bushDetailed', 'nature/plant_bushLarge', 'nature/grass', 'nature/grass_large',
-    'nature/flower_redA', 'nature/flower_yellowA', 'nature/flower_purpleA',
-    'pirate/palm-detailed-bend', 'pirate/palm-detailed-straight', 'pirate/palm-straight', 'pirate/rocks-a', 'pirate/rocks-b', 'pirate/rocks-c',
-    'pirate/rocks-sand-a', 'pirate/rocks-sand-b',
+    'suburban/tree-large', 'suburban/tree-small', ...NATURE_KEYS, ...DISTRICT_KEYS,
   ].forEach((k) => keys.add(k));
   return [...keys];
 }
+
+// 마을 밖에 세워 둔 차(월드 좌표). 높이는 지형에서 읽는다.
+PARKED.push(
+  { m: 'cars/tractor', x: -322, z: 180, r: 200 },
+  { m: 'cars/truck', x: 300, z: 226, r: 180 },
+  { m: 'cars/suv-luxury', x: 475, z: 148, r: 180 },
+  { m: 'cars/race', x: 480.5, z: 148, r: 180 },
+  { m: 'cars/suv', x: 132, z: 514, r: 20 },
+  { m: 'cars/van', x: 366, z: -262, r: 200 },
+  { m: 'cars/hatchback-sports', x: -76, z: 62, r: 250 },
+);
 
 export const carKeys = () => [...new Set(PARKED.map((p) => p.m))];

@@ -1,7 +1,10 @@
 // mapdata.js의 설계 데이터와 지형 규칙으로 월드를 실제로 세운다.
 import { CELL, GRID, BUILDINGS, PROPS, DYNAMIC, BOATS, PIER, LIGHTHOUSE, JOB_SITES } from './mapdata.js';
-import { height, slope, SEA, WORLD } from './terrain.js';
-import { rng, makeNoise, flatMat } from './util.js';
+import { height, SEA } from './terrain.js';
+import { buildRoads } from './roads.js';
+import { buildDistricts } from './districts.js';
+import { scatterNature } from './nature.js';
+import { rng, flatMat } from './util.js';
 import { buildJobSites } from './jobsites.js';
 const B = window.BABYLON;
 
@@ -13,7 +16,10 @@ const LAWN_Y = 0.34;
 // 자연 팩은 나무 크기에 맞춰 키웠기 때문에 꽃·풀·덤불은 따로 줄인다.
 const SMALL = (key) => (key.includes('flower') ? 0.38 : key.includes('grass') ? 0.5 : 0.62);
 
+// 격자 밖으로 이어지는 길(마을 밖 도로와 만나는 곳)
+const EXITS = new Set(['-1,4', '12,4', '1,9']);
 const isRoad = (cx, cz) => {
+  if (EXITS.has(cx + ',' + cz)) return true;
   const row = GRID[cz];
   const c = row && row[cx];
   return c === '#' || c === 'x';
@@ -65,11 +71,17 @@ export function buildTown(scene, assets) {
     m.material = mat;
     m.receiveShadows = true;
     m.isPickable = false;
-    if (!opts.noShadow) casters.push(m);
     if (opts.collide) addBox(x, y, z, w, h, d, opts.yaw || 0);
-    if (!opts.dynamic) m.freezeWorldMatrix();
+    if (opts.dynamic) { if (!opts.noShadow) casters.push(m); return m; }
+    // 움직이지 않는 상자는 나중에 "지구 × 재질"별로 하나의 메시로 합친다(그릴 것이 수백 개에서 수십 개로 준다).
+    const key = `${cur.id}|${mat.uniqueId}|${opts.noShadow ? 0 : 1}`;
+    if (!buckets.has(key)) buckets.set(key, { ...cur, mat, shadow: !opts.noShadow, list: [] });
+    buckets.get(key).list.push(m);
     return m;
   };
+  const buckets = new Map();
+  let cur = { id: 'town', x: 66, z: 48 };
+  const bucket = (id, x, z) => { cur = { id, x, z }; };
 
   // ---------- 도로와 바닥 ----------
   for (let cz = 0; cz < GRID.length; cz++) {
@@ -107,6 +119,8 @@ export function buildTown(scene, assets) {
   // 바닥 충돌판(도로와 보도 윗면)
   addBox(66, ROAD_Y - 1, 42, 120, 2, 96);
   addBox(132, ROAD_Y - 1, 48, 12, 2, 12);
+  addBox(0, ROAD_Y - 1, 48, 12, 2, 12);
+  addBox(12, ROAD_Y - 1, 96, 12, 2, 12);
 
   // ---------- 건물 ----------
   for (const b of BUILDINGS) {
@@ -269,23 +283,23 @@ export function buildTown(scene, assets) {
     }
   }
 
-  // ---------- 섬의 나무와 풀 ----------
-  scatter(assets, addBox);
-
-  // ---------- 먼바다의 작은 섬 ----------
-  {
-    const r = rng(404);
-    for (let i = 0; i < 9; i++) {
-      const a = -2.6 + (i / 8) * 2.1 + r.range(-0.1, 0.1), d = r.range(520, 880);
-      assets.place(r.pick(['pirate/rocks-a', 'pirate/rocks-b', 'pirate/rocks-c']), 66 + Math.cos(a) * d, SEA - 4, 150 + Math.sin(a) * d, r() * 6.28,
-        new B.Vector3(r.range(24, 50), r.range(12, 27), r.range(24, 50)));
-    }
-  }
+  // ---------- 마을 밖: 길과 다리, 지구별 구조물, 자연물 ----------
+  const extraBoats = [], boatSpots = [{ x: 78.4, z: -24, yaw: Math.PI }, { x: 84.2, z: -45, yaw: Math.PI / 2, m: 'watercraft/boat-tug-a' }];
+  bucket('roads', 66, 48);
+  buildRoads({ scene, addBox, casters });
+  buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots });
+  scatterNature(assets, addBox);
+  bucket('town', 66, 48);
 
   // ---------- 직업 건물 ----------
   const jobSites = buildJobSites({ scene, box, addBox, casters, groundY, updaters });
 
   assets.flush();
+  for (const b of buckets.values()) {
+    const merged = B.Mesh.MergeMeshes(b.list, true, true);
+    merged.material = b.mat; merged.receiveShadows = true; merged.isPickable = false; merged.freezeWorldMatrix();
+    assets.addGroup(merged, b.x, b.z, 1500, b.shadow);
+  }
 
   // ---------- 고정 충돌체 등록 ----------
   const staticNode = new B.TransformNode('statics', scene);
@@ -323,8 +337,8 @@ export function buildTown(scene, assets) {
   });
 
   // ---------- 배 ----------
-  const boats = BOATS.map((b, i) => {
-    const m = assets.spawn(b.m);
+  const boats = [...BOATS, ...extraBoats].map((b, i) => {
+    const m = assets.spawn(b.m, null, i < BOATS.length);
     m.position.set(b.x, SEA, b.z);
     m.rotation.y = (b.r || 0) * DEG;
     if (b.s) m.scaling.setAll(b.s);
@@ -341,75 +355,5 @@ export function buildTown(scene, assets) {
     }
   });
 
-  return { casters, jobSites, update: (dt) => updaters.forEach((u) => u(dt)) };
-}
-
-// 규칙 기반 배치: 높이·경사·마을과의 거리를 보고 나무, 바위, 풀을 뿌린다.
-function scatter(assets, addBox) {
-  const r = rng(9001);
-  const noise = makeNoise(4242);
-  const inGrid = (x, z, pad) => x > -6 - pad && x < 138 + pad && z > -6 - pad && z < 90 + pad;
-  const nearBuilding = (x, z, pad) => BUILDINGS.some((b) => Math.abs(b.cx * CELL - x) < 12 + pad && Math.abs(b.cz * CELL - z) < 9 + pad);
-  const leafy = ['nature/tree_blocks', 'nature/tree_blocks', 'nature/tree_blocks_dark', 'nature/tree_default', 'nature/tree_oak', 'nature/tree_fat', 'nature/tree_detailed', 'nature/tree_plateau', 'nature/tree_simple'];
-  const pines = ['nature/tree_pineRoundA', 'nature/tree_pineTallA_detailed', 'nature/tree_blocks_dark'];
-  const palms = ['pirate/palm-detailed-bend', 'pirate/palm-detailed-straight', 'pirate/palm-straight'];
-  const rocks = ['nature/stone_largeA', 'nature/stone_largeB', 'nature/stone_largeD', 'nature/stone_largeF', 'nature/stone_tallA', 'nature/stone_tallC'];
-  const W = WORLD;
-  let trees = 0, tries = 0;
-  while (trees < 620 && tries++ < 40000) {
-    const x = r.range(W.x0 + 10, W.x1 - 10), z = r.range(W.z0 + 10, W.z1 - 10);
-    const h = height(x, z);
-    if (h < SEA + 3.6 || slope(x, z) > 0.55 || inGrid(x, z, 3) || nearBuilding(x, z, 2)) continue;
-    const dens = noise.fbm(x * 0.012, z * 0.012, 3);
-    if (r() > (dens - 0.34) * 3.2) continue;
-    const key = h > 30 ? r.pick(pines) : r() < 0.12 ? r.pick(pines) : r.pick(leafy);
-    const s = r.range(0.8, 1.55);
-    assets.place(key, x, h - 0.15, z, r() * 6.28, s);
-    addBox(x, h + 1.5, z, 0.8, 4, 0.8);
-    trees++;
-  }
-  let n = 0;
-  tries = 0;
-  while (n < 46 && tries++ < 20000) {
-    const x = r.range(W.x0 + 10, W.x1 - 10), z = r.range(W.z0 + 10, 190);
-    const h = height(x, z);
-    if (h < SEA + 1.1 || h > SEA + 3.3 || slope(x, z) > 0.35 || inGrid(x, z, 2)) continue;
-    assets.place(r.pick(palms), x, h - 0.2, z, r() * 6.28, r.range(1.5, 2.4));
-    addBox(x, h + 2, z, 0.7, 4, 0.7);
-    n++;
-  }
-  n = 0;
-  tries = 0;
-  while (n < 60 && tries++ < 30000) {
-    const x = r.range(W.x0 + 10, W.x1 - 10), z = r.range(W.z0 + 10, W.z1 - 10);
-    const h = height(x, z), sl = slope(x, z);
-    if (h < SEA - 0.6 || inGrid(x, z, 4) || nearBuilding(x, z, 2)) continue;
-    if (!(sl > 0.5 || (h < SEA + 1.2 && r() < 0.25) || r() < 0.02)) continue;
-    const key = r.pick(rocks), s = r.range(0.7, 1.9);
-    assets.place(key, x, h - 0.3, z, r() * 6.28, s);
-    const bb = assets.bounds(key);
-    addBox(x, h + 0.2, z, (bb.max.x - bb.min.x) * s * 0.7, (bb.max.y - bb.min.y) * s, (bb.max.z - bb.min.z) * s * 0.7);
-    n++;
-  }
-  // 풀, 덤불, 꽃: 꽃은 무리 지어 핀다.
-  const small = ['nature/grass', 'nature/grass_large', 'nature/grass', 'nature/plant_bush', 'nature/plant_bushDetailed', 'nature/plant_bushLarge'];
-  const flowers = ['nature/flower_redA', 'nature/flower_yellowA', 'nature/flower_purpleA'];
-  n = 0;
-  tries = 0;
-  while (n < 1500 && tries++ < 60000) {
-    const x = r.range(-150, 290), z = r.range(-40, 300);
-    const h = height(x, z);
-    if (h < SEA + 3.3 || slope(x, z) > 0.6 || inGrid(x, z, 0.5) || nearBuilding(x, z, -4)) continue;
-    const sk = r.pick(small);
-    assets.place(sk, x, h - 0.05, z, r() * 6.28, r.range(0.9, 1.9) * SMALL(sk));
-    n++;
-  }
-  for (let c = 0; c < 70; c++) {
-    const cx = r.range(-120, 260), cz = r.range(-30, 260), kind = r.pick(flowers);
-    for (let i = 0; i < 9; i++) {
-      const x = cx + r.range(-4, 4), z = cz + r.range(-4, 4), h = height(x, z);
-      if (h < SEA + 3.3 || slope(x, z) > 0.5 || inGrid(x, z, 0.5) || nearBuilding(x, z, -4)) continue;
-      assets.place(kind, x, h - 0.03, z, r() * 6.28, r.range(1, 1.6) * SMALL(kind));
-    }
-  }
+  return { casters, jobSites, boatSpots, update: (dt) => updaters.forEach((u) => u(dt)) };
 }
