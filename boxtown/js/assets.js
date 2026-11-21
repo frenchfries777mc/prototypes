@@ -1,6 +1,8 @@
 // 에셋 팩(GLB) 불러오기와 배치.
 // 모델 하나당 "틀" 메시 하나를 만들고, 같은 모델은 전부 인스턴싱으로 한 번에 그린다.
+import { WORLD } from './world.js';
 const B = window.BABYLON;
+const REGION = WORLD.cell * WORLD.chunk; // 192m
 
 // 팩마다 단위가 달라서 미터 기준으로 맞추는 배율.
 // tex: 팩 공용 팔레트 텍스처(colormap.png)를 쓰는지, 아니면 재질 색을 정점 색으로 굽는지.
@@ -16,7 +18,7 @@ export const KITS = {
 };
 
 // 바닥에 붙은 타일과 작은 풀은 그림자를 드리우지 않는다(그려야 할 양이 크게 준다).
-const NO_SHADOW = /roads\/(road-|tile-)|nature\/(grass|flower|plant)/;
+const NO_SHADOW = /roads\/(road-|tile-)|nature\/(grass|flower|plant|crop|ground|path)/;
 
 // 팩의 원래 색을 섬 분위기에 맞게 살짝 옮긴다: 청록에 가까운 잎은 풀색 쪽으로, 푸르스름한 돌은 따뜻한 회색으로.
 function tune(kit, name, c) {
@@ -37,6 +39,7 @@ export class Assets {
     this.shadowCasters = [];
     this.pending = new Map(); // 틀 -> 행렬 배열 (thin instance)
     this.carTemplates = new Map();
+    this.groups = []; // 구역별 묶음
   }
 
   mat(kit) {
@@ -182,36 +185,64 @@ export class Assets {
     return { min: bb.minimum.clone(), max: bb.maximum.clone() };
   }
 
-  // 고정 배치. 실제 그리기는 flush()에서 모델별로 한꺼번에 등록된다.
+  // 고정 배치. 실제 그리기는 flush()에서 "모델 × 구역"별로 한꺼번에 등록된다.
+  // 구역(192m)으로 나눠 두면 화면 밖이거나 먼 구역은 통째로 건너뛸 수 있다.
   place(key, x, y, z, rotY = 0, scale = 1) {
-    const t = this.tpl(key);
+    this.tpl(key);
     const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
     const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));
-    if (!this.pending.has(t)) this.pending.set(t, []);
-    this.pending.get(t).push(m);
+    const ix = Math.floor((x - WORLD.x0) / REGION), iz = Math.floor((z - WORLD.z0) / REGION);
+    const id = `${key}#${ix},${iz}`;
+    if (!this.pending.has(id)) this.pending.set(id, { key, ix, iz, mats: [] });
+    this.pending.get(id).mats.push(m);
     return m;
   }
 
   flush() {
-    for (const [t, mats] of this.pending) {
-      const buf = new Float32Array(mats.length * 16);
-      mats.forEach((m, i) => m.copyToArray(buf, i * 16));
-      t.setEnabled(true);
-      t.thinInstanceSetBuffer('matrix', buf, 16, true);
-      t.thinInstanceRefreshBoundingInfo(false);
-      t.alwaysSelectAsActiveMesh = true;
-      t.freezeWorldMatrix();
-      if (!NO_SHADOW.test(t.name)) this.shadowCasters.push(t);
+    for (const [id, g] of this.pending) {
+      const buf = new Float32Array(g.mats.length * 16);
+      g.mats.forEach((m, i) => m.copyToArray(buf, i * 16));
+      const mesh = this.tpl(g.key).clone(id);
+      // 배치 행렬 버퍼는 지오메트리에 붙기 때문에, 구역마다 지오메트리를 따로 가져야 서로 덮어쓰지 않는다.
+      mesh.makeGeometryUnique();
+      mesh.setEnabled(true);
+      mesh.thinInstanceSetBuffer('matrix', buf, 16, true);
+      mesh.thinInstanceRefreshBoundingInfo(false);
+      mesh.freezeWorldMatrix();
+      mesh.isPickable = false;
+      const small = NO_SHADOW.test(g.key);
+      const range = /nature\/(grass|flower|plant|crop)/.test(g.key) ? 160 : g.key.startsWith('nature/') || g.key.startsWith('roads/light') ? 620 : 1300;
+      this.groups.push({ mesh, x: WORLD.x0 + (g.ix + 0.5) * REGION, z: WORLD.z0 + (g.iz + 0.5) * REGION, range, shadow: !small, on: true, lit: false });
     }
     this.pending.clear();
   }
 
+  // 직접 만든 메시(합친 상자 등)도 같은 방식으로 거리에 따라 켜고 끈다.
+  addGroup(mesh, x, z, range, shadow) { this.groups.push({ mesh, x, z, range, shadow, on: true, lit: false }); }
+
+  // 카메라에서 먼 구역은 끄고, 그림자는 가까운 구역만 드리운다. 가끔(0.3초마다) 부르면 된다.
+  cull(cam, shadowList, fixed) {
+    let changed = false;
+    for (const g of this.groups) {
+      const d = Math.hypot(g.x - cam.x, g.z - cam.z) - REGION * 0.71;
+      const on = d < g.range;
+      if (on !== g.on) { g.on = on; g.mesh.setEnabled(on); }
+      const lit = g.shadow && d < (this.shadowRange || 185);
+      if (lit !== g.lit) { g.lit = lit; changed = true; }
+    }
+    if (changed || !shadowList.length) {
+      shadowList.length = 0;
+      for (const m of fixed) shadowList.push(m);
+      for (const g of this.groups) if (g.lit) shadowList.push(g.mesh);
+    }
+  }
+
   // 움직이는 물체용: 틀을 복제한 독립 메시를 돌려준다(지오메트리는 공유).
-  spawn(key, name) {
+  spawn(key, name, shadow = true) {
     const t = this.tpl(key);
     const m = t.clone(name || key + '_obj');
     m.setEnabled(true);
-    this.shadowCasters.push(m);
+    if (shadow) this.shadowCasters.push(m);
     return m;
   }
 }

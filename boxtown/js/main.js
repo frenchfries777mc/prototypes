@@ -6,6 +6,7 @@ import { modelKeys, carKeys, SPAWN, PARKED, CELL } from './mapdata.js';
 import { Garage } from './vehicles.js';
 import { Residents } from './npc.js';
 import { Jobs } from './jobs.js';
+import { MapView } from './map.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -31,7 +32,7 @@ async function boot() {
     zenith: B.Color3.FromHexString('#3f8fe8'),
     horizon: B.Color3.FromHexString('#cfeaf7'),
     fog: B.Color3.FromHexString('#c3e2f2'),
-    fogDensity: 0.0017,
+    fogDensity: 0.00135,
   };
   scene.clearColor = new B.Color4(env.fog.r, env.fog.g, env.fog.b, 1);
   scene.ambientColor = new B.Color3(0.1, 0.12, 0.17);
@@ -59,10 +60,9 @@ async function boot() {
   await Promise.all(carKeys().map((k) => assets.loadCar(k)));
   setProgress(0.66);
 
-  setProgress(0.7, '섬 만드는 중');
+  setProgress(0.68, '섬과 바다 만드는 중');
   await new Promise((r) => setTimeout(r, 0));
-  const terrain = buildTerrain(scene);
-  new B.PhysicsAggregate(terrain, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  for (const chunk of buildTerrain(scene)) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
   buildSky(scene, env);
   buildWater(scene, env);
 
@@ -73,7 +73,8 @@ async function boot() {
   const character = new Character(scene);
   const input = new Input(canvas);
   const spawn = { ...SPAWN, y: groundY(SPAWN.x, SPAWN.z) };
-  const garage = new Garage(scene, assets, PARKED, CELL, ROAD_Y);
+  const garage = new Garage(scene, assets, PARKED, CELL, ROAD_Y, height);
+  garage.addBoats(scene, assets, town.boatSpots);
   const residents = new Residents(scene, groundY);
   const player = new Player(scene, input, character, spawn, garage);
   scene.activeCamera = player.cam;
@@ -91,10 +92,18 @@ async function boot() {
   csm.usePercentageCloserFiltering = true;
   csm.setDarkness(0.32);
   const rl = csm.getShadowMap().renderList;
-  for (const m of [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes]) rl.push(m);
+  // 그림자를 드리우는 것: 늘 있는 것(캐릭터, 차, 움직이는 소품) + 카메라 근처 구역의 건물과 나무
+  assets.shadowRange = quality === 'low' ? 110 : 185;
+  const fixedCasters = [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes];
+  assets.cull(player.cam.position, rl, fixedCasters);
+  let cullT = 0;
 
-  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, addShadow: (ms) => ms.forEach((m) => rl.push(m)) });
+  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   player.onUse = () => jobs.use();
+  const map = new MapView(() => ({
+    x: player.feet.x, z: player.feet.z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
+    pads: jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color })),
+  }));
 
   // 후처리: 구석 그늘(SSAO), 밝은 곳 번짐, 대비와 색감.
   let ssao = null;
@@ -117,10 +126,13 @@ async function boot() {
   let promptText = '';
   const tick = (dt) => {
     town.update(dt);
+    cullT -= dt;
+    if (cullT <= 0) { cullT = 0.3; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
     residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);
     jobs.update(dt);
+    map.update(dt);
     const text = jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
@@ -175,7 +187,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map };
   await scene.whenReadyAsync();
   engine.runRenderLoop(() => scene.render());
   setProgress(1, '준비 완료');
