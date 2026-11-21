@@ -78,6 +78,14 @@ export class Jobs {
     this.toast(`${text}  +${won(n)}원`, true);
     $('moneyBox').classList.remove('pop'); void $('moneyBox').offsetWidth; $('moneyBox').classList.add('pop');
   }
+  // 돈을 쓴다. 모자라면 false.
+  spend(n) {
+    if (this.money < n) return false;
+    this.money -= Math.round(n);
+    try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
+    this.renderMoney();
+    return true;
+  }
   toast(text, good = false) {
     const el = $('toast');
     el.textContent = text; el.className = good ? 'show good' : 'show';

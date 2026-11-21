@@ -6,6 +6,7 @@ import { buildDistricts } from './districts.js';
 import { scatterNature } from './nature.js';
 import { rng, flatMat } from './util.js';
 import { buildJobSites, buildOutposts } from './jobsites.js';
+import { buildInteriors } from './interiors.js';
 const B = window.BABYLON;
 
 const FACE = { S: 0, W: Math.PI / 2, N: Math.PI, E: (3 * Math.PI) / 2 };
@@ -126,12 +127,14 @@ export function buildTown(scene, assets, mark = () => {}) {
   addBox(0, ROAD_Y - 1, 48, 12, 2, 12);
   addBox(12, ROAD_Y - 1, 96, 12, 2, 12);
 
+  const houses = []; // 살 수 있는 집들
   // ---------- 건물 ----------
   for (const b of BUILDINGS) {
     const x = b.cx * CELL, z = b.cz * CELL, yaw = FACE[b.f];
     const y = groundY(x, z) - 0.02;
     assets.place(b.m, x, y, z, yaw);
     collideModel(b.m, x, y, z, yaw, 1, 0.96);
+    if (b.m.startsWith('suburban/building-type')) houses.push({ key: b.m, x, z, yaw, area: 'town' });
   }
 
   // ---------- 소품 ----------
@@ -294,7 +297,7 @@ export function buildTown(scene, assets, mark = () => {}) {
   mark('town.grid');
   buildRoads({ scene, addBox, casters });
   mark('town.roads');
-  buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots, docks });
+  buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots, docks, houses });
   mark('town.districts');
   scatterNature(assets, addBox);
   mark('town.nature');
@@ -303,6 +306,10 @@ export function buildTown(scene, assets, mark = () => {}) {
   // ---------- 직업 건물 ----------
   const jobSites = buildJobSites({ scene, box, addBox, casters, groundY, updaters });
   Object.assign(jobSites, buildOutposts({ scene, box, bucket, groundY }));
+  bucket('town', 66, 48);
+
+  // ---------- 건물 내부와 살 수 있는 집 ----------
+  const interiors = buildInteriors({ scene, assets, box, addBox, bucket, groundY, jobSites, houses });
   bucket('town', 66, 48);
 
   mark('town.jobsites');
@@ -371,5 +378,5 @@ export function buildTown(scene, assets, mark = () => {}) {
     }
   });
 
-  return { casters, jobSites, boatSpots, docks, dynamics, update: (dt) => updaters.forEach((u) => u(dt)) };
+  return { casters, jobSites, boatSpots, docks, dynamics, interiors, update: (dt) => updaters.forEach((u) => u(dt)) };
 }

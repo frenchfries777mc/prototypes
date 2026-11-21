@@ -8,6 +8,7 @@ import { Residents } from './npc.js';
 import { Jobs } from './jobs.js';
 import { MapView } from './map.js';
 import { Weapons } from './weapons.js';
+import { Police } from './police.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -90,6 +91,8 @@ async function boot() {
   garage.addBoats(scene, assets, town.boatSpots);
   const residents = new Residents(scene, groundY);
   const player = new Player(scene, input, character, spawn, garage);
+  const police = new Police({ scene, assets, garage, player, jobs: null, height });
+  const interiors = town.interiors;
   scene.activeCamera = player.cam;
 
   // 그림자: 가까운 곳은 선명하게, 먼 곳은 넓게 덮는 단계별 그림자.
@@ -112,12 +115,20 @@ async function boot() {
   let cullT = 0;
 
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
-  player.onUse = () => jobs.use();
+  police.jobs = jobs;
+  interiors.init(player, jobs);
+  player.onUse = () => interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  police.weapons = weapons;
+  weapons.onCrime = (amount) => police.report(amount);
   mark('actors');
   const map = new MapView(() => ({
-    x: player.feet.x, z: player.feet.z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
-    pads: jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
+    x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
+    pads: [
+      ...jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
+      ...interiors.homes.filter((d) => interiors.owned.has(d.id)).map((d) => ({ x: d.x, z: d.z, color: '#57c27a', name: '내 집' })),
+      ...police.marks().map((m) => ({ x: m.x, z: m.z, color: '#2f6bff', name: '' })),
+    ],
   }));
 
   // 후처리: 구석 그늘(SSAO), 밝은 곳 번짐, 대비와 색감.
@@ -149,12 +160,14 @@ async function boot() {
     jobs.update(dt);
     map.update(dt);
     weapons.update(dt, map.open);
-    const text = jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
+    police.update(dt);
+    interiors.update(dt);
+    const text = interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
       $('promptText').textContent = text;
-      $('btnUse').textContent = text.length > 5 ? text.slice(0, 5) : text || '타기';
+      $('btnUse').textContent = text.length > 6 ? text.slice(0, 6) : text || '타기';
       $('btnUse').style.visibility = text ? 'visible' : 'hidden';
       document.body.classList.toggle('driving', !!car);
     }
@@ -203,7 +216,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

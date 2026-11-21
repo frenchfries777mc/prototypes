@@ -25,6 +25,7 @@ export function buildDistricts(h) {
       if (y < SEA + 0.4) return false; // 물속이면 놓지 않는다
       if (roadDist(x, z) < 5.5) return false; // 길 위에도 놓지 않는다
       assets.place(key, x, y - 0.06, z, yaw * DEG, scale);
+      if (key.startsWith('suburban/building-type') && scale === 1) h.houses.push({ key, x, z, yaw: yaw * DEG, area: id });
       if (shrink) h.collideModel(key, x, y, z, yaw * DEG, scale, shrink);
       return true;
     };
@@ -146,7 +147,7 @@ export function buildDistricts(h) {
   {
     const S = SITES.lake, { P } = at(S, 'lake');
     const ring = [['e', -30, 22, 120], ['c', -8, 36, 180], ['j', 18, 34, 180], ['o', 38, 14, 250], ['q', 36, -14, 300], ['i', 12, -34, 0], ['h', -14, -32, 0], ['t', -36, -10, 70]];
-    for (const [c, dx, dz, yaw] of ring) P(SUB(c), dx, dz, yaw);
+    for (const [c, dx, dz, yaw] of ring) P(SUB(c), dx, dz, yaw + 180); // 정면이 마을 가운데를 보게
     P('nature/campfire_stones', 0, 0, 0, 0.55, 0.6); P('nature/log_stack', 4, 5, 20, 0.5); P('pirate/barrel', -4, 6, 0, 1, 0);
     // 호수 쪽 물가에 잔교와 배
     const dx = 60 - S.x, dz = 615 - S.z, l = Math.hypot(dx, dz);
@@ -176,7 +177,7 @@ export function buildDistricts(h) {
   {
     const S = SITES.gull, { P, Bx } = at(S, 'gull');
     const homes = [['a', -40, 30, 135], ['f', -14, 46, 180], ['k', 14, 46, 180], ['m', 42, 30, 225], ['s', 54, 0, 270], ['d', 40, -32, 315], ['c', 8, -48, 0], ['i', -22, -44, 0], ['o', -50, -18, 60]];
-    for (const [c, dx, dz, yaw] of homes) P(SUB(c), dx, dz, yaw);
+    for (const [c, dx, dz, yaw] of homes) P(SUB(c), dx, dz, yaw + 180);
     P('commercial/building-h', -4, 6, 0); P('commercial/building-c', 20, 4, 90);
     Bx('plaza', 30, 0.14, 26, 8, 0.06, -18, M('#d8dcec'), { noShadow: true, base: S.y });
     Bx('well', 2.6, 1.0, 2.6, 8, 0.5, -18, M('#b9bfd0'), { base: S.y, collide: true }); Bx('wellRoof', 3.4, 0.4, 3.4, 8, 3.2, -18, M('#e5553f'), { base: S.y });

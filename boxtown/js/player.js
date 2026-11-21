@@ -180,7 +180,8 @@ export class Player {
     this.onUse = null;
     this.faceT = 0; this.faceYaw = 0; this.kick = null;
     this.shoulder = 0; this.shoulderK = 0; // 총을 들면 카메라가 어깨 너머로 옮겨 간다
-    this.shake = 0; // E를 눌렀을 때 먼저 불리는 함수(직업 시스템이 건다)
+    this.shake = 0;
+    this.inside = false; // 건물 안에 있는지 // E를 눌렀을 때 먼저 불리는 함수(직업 시스템이 건다)
     this.cc = new B.PhysicsCharacterController(new B.Vector3(spawn.x, spawn.y + CAP_H / 2 + 0.2, spawn.z), { capsuleHeight: CAP_H, capsuleRadius: CAP_R }, scene);
     this.cc.maxSlopeCosine = Math.cos(50 * Math.PI / 180);
     this.cc.characterMass = 70;

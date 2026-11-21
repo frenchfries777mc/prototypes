@@ -14,7 +14,7 @@ const SPECS = {
   default: { mass: 900, engine: 11, vmax: 27, grip: 11 },
   'cars/hatchback-sports': { mass: 800, engine: 15, vmax: 36, grip: 12 },
   'cars/sedan-sports': { mass: 820, engine: 14, vmax: 34, grip: 12 },
-  'cars/police': { mass: 900, engine: 14, vmax: 33, grip: 12 },
+  'cars/police': { mass: 900, engine: 13, vmax: 27, grip: 12 },
   'cars/truck': { mass: 1400, engine: 8, vmax: 22, grip: 10 },
   'cars/firetruck': { mass: 1800, engine: 8, vmax: 22, grip: 10 },
   'cars/delivery': { mass: 1300, engine: 9, vmax: 23, grip: 10 },
@@ -247,13 +247,14 @@ export class Garage {
       : new Vehicle(scene, assets, p.m, p.x, heightFn(p.x, p.z) + 0.3, p.z, ((p.r || 0) * Math.PI) / 180)));
   }
   addBoats(scene, assets, spots) { for (const b of spots) this.cars.push(new Boat(scene, assets, b.m || 'watercraft/boat-speed-a', b.x, b.z, b.yaw)); }
-  fixedUpdate(dt, driven, input) { for (const c of this.cars) c.fixedUpdate(dt, c === driven && !c.dead ? input : null); } // 터진 차는 움직이지 않는다
+  // 터진 차는 움직이지 않는다. 경찰차처럼 스스로 모는 차는 ai()가 조작을 돌려준다.
+  fixedUpdate(dt, driven, input) { for (const c of this.cars) c.fixedUpdate(dt, c.dead ? null : c.ai ? c.ai(dt) : c === driven ? input : null); }
   frame() { for (const c of this.cars) c.frame(); }
   nearest(pos, maxDist) {
     let best = null, bd = maxDist;
     for (const c of this.cars) {
       const d = Math.hypot(c.pos.x - pos.x, c.pos.z - pos.z) - c.width * 0.5;
-      if (d < bd && Math.abs(c.pos.y - pos.y) < 3) { bd = d; best = c; }
+      if (d < bd && !c.police && Math.abs(c.pos.y - pos.y) < 3) { bd = d; best = c; }
     }
     return best;
   }

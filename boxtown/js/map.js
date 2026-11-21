@@ -116,7 +116,7 @@ export class MapView {
       const x = mx(p.x) * k, y = mz(p.z) * k;
       ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 4 * dpr, 0, 7); ctx.fill(); ctx.lineWidth = 1.5 * dpr; ctx.strokeStyle = '#fff'; ctx.stroke();
       // 마을 밖 직업은 이름도 적는다(마을 안은 다섯 곳이 붙어 있어 겹친다).
-      if (Math.hypot(p.x - 66, p.z - 48) > 150) {
+      if (p.name && Math.hypot(p.x - 66, p.z - 48) > 150) {
         ctx.font = `800 ${10.5 * dpr}px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif`;
         ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(22,34,58,0.9)'; ctx.fillStyle = p.color;
         ctx.textAlign = 'left';
