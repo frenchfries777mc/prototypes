@@ -1,0 +1,165 @@
+// 네모 캐릭터: 둥근 상자로 조립한 몸과, 물리가 아니라 스프링으로 만드는 흐느적거림.
+import { roundedBox, flatMat, damp, clamp, lerp } from './util.js';
+const B = window.BABYLON;
+
+// 감쇠 스프링. 목표를 지나쳤다가 돌아오는 출렁임을 만든다.
+class Spring {
+  constructor(freq, damping) { this.x = 0; this.v = 0; this.f = freq; this.d = damping; }
+  step(target, dt) {
+    const w = this.f * 2 * Math.PI;
+    this.v += (-2 * this.d * w * this.v - w * w * (this.x - target)) * dt;
+    this.x += this.v * dt;
+    return this.x;
+  }
+}
+
+export const LOOKS = {
+  courier: { skin: '#ffd3a8', shirt: '#f2644b', pants: '#34456f', shoes: '#f5f1e8', cap: '#f2644b', brim: '#fff7e6' },
+};
+
+export class Character {
+  constructor(scene, look = LOOKS.courier) {
+    this.scene = scene;
+    const mat = (n, hex) => flatMat('chr_' + n, hex, scene);
+    const m = {
+      skin: mat('skin', look.skin), shirt: mat('shirt', look.shirt), pants: mat('pants', look.pants),
+      shoes: mat('shoes', look.shoes), cap: mat('cap', look.cap), brim: mat('brim', look.brim),
+      eye: mat('eye', '#22202b'), cheek: mat('cheek', '#ff9d8a'),
+    };
+    m.eye.specularColor = new B.Color3(0.5, 0.5, 0.5);
+    this.meshes = [];
+    const part = (name, w, h, d, r, material, parent, x, y, z) => {
+      const p = roundedBox(name, w, h, d, r, scene);
+      p.material = material;
+      p.parent = parent;
+      p.position.set(x, y, z);
+      p.isPickable = false;
+      p.receiveShadows = true;
+      this.meshes.push(p);
+      return p;
+    };
+    const node = (name, parent, x, y, z) => {
+      const n = new B.TransformNode(name, scene);
+      n.parent = parent;
+      n.position.set(x, y, z);
+      return n;
+    };
+
+    this.root = new B.TransformNode('character', scene); // 발바닥 위치, 몸의 방향
+    this.tilt = node('tilt', this.root, 0, 0, 0); // 기울기와 찌그러짐
+    const LEG = 0.42, TORSO = 0.58;
+    this.hips = node('hips', this.tilt, 0, LEG, 0);
+    this.torso = node('torso', this.hips, 0, 0, 0);
+    part('torsoMesh', 0.66, TORSO, 0.44, 0.12, m.shirt, this.torso, 0, TORSO / 2, 0);
+    part('belt', 0.67, 0.1, 0.45, 0.04, m.pants, this.torso, 0, 0.06, 0);
+
+    this.neck = node('neck', this.torso, 0, TORSO - 0.02, 0);
+    part('head', 0.94, 0.82, 0.88, 0.2, m.skin, this.neck, 0, 0.41, 0);
+    part('capTop', 0.98, 0.3, 0.92, 0.12, m.cap, this.neck, 0, 0.74, -0.01);
+    part('capBrim', 0.8, 0.07, 0.36, 0.03, m.brim, this.neck, 0, 0.63, 0.55);
+    this.eyeL = part('eyeL', 0.13, 0.24, 0.06, 0.03, m.eye, this.neck, -0.2, 0.36, 0.43);
+    this.eyeR = part('eyeR', 0.13, 0.24, 0.06, 0.03, m.eye, this.neck, 0.2, 0.36, 0.43);
+    part('cheekL', 0.14, 0.08, 0.04, 0.02, m.cheek, this.neck, -0.33, 0.2, 0.43);
+    part('cheekR', 0.14, 0.08, 0.04, 0.02, m.cheek, this.neck, 0.33, 0.2, 0.43);
+    part('mouth', 0.16, 0.05, 0.04, 0.02, m.eye, this.neck, 0, 0.17, 0.44);
+
+    const arm = (side) => {
+      const sh = node('shoulder' + side, this.torso, side * 0.42, TORSO - 0.1, 0);
+      part('arm', 0.2, 0.34, 0.22, 0.07, m.shirt, sh, 0, -0.14, 0);
+      part('hand', 0.21, 0.2, 0.23, 0.08, m.skin, sh, 0, -0.39, 0);
+      return sh;
+    };
+    this.armL = arm(-1);
+    this.armR = arm(1);
+    const leg = (side) => {
+      const hip = node('hip' + side, this.hips, side * 0.17, 0.04, 0);
+      part('leg', 0.25, 0.3, 0.28, 0.07, m.pants, hip, 0, -0.15, 0);
+      part('shoe', 0.27, 0.16, 0.38, 0.06, m.shoes, hip, 0, -0.36, 0.05);
+      return hip;
+    };
+    this.legL = leg(-1);
+    this.legR = leg(1);
+
+    this.heading = 0;
+    this.phase = 0;
+    this.sPitch = new Spring(2.6, 0.32);
+    this.sRoll = new Spring(2.6, 0.32);
+    this.sSquash = new Spring(4.2, 0.3);
+    this.sHeadP = new Spring(3.2, 0.3);
+    this.sHeadR = new Spring(3.2, 0.3);
+    this.sArm = new Spring(3.0, 0.35);
+    this.blinkT = 2;
+    this.air = 0;
+    this.idleT = 0;
+    this.prevVel = new B.Vector3();
+  }
+
+  // state: { pos(발바닥), vel, grounded, wishHeading|null, landed(충격 속도), jumped }
+  update(dt, st) {
+    const speed = Math.hypot(st.vel.x, st.vel.z);
+    // 몸 방향은 가려는 쪽으로 부드럽게 돈다.
+    let turn = 0;
+    if (st.wishHeading !== null) {
+      let d = (st.wishHeading - this.heading) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      const step = d * (1 - Math.exp(-13 * dt));
+      this.heading += step;
+      turn = step / Math.max(dt, 1e-4);
+    }
+    this.root.position.copyFrom(st.pos);
+    this.root.rotation.y = this.heading;
+
+    // 가속도를 몸 기준으로 바꿔서 반대쪽으로 기울인다. 스프링이라 멈출 때 앞뒤로 출렁인다.
+    const ax = (st.vel.x - this.prevVel.x) / Math.max(dt, 1e-4), az = (st.vel.z - this.prevVel.z) / Math.max(dt, 1e-4);
+    this.prevVel.copyFrom(st.vel);
+    const sh = Math.sin(this.heading), ch = Math.cos(this.heading);
+    const aF = clamp(ax * sh + az * ch, -40, 40), aR = clamp(ax * ch - az * sh, -40, 40);
+    const pitch = this.sPitch.step(aF * 0.011 + speed * 0.012, dt);
+    const roll = this.sRoll.step(-aR * 0.011 - clamp(turn, -8, 8) * 0.018 * Math.min(speed / 6, 1), dt);
+
+    if (st.jumped) this.sSquash.v += 3.2;
+    if (st.landed > 0) this.sSquash.v -= clamp(st.landed * 0.55, 1.2, 6.5);
+    const sq = clamp(this.sSquash.step(0, dt), -0.38, 0.4);
+    this.tilt.scaling.set(1 - sq * 0.45, 1 + sq, 1 - sq * 0.45);
+    this.tilt.rotation.x = pitch;
+    this.tilt.rotation.z = roll;
+
+    this.air = damp(this.air, st.grounded ? 0 : 1, 14, dt);
+    const moving = st.grounded && speed > 0.4;
+    this.phase += dt * (moving ? 6.5 + speed * 0.95 : 0);
+    const amp = moving ? clamp(speed / 6.5, 0.25, 1.15) : 0;
+    this.amp = damp(this.amp || 0, amp, 12, dt);
+    const s = Math.sin(this.phase), c = Math.cos(this.phase);
+    this.idleT += dt;
+    const breath = Math.sin(this.idleT * 2.1) * 0.012 * (1 - this.amp);
+
+    // 다리: 걷기 흔들기 / 공중에서는 벌리고 버둥거린다.
+    const kick = Math.sin(this.idleT * 13) * 0.35 * this.air;
+    this.legL.rotation.x = lerp(s * 0.95 * this.amp, -0.35 + kick, this.air);
+    this.legR.rotation.x = lerp(-s * 0.95 * this.amp, 0.3 - kick, this.air);
+    this.legL.rotation.z = -0.12 * this.air;
+    this.legR.rotation.z = 0.12 * this.air;
+    this.hips.position.y = 0.42 + Math.abs(c) * 0.07 * this.amp + breath;
+    this.torso.rotation.y = s * 0.16 * this.amp;
+    this.torso.rotation.z = c * 0.05 * this.amp;
+
+    // 팔: 다리와 반대로 흔들고, 스프링으로 한 박자 늦게 따라온다. 공중에서는 번쩍 든다.
+    const armLag = this.sArm.step(pitch * 1.6, dt);
+    const up = this.air * 2.5;
+    this.armL.rotation.x = -s * 1.05 * this.amp - armLag - up * 0.25;
+    this.armR.rotation.x = s * 1.05 * this.amp - armLag - up * 0.25;
+    this.armL.rotation.z = -0.1 - up + Math.sin(this.idleT * 11) * 0.25 * this.air - roll * 1.2;
+    this.armR.rotation.z = 0.1 + up - Math.sin(this.idleT * 11 + 1) * 0.25 * this.air - roll * 1.2;
+
+    // 머리는 몸보다 늦게, 더 크게 흔들린다.
+    this.neck.rotation.x = this.sHeadP.step(-pitch * 0.9, dt) + breath * 2;
+    this.neck.rotation.z = this.sHeadR.step(-roll * 0.9, dt) + s * 0.04 * this.amp;
+    this.neck.rotation.y = clamp(turn * 0.03, -0.5, 0.5);
+
+    this.blinkT -= dt;
+    const blink = this.blinkT < 0.11 ? 0.12 : 1;
+    if (this.blinkT < 0) this.blinkT = 1.8 + Math.random() * 3.5;
+    this.eyeL.scaling.y = this.eyeR.scaling.y = blink;
+  }
+}
