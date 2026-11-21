@@ -58,7 +58,7 @@ export class Jobs {
       lm.diffuseTexture = tex; lm.emissiveTexture = tex; lm.opacityTexture = tex; lm.disableLighting = true; lm.backFaceCulling = false; lm.fogEnabled = false;
       const label = B.MeshBuilder.CreatePlane('padLabelPlane_' + id, { width: 3.6, height: 0.9 }, scene);
       label.position.set(s.x, s.y + 3.7, s.z); label.material = lm; label.billboardMode = B.Mesh.BILLBOARDMODE_ALL; label.isPickable = false;
-      this.pads.push({ id, s, pad, gem });
+      this.pads.push({ id, s, pad, gem, color: def.color });
     }
     this.t = 0;
     addEventListener('keydown', (e) => { if (e.code === 'KeyQ' && this.active) this.quit(); });

@@ -58,3 +58,26 @@ body.touch #btnQuit:not([hidden]) { display: block; }
 #arrow span { position: absolute; left: 50%; top: 20px; transform: translateX(-50%); padding: 3px 9px; border-radius: 7px; background: rgba(22, 34, 58, .78); font-size: 12px; font-weight: 800; white-space: nowrap; }
 #arrow.edge i { background: #f2644b; }
 body.touch .hint.mob { top: auto; bottom: 8px; opacity: .75; }
+
+#minimap { position: absolute; right: 12px; top: max(12px, env(safe-area-inset-top)); width: 132px; height: 132px; border-radius: 16px; border: 3px solid rgba(255, 255, 255, .85); box-shadow: 0 4px 14px rgba(10, 30, 60, .35); pointer-events: auto; cursor: pointer; }
+#fps { top: calc(max(12px, env(safe-area-inset-top)) + 146px); }
+#mapWrap { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 8px; background: rgba(12, 22, 40, .72); pointer-events: auto; z-index: 3; }
+#mapWrap[hidden] { display: none; }
+#fullmap { border-radius: 14px; border: 3px solid rgba(255, 255, 255, .85); max-width: 94vw; max-height: 86vh; }
+#mapWrap p { margin: 0; font-size: 13px; font-weight: 700; opacity: .85; }
+body.touch #minimap { width: 104px; height: 104px; }
+body.touch #speed { top: 56px; left: 150px; }
+
+/* 운전용 터치 조작: 왼쪽 운전대, 오른쪽 엑셀과 브레이크 */
+#wheel, .pedal { display: none; position: absolute; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+#wheel { left: max(26px, env(safe-area-inset-left)); bottom: max(26px, env(safe-area-inset-bottom)); width: min(168px, 38vh); height: min(168px, 38vh); border-radius: 50%; }
+#wheelRim { width: 100%; height: 100%; display: block; transition: transform .18s ease-out; filter: drop-shadow(0 4px 8px rgba(10, 30, 60, .35)); }
+#wheelRim.hold { transition: none; }
+.pedal { bottom: max(26px, env(safe-area-inset-bottom)); border: 0; border-radius: 18px; color: #fff; font: 900 16px inherit; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .75), 0 4px 10px rgba(10, 30, 60, .3); }
+.pedal small { display: block; font-size: 11px; font-weight: 700; opacity: .85; }
+#btnGas { right: max(22px, env(safe-area-inset-right)); width: 84px; height: min(132px, 34vh); background: rgba(63, 168, 104, .82); }
+#btnBrake { right: calc(max(22px, env(safe-area-inset-right)) + 98px); width: 84px; height: min(104px, 27vh); background: rgba(229, 85, 63, .82); }
+.pedal.on { transform: translateY(4px) scale(.96); filter: brightness(1.25); }
+body.touch.driving #wheel, body.touch.driving .pedal { display: block; }
+body.touch.driving #btnJump, body.touch.driving #btnRun, body.touch.driving .hint.mob { display: none; }
+body.touch.driving #btnUse { bottom: calc(max(26px, env(safe-area-inset-bottom)) + min(132px, 34vh) + 14px); width: 84px; height: 48px; border-radius: 14px; right: max(22px, env(safe-area-inset-right)); }
