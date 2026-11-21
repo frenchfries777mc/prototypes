@@ -142,7 +142,10 @@ export function buildJobSites(h) {
     }
     // 가게 앞 시작 지점(기본은 정면에서 1.9m 앞)
     const [mx, mz] = W(site.mx || 0, front - (site.pad || 1.9));
-    out[site.id] = { x: mx, z: mz, y: h.groundY(mx, mz), yaw, site, W };
+    // 들어가는 문 앞 지점
+    const DOORX = { pizza: 4.5, fire: 7.2, taxi: 2.88, clean: 2.88, fish: 2.1 };
+    const [qx, qz] = W(DOORX[site.id], front - 1.0);
+    out[site.id] = { x: mx, z: mz, y: h.groundY(mx, mz), yaw, site, W, door: { x: qx, z: qz, y: h.groundY(qx, qz), yaw } };
   }
   return out;
 }
@@ -197,7 +200,9 @@ export function buildOutposts(h) {
     const [sx, sz] = W(0, -1.64);
     plane.position.set(sx, gy + 4.0, sz); plane.rotation.y = yaw; plane.material = sm; plane.isPickable = false; plane.freezeWorldMatrix();
     const [mx, mz] = W(0, -4.4);
-    out[o.id] = { x: mx, z: mz, y: h.groundY(mx, mz), yaw, site: o };
+    put('sideDoor', 0.14, 2.2, 1.1, 2.34, 1.1, 0.4, mat('#5a4636'), { noShadow: true });
+    const [qx, qz] = W(3.5, 0.4); // 옆문
+    out[o.id] = { x: mx, z: mz, y: h.groundY(mx, mz), yaw, site: o, door: { x: qx, z: qz, y: h.groundY(qx, qz), yaw: yaw - Math.PI / 2 } };
   }
   return out;
 }

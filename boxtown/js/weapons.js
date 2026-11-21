@@ -155,6 +155,7 @@ export class Weapons {
     const hit = this.trace(o, sd, w.range);
     if (hit.resident) {
       const gone = this.residents.damage(hit.resident, w.dmg, sd.x, sd.z);
+      this.crime(gone ? 35 : 14);
       this.emit('star', hit.point.x, hit.point.y, hit.point.z, gone ? 0 : 10);
       this.sfx.play(gone ? 'pop' : 'hit');
     } else if (hit.hit) {
@@ -176,6 +177,7 @@ export class Weapons {
       const dx = n.pos.x - me.x, dz = n.pos.z - me.z, dist = Math.hypot(dx, dz);
       if (Math.abs(n.pos.y - me.y) > 2 || !front(dx, dz, dist)) continue;
       const gone = this.residents.damage(n, w.dmg, fx, fz);
+      this.crime(gone ? 35 : 14);
       this.emit('star', n.pos.x, n.pos.y + 1.2, n.pos.z, 12);
       if (gone) this.sfx.play('pop');
       landed = true;
@@ -214,7 +216,9 @@ export class Weapons {
     t.t = 0.06;
   }
 
-  hurtCar(c, amount) { if (!c.dead) c.hp -= amount; }
+  hurtCar(c, amount) { if (!c.dead) { c.hp -= amount; if (c.police) this.crime(Math.min(30, amount)); } }
+  // 나쁜 짓을 하면 경찰이 온다.
+  crime(amount) { if (this.onCrime) this.onCrime(amount); }
 
   // 폭발: 주변 주민은 날아가고, 차는 망가지며 밀려나고, 물건과 플레이어도 밀려난다.
   explode(x, y, z, radius = 8, skip = null) {
@@ -228,6 +232,7 @@ export class Weapons {
       if (dist > radius) continue;
       const l = Math.hypot(dx, dz) || 1;
       if (dist < radius * 0.8) this.residents.launch(n, dx / l, dz / l); else this.residents.damage(n, 60, dx, dz);
+      this.crime(35);
     }
     for (const c of this.garage.cars) {
       if (c === skip) continue;
@@ -256,6 +261,7 @@ export class Weapons {
   blow(c) {
     const P = this.player;
     c.dead = true; c.hp = 0; c.respawnT = 13;
+    this.crime(55);
     if (P.vehicle === c) { P.exit(); P.kick = new B.Vector3((Math.random() - 0.5) * 8, 13, (Math.random() - 0.5) * 8); }
     this.explode(c.pos.x, c.pos.y + 0.8, c.pos.z, 7.5, c);
     const M = c.spec.mass;
