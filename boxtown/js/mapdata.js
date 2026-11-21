@@ -8,10 +8,10 @@ const ROWS_NORTH_FIRST = [
   '............', // 8  주택가
   '.##########.', // 7  뒷길
   '.#ppp#ggpp#.', // 6
-  '.#ppp#ggpp#.', // 5
+  '.#pppxggpp#.', // 5
   '.##x##x##x##', // 4  중앙로
   '.#ppp#pppp#.', // 3
-  '.#ppp#pppp#.', // 2
+  '.#pppxpppp#.', // 2
   '.##x##x####.', // 1  해안로
   '.qqqqqqqqqq.', // 0  부두
 ];
@@ -90,18 +90,18 @@ export const PROPS = [
   { m: 'roads/construction-light', cx: 11.3, cz: 4.0, r: 0 },
 ];
 
-// 길가에 세워 둔 차. r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
+// 길가에 세워 둔 차(전부 탈 수 있다). r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
 export const PARKED = [
   { m: 'cars/taxi', cx: 2.4, cz: 1.27, r: -90 },
   { m: 'cars/delivery', cx: 3.6, cz: 0.73, r: 90 },
   { m: 'cars/sedan', cx: 7.3, cz: 4.27, r: -90 },
   { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.73, r: 90 },
-  { m: 'cars/suv', cx: 4.73, cz: 5.6, r: 180 },
+  { m: 'cars/suv', cx: 4.73, cz: 6.2, r: 180 },
   { m: 'cars/van', cx: 1.27, cz: 2.5, r: 0 },
   { m: 'cars/police', cx: 6.6, cz: 7.27, r: -90 },
   { m: 'cars/truck', cx: 9.73, cz: 5.4, r: 0 },
   { m: 'cars/sedan-sports', cx: 3.2, cz: 6.73, r: 90 },
-  { m: 'cars/firetruck', cx: 5.27, cz: 2.3, r: 180 },
+  { m: 'cars/firetruck', cx: 4.73, cz: 3.2, r: 180 },
 ];
 
 // 밀고 다닐 수 있는 물리 소품(무게 kg).
@@ -148,7 +148,7 @@ export const SPAWN = { x: 60, z: 10, yaw: 2.6 };
 
 export function modelKeys() {
   const keys = new Set();
-  for (const list of [BUILDINGS, PROPS, PARKED, DYNAMIC, BOATS]) for (const o of list) keys.add(o.m);
+  for (const list of [BUILDINGS, PROPS, DYNAMIC, BOATS]) for (const o of list) keys.add(o.m);
   [
     'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
     'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
@@ -164,3 +164,5 @@ export function modelKeys() {
   ].forEach((k) => keys.add(k));
   return [...keys];
 }
+
+export const carKeys = () => [...new Set(PARKED.map((p) => p.m))];
