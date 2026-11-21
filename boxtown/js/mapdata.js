@@ -1,0 +1,166 @@
+// 마을 설계 데이터. 여기가 "손으로 짜는" 부분이다.
+// 격자 한 칸은 12m. 칸 (cx, cz)의 중심은 월드 좌표 (cx*12, cz*12). +Z가 북쪽, 바다는 남쪽.
+export const CELL = 12;
+
+// 북쪽 줄부터 적는다(화면에서 본 지도와 같은 방향).
+//  # 도로   x 횡단보도   p 보도블록(상가 터)   g 잔디   q 부두   . 자연 지형
+const ROWS_NORTH_FIRST = [
+  '............', // 8  주택가
+  '.##########.', // 7  뒷길
+  '.#ppp#ggpp#.', // 6
+  '.#ppp#ggpp#.', // 5
+  '.##x##x##x##', // 4  중앙로
+  '.#ppp#pppp#.', // 3
+  '.#ppp#pppp#.', // 2
+  '.##x##x####.', // 1  해안로
+  '.qqqqqqqqqq.', // 0  부두
+];
+export const GRID = ROWS_NORTH_FIRST.slice().reverse(); // GRID[cz][cx]
+
+// 건물. f는 정면이 바라보는 방향(N/E/S/W). cx, cz는 칸 좌표(소수 가능).
+export const BUILDINGS = [
+  // A 블록: 해안로와 중앙로 사이 서쪽
+  { m: 'commercial/building-a', cx: 2.0, cz: 2.02, f: 'S' },
+  { m: 'commercial/building-e', cx: 3.45, cz: 2.0, f: 'S' },
+  { m: 'commercial/building-c', cx: 2.0, cz: 2.98, f: 'N' },
+  { m: 'commercial/building-k', cx: 3.45, cz: 3.02, f: 'N' },
+  // B 블록: 도심. 높은 건물이 스카이라인을 만든다.
+  { m: 'commercial/building-skyscraper-b', cx: 6.3, cz: 2.5, f: 'S' },
+  { m: 'commercial/building-n', cx: 8.15, cz: 2.5, f: 'S' },
+  // C 블록
+  { m: 'commercial/building-g', cx: 2.0, cz: 5.0, f: 'S' },
+  { m: 'commercial/building-j', cx: 3.45, cz: 5.15, f: 'S' },
+  { m: 'commercial/building-d', cx: 2.0, cz: 6.02, f: 'N' },
+  { m: 'commercial/building-b', cx: 3.0, cz: 6.25, f: 'N' },
+  { m: 'commercial/building-h', cx: 3.95, cz: 6.25, f: 'N' },
+  // D 블록: 공원 옆 고층
+  { m: 'commercial/building-skyscraper-d', cx: 8.05, cz: 5.5, f: 'S' },
+  { m: 'commercial/building-f', cx: 9.08, cz: 5.0, f: 'S' },
+  { m: 'commercial/building-a', cx: 9.08, cz: 6.02, f: 'N' },
+  // 뒷길 북쪽 주택가
+  { m: 'suburban/building-type-a', cx: 1.2, cz: 8.05, f: 'S' },
+  { m: 'suburban/building-type-d', cx: 2.85, cz: 8.05, f: 'S' },
+  { m: 'suburban/building-type-k', cx: 4.3, cz: 8.05, f: 'S' },
+  { m: 'suburban/building-type-f', cx: 5.75, cz: 8.15, f: 'S' },
+  { m: 'suburban/building-type-s', cx: 7.3, cz: 8.05, f: 'S' },
+  { m: 'suburban/building-type-b', cx: 9.0, cz: 8.1, f: 'S' },
+  { m: 'suburban/building-type-q', cx: 10.5, cz: 8.0, f: 'S' },
+  // 마을 양 끝
+  { m: 'suburban/building-type-m', cx: -0.1, cz: 5.6, f: 'E' },
+  { m: 'suburban/building-type-o', cx: -0.05, cz: 2.6, f: 'E' },
+  { m: 'suburban/building-type-t', cx: 11.2, cz: 6.0, f: 'W' },
+  { m: 'suburban/building-type-e', cx: 11.2, cz: 2.4, f: 'W' },
+  // 부두 창고
+  { m: 'industrial/building-s', cx: 1.95, cz: 0.0, f: 'N' },
+  { m: 'industrial/building-k', cx: 9.9, cz: 0.02, f: 'N' },
+];
+
+// 고정 소품. r은 도(°), s는 배율.
+export const PROPS = [
+  // 부두: 컨테이너 더미
+  { m: 'industrial/shipping-container-a', cx: 3.55, cz: -0.2, r: 0 },
+  { m: 'industrial/shipping-container-b', cx: 3.95, cz: -0.2, r: 0 },
+  { m: 'industrial/shipping-container-c', cx: 3.75, cz: -0.2, r: 0, y: 4.2 },
+  { m: 'industrial/shipping-container-b', cx: 4.5, cz: 0.1, r: 90 },
+  { m: 'industrial/shipping-container-a', cx: 8.4, cz: -0.15, r: 90 },
+  { m: 'industrial/shipping-container-c', cx: 8.4, cz: 0.25, r: 90 },
+  { m: 'industrial/detail-tank', cx: 0.95, cz: 0.3, r: 90 },
+  { m: 'watercraft/cargo-pile-a', cx: 5.1, cz: 0.15, r: 20 },
+  { m: 'watercraft/cargo-pile-b', cx: 7.35, cz: 0.2, r: -30 },
+  { m: 'roads/dumpster', cx: 2.95, cz: 0.3, r: 90 },
+  { m: 'roads/dumpster', cx: 9.1, cz: 0.3, r: 90 },
+  // 부두 파라솔 노점
+  { m: 'commercial/detail-parasol-a', cx: 6.55, cz: 0.2, r: 0 },
+  { m: 'commercial/detail-parasol-b', cx: 6.85, cz: -0.05, r: 40 },
+  // 공원(cx 6..7, cz 5..6)
+  { m: 'commercial/detail-parasol-a', cx: 6.2, cz: 5.2, r: 15 },
+  { m: 'commercial/detail-parasol-b', cx: 7.2, cz: 6.25, r: 70 },
+  { m: 'suburban/planter', cx: 6.02, cz: 4.72, r: 0 },
+  { m: 'suburban/planter', cx: 6.98, cz: 4.72, r: 0 },
+  { m: 'suburban/planter', cx: 6.02, cz: 6.3, r: 0 },
+  { m: 'suburban/planter', cx: 6.98, cz: 6.3, r: 0 },
+  // 주택가 울타리
+  { m: 'suburban/fence-1x4', cx: 2.0, cz: 8.55, r: 180 },
+  { m: 'suburban/fence-1x3', cx: 6.55, cz: 8.6, r: 180 },
+  { m: 'suburban/fence-1x4', cx: 8.15, cz: 8.6, r: 180 },
+  // 표지판
+  { m: 'roads/sign-highway-wide', cx: 10.62, cz: 4.0, r: 0 },
+  { m: 'roads/construction-barrier', cx: 11.35, cz: 3.8, r: 0 },
+  { m: 'roads/construction-barrier', cx: 11.35, cz: 4.2, r: 0 },
+  { m: 'roads/construction-light', cx: 11.3, cz: 4.0, r: 0 },
+];
+
+// 길가에 세워 둔 차. r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
+export const PARKED = [
+  { m: 'cars/taxi', cx: 2.4, cz: 1.27, r: -90 },
+  { m: 'cars/delivery', cx: 3.6, cz: 0.73, r: 90 },
+  { m: 'cars/sedan', cx: 7.3, cz: 4.27, r: -90 },
+  { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.73, r: 90 },
+  { m: 'cars/suv', cx: 4.73, cz: 5.6, r: 180 },
+  { m: 'cars/van', cx: 1.27, cz: 2.5, r: 0 },
+  { m: 'cars/police', cx: 6.6, cz: 7.27, r: -90 },
+  { m: 'cars/truck', cx: 9.73, cz: 5.4, r: 0 },
+  { m: 'cars/sedan-sports', cx: 3.2, cz: 6.73, r: 90 },
+  { m: 'cars/firetruck', cx: 5.27, cz: 2.3, r: 180 },
+];
+
+// 밀고 다닐 수 있는 물리 소품(무게 kg).
+export const DYNAMIC = [
+  { m: 'pirate/barrel', cx: 5.6, cz: -0.25, mass: 9 },
+  { m: 'pirate/barrel', cx: 5.78, cz: -0.22, mass: 9 },
+  { m: 'pirate/barrel', cx: 5.7, cz: -0.08, mass: 9 },
+  { m: 'pirate/crate', cx: 6.2, cz: -0.3, mass: 6 },
+  { m: 'pirate/crate', cx: 6.36, cz: -0.3, mass: 6 },
+  { m: 'pirate/crate', cx: 6.28, cz: -0.3, mass: 6, y: 1.4 },
+  { m: 'pirate/crate-bottles', cx: 7.0, cz: 0.3, mass: 6 },
+  { m: 'pirate/crate', cx: 4.9, cz: -0.3, mass: 6 },
+  { m: 'cars/box', cx: 5.3, cz: 1.38, mass: 3 },
+  { m: 'cars/box', cx: 5.42, cz: 1.38, mass: 3 },
+  { m: 'cars/box', cx: 5.36, cz: 1.38, mass: 3, y: 1.2 },
+  { m: 'cars/cone', cx: 4.3, cz: 1.3, mass: 1.5 },
+  { m: 'cars/cone', cx: 4.6, cz: 1.3, mass: 1.5 },
+  { m: 'cars/cone', cx: 4.9, cz: 1.3, mass: 1.5 },
+  { m: 'cars/cone', cx: 10.9, cz: 3.75, mass: 1.5 },
+  { m: 'cars/cone', cx: 10.9, cz: 4.25, mass: 1.5 },
+  { m: 'cars/box', cx: 6.5, cz: 4.6, mass: 3 },
+  { m: 'pirate/barrel', cx: 9.3, cz: 0.2, mass: 9 },
+  { m: 'pirate/crate', cx: 6.02, cz: -2.2, mass: 6 },
+  { m: 'pirate/barrel', cx: 5.98, cz: -3.3, mass: 9 },
+];
+
+// 정박한 배. 파도에 맞춰 흔들린다.
+export const BOATS = [
+  { m: 'watercraft/boat-fishing-small', x: 66.0, z: -17, r: 0 },
+  { m: 'watercraft/boat-speed-a', x: 78.2, z: -24, r: 180 },
+  { m: 'watercraft/boat-sail-a', x: 65.8, z: -33, r: 5 },
+  { m: 'watercraft/boat-tug-a', x: 78.4, z: -38, r: 180 },
+  { m: 'watercraft/boat-row-small', x: 30, z: -11, r: 80 },
+  { m: 'watercraft/boat-sail-b', x: 118, z: -46, r: 120 },
+  { m: 'watercraft/ship-cargo-a', x: 20, z: -62, r: 100, s: 2.1 },
+  { m: 'watercraft/buoy', x: 96, z: -58, r: 0 },
+  { m: 'watercraft/buoy-flag', x: 48, z: -52, r: 0 },
+  { m: 'watercraft/boat-speed-a', x: 170, z: -70, r: 60 },
+];
+
+export const PIER = { x: 72, z0: -6, z1: -44, w: 5 };
+export const LIGHTHOUSE = { x: 156, z: -14 };
+export const SPAWN = { x: 60, z: 10, yaw: 2.6 };
+
+export function modelKeys() {
+  const keys = new Set();
+  for (const list of [BUILDINGS, PROPS, PARKED, DYNAMIC, BOATS]) for (const o of list) keys.add(o.m);
+  [
+    'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
+    'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
+    'suburban/tree-large', 'suburban/tree-small',
+    'nature/tree_blocks', 'nature/tree_blocks_dark', 'nature/tree_default', 'nature/tree_oak', 'nature/tree_fat',
+    'nature/tree_detailed', 'nature/tree_pineRoundA', 'nature/tree_pineTallA_detailed', 'nature/tree_simple',
+    'nature/tree_blocks_fall', 'nature/tree_plateau',
+    'nature/stone_largeA', 'nature/stone_largeB', 'nature/stone_largeD', 'nature/stone_largeF', 'nature/stone_tallA', 'nature/stone_tallC',
+    'nature/plant_bush', 'nature/plant_bushDetailed', 'nature/plant_bushLarge', 'nature/grass', 'nature/grass_large',
+    'nature/flower_redA', 'nature/flower_yellowA', 'nature/flower_purpleA',
+    'pirate/palm-detailed-bend', 'pirate/palm-detailed-straight', 'pirate/palm-straight', 'pirate/rocks-a', 'pirate/rocks-b', 'pirate/rocks-c',
+    'pirate/rocks-sand-a', 'pirate/rocks-sand-b',
+  ].forEach((k) => keys.add(k));
+  return [...keys];
+}

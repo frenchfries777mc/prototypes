@@ -1,0 +1,174 @@
+// 에셋 팩(GLB) 불러오기와 배치.
+// 모델 하나당 "틀" 메시 하나를 만들고, 같은 모델은 전부 인스턴싱으로 한 번에 그린다.
+const B = window.BABYLON;
+
+// 팩마다 단위가 달라서 미터 기준으로 맞추는 배율.
+// tex: 팩 공용 팔레트 텍스처(colormap.png)를 쓰는지, 아니면 재질 색을 정점 색으로 굽는지.
+export const KITS = {
+  roads: { scale: 12, tex: true },
+  commercial: { scale: 12, tex: true },
+  suburban: { scale: 12, tex: true },
+  industrial: { scale: 12, tex: true },
+  cars: { scale: 1.55, tex: true },
+  pirate: { scale: 1.0, tex: true },
+  watercraft: { scale: 1.7, tex: true },
+  nature: { scale: 6, tex: false },
+};
+
+// 바닥에 붙은 타일과 작은 풀은 그림자를 드리우지 않는다(그려야 할 양이 크게 준다).
+const NO_SHADOW = /roads\/(road-|tile-)|nature\/(grass|flower|plant)/;
+
+// 팩의 원래 색을 섬 분위기에 맞게 살짝 옮긴다: 청록에 가까운 잎은 풀색 쪽으로, 푸르스름한 돌은 따뜻한 회색으로.
+function tune(kit, name, c) {
+  if (kit !== 'nature') return c;
+  let { r, g, b } = c;
+  if (name.startsWith('stone') || name.startsWith('rock')) return new B.Color3(r * 0.74, g * 0.7, b * 0.68);
+  if (g > r * 1.15 && g > b * 1.05) return new B.Color3(Math.min(1, r * 1.9 + 0.06), g * 0.93, b * 0.5);
+  if (g > r * 1.3 && b > r * 1.3) return new B.Color3(r * 1.5 + 0.05, g * 0.8, b * 0.42); // 짙은 청록(침엽수) -> 짙은 초록
+  return c;
+}
+
+export class Assets {
+  constructor(scene, base = 'assets/') {
+    this.scene = scene;
+    this.base = base;
+    this.templates = new Map(); // "kit/name" -> 틀 메시
+    this.mats = {};
+    this.shadowCasters = [];
+    this.pending = new Map(); // 틀 -> 행렬 배열 (thin instance)
+  }
+
+  mat(kit) {
+    if (this.mats[kit]) return this.mats[kit];
+    const m = new B.StandardMaterial('kit_' + kit, this.scene);
+    m.specularColor = new B.Color3(0.03, 0.03, 0.03);
+    if (KITS[kit].tex) {
+      const t = new B.Texture(`${this.base}${kit}/Textures/colormap.png`, this.scene, false, false);
+      t.anisotropicFilteringLevel = 4;
+      m.diffuseTexture = t;
+    }
+    // 그늘진 면이 너무 죽지 않게 살짝 띄운다.
+    m.ambientColor = new B.Color3(1, 1, 1);
+    return (this.mats[kit] = m);
+  }
+
+  async load(keys, onProgress) {
+    const uniq = [...new Set(keys)].filter((k) => !this.templates.has(k));
+    let done = 0;
+    const queue = uniq.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const key = queue.shift();
+        try {
+          await this._loadOne(key);
+        } catch (e) {
+          console.error('에셋을 불러오지 못했습니다:', key, e.message || e);
+        }
+        done++;
+        if (onProgress) onProgress(done / uniq.length);
+      }
+    };
+    await Promise.all(Array.from({ length: 6 }, worker));
+  }
+
+  async _loadOne(key) {
+    const [kit, name] = key.split('/');
+    const cfg = KITS[kit];
+    const c = await B.SceneLoader.LoadAssetContainerAsync(`${this.base}${kit}/`, `${name}.glb`, this.scene);
+    const raw = c.meshes.filter((m) => m.getTotalVertices && m.getTotalVertices() > 0);
+    const S = B.Matrix.Scaling(cfg.scale, cfg.scale, cfg.scale);
+    // 1단계: 변환을 먼저 전부 구해 둔다. 같은 부품을 여러 번 쓰는 모델(인스턴스)은
+    // 부품마다 독립된 지오메트리로 풀어야 변환이 겹쳐 적용되지 않는다.
+    const temps = [];
+    const items = raw.map((m) => {
+      m.computeWorldMatrix(true);
+      const w = m.getWorldMatrix().multiply(S);
+      const src = m.sourceMesh || m;
+      const mesh = src.clone(m.name + '_part', null, true);
+      mesh.makeGeometryUnique();
+      mesh.material = src.material;
+      temps.push(mesh);
+      return { mesh, w };
+    });
+    const parts = [];
+    for (const { mesh: m, w } of items) {
+      if (!cfg.tex) {
+        // 재질 색 -> 정점 색. 팩 전체가 재질 하나를 공유하게 된다.
+        const col = (m.material && (m.material.albedoColor || m.material.diffuseColor)) || B.Color3.White();
+        const g = tune(kit, name, col);
+        const n = m.getTotalVertices();
+        const arr = new Float32Array(n * 4);
+        for (let i = 0; i < n; i++) arr.set([g.r, g.g, g.b, 1], i * 4);
+        m.setVerticesData(B.VertexBuffer.ColorKind, arr);
+      }
+      for (const kind of [B.VertexBuffer.TangentKind, B.VertexBuffer.UV2Kind]) {
+        if (m.isVerticesDataPresent(kind)) m.removeVerticesData(kind);
+      }
+      if (cfg.tex && m.isVerticesDataPresent(B.VertexBuffer.ColorKind)) m.removeVerticesData(B.VertexBuffer.ColorKind);
+      m.parent = null;
+      m.rotationQuaternion = null;
+      m.position.set(0, 0, 0);
+      m.rotation.set(0, 0, 0);
+      m.scaling.set(1, 1, 1);
+      m.bakeTransformIntoVertices(w);
+      m.material = null;
+      parts.push(m);
+    }
+    const merged = B.Mesh.MergeMeshes(parts, false, true, undefined, false, false); // 새 지오메트리를 만들어 컨테이너와 분리한다
+    merged.name = key;
+    merged.material = this.mat(kit);
+    merged.useVertexColors = !cfg.tex;
+    merged.isPickable = false;
+    merged.receiveShadows = true;
+    merged.setEnabled(false);
+    merged.refreshBoundingInfo();
+    temps.forEach((t) => t.dispose());
+    c.dispose();
+    this.templates.set(key, merged);
+  }
+
+  tpl(key) {
+    const t = this.templates.get(key);
+    if (!t) throw new Error('불러오지 않은 에셋: ' + key);
+    return t;
+  }
+
+  // 모델의 크기(배율 적용 후). 충돌 상자를 만들 때 쓴다.
+  bounds(key) {
+    const bb = this.tpl(key).getBoundingInfo().boundingBox;
+    return { min: bb.minimum.clone(), max: bb.maximum.clone() };
+  }
+
+  // 고정 배치. 실제 그리기는 flush()에서 모델별로 한꺼번에 등록된다.
+  place(key, x, y, z, rotY = 0, scale = 1) {
+    const t = this.tpl(key);
+    const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
+    const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));
+    if (!this.pending.has(t)) this.pending.set(t, []);
+    this.pending.get(t).push(m);
+    return m;
+  }
+
+  flush() {
+    for (const [t, mats] of this.pending) {
+      const buf = new Float32Array(mats.length * 16);
+      mats.forEach((m, i) => m.copyToArray(buf, i * 16));
+      t.setEnabled(true);
+      t.thinInstanceSetBuffer('matrix', buf, 16, true);
+      t.thinInstanceRefreshBoundingInfo(false);
+      t.alwaysSelectAsActiveMesh = true;
+      t.freezeWorldMatrix();
+      if (!NO_SHADOW.test(t.name)) this.shadowCasters.push(t);
+    }
+    this.pending.clear();
+  }
+
+  // 움직이는 물체용: 틀을 복제한 독립 메시를 돌려준다(지오메트리는 공유).
+  spawn(key, name) {
+    const t = this.tpl(key);
+    const m = t.clone(name || key + '_obj');
+    m.setEnabled(true);
+    this.shadowCasters.push(m);
+    return m;
+  }
+}
