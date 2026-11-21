@@ -12,6 +12,8 @@ export class Input {
     this.jumpQueued = false;
     this.useQueued = false;
     this.touchUse = false;
+    this.driving = false;
+    this.wheel = 0; this.gas = 0; this.pedalBrake = 0;
     this.jumpHeld = false;
     this.touchRun = false;
     this.locked = false;
@@ -43,7 +45,7 @@ export class Input {
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       for (const t of e.changedTouches) {
-        if (t.clientX < innerWidth * 0.45 && moveId === null) {
+        if (!this.driving && t.clientX < innerWidth * 0.45 && moveId === null) {
           moveId = t.identifier; ox = t.clientX; oy = t.clientY;
           pad.style.display = 'block'; pad.style.left = ox - 70 + 'px'; pad.style.top = oy - 70 + 'px';
           knob.style.transform = 'translate(0px,0px)';
@@ -83,6 +85,64 @@ export class Input {
       use.addEventListener('touchcancel', () => { this.touchUse = false; });
     }
     if (run) run.addEventListener('touchstart', (e) => { e.preventDefault(); this.touchRun = !this.touchRun; run.classList.toggle('on', this.touchRun); }, { passive: false });
+    this.releaseStick = () => { moveId = null; this.stick.x = this.stick.y = 0; pad.style.display = 'none'; };
+
+    // ----- 운전용 터치 조작: 왼쪽 운전대, 오른쪽 엑셀과 브레이크 -----
+    const wheel = document.getElementById('wheel'), rim = document.getElementById('wheelRim');
+    const MAX = 2.1; // 운전대를 끝까지 돌린 각도(약 120도)
+    let wid = null, last = 0, ang = 0;
+    const angleAt = (t) => { const r = wheel.getBoundingClientRect(); return Math.atan2(t.clientX - (r.left + r.width / 2), -(t.clientY - (r.top + r.height / 2))); };
+    const setWheel = (a) => { ang = a; this.wheel = a / MAX; rim.style.transform = `rotate(${a}rad)`; };
+    wheel.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (wid !== null) return;
+      const t = e.changedTouches[0];
+      wid = t.identifier; last = angleAt(t); rim.classList.add('hold');
+    }, { passive: false });
+    wheel.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier !== wid) continue;
+        // 손가락이 운전대 중심 둘레로 돈 만큼 운전대가 돈다.
+        const a = angleAt(t);
+        let d = a - last;
+        if (d > Math.PI) d -= Math.PI * 2;
+        if (d < -Math.PI) d += Math.PI * 2;
+        last = a;
+        setWheel(clamp(ang + d, -MAX, MAX));
+      }
+    }, { passive: false });
+    const wheelEnd = (e) => { for (const t of e.changedTouches) if (t.identifier === wid) { wid = null; rim.classList.remove('hold'); setWheel(0); } }; // 놓으면 가운데로 돌아온다
+    wheel.addEventListener('touchend', wheelEnd);
+    wheel.addEventListener('touchcancel', wheelEnd);
+    this.releaseWheel = () => { wid = null; rim.classList.remove('hold'); setWheel(0); };
+    const pedal = (id, prop) => {
+      const el = document.getElementById(id);
+      const set = (v) => (e) => { if (v) e.preventDefault(); this[prop] = v; el.classList.toggle('on', !!v); };
+      el.addEventListener('touchstart', set(1), { passive: false });
+      el.addEventListener('touchend', set(0));
+      el.addEventListener('touchcancel', set(0));
+    };
+    pedal('btnGas', 'gas');
+    pedal('btnBrake', 'pedalBrake');
+    // 터치가 한 번이라도 들어오면 터치 조작 화면으로 바꾼다(터치 되는 노트북·태블릿 대응).
+    addEventListener('touchstart', () => { this.isTouch = true; document.body.classList.add('touch'); }, { once: true, passive: true });
+  }
+
+  // 차에 타고 내릴 때 조작 화면을 바꾼다.
+  setDriving(on) {
+    this.driving = on;
+    document.body.classList.toggle('driving', on);
+    this.releaseStick(); this.releaseWheel();
+    this.gas = this.pedalBrake = 0;
+    for (const id of ['btnGas', 'btnBrake']) document.getElementById(id).classList.remove('on');
+  }
+  // 운전 입력: 키보드와 화면 조작을 합친다. throttle +1 가속, -1 브레이크·후진.
+  drive() {
+    const k = this.keys;
+    const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + this.wheel;
+    const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.gas - this.pedalBrake;
+    return { throttle: clamp(y, -1, 1), steer: clamp(x, -1, 1), handbrake: this.brake };
   }
 
   move() {
@@ -138,12 +198,12 @@ export class Player {
   // 물리 스텝 직전: 자동차에 힘을 준다.
   fixed() {
     const dt = clamp(this.scene.getEngine().getDeltaTime() / 1000, 0.001, 0.05);
-    const mv = this.input.move();
-    this.garage.fixedUpdate(dt, this.vehicle, { throttle: mv.y, steer: mv.x, handbrake: this.input.brake });
+    this.garage.fixedUpdate(dt, this.vehicle, this.input.drive());
   }
 
   enter(car) {
     this.vehicle = car;
+    this.input.setDriving(true);
     this.chr.setVisible(false);
     this.cc.setPosition(new B.Vector3(car.pos.x, car.pos.y + 400, car.pos.z)); // 캐릭터 충돌체는 멀리 치워 둔다
     this.cc.setVelocity(B.Vector3.Zero());
@@ -172,6 +232,7 @@ export class Player {
     }
     if (!out) out = car.pos.add(new B.Vector3(0, car.height + 0.6, 0));
     this.vehicle = null;
+    this.input.setDriving(false);
     this.cc.setPosition(new B.Vector3(out.x, out.y + 0.4, out.z));
     this.cc.setVelocity(B.Vector3.Zero());
     this.vel.set(0, 0, 0);
