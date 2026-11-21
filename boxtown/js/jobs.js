@@ -274,7 +274,7 @@ function taxiJob(J, site) {
 
 // ---------- 소방관 ----------
 let sparkTex = null;
-function spark(scene) {
+export function spark(scene) {
   if (sparkTex) return sparkTex;
   sparkTex = new B.DynamicTexture('spark', { width: 64, height: 64 }, scene, false);
   const c = sparkTex.getContext(), g = c.createRadialGradient(32, 32, 2, 32, 32, 30);
