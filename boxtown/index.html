@@ -36,6 +36,17 @@
   <button id="btnRun" class="pad" aria-label="달리기">달리기</button>
   <button id="btnJump" class="pad" aria-label="점프">점프</button>
   <button id="btnUse" class="pad" style="visibility:hidden">타기</button>
+  <div id="wheel" aria-label="운전대">
+    <svg id="wheelRim" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(22,34,58,.55)" stroke-width="15"/>
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#f4f1ea" stroke-width="10"/>
+      <path d="M50 50 L50 88 M50 50 L12 42 M50 50 L88 42" stroke="#f4f1ea" stroke-width="9" stroke-linecap="round"/>
+      <circle cx="50" cy="50" r="13" fill="#f2644b" stroke="#f4f1ea" stroke-width="4"/>
+      <rect x="46" y="3" width="8" height="11" rx="2" fill="#f2644b"/>
+    </svg>
+  </div>
+  <button id="btnBrake" class="pedal" aria-label="브레이크">브레이크<small>후진</small></button>
+  <button id="btnGas" class="pedal" aria-label="엑셀">엑셀</button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/babylonjs@9.37.1/babylon.js"></script>
