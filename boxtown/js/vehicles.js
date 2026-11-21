@@ -1,7 +1,7 @@
 // 운전할 수 있는 자동차. 차체는 Havok 강체 하나이고, 바퀴는 강체가 아니라
 // 아래로 쏜 광선 네 개로 서스펜션·접지력·구동력을 계산한다(레이캐스트 차량).
 import { clamp, damp } from './util.js';
-import { SEA } from './terrain.js';
+import { SEA, WORLD } from './terrain.js';
 const B = window.BABYLON;
 
 export const CAR_MASK = 4; // 차체 충돌 그룹. 바퀴 광선과 카메라 광선이 자기 차를 무시하는 데 쓴다.
@@ -61,6 +61,7 @@ export class Vehicle {
     this.steer = 0;
     this.speed = 0; // 앞쪽 방향 속도(m/s)
     this.flipT = 0;
+    this.safeT = 0; this.safe = null;
     this.driven = false;
     this.restore = 0;
     this.up = new B.Vector3(0, 1, 0); this.fwd = new B.Vector3(0, 0, 1); this.right = new B.Vector3(1, 0, 0);
@@ -135,7 +136,10 @@ export class Vehicle {
     // 뒤집히면 잠시 뒤 바로 세운다.
     this.flipT = this.up.y < 0.25 ? this.flipT + dt : 0;
     if (this.flipT > 1.6) { this.reset(p.x, p.y + 1.2, p.z, this.yaw); this.flipT = 0; }
-    if (p.y < SEA - 2.5) this.reset(this.home.pos.x, this.home.pos.y + 0.5, this.home.pos.z, null); // 바다에 빠지면 제자리로
+    // 바다에 빠지면 마지막으로 멀쩡히 서 있던 곳으로 돌아간다.
+    this.safeT += dt;
+    if (this.safeT > 1 && grounded >= 3 && this.up.y > 0.85 && p.y > SEA + 0.9) { this.safeT = 0; this.safe = { x: p.x, y: p.y, z: p.z, yaw: this.yaw }; }
+    if (p.y < SEA - 2.5) { const f = this.safe; if (f) this.reset(f.x, f.y + 0.6, f.z, f.yaw); else this.reset(this.home.pos.x, this.home.pos.y + 0.5, this.home.pos.z, null); }
   }
 
   reset(x, y, z, yaw) {
@@ -156,10 +160,90 @@ export class Vehicle {
   }
 }
 
-export class Garage {
-  constructor(scene, assets, list, cell, roadY) {
-    this.cars = list.map((p) => new Vehicle(scene, assets, p.m, p.cx * cell, roadY, p.cz * cell, ((p.r || 0) * Math.PI) / 180));
+// 배: 차와 같은 방식으로 타고 내린다. 네 귀퉁이의 부력으로 물에 뜨고, 뒤에서 미는 힘과 물의 저항으로 움직인다.
+const BOAT_SPECS = { default: { mass: 600, thrust: 12.5, vmax: 19 }, 'watercraft/boat-tug-a': { mass: 900, thrust: 6, vmax: 11 } };
+export class Boat {
+  constructor(scene, assets, key, x, z, yaw) {
+    this.scene = scene; this.key = key; this.isBoat = true;
+    this.spec = BOAT_SPECS[key] || BOAT_SPECS.default;
+    const mesh = assets.spawn(key);
+    const bb = assets.bounds(key);
+    this.root = new B.TransformNode('boat_' + key, scene);
+    this.root.position.set(x, SEA - 0.3, z);
+    this.root.rotationQuaternion = B.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
+    this.home = { pos: this.root.position.clone(), rot: this.root.rotationQuaternion.clone() };
+    mesh.parent = this.root;
+    this.width = bb.max.x - bb.min.x; this.length = bb.max.z - bb.min.z; this.height = 1.1; this.zc = (bb.max.z + bb.min.z) / 2;
+    const shape = new B.PhysicsShapeBox(new B.Vector3(0, 0.55, this.zc), B.Quaternion.Identity(), new B.Vector3(this.width * 0.9, 1.1, this.length * 0.95), scene);
+    shape.filterMembershipMask = CAR_MASK;
+    shape.material = { friction: 0.04, restitution: 0.1 };
+    this.body = new B.PhysicsBody(this.root, B.PhysicsMotionType.DYNAMIC, false, scene);
+    this.body.shape = shape;
+    this.com = new B.Vector3(0, 0.15, this.zc);
+    this.body.setMassProperties({ mass: this.spec.mass, centerOfMass: this.com });
+    this.body.setLinearDamping(0.12); this.body.setAngularDamping(2.6);
+    this.corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => new B.Vector3(a * this.width * 0.38, 0, this.zc + b * this.length * 0.4));
+    this.up = new B.Vector3(0, 1, 0); this.fwd = new B.Vector3(0, 0, 1); this.right = new B.Vector3(1, 0, 0);
+    this.speed = 0; this.steer = 0; this.flipT = 0; this.restore = 0; this.t = x * 0.37; this.wheels = [];
   }
+  get pos() { return this.root.position; }
+  get yaw() { return Math.atan2(this.fwd.x, this.fwd.z); }
+  fixedUpdate(dt, input) {
+    const body = this.body, q = this.root.rotationQuaternion, p = this.root.position, M = this.spec.mass;
+    if (this.restore > 0 && --this.restore === 0) body.disablePreStep = true;
+    B.Vector3.Up().rotateByQuaternionToRef(q, this.up);
+    B.Vector3.Forward().rotateByQuaternionToRef(q, this.fwd);
+    B.Vector3.Right().rotateByQuaternionToRef(q, this.right);
+    const v = body.getLinearVelocity(), w = body.getAngularVelocity();
+    const comW = this.com.rotateByQuaternionToRef(q, new B.Vector3()).addInPlace(p);
+    this.t += dt;
+    const level = SEA + 0.05 + Math.sin(this.t * 1.1) * 0.05; // 잔잔한 너울
+    let wet = 0;
+    for (const c of this.corners) {
+      const pt = c.rotateByQuaternionToRef(q, new B.Vector3()).addInPlace(p);
+      const depth = level - pt.y;
+      if (depth <= 0) continue;
+      wet++;
+      const vy = v.y + B.Vector3.Cross(w, pt.subtract(comW)).y;
+      const F = clamp((M * G / 4) * (depth / 0.35) - vy * M * 1.6, 0, M * G);
+      body.applyImpulse(new B.Vector3(0, F * dt, 0), pt);
+    }
+    const flatF = new B.Vector3(this.fwd.x, 0, this.fwd.z).normalize(), flatR = new B.Vector3(this.right.x, 0, this.right.z).normalize();
+    const vf = B.Vector3.Dot(v, flatF), vs = B.Vector3.Dot(v, flatR);
+    this.speed = vf;
+    const afloat = wet >= 2;
+    let imp = flatR.scale(-vs * M * (afloat ? 3.2 : 0.5) * dt).add(flatF.scale(-vf * M * (afloat ? 0.3 : 0.1) * dt));
+    let yawRate = 0;
+    if (input) {
+      const th = input.throttle, top = th >= 0 ? this.spec.vmax : 6;
+      imp = imp.add(flatF.scale(th * this.spec.thrust * (afloat ? 1 : 0.6) * M * Math.max(0, 1 - Math.pow(Math.abs(vf) / top, 2)) * dt));
+      this.steer = damp(this.steer, input.steer, 6, dt);
+      yawRate = this.steer * 1.0 * clamp(vf / 5, -1, 1) + this.steer * 0.25 * Math.abs(th);
+    } else this.steer = damp(this.steer, 0, 6, dt);
+    body.applyImpulse(imp, comW);
+    body.setAngularVelocity(new B.Vector3(w.x, damp(w.y, yawRate, 5, dt), w.z));
+    this.flipT = this.up.y < 0.2 ? this.flipT + dt : 0;
+    if (this.flipT > 1.5) { this.reset(p.x, SEA + 0.4, p.z, this.yaw); this.flipT = 0; }
+    if (p.y < SEA - 4 || p.x < WORLD.x0 + 20 || p.x > WORLD.x1 - 20 || p.z < WORLD.z0 + 20 || p.z > WORLD.z1 - 20) this.reset(this.home.pos.x, SEA + 0.3, this.home.pos.z, null);
+  }
+  reset(x, y, z, yaw) {
+    this.body.disablePreStep = false;
+    this.root.position.set(x, y, z);
+    this.root.rotationQuaternion.copyFrom(yaw === null ? this.home.rot : B.Quaternion.RotationYawPitchRoll(yaw, 0, 0));
+    this.body.setLinearVelocity(B.Vector3.Zero()); this.body.setAngularVelocity(B.Vector3.Zero());
+    this.restore = 2;
+  }
+  frame() {}
+}
+
+export class Garage {
+  constructor(scene, assets, list, cell, roadY, heightFn) {
+    // 마을 안은 칸 좌표(cx, cz), 마을 밖은 월드 좌표(x, z)로 적혀 있다.
+    this.cars = list.map((p) => (p.x === undefined
+      ? new Vehicle(scene, assets, p.m, p.cx * cell, roadY, p.cz * cell, ((p.r || 0) * Math.PI) / 180)
+      : new Vehicle(scene, assets, p.m, p.x, heightFn(p.x, p.z) + 0.3, p.z, ((p.r || 0) * Math.PI) / 180)));
+  }
+  addBoats(scene, assets, spots) { for (const b of spots) this.cars.push(new Boat(scene, assets, b.m || 'watercraft/boat-speed-a', b.x, b.z, b.yaw)); }
   fixedUpdate(dt, driven, input) { for (const c of this.cars) c.fixedUpdate(dt, c === driven ? input : null); }
   frame() { for (const c of this.cars) c.frame(); }
   nearest(pos, maxDist) {

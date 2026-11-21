@@ -122,7 +122,7 @@ export class Player {
     this.feet = new B.Vector3(spawn.x, spawn.y, spawn.z);
 
     this.cam = new B.FreeCamera('cam', new B.Vector3(spawn.x, spawn.y + 6, spawn.z - 10), scene);
-    this.cam.fov = 0.95; this.cam.minZ = 0.25; this.cam.maxZ = 3000;
+    this.cam.fov = 0.95; this.cam.minZ = 0.3; this.cam.maxZ = 4500;
     this.cam.inputs.clear();
     this.yaw = spawn.yaw || 0; this.pitch = 0.3; this.dist = 6.8; this.curDist = 6.8;
     this.target = new B.Vector3(spawn.x, spawn.y + 1.5, spawn.z);
@@ -158,6 +158,17 @@ export class Player {
       const p = car.pos.add(car.right.scale(side * (car.width / 2 + 0.95))).addInPlaceFromFloats(0, 0.9, 0);
       phys.raycastToRef(car.pos.add(new B.Vector3(0, 0.9, 0)), p, this.ray, { collideWith: ~CAR_MASK });
       if (!this.ray.hasHit) { out = p; break; }
+    }
+    if (car.isBoat) {
+      // 배에서는 가까운 땅이나 잔교를 찾아 내린다. 없으면 갑판 위에 선다.
+      out = null;
+      for (let rad = 2.5; rad <= 8.5 && !out; rad += 1.5) {
+        for (let k = 0; k < 12 && !out; k++) {
+          const x = car.pos.x + Math.sin(k * 0.5236) * rad, z = car.pos.z + Math.cos(k * 0.5236) * rad;
+          phys.raycastToRef(new B.Vector3(x, car.pos.y + 4, z), new B.Vector3(x, car.pos.y - 3, z), this.ray, { collideWith: ~CAR_MASK });
+          if (this.ray.hasHit && this.ray.hitPointWorld.y > SEA + 0.3) out = new B.Vector3(x, this.ray.hitPointWorld.y + 0.9, z);
+        }
+      }
     }
     if (!out) out = car.pos.add(new B.Vector3(0, car.height + 0.6, 0));
     this.vehicle = null;
@@ -222,7 +233,10 @@ export class Player {
     this.wishHeading = mag > 0.1 ? Math.atan2(wx, wz) : null;
 
     const p = cc.getPosition();
-    if (p.y < SEA - 2.2) this.respawn(); // 물에 빠지면 출발 지점으로
+    // 물에 빠지면 마지막으로 땅을 딛고 있던 곳으로 돌아간다.
+    this.safeT = (this.safeT || 0) + dt;
+    if (this.safeT > 0.7 && this.grounded && p.y > SEA + 1.6) { this.safeT = 0; this.spawn = { x: p.x, y: p.y - CAP_H / 2, z: p.z, yaw: this.yaw }; }
+    if (p.y < SEA - 2.2) this.respawn();
     this.feet.set(p.x, p.y - CAP_H / 2 - FOOT_PAD, p.z);
     this.chr.update(dt, { pos: this.feet, vel: cc.getVelocity(), grounded: this.grounded || this.airT < 0.1, wishHeading: this.wishHeading, landed: this.landed, jumped: this.jumped });
   }
