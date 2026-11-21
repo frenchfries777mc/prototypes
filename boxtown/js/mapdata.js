@@ -8,10 +8,10 @@ const ROWS_NORTH_FIRST = [
   '............', // 8  주택가
   '.##########.', // 7  뒷길
   '.#ppp#ggpp#.', // 6
-  '.#ppp#ggpp#.', // 5
+  '.#pppxggpp#.', // 5
   '.##x##x##x##', // 4  중앙로
   '.#ppp#pppp#.', // 3
-  '.#ppp#pppp#.', // 2
+  '.#pppxpppp#.', // 2
   '.##x##x####.', // 1  해안로
   '.qqqqqqqqqq.', // 0  부두
 ];
@@ -21,9 +21,7 @@ export const GRID = ROWS_NORTH_FIRST.slice().reverse(); // GRID[cz][cx]
 export const BUILDINGS = [
   // A 블록: 해안로와 중앙로 사이 서쪽
   { m: 'commercial/building-a', cx: 2.0, cz: 2.02, f: 'S' },
-  { m: 'commercial/building-e', cx: 3.45, cz: 2.0, f: 'S' },
   { m: 'commercial/building-c', cx: 2.0, cz: 2.98, f: 'N' },
-  { m: 'commercial/building-k', cx: 3.45, cz: 3.02, f: 'N' },
   // B 블록: 도심. 높은 건물이 스카이라인을 만든다.
   { m: 'commercial/building-skyscraper-b', cx: 6.3, cz: 2.5, f: 'S' },
   { m: 'commercial/building-n', cx: 8.15, cz: 2.5, f: 'S' },
@@ -35,8 +33,6 @@ export const BUILDINGS = [
   { m: 'commercial/building-h', cx: 3.95, cz: 6.25, f: 'N' },
   // D 블록: 공원 옆 고층
   { m: 'commercial/building-skyscraper-d', cx: 8.05, cz: 5.5, f: 'S' },
-  { m: 'commercial/building-f', cx: 9.08, cz: 5.0, f: 'S' },
-  { m: 'commercial/building-a', cx: 9.08, cz: 6.02, f: 'N' },
   // 뒷길 북쪽 주택가
   { m: 'suburban/building-type-a', cx: 1.2, cz: 8.05, f: 'S' },
   { m: 'suburban/building-type-d', cx: 2.85, cz: 8.05, f: 'S' },
@@ -55,6 +51,15 @@ export const BUILDINGS = [
   { m: 'industrial/building-k', cx: 9.9, cz: 0.02, f: 'N' },
 ];
 
+// 직업 건물(js/jobsites.js에서 상자로 짓는다). 가게 앞 표시에서 E로 일을 시작한다.
+export const JOB_SITES = [
+  { id: 'pizza', cx: 3.45, cz: 2.0, f: 'S' },
+  { id: 'fire', cx: 3.4, cz: 3.05, f: 'N', pad: 1.0 },
+  { id: 'taxi', cx: 9.1, cz: 5.02, f: 'S' },
+  { id: 'clean', cx: 9.1, cz: 6.0, f: 'N' },
+  { id: 'fish', cx: 6.95, cz: -0.1, f: 'N' },
+];
+
 // 고정 소품. r은 도(°), s는 배율.
 export const PROPS = [
   // 부두: 컨테이너 더미
@@ -71,7 +76,6 @@ export const PROPS = [
   { m: 'roads/dumpster', cx: 9.1, cz: 0.3, r: 90 },
   // 부두 파라솔 노점
   { m: 'commercial/detail-parasol-a', cx: 6.55, cz: 0.2, r: 0 },
-  { m: 'commercial/detail-parasol-b', cx: 6.85, cz: -0.05, r: 40 },
   // 공원(cx 6..7, cz 5..6)
   { m: 'commercial/detail-parasol-a', cx: 6.2, cz: 5.2, r: 15 },
   { m: 'commercial/detail-parasol-b', cx: 7.2, cz: 6.25, r: 70 },
@@ -90,18 +94,20 @@ export const PROPS = [
   { m: 'roads/construction-light', cx: 11.3, cz: 4.0, r: 0 },
 ];
 
-// 길가에 세워 둔 차. r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
+// 길가에 세워 둔 차(전부 탈 수 있다). r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
 export const PARKED = [
-  { m: 'cars/taxi', cx: 2.4, cz: 1.27, r: -90 },
+  { m: 'cars/taxi', cx: 8.45, cz: 4.27, r: -90 },
+  { m: 'cars/taxi', cx: 9.3, cz: 4.27, r: -90 },
+  { m: 'cars/garbage-truck', cx: 9.2, cz: 6.73, r: 90 },
   { m: 'cars/delivery', cx: 3.6, cz: 0.73, r: 90 },
-  { m: 'cars/sedan', cx: 7.3, cz: 4.27, r: -90 },
+  { m: 'cars/sedan', cx: 2.4, cz: 1.27, r: -90 },
   { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.73, r: 90 },
-  { m: 'cars/suv', cx: 4.73, cz: 5.6, r: 180 },
+  { m: 'cars/suv', cx: 4.73, cz: 6.2, r: 180 },
   { m: 'cars/van', cx: 1.27, cz: 2.5, r: 0 },
   { m: 'cars/police', cx: 6.6, cz: 7.27, r: -90 },
   { m: 'cars/truck', cx: 9.73, cz: 5.4, r: 0 },
   { m: 'cars/sedan-sports', cx: 3.2, cz: 6.73, r: 90 },
-  { m: 'cars/firetruck', cx: 5.27, cz: 2.3, r: 180 },
+  { m: 'cars/firetruck', cx: 3.3, cz: 3.73, r: 90 },
 ];
 
 // 밀고 다닐 수 있는 물리 소품(무게 kg).
@@ -112,7 +118,7 @@ export const DYNAMIC = [
   { m: 'pirate/crate', cx: 6.2, cz: -0.3, mass: 6 },
   { m: 'pirate/crate', cx: 6.36, cz: -0.3, mass: 6 },
   { m: 'pirate/crate', cx: 6.28, cz: -0.3, mass: 6, y: 1.4 },
-  { m: 'pirate/crate-bottles', cx: 7.0, cz: 0.3, mass: 6 },
+  { m: 'pirate/crate-bottles', cx: 7.6, cz: -0.3, mass: 6 },
   { m: 'pirate/crate', cx: 4.9, cz: -0.3, mass: 6 },
   { m: 'cars/box', cx: 5.3, cz: 1.38, mass: 3 },
   { m: 'cars/box', cx: 5.42, cz: 1.38, mass: 3 },
@@ -148,7 +154,7 @@ export const SPAWN = { x: 60, z: 10, yaw: 2.6 };
 
 export function modelKeys() {
   const keys = new Set();
-  for (const list of [BUILDINGS, PROPS, PARKED, DYNAMIC, BOATS]) for (const o of list) keys.add(o.m);
+  for (const list of [BUILDINGS, PROPS, DYNAMIC, BOATS]) for (const o of list) keys.add(o.m);
   [
     'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
     'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
@@ -164,3 +170,5 @@ export function modelKeys() {
   ].forEach((k) => keys.add(k));
   return [...keys];
 }
+
+export const carKeys = () => [...new Set(PARKED.map((p) => p.m))];
