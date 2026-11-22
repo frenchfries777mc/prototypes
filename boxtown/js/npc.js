@@ -90,7 +90,8 @@ export class Residents {
     if (n.hp <= 0) { this.launch(n, dx / l, dz / l); return true; }
     // 아직 버틸 만하면 뒤로 밀리고 달아난다.
     n.pos.x += (dx / l) * 0.3; n.pos.z += (dz / l) * 0.3;
-    if (n.mode !== 'fly' && n.mode !== 'down') { n.mode = 'flee'; n.t = 3.8; n.stagger = 0.75; }
+    // 불량배와 경찰관은 달아나지 않고 덤빈다.
+    if (n.mode !== 'fly' && n.mode !== 'down') { n.mode = n.kind === 'citizen' ? 'flee' : 'fight'; n.t = n.kind === 'citizen' ? 3.8 : 14; n.stagger = 0.75; }
     return false;
   }
   launch(n, dx = 0, dz = 0) {
@@ -136,6 +137,7 @@ export class Residents {
           if (Math.abs(lx) > c.width / 2 + 0.38 || Math.abs(lz) > c.length / 2 + 0.38) continue;
           const cv = c.body.getLinearVelocity(), sp = Math.hypot(cv.x, cv.z);
           if (sp > 3) {
+            if (this.onCarHit) this.onCarHit(c, n);
             // 날아간다
             n.back = n.mode === 'stand' ? 'stand' : 'walk';
             n.mode = 'fly';
@@ -176,6 +178,18 @@ export class Residents {
           chr.root.scaling.setAll(1); chr.setVisible(true); chr.sSquash.v += 4; // 뿅 하고 돌아온다
           n.mode = n.home ? 'stand' : 'walk';
         }
+      } else if (n.mode === 'fight') {
+        // 쫓아와서 주먹을 날린다.
+        n.t -= dt;
+        if (n.stagger > 0) n.stagger -= dt;
+        n.hitT = (n.hitT || 0) - dt;
+        const d = pd0 || 1, sp = n.stagger > 0 || d < 1.4 ? 0 : 5.6;
+        n.vel.set((pdx0 / d) * sp, 0, (pdz0 / d) * sp);
+        const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
+        if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; }
+        wish = Math.atan2(pdx0, pdz0);
+        if (player.active && d < 1.9 && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2) { n.hitT = 0.95; chr.swing = 1; chr.swingTime = 0.3; if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
+        if (n.t <= 0 || d > 45 || !player.active || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
       } else if (n.mode === 'flee') {
         // 놀라서 플레이어 반대쪽으로 달아난다.
         n.t -= dt;
@@ -269,7 +283,9 @@ export class Residents {
       n.bumped = Math.max(0, (n.bumped || 0) - dt);
 
       // 가까이 오면 고개를 돌려 보고 손을 흔든다
-      if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee') {
+      // 수배 중이면 근처 경찰관이 달려든다.
+      if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
+      if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
         chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
       } else chr.wave = damp(chr.wave, 0, 8, dt);

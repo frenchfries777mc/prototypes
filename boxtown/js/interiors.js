@@ -62,7 +62,20 @@ const ROOMS = {
     ['#c79a5b', 0.16, 1.0, 0.16, -4.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, -4.6, -1], ['#2a2c36', 0.5, 0.2, 0.16, -1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, -1.6, -1],
     ['#2a2c36', 0.9, 0.22, 0.18, 1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 1.6, -1], ['#55693f', 1.3, 0.3, 0.3, 4.6, -1, 0.9, 0], ['#d9473c', 0.3, 0.22, 0.22, 5.3, -1, 0.94, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 4.6, -1],
     ['#2a2c36', 0.5, 0.2, 0.1, -3, 4.4, 1.6, 0], ['#2a2c36', 0.9, 0.2, 0.1, 0, 4.4, 1.9, 0], ['#55693f', 1.3, 0.3, 0.1, 3, 4.4, 1.5, 0]],
-    buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6]] },
+    buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6], ['rifle', 9500, 0, 4.2]] },
+  hospital: { name: '병원', w: 16, d: 12, floor: '#e8f1f4', wall: '#f7fbfc', clerk: [-4.5, -2.4, 0], items: [
+    ['#f4f1ea', 4, 1.1, 1.1, -4.5, -1.2], ['#d9473c', 0.9, 0.3, 0.06, -4.5, -1.78, 0.5, 0], ['#d9473c', 0.3, 0.9, 0.06, -4.5, -1.78, 0.2, 0],
+    ['#8f95a8', 2.2, 0.5, 3.6, -6.2, 3.6], ['#f4f1ea', 2, 0.3, 3.4, -6.2, 3.6, 0.5, 0], ['#6fb6d9', 2.04, 0.32, 2, -6.2, 3.1, 0.52, 0],
+    ['#8f95a8', 2.2, 0.5, 3.6, -2.6, 3.6], ['#f4f1ea', 2, 0.3, 3.4, -2.6, 3.6, 0.5, 0], ['#6fb6d9', 2.04, 0.32, 2, -2.6, 3.1, 0.52, 0], ['#bfe6c4', 0.1, 2.4, 3.8, -4.4, 3.6],
+    ['#f4f1ea', 5.4, 2.4, 0.7, 4.6, 5.5], ['*#e5553f', 1.1, 0.9, 0.9, 2.8, 4.4, 0.9], ['*#4f9bea', 1.1, 0.9, 0.9, 4.6, 4.4, 0.9], ['*#57c27a', 1.1, 0.9, 0.9, 6.4, 4.4, 0.9],
+    ['#b9bfd0', 1.2, 0.9, 1, 2.8, 4.4], ['#b9bfd0', 1.2, 0.9, 1, 4.6, 4.4], ['#b9bfd0', 1.2, 0.9, 1, 6.4, 4.4],
+    ['*#57c27a', 1.8, 0.05, 1.8, 5.6, -2.6, 0, 0], ['#f4f1ea', 0.5, 1.8, 0.5, 7, -3.4], ['*#57c27a', 0.3, 0.3, 0.3, 7, -3.4, 1.8, 0], ['#4f6fb0', 3.2, 0.6, 1, 1, -4.6], ['#3fa868', 0.6, 1.5, 0.6, 7.2, 1]] },
+  jail: { name: '경찰서', w: 16, d: 11, floor: '#9aa1b3', wall: '#c9cede', clerk: [-5, -2.6, 0], items: [
+    ['#34456f', 4, 1.1, 1.1, -5, -1.4], ['*#ffd84a', 0.5, 0.3, 0.06, -5, -1.98, 0.5, 0],
+    ...[-1, 0, 1, 2, 3, 4, 5, 6, 7].map((i) => ['#3a3d4d', 0.14, 4.4, 0.14, 0.5 + i * 0.85, 1.2, 0, 0]), ['#3a3d4d', 7.4, 0.16, 0.16, 3.6, 1.2, 4.3, 0], ['#3a3d4d', 7.4, 0.16, 0.16, 3.6, 1.2, 0.2, 0],
+    ['#8f95a8', 3, 0.5, 1, 5.6, 4.6], ['#f4f1ea', 2.8, 0.2, 0.9, 5.6, 4.6, 0.5, 0], ['#8f95a8', 0.7, 0.6, 0.7, 1.2, 4.6],
+    ['#6b7a99', 1.4, 0.9, 1.2, 4.5, -3], ['#6b7a99', 1, 0.7, 1, 5.7, -3.2], ['#3a3d4d', 0.12, 1.3, 0.12, 3.4, -2.6], ['#8f95a8', 0.5, 0.2, 0.2, 3.4, -2.6, 1.3, 0],
+    ['*#ffd84a', 1.6, 0.05, 1.6, -1.6, -3.2, 0, 0], ['*#f28b3c', 1.6, 0.05, 1.6, 4.6, -1.6, 0, 0], ['#5a4636', 0.12, 2.6, 1.5, 7.9, 3], ['*#d9473c', 1.6, 0.05, 1.6, 6.8, 3, 0, 0]] },
   home: { w: 13, d: 10, items: [] }, // 집 내부는 buildHome이 집마다 따로 만든다
 };
 const PRICE = { town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
@@ -254,6 +267,8 @@ export function buildInteriors(h) {
     { id: 'store', key: 'commercial/building-a', x: 24, z: 2.02 * 12, yaw: FACE.S, bg: '#2f7d4f' },
     { id: 'cafe', key: 'commercial/building-d', x: 24, z: 6.02 * 12, yaw: FACE.N, bg: '#8a5a2b' },
     { id: 'hotel', key: 'commercial/building-n', x: 456, z: 154, yaw: 0, bg: '#34456f' },
+    { id: 'hospital', key: 'commercial/building-n', x: 8.15 * 12, z: 2.5 * 12, yaw: FACE.S, bg: '#d9473c' },
+    { id: 'jail', key: 'commercial/building-j', x: 3.45 * 12, z: 5.15 * 12, yaw: FACE.S, bg: '#34456f' },
     { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
@@ -312,8 +327,8 @@ export function buildInteriors(h) {
     atStand() {
       const r = this.inside && rooms[this.inside.room], buy = r && ROOMS[r.key].buy, p = this.player.feet;
       if (!buy) return null;
-      const NAME = { bat: '방망이', pistol: '권총', smg: '기관단총', rocket: '로켓 발사기' };
-      for (const b of buy) if (Math.hypot(r.cx + b[2] - p.x, r.cz - 1 - p.z) < 1.9) return [b[0], b[1], b[2], NAME[b[0]]];
+      const NAME = { bat: '방망이', pistol: '권총', smg: '기관단총', rifle: '돌격소총', rocket: '로켓 발사기' };
+      for (const b of buy) if (Math.hypot(r.cx + b[2] - p.x, r.cz + (b[3] === undefined ? -1 : b[3] - 3.2) - p.z) < 1.9) return [b[0], b[1], b[2], NAME[b[0]]];
       return null;
     },
     atExit() { const r = this.inside && rooms[this.inside.room], p = this.player.feet; return r && Math.hypot(r.out.x - p.x, r.out.z - p.z) < 1.7; },
@@ -326,6 +341,21 @@ export function buildInteriors(h) {
       return d.house ? '내 집 들어가기' : '들어가기';
     },
     fade() { const f = $('fade'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 220); },
+    // 방으로 바로 데려간다(병원에서 깨어나기, 감옥에 갇히기).
+    send(id, x = 0, z = 0) {
+      const P = this.player, d = doors.find((q) => q.id === id), r = rooms[id];
+      if (P.vehicle) P.exit();
+      this.inside = d; P.inside = true; P.dist = 4.6; assets.activeInterior = 'in_' + id;
+      this.fade();
+      P.teleport(r.cx + x, r.y0, r.cz + z); P.yaw = 0; P.pitch = 0.32;
+    },
+    leave() {
+      const P = this.player, d = this.inside;
+      if (!d) return;
+      this.inside = null; P.inside = false; P.dist = 6.8; assets.activeInterior = null;
+      this.fade();
+      P.teleport(d.x, d.y, d.z); P.yaw = d.yaw + Math.PI; P.chr.heading = d.yaw + Math.PI;
+    },
     use() {
       const P = this.player;
       if (this.inside) {
@@ -338,6 +368,7 @@ export function buildInteriors(h) {
           return true;
         }
         if (!this.atExit()) return false;
+        if (this.locked) { this.jobs.toast('갇혀 있어요. 벌금을 내거나, 일을 하거나, 몰래 빠져나가세요'); return true; }
         const d = this.inside;
         this.inside = null; P.inside = false; P.dist = 6.8;
         assets.activeInterior = null;

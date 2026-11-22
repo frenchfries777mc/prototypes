@@ -10,6 +10,7 @@ export const WEAPONS = [
   { id: 'bat', name: '방망이', melee: true, range: 2.7, arc: 0.35, dmg: 60, carDmg: 14, cd: 0.55, push: 9 },
   { id: 'pistol', name: '권총', dmg: 50, carDmg: 14, cd: 0.3, spread: 0.004, range: 170 },
   { id: 'smg', name: '기관단총', dmg: 22, carDmg: 6, cd: 0.085, spread: 0.02, range: 130, auto: true },
+  { id: 'rifle', name: '돌격소총', dmg: 34, carDmg: 11, cd: 0.11, spread: 0.009, range: 210, auto: true },
   { id: 'rocket', name: '로켓 발사기', cd: 1.3, rocket: true, range: 260 },
 ];
 
@@ -68,8 +69,9 @@ export class Weapons {
     { const n = node(); n.rotation.x = -2.0; part(n, 0.11, 0.3, 0.11, 0, -0.1, 0, M('#3a3d4d')); part(n, 0.14, 0.8, 0.14, 0, -0.62, 0, M('#c79a5b')); this.models.bat = n; }
     { const n = node(); part(n, 0.1, 0.44, 0.17, 0, -0.16, 0.1, M('#2a2c36')); part(n, 0.08, 0.2, 0.1, 0, -0.02, -0.03, M('#5a4636')); this.models.pistol = n; }
     { const n = node(); part(n, 0.11, 0.74, 0.18, 0, -0.26, 0.1, M('#2a2c36')); part(n, 0.08, 0.14, 0.3, 0, -0.3, -0.12, M('#3a3d4d')); part(n, 0.09, 0.26, 0.12, 0, 0.14, 0.08, M('#5a4636')); this.models.smg = n; }
+    { const n = node(); part(n, 0.11, 1.05, 0.18, 0, -0.42, 0.1, M('#3a3d4d')); part(n, 0.08, 0.16, 0.34, 0, -0.34, -0.14, M('#2a2c36')); part(n, 0.1, 0.4, 0.16, 0, 0.2, 0.06, M('#8b5d3a')); part(n, 0.06, 0.3, 0.06, 0, -1.05, 0.1, M('#2a2c36')); this.models.rifle = n; }
     { const n = node(); part(n, 0.27, 1.5, 0.27, 0, -0.12, 0.26, M('#55693f')); part(n, 0.33, 0.16, 0.33, 0, -0.9, 0.26, M('#3a3d4d')); part(n, 0.2, 0.3, 0.2, 0, -1.02, 0.26, M('#d9473c')); this.models.rocket = n; }
-    this.muzzle = { pistol: 0.45, smg: 0.75, rocket: 1.25 };
+    this.muzzle = { pistol: 0.45, smg: 0.75, rifle: 1.15, rocket: 1.25 };
 
     // ----- 입자 효과: 한 번에 터뜨리는 것들은 넷으로 나눠 재사용한다 -----
     const burst = (name, cap, setup) => { const p = new B.ParticleSystem(name, cap, scene); p.particleTexture = spark(scene); p.emitter = new B.Vector3(0, -100, 0); p.emitRate = 0; p.manualEmitCount = 0; p.updateSpeed = 0.016; setup(p); p.start(); return p; };
@@ -233,7 +235,7 @@ export class Weapons {
     try { localStorage.setItem('boxtown.weapons', JSON.stringify([...this.owned])); } catch (e) { /* 무시 */ }
     this.renderBar();
     this.select(WEAPONS.findIndex((w) => w.id === id));
-    const OBJ = { bat: '방망이를', pistol: '권총을', smg: '기관단총을', rocket: '로켓 발사기를' };
+    const OBJ = { bat: '방망이를', pistol: '권총을', smg: '기관단총을', rifle: '돌격소총을', rocket: '로켓 발사기를' };
     if (this.toast) this.toast(`${how || ''} ${OBJ[id]} ${verb || '얻었어요'}!`.trim(), true);
     return true;
   }
@@ -278,6 +280,7 @@ export class Weapons {
       const f = 1 - pd / (radius + 1), l = Math.hypot(P.feet.x - x, P.feet.z - z) || 1;
       P.kick = new B.Vector3(((P.feet.x - x) / l) * 15 * f, 5 + 9 * f, ((P.feet.z - z) / l) * 15 * f);
       P.chr.bump(P.feet.x - x, P.feet.z - z, 2);
+      if (this.onBlast) this.onBlast(65 * f);
     }
   }
 
@@ -286,7 +289,7 @@ export class Weapons {
     const P = this.player;
     c.dead = true; c.hp = 0; c.respawnT = 13;
     this.crime(55);
-    if (P.vehicle === c) { P.exit(); P.kick = new B.Vector3((Math.random() - 0.5) * 8, 13, (Math.random() - 0.5) * 8); }
+    if (P.vehicle === c) { P.exit(); P.kick = new B.Vector3((Math.random() - 0.5) * 8, 13, (Math.random() - 0.5) * 8); if (this.onBlast) this.onBlast(45); }
     this.explode(c.pos.x, c.pos.y + 0.8, c.pos.z, 7.5, c);
     const M = c.spec.mass;
     c.body.applyImpulse(new B.Vector3((Math.random() - 0.5) * M * 8, M * 23, (Math.random() - 0.5) * M * 8), c.pos.add(new B.Vector3((Math.random() - 0.5) * 0.8, 0, (Math.random() - 0.5) * 0.8)));

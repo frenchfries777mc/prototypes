@@ -9,6 +9,7 @@ import { Jobs } from './jobs.js';
 import { MapView } from './map.js';
 import { Weapons } from './weapons.js';
 import { Police } from './police.js';
+import { Health } from './health.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -114,15 +115,19 @@ async function boot() {
   assets.cull(player.cam.position, rl, fixedCasters);
   let cullT = 0, lastInterior = null;
 
+  // 간호사 일은 병원 안에서 시작한다.
+  { const r = interiors.rooms.hospital; town.jobSites.nurse = { x: r.cx + 1.5, z: r.cz + 0.3, y: r.y0, room: r }; }
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.jobs = jobs;
   interiors.init(player, jobs);
-  player.onUse = () => interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
+  player.onUse = () => (health && health.use()) || interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
+  let health = null;
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.weapons = weapons;
   interiors.weapons = weapons;
   weapons.toast = (text, good) => jobs.toast(text, good);
   weapons.onCrime = (amount) => police.report(amount);
+  health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
   mark('actors');
   const map = new MapView(() => ({
     x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
@@ -158,13 +163,14 @@ async function boot() {
     if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
-    residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);
+    residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, wanted: police.level }, garage.cars);
     jobs.update(dt);
     map.update(dt);
     weapons.update(dt, map.open);
     police.update(dt);
+    health.update(dt);
     interiors.update(dt);
-    const text = interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
+    const text = health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
@@ -218,7 +224,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

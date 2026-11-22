@@ -139,8 +139,12 @@ export function buildRoads(h) {
   };
   const boxes = [];
   for (const path of paths) {
-    const road = path.type === 'road', hw = path.half;
-    const across = (p, o, lift) => [p.x - p.tz * o, p.y + lift, p.z + p.tx * o];
+    const road = path.type === 'road';
+    // 흙길이 포장도로에서 갈라져 나올 때는 같은 너비에서 시작해 서서히 좁아진다(뚝 끊겨 보이지 않게).
+    const joined = !road && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - path.pts[0].x, q.z - path.pts[0].z) < 9));
+    const width = (p) => (joined ? lerp(4.2, path.half, smoothstep(0, 36, p.s)) : path.half);
+    const across = (p, o, lift) => { const k = width(p) / path.half; return [p.x - p.tz * o * k, p.y + lift, p.z + p.tx * o * k]; };
+    const hw = path.half;
     for (let i = 0; i < path.pts.length - 1; i++) {
       const a = path.pts[i], b = path.pts[i + 1];
       const lift = 0.1;
@@ -150,7 +154,9 @@ export function buildRoads(h) {
         quad(across(a, hw - 0.55, lift), across(b, hw - 0.55, lift), across(a, hw, lift), across(b, hw, lift), EDGE);
         if (i % 3 === 0) quad(across(a, -0.16, lift + 0.03), across(b, -0.16, lift + 0.03), across(a, 0.16, lift + 0.03), across(b, 0.16, lift + 0.03), LINE);
       } else {
-        quad(across(a, -hw, lift), across(b, -hw, lift), across(a, hw, lift), across(b, hw, lift), i % 2 ? DIRT : DIRT2);
+        // 갈라지는 곳은 아스팔트 색에서 흙색으로 물든다.
+        const tA = joined ? smoothstep(4, 30, a.s) : 1, base = i % 2 ? DIRT : DIRT2;
+        quad(across(a, -hw, lift), across(b, -hw, lift), across(a, hw, lift), across(b, hw, lift), [lerp(ASPH[0], base[0], tA), lerp(ASPH[1], base[1], tA), lerp(ASPH[2], base[2], tA)]);
       }
       // 다리 구간(양 끝 한 칸씩 더 덮어서 둑과 이어지게 한다)
       const span = a.water || b.water || (path.pts[i + 2] && path.pts[i + 2].water) || (i > 0 && path.pts[i - 1].water);
