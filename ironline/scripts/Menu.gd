@@ -160,7 +160,7 @@ func _load_settings() -> void:
 	if OS.has_feature("web"):
 		var acc := str(JavaScriptBridge.eval("String((function(){try{var a=window.parent.FFAuth;return (a&&a.user())?(a.nickname()||''):''}catch(e){return ''}})())", true))
 		if acc != "" and acc != "null" and acc != "undefined":
-			player_name = acc.substr(0, 12)
+			player_name = acc.substr(0, 15)
 
 
 func save_settings() -> void:
@@ -434,7 +434,7 @@ func _build_home() -> void:
 	name_row.add_child(_label("콜사인", 13, Color(KHAKI.r, KHAKI.g, KHAKI.b, 0.7), font_cd))
 	name_edit = LineEdit.new()
 	name_edit.text = player_name
-	name_edit.max_length = 12
+	name_edit.max_length = 15
 	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_edit.text_changed.connect(func(t): player_name = t; save_settings(); player_card.queue_redraw())
 	name_row.add_child(name_edit)
