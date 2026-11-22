@@ -92,7 +92,7 @@ export class Weapons {
     // ----- 화면 표시 -----
     // 처음에는 주먹뿐이다. 나머지는 사거나 빼앗아서 얻는다.
     this.owned = new Set(['fist']);
-    try { for (const id of JSON.parse(localStorage.getItem('boxtown.weapons') || '[]')) if (WEAPONS.some((w) => w.id === id)) this.owned.add(id); } catch (e) { /* 무시 */ }
+    try { const saved = JSON.parse(localStorage.getItem('boxtown.weapons') || '[]').filter((id) => id !== 'fist' && WEAPONS.some((w) => w.id === id)); if (saved.length) this.owned.add(saved[saved.length - 1]); } catch (e) { /* 무시 */ }
     residents.onDefeat = (n) => { if (n.kind === 'thug') this.unlock('bat', '불량배에게서', '빼앗았어요'); else if (n.kind === 'cop') this.unlock('pistol', '경찰관에게서', '빼앗았어요'); };
     this.renderBar();
     this.select(0);
@@ -104,7 +104,7 @@ export class Weapons {
     this.cur = i;
     const w = WEAPONS[this.cur];
     for (const id in this.models) this.models[id].setEnabled(id === w.id);
-    document.querySelectorAll('#weapons .wp').forEach((el) => el.classList.toggle('on', +el.dataset.i === this.cur));
+    this.renderBar();
     document.getElementById('btnWeapon').textContent = w.name;
     this.cd = Math.max(this.cd, 0.15);
   }
@@ -231,7 +231,7 @@ export class Weapons {
   // 무기를 얻는다.
   unlock(id, how, verb) {
     if (this.owned.has(id)) return false;
-    this.owned.add(id);
+    this.owned = new Set(['fist', id]); // 무기는 하나만 든다: 새로 얻으면 전에 것은 버린다
     try { localStorage.setItem('boxtown.weapons', JSON.stringify([...this.owned])); } catch (e) { /* 무시 */ }
     this.renderBar();
     this.select(WEAPONS.findIndex((w) => w.id === id));
@@ -239,10 +239,16 @@ export class Weapons {
     if (this.toast) this.toast(`${how || ''} ${OBJ[id]} ${verb || '얻었어요'}!`.trim(), true);
     return true;
   }
+  // 압수: 주먹만 남는다.
+  confiscate() {
+    this.owned = new Set(['fist']);
+    try { localStorage.setItem('boxtown.weapons', '["fist"]'); } catch (e) { /* 무시 */ }
+    this.select(0); this.renderBar();
+  }
   renderBar() {
     const bar = document.getElementById('weapons');
     bar.innerHTML = '';
-    WEAPONS.forEach((w, i) => { if (!this.owned.has(w.id)) return; const el = document.createElement('div'); el.className = 'wp' + (i === this.cur ? ' on' : ''); el.dataset.i = i; el.innerHTML = `<b>${i + 1}</b>${w.name}`; bar.appendChild(el); });
+    WEAPONS.forEach((w, i) => { if (i !== this.cur) return; const el = document.createElement('div'); el.className = 'wp' + (i === this.cur ? ' on' : ''); el.dataset.i = i; el.innerHTML = `<b>${i + 1}</b>${w.name}`; bar.appendChild(el); });
     document.getElementById('btnWeapon').style.visibility = this.owned.size > 1 ? '' : 'hidden';
   }
 
@@ -342,7 +348,8 @@ export class Weapons {
 
   update(dt, blocked = false) {
     const P = this.player, inp = P.input;
-    if (inp.weaponPick >= 0) { if (inp.weaponPick < WEAPONS.length) this.select(inp.weaponPick); inp.weaponPick = -1; }
+    // 1: 주먹, 2: 들고 있는 무기
+    if (inp.weaponPick >= 0) { const k = inp.weaponPick === 0 ? 0 : WEAPONS.findIndex((x) => x.id !== 'fist' && this.owned.has(x.id)); if (k >= 0) this.select(k); inp.weaponPick = -1; }
     if (inp.weaponNext) { let k = this.cur; do { k = (k + 1) % WEAPONS.length; } while (!this.owned.has(WEAPONS[k].id)); this.select(k); inp.weaponNext = false; }
     const w = WEAPONS[this.cur], can = !P.vehicle && !blocked;
     this.cd -= dt;

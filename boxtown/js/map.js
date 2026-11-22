@@ -32,6 +32,11 @@ function render() {
   ctx.putImageData(img, 0, 0);
   ctx.lineCap = ctx.lineJoin = 'round';
   for (const pass of [0, 1]) for (const p of paths) {
+    if (p.type === 'rail') { // 철도는 검은 줄에 흰 토막
+      ctx.strokeStyle = pass ? '#f4f1ea' : '#22202b'; ctx.lineWidth = pass ? 1 : 3; ctx.setLineDash(pass ? [3, 3] : []);
+      ctx.beginPath(); p.pts.forEach((q, i) => (i ? ctx.lineTo(mx(q.x), mz(q.z)) : ctx.moveTo(mx(q.x), mz(q.z)))); ctx.stroke(); ctx.setLineDash([]);
+      continue;
+    }
     const road = p.type === 'road';
     ctx.strokeStyle = pass ? (road ? '#f4f1ea' : '#e9cf9a') : 'rgba(40,44,60,0.75)';
     ctx.lineWidth = (road ? 2.2 : 1.3) + (pass ? 0 : 1.2);

@@ -96,7 +96,7 @@ export class Residents {
   }
   launch(n, dx = 0, dz = 0) {
     if (n.mode === 'sky') return;
-    n.mode = 'sky'; n.t = 0; n.vy = 16; n.gone = false; n.hp = 0;
+    n.mode = 'sky'; n.t = 0; n.vy = 15; n.gone = false; n.hp = 0;
     if (this.onDefeat) this.onDefeat(n);
     n.vel.set(dx * 5, 0, dz * 5);
     n.chr.wave = 0;
@@ -142,8 +142,11 @@ export class Residents {
             n.back = n.mode === 'stand' ? 'stand' : 'walk';
             n.mode = 'fly';
             const side = Math.sign(lx) || 1;
-            n.vel.set(cv.x * 1.15 + c.right.x * side * 2.5, 0, cv.z * 1.15 + c.right.z * side * 2.5);
-            n.vy = 5 + sp * 0.45;
+            n.vel.set(cv.x * 0.75 + c.right.x * side * 2, 0, cv.z * 0.75 + c.right.z * side * 2);
+            n.vy = 4 + sp * 0.22;
+            // 차에 치이면 체력도 깎인다. 다 닳으면 그대로 날아가 버린다.
+            n.hp = (n.hp === undefined ? 100 : n.hp) - Math.min(85, 15 + sp * 4);
+            if (n.hp <= 0) { n.mode = n.back; this.launch(n, cv.x / sp, cv.z / sp); }
             n.spin = (n.r() - 0.5) * 14;
             chr.bump(cv.x, cv.z, 2);
           } else {
@@ -163,10 +166,10 @@ export class Residents {
         n.t += dt;
         grounded = false;
         if (n.t < 1.5) {
-          n.vy += 46 * dt;
+          n.vy -= 13 * dt; // 적당히 떠올랐다가 별이 된다
           p.y += n.vy * dt; p.x += n.vel.x * dt; p.z += n.vel.z * dt;
-          n.lie += 13 * dt;
-          chr.root.scaling.setAll(Math.max(0.08, 1 - n.t / 1.5));
+          n.lie += 8 * dt;
+          chr.root.scaling.setAll(Math.max(0.08, 1 - Math.max(0, n.t - 0.5) / 1.0));
         } else if (!n.gone) {
           n.gone = true;
           chr.setVisible(false);

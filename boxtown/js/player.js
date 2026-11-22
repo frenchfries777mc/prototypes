@@ -257,6 +257,12 @@ export class Player {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
     if (dt <= 0) return;
     const inp = this.input, cc = this.cc;
+    if (this.riding) { // 기차에 탄 동안은 기차가 데려간다
+      const u = inp.useQueued; inp.useQueued = false;
+      this.feet.copyFrom(this.riding.seat);
+      if (u && this.onUse) this.onUse();
+      return;
+    }
     const use = inp.useQueued;
     inp.useQueued = false;
     if (this.vehicle) {
@@ -328,7 +334,11 @@ export class Player {
     this.cc.setPosition(new B.Vector3(s.x, s.y + CAP_H / 2 + 0.5, s.z));
     this.cc.setVelocity(B.Vector3.Zero());
   }
-  teleport(x, y, z) { this.cc.setPosition(new B.Vector3(x, y + CAP_H / 2 + 0.1, z)); this.cc.setVelocity(B.Vector3.Zero()); }
+  // 순간 이동. 카메라도 바로 옮겨서, 건너가는 모습이 보이지 않게 한다.
+  teleport(x, y, z) {
+    this.cc.setPosition(new B.Vector3(x, y + CAP_H / 2 + 0.1, z)); this.cc.setVelocity(B.Vector3.Zero());
+    this.feet.set(x, y, z); this.target.set(x, y + 1.45, z); this.vel.set(0, 0, 0);
+  }
 
   frame() {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
