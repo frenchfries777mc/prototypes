@@ -6,7 +6,7 @@ import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
 
 const STEP = 4;
-const HALF = { road: 4.2, dirt: 2.6 };
+const HALF = { road: 4.2, dirt: 2.6, rail: 2.6 };
 
 // 점들을 지나는 매끄러운 곡선(Catmull-Rom)을 STEP 간격으로 다시 찍는다.
 function resample(pts) {
@@ -26,7 +26,7 @@ function resample(pts) {
   return out;
 }
 
-const GRADE = { road: 0.13, dirt: 0.19 }; // 길이 가질 수 있는 가장 가파른 기울기
+const GRADE = { road: 0.13, dirt: 0.19, rail: 0.06 }; // 길이 가질 수 있는 가장 가파른 기울기
 export const paths = [];
 for (const r of ROADS) {
   const pts = resample(r.pts);
@@ -138,7 +138,23 @@ export function buildRoads(h) {
     idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   };
   const boxes = [];
+  const BALLAST = [0.5, 0.46, 0.42], SLEEPER = [0.36, 0.25, 0.17], STEEL = [0.72, 0.74, 0.8];
   for (const path of paths) {
+    if (path.type === 'rail') {
+      // 철길: 자갈 바닥, 침목, 레일 두 줄
+      const at = (p, o, lift, along = 0) => [p.x - p.tz * o + p.tx * along, p.y + lift, p.z + p.tx * o + p.tz * along];
+      for (let i = 0; i < path.pts.length - 1; i++) {
+        const a = path.pts[i], b = path.pts[i + 1];
+        quad(at(a, -2.6, 0.1), at(b, -2.6, 0.1), at(a, 2.6, 0.1), at(b, 2.6, 0.1), BALLAST);
+        for (const k of [0.5, 2.5]) quad(at(a, -1.5, 0.16, k), at(a, -1.5, 0.16, k + 0.55), at(a, 1.5, 0.16, k), at(a, 1.5, 0.16, k + 0.55), SLEEPER);
+        for (const o of [-0.85, 0.85]) quad(at(a, o - 0.09, 0.26), at(b, o - 0.09, 0.26), at(a, o + 0.09, 0.26), at(b, o + 0.09, 0.26), STEEL);
+        if ((a.water || b.water) || (path.pts[i + 2] && path.pts[i + 2].water) || (i > 0 && path.pts[i - 1].water)) {
+          const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
+          boxes.push({ w: 6.4, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, mat: deckMat, collide: true });
+        }
+      }
+      continue;
+    }
     const road = path.type === 'road';
     // 흙길이 포장도로에서 갈라져 나올 때는 같은 너비에서 시작해 서서히 좁아진다(뚝 끊겨 보이지 않게).
     const joined = !road && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - path.pts[0].x, q.z - path.pts[0].z) < 9));

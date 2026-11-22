@@ -189,38 +189,40 @@ export class Jobs {
 
 // ---------- 피자 배달 ----------
 function pizzaJob(J, site) {
-  let state, dest, time, box;
+  // 피자는 가게 앞 배달 트럭으로 나른다.
+  const isVan = (v) => v.key === 'cars/delivery';
+  const shop = { x: 43.2, z: 8.8 }; // 가게 앞 찻길
+  let state = 'get', dest, time;
   const order = () => {
     dest = J.randomDoor(site, 45);
-    time = dist2(site, dest.x, dest.z) / 4.2 + 24;
+    time = dist2(site, dest.x, dest.z) / 7 + 22;
     state = 'deliver';
-    box.setEnabled(true);
     J.setTarget(dest.x, dest.z, '배달지', dest.y);
     J.toast('주문이 들어왔어요. 식기 전에 배달하세요!');
   };
   return {
-    start() {
-      box = B.MeshBuilder.CreateBox('pizzaBox', { width: 0.62, height: 0.1, depth: 0.62 }, J.scene);
-      box.material = flatMat('pizzaBoxMat', '#fff3d6', J.scene);
-      box.parent = J.player.chr.torso; box.position.set(0, 0.26, 0.5); box.isPickable = false;
-      J.addShadow([box]);
-      order();
-    },
+    start() {},
     update(dt) {
-      if (state === 'deliver') {
+      const inVan = inVehicle(J, isVan);
+      if (state === 'get') {
+        J.panel('피자 배달', '초록 배달 트럭에 타세요', 'E로 타고 내립니다');
+        const t = nearestVehicle(J, isVan);
+        J.setTarget(t.pos.x, t.pos.z, '배달 트럭', t.pos.y);
+        if (inVan) order();
+      } else if (state === 'deliver') {
         time -= dt;
-        J.panel('피자 배달', '빛기둥이 선 집 문 앞까지 피자를 가져가세요', time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (기본 요금만 받아요)');
-        if (J.onFoot && dist2(J.pos, dest.x, dest.z) < 2.3) {
-          J.pay(time > 0 ? 260 + time * 9 : 120, time > 0 ? '따끈한 배달 완료' : '식은 피자 배달');
-          box.setEnabled(false); state = 'return';
-          J.setTarget(site.x, site.z, '피자 가게', site.y);
+        J.panel('피자 배달', inVan ? '빛기둥이 선 집 앞에 트럭을 세우세요' : '배달 트럭에 다시 타세요', time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (기본 요금만 받아요)');
+        if (stoppedAt(J, dest, 13, isVan)) {
+          J.pay(time > 0 ? 280 + time * 10 : 130, time > 0 ? '따끈한 배달 완료' : '식은 피자 배달');
+          state = 'return';
+          J.setTarget(shop.x, shop.z, '피자 가게', 0.2);
         }
       } else {
-        J.panel('피자 배달', '가게로 돌아가 다음 주문을 받으세요');
-        if (J.onFoot && dist2(J.pos, site.x, site.z) < 2.6) order();
+        J.panel('피자 배달', '가게 앞으로 돌아가 다음 주문을 받으세요', inVan ? '' : '배달 트럭에 다시 타세요');
+        if (stoppedAt(J, shop, 13, isVan)) order();
       }
     },
-    stop() { box.dispose(); },
+    stop() {},
   };
 }
 
