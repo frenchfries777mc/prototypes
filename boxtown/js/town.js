@@ -245,7 +245,8 @@ export function buildTown(scene, assets, mark = () => {}) {
   }
 
   // ---------- 부두 벽, 계선주, 잔교 ----------
-  box('quayWall', 126, 9, 2.6, 66, SLAB_Y - 4.5, -7.2, M.concrete, { collide: true });
+  // 벽 윗면은 부두 타일보다 조금 낮게, 안쪽 면은 타일 밖으로: 같은 높이로 겹치면 깜빡인다.
+  box('quayWall', 126, 9, 2.3, 66, SLAB_Y - 4.56, -7.2, M.concrete, { collide: true });
   box('quayCapW', 66.5, 0.3, 1.0, 36.25, SLAB_Y + 0.15, -6.3, M.concreteDark, { collide: true });
   box('quayCapE', 54.5, 0.3, 1.0, 101.75, SLAB_Y + 0.15, -6.3, M.concreteDark, { collide: true });
   for (let x = 12; x <= 120; x += 9) {
