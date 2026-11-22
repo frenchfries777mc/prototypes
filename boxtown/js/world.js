@@ -7,6 +7,8 @@ export const WORLD = { x0: -1062, x1: 1242, z0: -870, z1: 1434, cell: 4, chunk: 
 // 섬: 타원 + 해안선 굴곡(warp). base는 내륙 기본 높이, hills는 언덕 높이, forest는 숲 밀도 배율.
 export const ISLANDS = [
   { id: 'main', cx: 100, cz: 430, rx: 620, rz: 470, rot: 0, warp: 0.3, base: 4, hills: 52, forest: 1 },
+  // 본토: 북쪽으로 지도 밖까지 이어지는 큰 땅. 시작 지역은 섬이 아니라 이 대륙의 남쪽 끝이다.
+  { id: 'mainland', cx: 150, cz: 2400, rx: 700, rz: 1560, rot: 0, warp: 0.12, base: 8, hills: 46, forest: 1.3 },
   { id: 'gull', cx: 360, cz: -300, rx: 170, rz: 128, rot: 0.2, warp: 0.22, base: 3, hills: 20, forest: 0.7 },
   { id: 'fort', cx: 770, cz: -390, rx: 150, rz: 118, rot: -0.3, warp: 0.25, base: 4, hills: 30, forest: 0.6 },
   { id: 'woods', cx: -700, cz: -120, rx: 235, rz: 180, rot: 0.35, warp: 0.3, base: 4, hills: 34, forest: 2.6 },
@@ -23,6 +25,7 @@ export const ISLANDS = [
 
 // 산: 중심에서 r까지 서서히 낮아지는 봉우리 무리. h는 대략의 최고 높이.
 export const MOUNTAINS = [
+  { x: 150, z: 1340, r: 520, h: 190, s: 12.4 }, // 북쪽 산맥: 지도 끝을 가린다
   { x: 240, z: 730, r: 310, h: 118, s: 1.7 },
   { x: -330, z: 640, r: 190, h: 52, s: 5.1 },
   { x: 900, z: 960, r: 120, h: 150, s: 9.3 }, // 뾰족섬
@@ -59,6 +62,7 @@ export const ROADS = [
 
 // 터: 건물이 설 자리를 평평하게 다진다. r 안쪽은 평지, blend만큼 주변과 이어진다.
 export const SITES = {
+  prison: { x: 240, z: 28, r: 30, name: '교도소' },
   farm: { x: -320, z: 172, r: 76, name: '서쪽 농장' },
   wind: { x: -318, z: 590, r: 46, name: '풍차 언덕' },
   works: { x: 300, z: 262, r: 84, name: '공단' },
@@ -112,7 +116,8 @@ ROADS.push(
 
 export const PLACES = [
   { name: '항구 마을', x: 66, z: 48, big: true },
-  { name: '본섬', x: 60, z: 380, big: true },
+  { name: '본토', x: 60, z: 380, big: true },
+  { name: '북쪽 산맥', x: 150, z: 1290 },
   { name: '큰 호수', x: 60, z: 615 },
   { name: '눈산', x: 250, z: 800 },
   { name: '갈매기섬', x: 360, z: -360, big: true },

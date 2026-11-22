@@ -12,6 +12,8 @@ import { Police } from './police.js';
 import { Health } from './health.js';
 import { Train } from './train.js';
 import { Traffic } from './traffic.js';
+import { Music } from './music.js';
+import { islandAt } from './terrain.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -135,6 +137,13 @@ async function boot() {
   train0 = train;
   const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   weapons.traffic = traffic; traffic0 = traffic;
+  // 배경 음악: 수배 > 내 집 > 건물 안 > 다른 섬 > 시작 대륙
+  const music = new Music(() => {
+    if (police.level > 0) return 'wanted';
+    if (interiors.inside) return interiors.inside.house ? 'home' : 'indoor';
+    const id = islandAt(player.feet.x, player.feet.z).id;
+    return id === 'main' || id === 'mainland' ? 'land' : 'island';
+  });
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(70, vx, vz, 'train'); };
   mark('actors');
   const map = new MapView(() => ({
@@ -179,6 +188,7 @@ async function boot() {
     health.update(dt);
     train.update(dt);
     traffic.update(dt);
+    music.update(dt);
     interiors.update(dt);
     const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
@@ -234,7 +244,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');
