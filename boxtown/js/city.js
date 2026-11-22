@@ -30,8 +30,13 @@ export function buildCity(h) {
         // 보도: 네거리 사이 구간마다 한 줄
         const cuts = [-half, ...c.offsets.filter((q) => Math.abs(q) < half - 12), half];
         for (let i = 0; i < cuts.length - 1; i++) {
-          const a = cuts[i] + (i === 0 ? 0 : 9), b = cuts[i + 1] - (i === cuts.length - 2 ? 0 : 9), [mx, mz] = at((a + b) / 2, side, HW + 1.3);
-          if (b - a > 4) h.box('pave', ns ? 2.6 : b - a, 0.16, ns ? b - a : 2.6, mx, height(mx, mz) + 0.1, mz, pave, { noShadow: true });
+          const a = cuts[i] + (i === 0 ? 0 : 9), b = cuts[i + 1] - (i === cuts.length - 2 ? 0 : 9);
+          // 비탈에서도 뜨거나 묻히지 않게 짧게 끊어 그 자리 땅 높이에 놓는다.
+          const n = Math.max(1, Math.ceil((b - a) / 6)), len = (b - a) / n;
+          if (b - a > 4) for (let k = 0; k < n; k++) {
+            const [px, pz] = at(a + (k + 0.5) * len, side, HW + 1.3);
+            h.box('pave', ns ? 2.6 : len + 0.1, 0.5, ns ? len + 0.1 : 2.6, px, height(px, pz) - 0.07, pz, pave, { noShadow: true });
+          }
         }
         // 가로등과 가로수
         for (let t = -half + 18, k = 0; t < half - 10; t += 15, k++) {
