@@ -127,6 +127,7 @@ export class Character {
     this.amp = 0;
     this.idleT = Math.random() * 10;
     this.wave = 0; // 0..1, 손 흔들기
+    this.aim = 0; this.swing = 0; // 무기 자세
     this.prevVel = new B.Vector3();
   }
 
@@ -202,6 +203,21 @@ export class Character {
     this.neck.rotation.x = this.sHeadP.step(-pitch * 0.9, dt) + breath * 2;
     this.neck.rotation.z = this.sHeadR.step(-roll * 0.9, dt) + s * 0.04 * this.amp;
     this.neck.rotation.y = clamp(turn * 0.03, -0.5, 0.5) + (st.lookYaw || 0);
+
+    // 무기: 겨누기(오른팔을 앞으로)와 휘두르기
+    this.aimK = damp(this.aimK || 0, this.aim || 0, 16, dt);
+    if (this.aimK > 0.01) {
+      this.armR.rotation.x = lerp(this.armR.rotation.x, -1.5 - (this.aimPitch || 0) + (this.recoil || 0), this.aimK);
+      this.armR.rotation.z = lerp(this.armR.rotation.z, 0, this.aimK);
+    }
+    this.recoil = damp(this.recoil || 0, 0, 14, dt);
+    if (this.swing > 0) {
+      const k = 1 - this.swing; // 0 -> 1
+      this.armR.rotation.x = k < 0.3 ? lerp(-0.3, -3.0, k / 0.3) : lerp(-3.0, 0.5, (k - 0.3) / 0.7);
+      this.armR.rotation.z = 0.15;
+      this.torso.rotation.y = lerp(0.5, -0.5, k);
+      this.swing = Math.max(0, this.swing - dt / (this.swingTime || 0.3));
+    }
 
     this.blinkT -= dt;
     const blink = this.blinkT < 0.11 ? 0.12 : 1;
