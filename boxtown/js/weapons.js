@@ -125,6 +125,9 @@ export class Weapons {
     phys.raycastToRef(o, far, this.ray);
     let t = this.ray.hasHit ? this.ray.hitDistance : range, body = this.ray.hasHit ? this.ray.body : null;
     const res = this.residents.rayHit(o, d, t);
+    // 주민이 모는 차에 맞으면 진짜 차로 바뀐다.
+    const tc = !res && this.traffic && this.traffic.rayHit(o, d, t);
+    if (tc) { const v = this.traffic.convert(tc.car); return { t: tc.t, point: o.add(d.scale(tc.t)), car: v, hit: true }; }
     if (res) return { t: res.t, point: o.add(d.scale(res.t)), resident: res.n };
     return { t, point: o.add(d.scale(t)), car: body ? this.byBody.get(body) : null, dyn: body ? this.dynByBody.get(body) : null, hit: !!body };
   }
@@ -177,6 +180,7 @@ export class Weapons {
   melee(w, yaw) {
     const P = this.player, chr = P.chr, fx = Math.sin(yaw), fz = Math.cos(yaw), me = P.feet;
     chr.swing = 1; chr.swingTime = w.cd * 0.85;
+    if (this.traffic) this.traffic.convertNear(me.x, me.z, 4);
     let landed = false;
     const front = (dx, dz, dist, extra = 0) => dist < 0.9 + extra || (dist < w.range + extra && (dx * fx + dz * fz) / (dist || 1) > w.arc);
     for (const n of this.residents.list) {
@@ -223,7 +227,7 @@ export class Weapons {
     t.t = 0.06;
   }
 
-  hurtCar(c, amount) { if (!c.dead) { c.hp -= amount; if (c.police) this.crime(Math.min(30, amount)); } }
+  hurtCar(c, amount) { if (!c.dead) { c.hp -= amount; c.blame = true; if (c.police) this.crime(Math.min(30, amount)); } }
   // 나쁜 짓을 하면 경찰이 온다.
   crime(amount) { if (this.onCrime) this.onCrime(amount); }
   // 누구를 때렸느냐에 따라 다르다: 불량배는 죄가 아니고, 경찰관은 큰 죄다.
@@ -257,6 +261,7 @@ export class Weapons {
     const P = this.player;
     this.emit('boom', x, y + 0.5, z, 130); this.emit('puff', x, y + 1, z, 46); this.emit('spark', x, y + 0.5, z, 60);
     this.sfx.play('boom');
+    if (this.traffic) this.traffic.convertNear(x, z, radius + 4);
     this.residents.scare(x, z, 60);
     for (const n of this.residents.list) {
       if (!this.residents.alive(n)) continue;
@@ -294,7 +299,8 @@ export class Weapons {
   blow(c) {
     const P = this.player;
     c.dead = true; c.hp = 0; c.respawnT = 13;
-    this.crime(55);
+    if (c.blame) this.crime(55); // 혼자 사고로 터진 차는 죄가 아니다
+    c.blame = false;
     if (P.vehicle === c) { P.exit(); P.kick = new B.Vector3((Math.random() - 0.5) * 8, 13, (Math.random() - 0.5) * 8); if (this.onBlast) this.onBlast(45); }
     this.explode(c.pos.x, c.pos.y + 0.8, c.pos.z, 7.5, c);
     const M = c.spec.mass;

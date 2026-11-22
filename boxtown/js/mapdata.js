@@ -1,6 +1,6 @@
 // 마을 설계 데이터. 여기가 "손으로 짜는" 부분이다.
 // 격자 한 칸은 12m. 칸 (cx, cz)의 중심은 월드 좌표 (cx*12, cz*12). +Z가 북쪽, 바다는 남쪽.
-import { NATURE_KEYS, DISTRICT_KEYS, FURNITURE_KEYS, TRAIN_KEYS } from './world.js';
+import { NATURE_KEYS, DISTRICT_KEYS, FURNITURE_KEYS, TRAIN_KEYS, CITY_KEYS } from './world.js';
 export const CELL = 12;
 
 // 북쪽 줄부터 적는다(화면에서 본 지도와 같은 방향).
@@ -93,18 +93,18 @@ export const PROPS = [
 
 // 길가에 세워 둔 차(전부 탈 수 있다). r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
 export const PARKED = [
-  { m: 'cars/taxi', cx: 8.45, cz: 4.27, r: -90 },
-  { m: 'cars/taxi', cx: 9.3, cz: 4.27, r: -90 },
-  { m: 'cars/garbage-truck', cx: 9.2, cz: 6.73, r: 90 },
-  { m: 'cars/delivery', cx: 3.6, cz: 0.73, r: 90 },
-  { m: 'cars/sedan', cx: 2.4, cz: 1.27, r: -90 },
-  { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.73, r: 90 },
-  { m: 'cars/suv', cx: 4.73, cz: 6.2, r: 180 },
-  { m: 'cars/van', cx: 1.27, cz: 2.5, r: 0 },
-  { m: 'cars/police', cx: 6.6, cz: 7.27, r: -90 },
-  { m: 'cars/truck', cx: 9.73, cz: 5.4, r: 0 },
-  { m: 'cars/sedan-sports', cx: 3.2, cz: 6.73, r: 90 },
-  { m: 'cars/firetruck', cx: 3.3, cz: 3.73, r: 90 },
+  { m: 'cars/taxi', cx: 8.45, cz: 4.30, r: -90 },
+  { m: 'cars/taxi', cx: 9.3, cz: 4.30, r: -90 },
+  { m: 'cars/garbage-truck', cx: 9.2, cz: 6.70, r: 90 },
+  { m: 'cars/delivery', cx: 3.6, cz: 0.70, r: 90 },
+  { m: 'cars/sedan', cx: 2.4, cz: 1.30, r: -90 },
+  { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.70, r: 90 },
+  { m: 'cars/suv', cx: 4.70, cz: 6.2, r: 180 },
+  { m: 'cars/van', cx: 1.30, cz: 2.5, r: 0 },
+  { m: 'cars/police', cx: 6.6, cz: 7.30, r: -90 },
+  { m: 'cars/truck', cx: 9.70, cz: 5.4, r: 0 },
+  { m: 'cars/sedan-sports', cx: 3.2, cz: 6.70, r: 90 },
+  { m: 'cars/firetruck', cx: 3.3, cz: 3.70, r: 90 },
 ];
 
 // 밀고 다닐 수 있는 물리 소품(무게 kg).
@@ -151,7 +151,7 @@ export function modelKeys() {
   [
     'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
     'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
-    'suburban/tree-large', 'suburban/tree-small', ...NATURE_KEYS, ...DISTRICT_KEYS, ...FURNITURE_KEYS, ...TRAIN_KEYS,
+    'suburban/tree-large', 'suburban/tree-small', ...NATURE_KEYS, ...DISTRICT_KEYS, ...FURNITURE_KEYS, ...TRAIN_KEYS, ...CITY_KEYS,
   ].forEach((k) => keys.add(k));
   return [...keys];
 }
@@ -159,7 +159,7 @@ export function modelKeys() {
 // 마을 밖에 세워 둔 차(월드 좌표). 높이는 지형에서 읽는다.
 PARKED.push(
   { m: 'cars/tractor', x: -322, z: 180, r: 200 },
-  { m: 'cars/truck', x: 300, z: 226, r: 180 },
+  { m: 'cars/truck', x: 322, z: 240, r: 180 },
   { m: 'cars/suv-luxury', x: 475, z: 148, r: 180 },
   { m: 'cars/race', x: 480.5, z: 148, r: 180 },
   { m: 'cars/suv', x: 132, z: 514, r: 20 },
