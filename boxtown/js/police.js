@@ -57,7 +57,8 @@ export class Police {
   }
 
   // 나쁜 짓 신고
-  report(amount) {
+  report(amount, force = false) {
+    if (this.player.jailed && !force) return; // 갇혀 있는 동안에는 수배되지 않는다(탈옥하다 들킨 경우만 예외)
     const was = this.level;
     this.heat = Math.min(260, this.heat + amount);
     this.lostT = 0;
@@ -147,7 +148,7 @@ export class Police {
       u.lamps[0].setEnabled(on); u.lamps[1].setEnabled(!on);
     }
     // 따돌리기: 멀리 떨어지거나, 건물 안에 숨거나, 경찰이 올 수 없는 곳이면 수배가 식는다.
-    const hidden = P.inside || nearest > LOSE_DIST;
+    const hidden = !P.jailAlarm && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중에는 식지 않는다
     if (hidden) { this.lostT += dt; if (this.lostT > 5) this.heat -= dt * 22; } else this.lostT = 0;
     if (this.heat <= 0) { this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면

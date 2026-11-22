@@ -2,6 +2,7 @@
 // 건물 모델은 속이 막혀 있어서, 문 앞에서 E를 누르면 하늘 높이 따로 지어 둔 방으로 옮겨 간다(나올 때는 들어간 문 앞으로).
 // 방은 상자로 짓는다: 바닥·벽·천장 + 가구 목록.
 import { flatMat, rng } from './util.js';
+import { SITES } from './world.js';
 import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
 
@@ -70,12 +71,17 @@ const ROOMS = {
     ['#f4f1ea', 5.4, 2.4, 0.7, 4.6, 5.5], ['*#e5553f', 1.1, 0.9, 0.9, 2.8, 4.4, 0.9], ['*#4f9bea', 1.1, 0.9, 0.9, 4.6, 4.4, 0.9], ['*#57c27a', 1.1, 0.9, 0.9, 6.4, 4.4, 0.9],
     ['#b9bfd0', 1.2, 0.9, 1, 2.8, 4.4], ['#b9bfd0', 1.2, 0.9, 1, 4.6, 4.4], ['#b9bfd0', 1.2, 0.9, 1, 6.4, 4.4],
     ['*#57c27a', 1.8, 0.05, 1.8, 5.6, -2.6, 0, 0], ['#f4f1ea', 0.5, 1.8, 0.5, 7, -3.4], ['*#57c27a', 0.3, 0.3, 0.3, 7, -3.4, 1.8, 0], ['#4f6fb0', 3.2, 0.6, 1, 1, -4.6], ['#3fa868', 0.6, 1.5, 0.6, 7.2, 1]] },
-  jail: { name: '경찰서', w: 16, d: 11, floor: '#9aa1b3', wall: '#c9cede', clerk: [-5, -2.6, 0], items: [
-    ['#34456f', 4, 1.1, 1.1, -5, -1.4], ['*#ffd84a', 0.5, 0.3, 0.06, -5, -1.98, 0.5, 0],
-    ...[-1, 0, 1, 2, 3, 4, 5, 6, 7].map((i) => ['#3a3d4d', 0.14, 4.4, 0.14, 0.5 + i * 0.85, 1.2, 0, 0]), ['#3a3d4d', 7.4, 0.16, 0.16, 3.6, 1.2, 4.3, 0], ['#3a3d4d', 7.4, 0.16, 0.16, 3.6, 1.2, 0.2, 0],
-    ['#8f95a8', 3, 0.5, 1, 5.6, 4.6], ['#f4f1ea', 2.8, 0.2, 0.9, 5.6, 4.6, 0.5, 0], ['#8f95a8', 0.7, 0.6, 0.7, 1.2, 4.6],
-    ['#6b7a99', 1.4, 0.9, 1.2, 4.5, -3], ['#6b7a99', 1, 0.7, 1, 5.7, -3.2], ['#3a3d4d', 0.12, 1.3, 0.12, 3.4, -2.6], ['#8f95a8', 0.5, 0.2, 0.2, 3.4, -2.6, 1.3, 0],
-    ['*#ffd84a', 1.6, 0.05, 1.6, -1.6, -3.2, 0, 0], ['*#f28b3c', 1.6, 0.05, 1.6, 4.6, -1.6, 0, 0], ['#5a4636', 0.12, 2.6, 1.5, 7.9, 3], ['*#d9473c', 1.6, 0.05, 1.6, 6.8, 3, 0, 0]] },
+  // 교도소: 북쪽에 감방 다섯 칸, 가운데 공용 공간, 동쪽에 출입 금지 복도(탈옥 길)
+  jail: { name: '교도소', w: 30, d: 22, floor: '#9aa1b3', wall: '#c9cede', clerk: [-9, -9.4, 0], items: [
+    ...[-10, -5, 0, 5].map((x) => ['#b9bfd0', 0.3, 4.4, 5, x, 8.5]), // 감방 칸막이
+    ...[-12.5, -7.5, -2.5, 2.5, 7.5].flatMap((c) => [-2.2, -1.6, -1.0, 1.0, 1.6, 2.2].map((o) => ['#3a3d4d', 0.14, 4.4, 0.14, c + o, 6])), // 쇠창살(가운데는 문)
+    ['#3a3d4d', 25, 0.16, 0.16, -2.5, 6, 4.3, 0], ['#3a3d4d', 25, 0.16, 0.16, -2.5, 6, 2.6, 0],
+    ['#b9bfd0', 0.4, 5.2, 17, 10, 2.5], // 출입 금지 복도의 벽
+    ['*#d9473c', 5, 0.05, 0.4, 12.5, -6, 0, 0], ['#e9c9c4', 4.6, 0.03, 16.6, 12.5, 2.5, 0, 0],
+    ['#34456f', 5, 1.1, 1.1, -9, -8], ['*#ffd84a', 0.5, 0.3, 0.06, -9, -7.42, 0.5, 0], ['*#ffd84a', 1.6, 0.05, 1.6, -9, -6, 0, 0], // 벌금 창구
+    ['#6b7a99', 1.6, 1, 1.4, -13, 1.6], ['#6b7a99', 1.1, 0.7, 1, -12.6, 0.2], ['#8f95a8', 0.9, 0.5, 0.9, -13.4, 2.8], ['*#f28b3c', 1.6, 0.05, 1.6, -10.5, 1, 0, 0], // 돌 깨는 곳
+    ['#5a4636', 0.14, 2.7, 1.6, 14.9, 5], ['*#d9473c', 1.6, 0.05, 1.6, 13.8, 5, 0, 0], // 뒷문
+    ['#f4f1ea', 6, 2, 0.1, 0, -10.9, 2, 0]] },
   home: { w: 13, d: 10, items: [] }, // 집 내부는 buildHome이 집마다 따로 만든다
 };
 // 가게마다 놓는 가구 모델과, 그 자리에 있던 상자 가구를 빼는 규칙
@@ -85,7 +91,8 @@ const DRESS = {
   cafe: [...set4(-4, 2.6, 'tableRound'), ...set4(-4, -0.9, 'tableRound'), ['loungeSofa', -4.6, -4.2, 180], ['tableCoffee', -4.6, -2.9, 0], ['loungeChair', 3.2, -3.9, 180], ['kitchenCoffeeMachine', 2.2, 2, 0, 1.2, 0], ['bookcaseOpen', -6, 4.4, 0]],
   hotel: [['loungeSofa', -5.6, -0.4, 0], ['tableCoffee', -5.6, -2.2, 0], ['loungeChair', -7.2, -2.2, -90], ['loungeSofa', 5.6, -0.4, 0], ['tableCoffee', 5.6, -2.2, 0], ['loungeChair', 7.2, -2.2, 90], ['lampRoundFloor', -7.3, -0.3, 0], ['lampRoundFloor', 7.3, -0.3, 0], ['pottedPlant', -7.2, 5, 0], ['pottedPlant', 7.2, 5, 0], ['rugRectangle', -5.6, -1.8, 0, 0, 0], ['rugRectangle', 5.6, -1.8, 0, 0, 0], ['bench', -3, -5.2, 180], ['bench', 3, -5.2, 180]],
   hospital: [['bedSingle', -6.2, 3.9, 0], ['bedSingle', -2.6, 3.9, 0], ['cabinetBedDrawerTable', -7.5, 5.4, 0], ['cabinetBedDrawerTable', -1.3, 5.4, 0], ['chairDesk', -4.5, -2.4, 0, 0, 0], ['computerScreen', -5.4, -1.2, 180, 1.1, 0], ['benchCushion', 0.2, -4.9, 180], ['benchCushion', 1.8, -4.9, 180], ['bathroomSink', 7.4, 1, 90]],
-  jail: [['bedSingle', 6.6, 3.9, 0], ['toilet', 1.2, 4.6, 0], ['desk', -5, 1.2, 180], ['chairDesk', -5, 2.4, 180, 0, 0], ['computerScreen', -5, 1.2, 0, 1.16, 0], ['bench', -7.3, -3, -90], ['bookcaseClosedWide', -2, 5, 0]],
+  jail: [...[-12.5, -7.5, -2.5, 2.5, 7.5].flatMap((c) => [['bedSingle', c - 1.2, 9.2, 0], ['toilet', c + 1.7, 10.2, 0, 0, 0]]), ['table', -3, -1.5, 0], ['benchCushion', -3, -3, 180], ['bench', -3, 0, 0], ['table', 4, -1.5, 0], ['bench', 4, -3, 180], ['bench', 4, 0, 0],
+    ['chairDesk', -9, -9.6, 0, 0, 0], ['computerScreen', -10, -8, 180, 1.1, 0], ['bench', 2, -9.8, 180], ['bookcaseOpen', -14.3, -4, -90], ['televisionVintage', 0.5, 3.4, 180, 0, 0]],
   store: [['kitchenFridge', 6.2, -1, 90], ['kitchenFridge', 6.2, 0.4, 90], ['stoolBar', -4.6, 0.4, 180, 0, 0]],
   taxi: [['chairDesk', -3, 3.2, 0, 0, 0], ['computerScreen', -3.6, 2, 180, 1.0, 0], ['benchCushion', 2, -3.9, 180], ['benchCushion', 3.6, -3.9, 180], ['bookcaseClosedWide', -4.6, 4.5, 0], ['tableCoffee', 3, -2.4, 0]],
   fire: [['chairDesk', 5, 3.2, 180, 0, 0], ['computerScreen', 5, 4.6, 0, 1.0, 0], ['bench', -4.9, 2.9, 180], ['bench', -3.5, 2.9, 180], ['bedSingle', 6.8, -3.4, 90], ['bedSingle', 3.6, -3.4, 90]],
@@ -102,7 +109,6 @@ const DROP = {
   cafe: (c, w) => (c === '#8b5d3a' && w === 1.3) || (c === '#f4c542' && w === 0.6) || (c === '#3fa868' && w === 0.6),
   hotel: (c, w) => c === '#4f6fb0' || (c === '#8b5d3a' && w === 1.4) || (c === '#3fa868' && w === 0.7),
   hospital: (c, w) => (c === '#8f95a8' && w === 2.2) || (c === '#f4f1ea' && w === 2) || c === '#6fb6d9' || (c === '#3fa868' && w === 0.6) || (c === '#4f6fb0' && w === 3.2),
-  jail: (c, w) => (c === '#8f95a8' && (w === 3 || w === 0.7)) || (c === '#f4f1ea' && w === 2.8),
   taxi: (c, w) => c === '#ffd84a' && w === 3.6, fire: (c, w) => c === '#b9814f' && w === 4,
 };
 const PRICE = { midtown: 6000, north: 3800, east: 3400, west: 3000, town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
@@ -302,14 +308,14 @@ export function buildInteriors(h) {
     { id: 'cafe', key: 'commercial/building-d', x: 24, z: 6.02 * 12, yaw: FACE.N, bg: '#8a5a2b' },
     { id: 'hotel', key: 'commercial/building-n', x: 456, z: 154, yaw: 0, bg: '#34456f' },
     { id: 'hospital', key: 'commercial/building-n', x: 8.15 * 12, z: 2.5 * 12, yaw: FACE.S, bg: '#d9473c' },
-    { id: 'jail', key: 'commercial/building-j', x: 3.45 * 12, z: 5.15 * 12, yaw: FACE.S, bg: '#34456f' },
+    { id: 'jail', door: { x: SITES.prison.x, z: SITES.prison.z + 9.2 }, yaw: FACE.N, bg: '#34456f' }, // 교도소 건물은 districts.js에서 짓는다
     { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
-    const f = frontOf(s.key, s.x, s.z, s.yaw, 1.1), y = h.groundY(f.x, f.z);
+    const f = s.door || frontOf(s.key, s.x, s.z, s.yaw, 1.1), y = h.groundY(f.x, f.z);
     buildRoom(s.id, s.id, f.x, f.z);
     doors.push({ id: s.id, room: s.id, x: f.x, y, z: f.z, yaw: s.yaw, gem: marker(f.x, y, f.z) });
-    signPlane(ROOMS[s.id].name, f.x + Math.sin(s.yaw) * 0.9, y + 3.5, f.z + Math.cos(s.yaw) * 0.9, s.yaw, s.bg);
+    if (s.id === 'jail') signPlane('교도소', SITES.prison.x, y + 6.6, SITES.prison.z + 20.2, Math.PI, s.bg); else signPlane(ROOMS[s.id].name, f.x + Math.sin(s.yaw) * 0.9, y + 3.5, f.z + Math.cos(s.yaw) * 0.9, s.yaw, s.bg);
   }
   // 살 수 있는 집: 안은 모두 같은 방을 쓴다.
   const forSale = M('#d9473c'), mine = M('*#57c27a'), post = M('#f4f1ea');
