@@ -1,6 +1,6 @@
 // 마을 설계 데이터. 여기가 "손으로 짜는" 부분이다.
 // 격자 한 칸은 12m. 칸 (cx, cz)의 중심은 월드 좌표 (cx*12, cz*12). +Z가 북쪽, 바다는 남쪽.
-import { NATURE_KEYS, DISTRICT_KEYS } from './world.js';
+import { NATURE_KEYS, DISTRICT_KEYS, FURNITURE_KEYS, TRAIN_KEYS } from './world.js';
 export const CELL = 12;
 
 // 북쪽 줄부터 적는다(화면에서 본 지도와 같은 방향).
@@ -151,7 +151,7 @@ export function modelKeys() {
   [
     'roads/road-straight', 'roads/road-bend', 'roads/road-intersection', 'roads/road-crossroad', 'roads/road-end',
     'roads/road-crossing', 'roads/tile-low', 'roads/light-square', 'roads/light-curved', 'roads/traffic-light',
-    'suburban/tree-large', 'suburban/tree-small', ...NATURE_KEYS, ...DISTRICT_KEYS,
+    'suburban/tree-large', 'suburban/tree-small', ...NATURE_KEYS, ...DISTRICT_KEYS, ...FURNITURE_KEYS, ...TRAIN_KEYS,
   ].forEach((k) => keys.add(k));
   return [...keys];
 }
