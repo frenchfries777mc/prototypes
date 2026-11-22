@@ -393,5 +393,5 @@ export function buildTown(scene, assets, mark = () => {}) {
     }
   });
 
-  return { casters, jobSites, boatSpots, docks, dynamics, interiors, update: (dt) => updaters.forEach((u) => u(dt)) };
+  return { casters, jobSites, boatSpots, docks, dynamics, interiors, lazyCollider, update: (dt) => updaters.forEach((u) => u(dt)) };
 }

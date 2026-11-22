@@ -340,7 +340,7 @@ export function buildInteriors(h) {
       if (d.house && !owned.has(d.id)) return `${d.name} 사기 (${won(d.price)}원)`;
       return d.house ? '내 집 들어가기' : '들어가기';
     },
-    fade() { const f = $('fade'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 220); },
+    fade() { const f = $('fade'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 320); },
     // 방으로 바로 데려간다(병원에서 깨어나기, 감옥에 갇히기).
     send(id, x = 0, z = 0) {
       const P = this.player, d = doors.find((q) => q.id === id), r = rooms[id];

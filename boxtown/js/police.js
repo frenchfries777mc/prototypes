@@ -69,7 +69,7 @@ export class Police {
   spawnPoint() {
     const p = this.player.feet, c = [];
     for (let j = 0; j < GRID.length; j++) for (let i = 0; i < GRID[j].length; i++) if (isRoad(i, j)) c.push([i * CELL, j * CELL, 0.12]);
-    for (const path of paths) for (let k = 0; k < path.pts.length; k += 5) { const q = path.pts[k]; if (!q.water) c.push([q.x, q.z, q.y]); }
+    for (const path of paths) if (path.type !== 'rail') for (let k = 0; k < path.pts.length; k += 5) { const q = path.pts[k]; if (!q.water) c.push([q.x, q.z, q.y]); }
     const ok = c.filter(([x, z]) => { const d = Math.hypot(x - p.x, z - p.z); return d > 70 && d < 130 && !this.units.some((u) => u.active && Math.hypot(u.car.pos.x - x, u.car.pos.z - z) < 12); });
     return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
   }
