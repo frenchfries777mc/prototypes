@@ -164,7 +164,7 @@ npx serve .        # 또는 python3 -m http.server
 
 ## 에셋
 
-모델은 전부 [Kenney](https://kenney.nl)의 CC0(퍼블릭 도메인) 팩에서 쓰는 것만 골라 `assets/`에 넣었다: City Kit (Roads, Commercial, Suburban, Industrial), Car Kit, Pirate Kit, Watercraft Pack, Nature Kit. 팩별 라이선스 원문은 `assets/<팩>/License.txt`에 있다. 지형, 바다, 하늘, 구름, 캐릭터, 공원, 잔교, 등대는 코드로 만들었다.
+실내 가구는 Furniture Kit(OBJ를 `tools/obj2glb.mjs`로 GLB로 변환), 기차는 Train Kit의 모델이다. 모델은 전부 [Kenney](https://kenney.nl)의 CC0(퍼블릭 도메인) 팩에서 쓰는 것만 골라 `assets/`에 넣었다: City Kit (Roads, Commercial, Suburban, Industrial), Car Kit, Pirate Kit, Watercraft Pack, Nature Kit. 팩별 라이선스 원문은 `assets/<팩>/License.txt`에 있다. 지형, 바다, 하늘, 구름, 캐릭터, 공원, 잔교, 등대는 코드로 만들었다.
 
 ## 다음 단계
 
