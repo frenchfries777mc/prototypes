@@ -85,6 +85,24 @@ export function buildTown(scene, assets, mark = () => {}) {
     return m;
   };
   const buckets = new Map();
+  // 모아 둔 상자들을 "지구 × 재질"별 메시 하나로 합친다. only를 주면 그 지구 것만(나중에 지은 방).
+  const mergeBuckets = (only) => {
+    for (const [key, b] of buckets) {
+      if (only && b.id !== only) continue;
+      const merged = B.Mesh.MergeMeshes(b.list, true, true);
+      merged.material = b.mat; merged.receiveShadows = true; merged.isPickable = false; merged.freezeWorldMatrix();
+      assets.addGroup(merged, b.x, b.z, 1500, b.shadow, b.id);
+      buckets.delete(key);
+    }
+  };
+  // 게임 도중에 방을 지을 때 쓰는 충돌체 묶음(이미 등록된 구역 묶음에는 더 넣지 않는다).
+  const lazyCollider = () => {
+    const c = new B.PhysicsShapeContainer(scene);
+    return {
+      add: (x, y, z, sx, sy, sz) => c.addChild(unitBox, new B.Vector3(x, y, z), B.Quaternion.Identity(), new B.Vector3(sx, sy, sz)),
+      done: () => { const body = new B.PhysicsBody(new B.TransformNode('lazyStatics', scene), B.PhysicsMotionType.STATIC, false, scene); body.shape = c; },
+    };
+  };
   let cur = { id: 'town', x: 66, z: 48 };
   const bucket = (id, x, z) => { cur = { id, x, z }; };
 
@@ -309,17 +327,13 @@ export function buildTown(scene, assets, mark = () => {}) {
   bucket('town', 66, 48);
 
   // ---------- 건물 내부와 살 수 있는 집 ----------
-  const interiors = buildInteriors({ scene, assets, box, addBox, bucket, groundY, jobSites, houses });
+  const interiors = buildInteriors({ scene, assets, box, addBox, bucket, groundY, jobSites, houses, mergeBuckets, lazyCollider });
   bucket('town', 66, 48);
 
   mark('town.jobsites');
   assets.flush();
   mark('town.flush');
-  for (const b of buckets.values()) {
-    const merged = B.Mesh.MergeMeshes(b.list, true, true);
-    merged.material = b.mat; merged.receiveShadows = true; merged.isPickable = false; merged.freezeWorldMatrix();
-    assets.addGroup(merged, b.x, b.z, 1500, b.shadow);
-  }
+  mergeBuckets();
 
   mark('town.merge');
   // ---------- 고정 충돌체 등록 ----------
