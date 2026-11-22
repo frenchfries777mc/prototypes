@@ -318,7 +318,7 @@ export class Player {
     // 물에 빠지면 마지막으로 땅을 딛고 있던 곳으로 돌아간다.
     this.safeT = (this.safeT || 0) + dt;
     if (this.safeT > 0.7 && this.grounded && p.y > SEA + 1.6) { this.safeT = 0; this.spawn = { x: p.x, y: p.y - CAP_H / 2, z: p.z, yaw: this.yaw }; }
-    if (p.y < SEA - 2.2) this.respawn();
+    if (p.y < SEA - 30) this.respawn(); // 세계 밖으로 떨어졌을 때만(물에 빠진 것은 health.js가 맡는다)
     this.feet.set(p.x, p.y - CAP_H / 2 - FOOT_PAD, p.z);
     this.chr.update(dt, { pos: this.feet, vel: cc.getVelocity(), grounded: this.grounded || this.airT < 0.1, wishHeading: this.wishHeading, landed: this.landed, jumped: this.jumped });
   }
