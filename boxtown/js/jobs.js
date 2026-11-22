@@ -799,6 +799,41 @@ function rangerJob(J, site) {
   });
 }
 
+// ---------- 간호사: 환자의 증상에 맞는 약을 약장에서 골라 준다 ----------
+const CASES = [
+  ['열이 펄펄 나요', 0], ['이마가 뜨거워요', 0], ['무릎이 까졌어요', 1], ['손을 베였어요', 1], ['기침이 멈추질 않아요', 2], ['목이 따가워요', 2],
+];
+const MEDS = [['빨간 해열제', 2.8], ['파란 붕대', 4.6], ['초록 기침약', 6.4]];
+function nurseJob(J, site) {
+  const R = site.room; // 병원 방
+  let patient, now, streak = 0, count = 0;
+  const spot = () => new B.Vector3(R.cx - 0.9, R.y0, R.cz + 2.9);
+  const next = () => {
+    if (patient) disposeChr(patient);
+    patient = makePassenger(J);
+    now = J.r.pick(CASES);
+    J.toast(`환자: "${now[0]}"`);
+  };
+  const station = () => MEDS.findIndex((m) => Math.hypot(R.cx + m[1] - J.pos.x, R.cz + 3.2 - J.pos.z) < 1.3);
+  return {
+    start() { next(); },
+    prompt() { const i = station(); return i >= 0 ? `${MEDS[i][0]} 주기` : ''; },
+    use() {
+      const i = station();
+      if (i < 0) return false;
+      if (i === now[1]) { streak++; count++; J.pay(170 + Math.min(streak, 6) * 25, '딱 맞는 처방이에요'); next(); }
+      else { streak = 0; J.toast('그 약이 아니에요. 증상을 다시 보세요'); }
+      return true;
+    },
+    update() {
+      const p = spot();
+      standAt(J, patient, p, 0);
+      J.panel('간호사', `환자: "${now[0]}"`, `약장에서 맞는 약을 골라 E · 돌본 환자 ${count}명`);
+    },
+    stop() { if (patient) disposeChr(patient); },
+  };
+}
+
 const DEFS = {
   pizza: { name: '피자 배달', color: '#f2644b', make: pizzaJob },
   taxi: { name: '택시 기사', color: '#ffd84a', make: taxiJob },
@@ -813,4 +848,5 @@ const DEFS = {
   race: { name: '레이서', color: '#f2644b', make: raceJob },
   treasure: { name: '보물 사냥꾼', color: '#c99a3a', make: treasureJob },
   ranger: { name: '산림 감시원', color: '#3fa868', make: rangerJob },
+  nurse: { name: '간호사', color: '#f08fb0', make: nurseJob },
 };

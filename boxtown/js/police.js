@@ -115,6 +115,7 @@ export class Police {
   }
 
   arrest() {
+    if (this.onArrest) { this.clear(); this.onArrest(); return; } // 감옥으로
     const P = this.player, fine = Math.min(this.jobs.money, 300 + this.level * 300);
     this.jobs.spend(fine);
     if (P.vehicle) P.exit();

@@ -10,15 +10,23 @@ const SUS_TOP = 0.45; // 바퀴 중심에서 광선 시작점까지의 높이
 const SAG = 0.14; // 정지 상태에서 스프링이 눌린 길이
 const DROOP = 0.3; // 바퀴가 아래로 늘어질 수 있는 길이
 
+// 차종별 성격: mass 무게, engine 가속력, vmax 최고 속도(m/s), grip 접지력, steer 핸들이 꺾이는 정도.
 const SPECS = {
-  default: { mass: 900, engine: 11, vmax: 27, grip: 11 },
-  'cars/hatchback-sports': { mass: 800, engine: 15, vmax: 36, grip: 12 },
-  'cars/sedan-sports': { mass: 820, engine: 14, vmax: 34, grip: 12 },
-  'cars/police': { mass: 900, engine: 13, vmax: 27, grip: 12 },
-  'cars/truck': { mass: 1400, engine: 8, vmax: 22, grip: 10 },
-  'cars/firetruck': { mass: 1800, engine: 8, vmax: 22, grip: 10 },
-  'cars/delivery': { mass: 1300, engine: 9, vmax: 23, grip: 10 },
-  'cars/van': { mass: 1200, engine: 9, vmax: 24, grip: 10 },
+  default: { mass: 900, engine: 10, vmax: 26, grip: 12, steer: 0.5 },
+  'cars/sedan': { mass: 950, engine: 10, vmax: 27, grip: 12, steer: 0.5 },
+  'cars/taxi': { mass: 950, engine: 11, vmax: 28, grip: 12, steer: 0.52 },
+  'cars/hatchback-sports': { mass: 780, engine: 15, vmax: 36, grip: 14, steer: 0.58 },
+  'cars/sedan-sports': { mass: 820, engine: 14, vmax: 34, grip: 13, steer: 0.55 },
+  'cars/race': { mass: 650, engine: 19, vmax: 46, grip: 16, steer: 0.5 },
+  'cars/suv': { mass: 1250, engine: 10, vmax: 26, grip: 12, steer: 0.46 },
+  'cars/suv-luxury': { mass: 1300, engine: 12, vmax: 31, grip: 13, steer: 0.48 },
+  'cars/police': { mass: 900, engine: 13, vmax: 27, grip: 13, steer: 0.55 },
+  'cars/van': { mass: 1250, engine: 8.5, vmax: 23, grip: 11, steer: 0.44 },
+  'cars/delivery': { mass: 1400, engine: 8, vmax: 22, grip: 11, steer: 0.42 },
+  'cars/truck': { mass: 1500, engine: 7.5, vmax: 21, grip: 11, steer: 0.4 },
+  'cars/garbage-truck': { mass: 2000, engine: 6.5, vmax: 18, grip: 11, steer: 0.36 },
+  'cars/firetruck': { mass: 1900, engine: 8, vmax: 24, grip: 11, steer: 0.38 },
+  'cars/tractor': { mass: 1100, engine: 7, vmax: 13, grip: 15, steer: 0.62 },
 };
 
 const tmp = { a: new B.Vector3(), b: new B.Vector3(), c: new B.Vector3() };
@@ -57,7 +65,7 @@ export class Vehicle {
     this.com = new B.Vector3(0, 0.42, this.zc);
     this.body.setMassProperties({ mass: M, centerOfMass: this.com });
     this.body.setLinearDamping(0.04);
-    this.body.setAngularDamping(1.1);
+    this.body.setAngularDamping(1.0);
     this.ray = new B.PhysicsRaycastResult();
     this.steer = 0;
     this.speed = 0; // 앞쪽 방향 속도(m/s)
@@ -87,7 +95,7 @@ export class Vehicle {
     const throttle = input ? input.throttle : 0;
     const speedAbs = Math.abs(this.speed);
     // 빠를수록 핸들이 덜 꺾인다.
-    const maxSteer = 0.62 / (1 + speedAbs / 11);
+    const maxSteer = (this.spec.steer || 0.5) / (1 + speedAbs / 9);
     this.steer = damp(this.steer, input ? input.steer * maxSteer : 0, 9, dt);
     const phys = this.scene.getPhysicsEngine();
     const pointVel = (pt) => v.add(B.Vector3.Cross(w, pt.subtract(comW)));
@@ -116,7 +124,7 @@ export class Vehicle {
       const vc = pointVel(hit), vf = B.Vector3.Dot(vc, f), vs = B.Vector3.Dot(vc, s);
       const hand = input && input.handbrake && !wh.front;
       // 옆 방향: 미끄러지는 속도를 지운다. 접지 한계를 넘으면 미끄러진다(드리프트).
-      const mu = hand ? 0.55 : 1.55;
+      const mu = hand ? 0.6 : 1.9; // 접지 한계를 넉넉하게: 웬만해선 미끄러지지 않는다
       const Fs = clamp(-vs * M4 * this.spec.grip, -mu * F, mu * F);
       // 앞 방향: 구동, 제동, 굴림 저항
       let Fl;
@@ -135,6 +143,12 @@ export class Vehicle {
       wh.spin += (vf / wh.r) * dt;
     }
     this.groundedWheels = grounded;
+    // 부딪힘: 속도가 한순간에 크게 바뀌면 차가 망가진다.
+    if (this.pv && this.restore === 0 && !this.dead) {
+      const dv = Math.hypot(v.x - this.pv.x, v.y - this.pv.y, v.z - this.pv.z);
+      if (dv > 4.5) { this.hp -= (dv - 3.5) * 3; if (this.onCrash) this.onCrash(dv); }
+    }
+    this.pv = v.clone();
     // 뒤집히면 잠시 뒤 바로 세운다.
     this.flipT = this.up.y < 0.25 ? this.flipT + dt : 0;
     if (this.flipT > 1.6 && !this.dead) { this.reset(p.x, p.y + 1.2, p.z, this.yaw); this.flipT = 0; }
