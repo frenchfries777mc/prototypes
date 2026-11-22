@@ -53,6 +53,8 @@ export const ROADS = [
   // 북쪽: 마을 -> 호수 마을 -> 산 전망대
   { type: 'road', pin: 0.03, pts: [[12, 99], [8, 170], [34, 260], [66, 350], [96, 440], [120, 520]] },
   { type: 'dirt', pts: [[212, 562], [256, 588], [312, 640], [318, 700], [282, 742], [248, 748]] },
+  // 철도: 항구역 -> 공단역 -> 해변역 -> 야영장역 (맨 끝에 둔다: 앞의 길 번호가 바뀌지 않게)
+  { type: 'rail', pts: [[158, 100], [215, 128], [262, 118], [330, 150], [400, 190], [470, 215], [530, 270], [548, 350], [530, 420]] },
 ];
 
 // 터: 건물이 설 자리를 평평하게 다진다. r 안쪽은 평지, blend만큼 주변과 이어진다.
@@ -120,3 +122,6 @@ export const DISTRICT_KEYS = [
   'pirate/flag-pirate-high', 'pirate/flag-high', 'pirate/chest', 'pirate/ship-wreck', 'pirate/structure', 'pirate/structure-roof', 'pirate/barrel', 'pirate/crate',
   'watercraft/boat-row-small', 'watercraft/boat-row-large', 'watercraft/boat-fishing-small', 'watercraft/boat-sail-a', 'watercraft/boat-sail-b', 'watercraft/boat-speed-a', 'watercraft/boat-tug-a',
 ];
+
+// 철도역: 노선 위의 위치(0~1)와 이름
+export const STATIONS = [[0.02, '항구역'], [0.33, '공단역'], [0.6, '해변역'], [0.98, '야영장역']];
