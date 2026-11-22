@@ -1,12 +1,14 @@
 // 부팅: 엔진, 물리, 조명, 후처리, 월드 조립.
 import { Assets } from './assets.js';
-import { buildTerrain, buildWater, buildSky, height } from './terrain.js';
+import { buildTerrain, buildWater, buildSky, height, initGrid } from './terrain.js';
 import { buildTown, groundY, ROAD_Y } from './town.js';
 import { modelKeys, carKeys, SPAWN, PARKED, CELL } from './mapdata.js';
 import { Garage } from './vehicles.js';
 import { Residents } from './npc.js';
 import { Jobs } from './jobs.js';
 import { MapView } from './map.js';
+import { Weapons } from './weapons.js';
+import { Police } from './police.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -15,6 +17,10 @@ const $ = (id) => document.getElementById(id);
 const setProgress = (p, text) => { $('bar').style.width = Math.round(p * 100) + '%'; if (text) $('loadText').textContent = text; };
 
 async function boot() {
+  // 로딩 단계별 걸린 시간(ms). 콘솔에서 __game.timing 으로 볼 수 있다.
+  const timing = {}, t0 = performance.now();
+  let tPrev = t0;
+  const mark = (k) => { const n = performance.now(); timing[k] = Math.round(n - tPrev); tPrev = n; };
   const canvas = $('game');
   const isTouch = matchMedia('(pointer: coarse)').matches;
   const params = new URLSearchParams(location.search);
@@ -54,21 +60,29 @@ async function boot() {
   sun.diffuse = B.Color3.FromHexString('#fff1d6');
   sun.specular = B.Color3.FromHexString('#fff1d6');
 
+  mark('engine');
   setProgress(0.06, '에셋 불러오는 중');
   const assets = new Assets(scene);
   await assets.load(modelKeys(), (p) => setProgress(0.06 + p * 0.55));
   await Promise.all(carKeys().map((k) => assets.loadCar(k)));
   setProgress(0.66);
 
+  mark('assets');
   setProgress(0.68, '섬과 바다 만드는 중');
   await new Promise((r) => setTimeout(r, 0));
-  for (const chunk of buildTerrain(scene)) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  initGrid();
+  mark('heightGrid');
+  const chunks = buildTerrain(scene);
+  mark('terrainMesh');
+  for (const chunk of chunks) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  mark('terrainPhysics');
   buildSky(scene, env);
   buildWater(scene, env);
 
   setProgress(0.82, '마을 세우는 중');
   await new Promise((r) => setTimeout(r, 0));
-  const town = buildTown(scene, assets);
+  const town = buildTown(scene, assets, mark);
+  mark('town.rest');
 
   const character = new Character(scene);
   const input = new Input(canvas);
@@ -77,6 +91,8 @@ async function boot() {
   garage.addBoats(scene, assets, town.boatSpots);
   const residents = new Residents(scene, groundY);
   const player = new Player(scene, input, character, spawn, garage);
+  const police = new Police({ scene, assets, garage, player, jobs: null, height });
+  const interiors = town.interiors;
   scene.activeCamera = player.cam;
 
   // 그림자: 가까운 곳은 선명하게, 먼 곳은 넓게 덮는 단계별 그림자.
@@ -96,13 +112,25 @@ async function boot() {
   assets.shadowRange = quality === 'low' ? 110 : 185;
   const fixedCasters = [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes];
   assets.cull(player.cam.position, rl, fixedCasters);
-  let cullT = 0;
+  let cullT = 0, lastInterior = null;
 
-  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
-  player.onUse = () => jobs.use();
+  const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  police.jobs = jobs;
+  interiors.init(player, jobs);
+  player.onUse = () => interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
+  const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  police.weapons = weapons;
+  interiors.weapons = weapons;
+  weapons.toast = (text, good) => jobs.toast(text, good);
+  weapons.onCrime = (amount) => police.report(amount);
+  mark('actors');
   const map = new MapView(() => ({
-    x: player.feet.x, z: player.feet.z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
-    pads: jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color })),
+    x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
+    pads: [
+      ...jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
+      ...interiors.homes.filter((d) => interiors.owned.has(d.id)).map((d) => ({ x: d.x, z: d.z, color: '#57c27a', name: '내 집' })),
+      ...police.marks().map((m) => ({ x: m.x, z: m.z, color: '#2f6bff', name: '' })),
+    ],
   }));
 
   // 후처리: 구석 그늘(SSAO), 밝은 곳 번짐, 대비와 색감.
@@ -127,18 +155,21 @@ async function boot() {
   const tick = (dt) => {
     town.update(dt);
     cullT -= dt;
-    if (cullT <= 0) { cullT = 0.3; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
+    if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
     residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);
     jobs.update(dt);
     map.update(dt);
-    const text = jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
+    weapons.update(dt, map.open);
+    police.update(dt);
+    interiors.update(dt);
+    const text = interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
       $('promptText').textContent = text;
-      $('btnUse').textContent = text.length > 5 ? text.slice(0, 5) : text || '타기';
+      $('btnUse').textContent = text.length > 6 ? text.slice(0, 6) : text || '타기';
       $('btnUse').style.visibility = text ? 'visible' : 'hidden';
       document.body.classList.toggle('driving', !!car);
     }
@@ -187,8 +218,11 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors };
+  mark('map+fx');
   await scene.whenReadyAsync();
+  mark('shaders');
+  timing.total = Math.round(performance.now() - t0);
   engine.runRenderLoop(() => scene.render());
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');

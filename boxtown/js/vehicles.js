@@ -14,7 +14,7 @@ const SPECS = {
   default: { mass: 900, engine: 11, vmax: 27, grip: 11 },
   'cars/hatchback-sports': { mass: 800, engine: 15, vmax: 36, grip: 12 },
   'cars/sedan-sports': { mass: 820, engine: 14, vmax: 34, grip: 12 },
-  'cars/police': { mass: 900, engine: 14, vmax: 33, grip: 12 },
+  'cars/police': { mass: 900, engine: 13, vmax: 27, grip: 12 },
   'cars/truck': { mass: 1400, engine: 8, vmax: 22, grip: 10 },
   'cars/firetruck': { mass: 1800, engine: 8, vmax: 22, grip: 10 },
   'cars/delivery': { mass: 1300, engine: 9, vmax: 23, grip: 10 },
@@ -34,6 +34,7 @@ export class Vehicle {
     this.root.rotationQuaternion = B.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
     this.home = { pos: this.root.position.clone(), rot: this.root.rotationQuaternion.clone() };
     parts.body.parent = this.root;
+    this.parts = parts;
     this.width = parts.max.x - parts.min.x;
     this.length = parts.max.z - parts.min.z;
     this.height = parts.max.y;
@@ -60,6 +61,7 @@ export class Vehicle {
     this.ray = new B.PhysicsRaycastResult();
     this.steer = 0;
     this.speed = 0; // 앞쪽 방향 속도(m/s)
+    this.hp = 100; this.dead = false;
     this.flipT = 0;
     this.safeT = 0; this.safe = null;
     this.driven = false;
@@ -135,7 +137,7 @@ export class Vehicle {
     this.groundedWheels = grounded;
     // 뒤집히면 잠시 뒤 바로 세운다.
     this.flipT = this.up.y < 0.25 ? this.flipT + dt : 0;
-    if (this.flipT > 1.6) { this.reset(p.x, p.y + 1.2, p.z, this.yaw); this.flipT = 0; }
+    if (this.flipT > 1.6 && !this.dead) { this.reset(p.x, p.y + 1.2, p.z, this.yaw); this.flipT = 0; }
     // 바다에 빠지면 마지막으로 멀쩡히 서 있던 곳으로 돌아간다.
     this.safeT += dt;
     if (this.safeT > 1 && grounded >= 3 && this.up.y > 0.85 && p.y > SEA + 0.9) { this.safeT = 0; this.safe = { x: p.x, y: p.y, z: p.z, yaw: this.yaw }; }
@@ -185,6 +187,7 @@ export class Boat {
     this.corners = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => new B.Vector3(a * this.width * 0.38, 0, this.zc + b * this.length * 0.4));
     this.up = new B.Vector3(0, 1, 0); this.fwd = new B.Vector3(0, 0, 1); this.right = new B.Vector3(1, 0, 0);
     this.speed = 0; this.steer = 0; this.flipT = 0; this.restore = 0; this.t = x * 0.37; this.wheels = [];
+    this.hp = 100; this.dead = false; this.parts = { body: mesh };
   }
   get pos() { return this.root.position; }
   get yaw() { return Math.atan2(this.fwd.x, this.fwd.z); }
@@ -223,7 +226,7 @@ export class Boat {
     body.applyImpulse(imp, comW);
     body.setAngularVelocity(new B.Vector3(w.x, damp(w.y, yawRate, 5, dt), w.z));
     this.flipT = this.up.y < 0.2 ? this.flipT + dt : 0;
-    if (this.flipT > 1.5) { this.reset(p.x, SEA + 0.4, p.z, this.yaw); this.flipT = 0; }
+    if (this.flipT > 1.5 && !this.dead) { this.reset(p.x, SEA + 0.4, p.z, this.yaw); this.flipT = 0; }
     if (p.y < SEA - 4 || p.x < WORLD.x0 + 20 || p.x > WORLD.x1 - 20 || p.z < WORLD.z0 + 20 || p.z > WORLD.z1 - 20) this.reset(this.home.pos.x, SEA + 0.3, this.home.pos.z, null);
   }
   reset(x, y, z, yaw) {
@@ -244,13 +247,14 @@ export class Garage {
       : new Vehicle(scene, assets, p.m, p.x, heightFn(p.x, p.z) + 0.3, p.z, ((p.r || 0) * Math.PI) / 180)));
   }
   addBoats(scene, assets, spots) { for (const b of spots) this.cars.push(new Boat(scene, assets, b.m || 'watercraft/boat-speed-a', b.x, b.z, b.yaw)); }
-  fixedUpdate(dt, driven, input) { for (const c of this.cars) c.fixedUpdate(dt, c === driven ? input : null); }
+  // 터진 차는 움직이지 않는다. 경찰차처럼 스스로 모는 차는 ai()가 조작을 돌려준다.
+  fixedUpdate(dt, driven, input) { for (const c of this.cars) c.fixedUpdate(dt, c.dead ? null : c.ai ? c.ai(dt) : c === driven ? input : null); }
   frame() { for (const c of this.cars) c.frame(); }
   nearest(pos, maxDist) {
     let best = null, bd = maxDist;
     for (const c of this.cars) {
       const d = Math.hypot(c.pos.x - pos.x, c.pos.z - pos.z) - c.width * 0.5;
-      if (d < bd && Math.abs(c.pos.y - pos.y) < 3) { bd = d; best = c; }
+      if (d < bd && !c.police && Math.abs(c.pos.y - pos.y) < 3) { bd = d; best = c; }
     }
     return best;
   }

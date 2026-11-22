@@ -5,7 +5,8 @@ import { buildRoads } from './roads.js';
 import { buildDistricts } from './districts.js';
 import { scatterNature } from './nature.js';
 import { rng, flatMat } from './util.js';
-import { buildJobSites } from './jobsites.js';
+import { buildJobSites, buildOutposts } from './jobsites.js';
+import { buildInteriors } from './interiors.js';
 const B = window.BABYLON;
 
 const FACE = { S: 0, W: Math.PI / 2, N: Math.PI, E: (3 * Math.PI) / 2 };
@@ -46,15 +47,19 @@ export function groundY(x, z) {
   return height(x, z);
 }
 
-export function buildTown(scene, assets) {
-  const colliders = new B.PhysicsShapeContainer(scene);
+export function buildTown(scene, assets, mark = () => {}) {
+  // 고정 충돌체는 192m 구역마다 묶음 하나로 나눈다. 한 묶음에 수천 개를 넣으면 넣을 때마다 느려져서 로딩이 몇 초씩 걸린다.
+  const colliders = new Map();
   const casters = [];
   const updaters = [];
   // 고정 충돌 상자 추가. (cx,cy,cz)는 상자 중심.
+  // 상자 모양은 하나만 만들고, 위치·회전·크기만 달리해서 여러 번 넣는다(모양을 수천 개 따로 만들면 로딩이 몇 초씩 걸린다).
+  const unitBox = new B.PhysicsShapeBox(B.Vector3.Zero(), B.Quaternion.Identity(), new B.Vector3(1, 1, 1), scene);
   const addBox = (cx, cy, cz, sx, sy, sz, yaw = 0) => {
-    const shape = new B.PhysicsShapeBox(
-      new B.Vector3(cx, cy, cz), B.Quaternion.RotationYawPitchRoll(yaw, 0, 0), new B.Vector3(sx, sy, sz), scene);
-    colliders.addChild(shape);
+    const key = Math.floor(cx / 192) + ',' + Math.floor(cz / 192);
+    let c = colliders.get(key);
+    if (!c) colliders.set(key, (c = new B.PhysicsShapeContainer(scene)));
+    c.addChild(unitBox, new B.Vector3(cx, cy, cz), B.Quaternion.RotationYawPitchRoll(yaw, 0, 0), new B.Vector3(sx, sy, sz));
   };
   // 모델 경계 상자 그대로 충돌 상자를 만든다. shrink로 가로·세로를 줄일 수 있다.
   const collideModel = (key, x, y, z, yaw, scale = 1, shrink = 1) => {
@@ -80,6 +85,24 @@ export function buildTown(scene, assets) {
     return m;
   };
   const buckets = new Map();
+  // 모아 둔 상자들을 "지구 × 재질"별 메시 하나로 합친다. only를 주면 그 지구 것만(나중에 지은 방).
+  const mergeBuckets = (only) => {
+    for (const [key, b] of buckets) {
+      if (only && b.id !== only) continue;
+      const merged = B.Mesh.MergeMeshes(b.list, true, true);
+      merged.material = b.mat; merged.receiveShadows = true; merged.isPickable = false; merged.freezeWorldMatrix();
+      assets.addGroup(merged, b.x, b.z, 1500, b.shadow, b.id);
+      buckets.delete(key);
+    }
+  };
+  // 게임 도중에 방을 지을 때 쓰는 충돌체 묶음(이미 등록된 구역 묶음에는 더 넣지 않는다).
+  const lazyCollider = () => {
+    const c = new B.PhysicsShapeContainer(scene);
+    return {
+      add: (x, y, z, sx, sy, sz) => c.addChild(unitBox, new B.Vector3(x, y, z), B.Quaternion.Identity(), new B.Vector3(sx, sy, sz)),
+      done: () => { const body = new B.PhysicsBody(new B.TransformNode('lazyStatics', scene), B.PhysicsMotionType.STATIC, false, scene); body.shape = c; },
+    };
+  };
   let cur = { id: 'town', x: 66, z: 48 };
   const bucket = (id, x, z) => { cur = { id, x, z }; };
 
@@ -122,12 +145,14 @@ export function buildTown(scene, assets) {
   addBox(0, ROAD_Y - 1, 48, 12, 2, 12);
   addBox(12, ROAD_Y - 1, 96, 12, 2, 12);
 
+  const houses = []; // 살 수 있는 집들
   // ---------- 건물 ----------
   for (const b of BUILDINGS) {
     const x = b.cx * CELL, z = b.cz * CELL, yaw = FACE[b.f];
     const y = groundY(x, z) - 0.02;
     assets.place(b.m, x, y, z, yaw);
     collideModel(b.m, x, y, z, yaw, 1, 0.96);
+    if (b.m.startsWith('suburban/building-type')) houses.push({ key: b.m, x, z, yaw, area: 'town' });
   }
 
   // ---------- 소품 ----------
@@ -284,28 +309,40 @@ export function buildTown(scene, assets) {
   }
 
   // ---------- 마을 밖: 길과 다리, 지구별 구조물, 자연물 ----------
+  const docks = [{ id: 'pier', name: '항구 잔교', x: PIER.x, z: PIER.z1 - 1.5, y: SLAB_Y }];
   const extraBoats = [], boatSpots = [{ x: 78.4, z: -24, yaw: Math.PI }, { x: 84.2, z: -45, yaw: Math.PI / 2, m: 'watercraft/boat-tug-a' }];
   bucket('roads', 66, 48);
+  mark('town.grid');
   buildRoads({ scene, addBox, casters });
-  buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots });
+  mark('town.roads');
+  buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots, docks, houses });
+  mark('town.districts');
   scatterNature(assets, addBox);
+  mark('town.nature');
   bucket('town', 66, 48);
 
   // ---------- 직업 건물 ----------
   const jobSites = buildJobSites({ scene, box, addBox, casters, groundY, updaters });
+  Object.assign(jobSites, buildOutposts({ scene, box, bucket, groundY }));
+  bucket('town', 66, 48);
 
+  // ---------- 건물 내부와 살 수 있는 집 ----------
+  const interiors = buildInteriors({ scene, assets, box, addBox, bucket, groundY, jobSites, houses, mergeBuckets, lazyCollider });
+  bucket('town', 66, 48);
+
+  mark('town.jobsites');
   assets.flush();
-  for (const b of buckets.values()) {
-    const merged = B.Mesh.MergeMeshes(b.list, true, true);
-    merged.material = b.mat; merged.receiveShadows = true; merged.isPickable = false; merged.freezeWorldMatrix();
-    assets.addGroup(merged, b.x, b.z, 1500, b.shadow);
+  mark('town.flush');
+  mergeBuckets();
+
+  mark('town.merge');
+  // ---------- 고정 충돌체 등록 ----------
+  for (const [key, c] of colliders) {
+    const body = new B.PhysicsBody(new B.TransformNode('statics_' + key, scene), B.PhysicsMotionType.STATIC, false, scene);
+    body.shape = c;
   }
 
-  // ---------- 고정 충돌체 등록 ----------
-  const staticNode = new B.TransformNode('statics', scene);
-  const body = new B.PhysicsBody(staticNode, B.PhysicsMotionType.STATIC, false, scene);
-  body.shape = colliders;
-
+  mark('town.colliders');
   // ---------- 밀 수 있는 물건 ----------
   const dynamics = [];
   for (const d of DYNAMIC) {
@@ -355,5 +392,5 @@ export function buildTown(scene, assets) {
     }
   });
 
-  return { casters, jobSites, boatSpots, update: (dt) => updaters.forEach((u) => u(dt)) };
+  return { casters, jobSites, boatSpots, docks, dynamics, interiors, update: (dt) => updaters.forEach((u) => u(dt)) };
 }
