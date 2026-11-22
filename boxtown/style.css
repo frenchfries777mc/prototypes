@@ -118,3 +118,9 @@ body.touch.driving #btnAttack, body.touch.driving #btnWeapon { display: none; }
 @keyframes hurt { from { opacity: 1; } to { opacity: 0; } }
 
 #weapons .wp b { display: none; }
+
+/* 음악 표시 */
+#music { position: absolute; left: 14px; bottom: max(14px, env(safe-area-inset-bottom)); max-width: min(46vw, 420px); padding: 6px 12px; border-radius: 9px; background: rgba(22, 34, 58, .62); font-size: 12px; font-weight: 600; opacity: 0; transition: opacity .5s ease; pointer-events: auto; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#music.show { opacity: 1; }
+#loading .credit { margin-top: 18px; font-size: 12px; opacity: .85; }
+body.touch #music { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 40px); max-width: 60vw; }
