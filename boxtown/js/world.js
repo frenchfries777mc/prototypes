@@ -42,7 +42,7 @@ export const RIVERS = [
 export const ROADS = [
   // 서쪽: 마을 -> 강 다리 -> 농장 -> 풍차 언덕
   { type: 'road', pin: 0.03, pts: [[-3, 48], [-70, 50], [-140, 78], [-186, 118], [-232, 158], [-285, 190], [-340, 205]] },
-  { type: 'dirt', pts: [[-340, 205], [-372, 290], [-362, 390], [-330, 480], [-318, 560]] },
+  { type: 'dirt', pts: [[-340, 205], [-334, 222], [-330, 239]] }, // 서쪽 마을 남쪽 끝으로
   // 동쪽: 마을 -> 갈림길 -> 해변 리조트 -> 동해 야영장
   { type: 'road', pin: 0.03, pts: [[135, 48], [205, 54], [268, 76], [332, 78], [400, 100], [468, 128], [530, 150]] },
   { type: 'dirt', pts: [[530, 150], [575, 250], [578, 360], [562, 432]] },
@@ -51,7 +51,7 @@ export const ROADS = [
   // 바다 다리 -> 갈매기섬
   { type: 'road', pts: [[332, 78], [352, 30], [360, -40], [362, -130], [360, -205], [352, -258]] },
   // 북쪽: 마을 -> 호수 마을 -> 산 전망대
-  { type: 'road', pin: 0.03, pts: [[12, 99], [8, 170], [34, 260], [66, 350], [96, 440], [120, 520]] },
+  { type: 'road', pin: 0.03, pts: [[12, 99], [14, 120], [40, 138], [60, 144]] }, // 중심가 남쪽 끝으로
   { type: 'dirt', pts: [[212, 562], [256, 588], [312, 640], [318, 700], [282, 742], [248, 748]] },
   // 철도: 항구역 -> 공단역 -> 해변역 -> 야영장역 (맨 끝에 둔다: 앞의 길 번호가 바뀌지 않게)
   { type: 'rail', pts: [[158, 100], [215, 128], [262, 118], [330, 150], [400, 190], [470, 215], [530, 270], [548, 350], [530, 420]] },
@@ -80,6 +80,36 @@ export const SITES = {
 };
 
 // 지도에 적는 지명
+// ---------- 시가지: 둥근 터에 바둑판 길을 깔고 건물로 채운다 ----------
+// kind에 따라 건물 종류가 달라진다(js/city.js). 길은 60m 간격의 4차선.
+export const CITY = [
+  { id: 'midtown', x: 60, z: 240, r: 100, kind: 'downtown', name: '중심가' },
+  { id: 'north', x: 170, z: 410, r: 95, kind: 'homes', name: '북쪽 주택가' },
+  { id: 'east', x: 390, z: 320, r: 95, kind: 'mixed', name: '동쪽 시가지' },
+  { id: 'west', x: -330, z: 330, r: 95, kind: 'homes', name: '서쪽 마을' },
+];
+export const CITY_STEP = 60;
+export const JUNCTIONS = []; // 시가지 네거리: { x, z, city }
+for (const c of CITY) {
+  SITES[c.id] = { x: c.x, z: c.z, r: c.r + 6, name: c.name };
+  const n = Math.floor((c.r - 31) / CITY_STEP), half = (o) => Math.sqrt(c.r * c.r - o * o) - 4;
+  c.offsets = []; for (let k = -n; k <= n; k++) c.offsets.push(k * CITY_STEP);
+  c.half = half;
+  for (const o of c.offsets) {
+    const h = half(o), line = (f) => { const pts = []; for (let t = -h; t < h - 1; t += 30) pts.push(f(t)); pts.push(f(h)); return pts; };
+    ROADS.push({ type: 'road', city: c.id, ns: false, pts: line((t) => [c.x + t, c.z + o]) });
+    ROADS.push({ type: 'road', city: c.id, ns: true, pts: line((t) => [c.x + o, c.z + t]) });
+    for (const o2 of c.offsets) if (Math.abs(o2) <= half(o) && Math.abs(o) <= half(o2)) JUNCTIONS.push({ x: c.x + o2, z: c.z + o, city: c.id });
+  }
+}
+// 시가지와 기존 길을 잇는 길
+ROADS.push(
+  { type: 'road', pts: [[60, 336], [66, 372], [79, 410]] }, // 중심가 -> 북쪽 주택가
+  { type: 'road', pts: [[170, 501], [150, 514], [120, 520]] }, // 북쪽 주택가 -> 호수 마을
+  { type: 'road', pts: [[400, 100], [408, 160], [390, 229]] }, // 동쪽 도로 -> 동쪽 시가지
+  { type: 'dirt', pts: [[-330, 421], [-332, 480], [-318, 560]] }, // 서쪽 마을 -> 풍차 언덕
+);
+
 export const PLACES = [
   { name: '항구 마을', x: 66, z: 48, big: true },
   { name: '본섬', x: 60, z: 380, big: true },
@@ -133,3 +163,9 @@ export const FURNITURE_KEYS = ['bedDouble', 'bedSingle', 'bedBunk', 'loungeSofa'
   'cabinetBedDrawerTable', 'bench', 'benchCushion', 'toilet', 'computerScreen', 'computerKeyboard', 'trashcan', 'speaker', 'radio', 'books', 'coatRackStanding', 'bear', 'laptop',
   'kitchenCoffeeMachine', 'kitchenMicrowave', 'washer', 'bathroomSink'].map((k) => 'furniture/' + k);
 export const TRAIN_KEYS = ['train/train-electric-subway-a', 'train/train-electric-subway-b', 'train/train-electric-subway-c'];
+
+// 시가지 건물 모델
+export const CITY_KEYS = [
+  ...'abcdefghijklmn'.split('').map((c) => 'commercial/building-' + c), ...'abcde'.split('').map((c) => 'commercial/building-skyscraper-' + c),
+  ...'abcdefghijklmnopqrstu'.split('').map((c) => 'suburban/building-type-' + c), ...'abegmr'.split('').map((c) => 'industrial/building-' + c),
+];

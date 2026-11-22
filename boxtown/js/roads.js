@@ -1,12 +1,13 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
-import { ROADS } from './world.js';
+import { ROADS, JUNCTIONS } from './world.js';
 import { baseHeight, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
 
 const STEP = 4;
-const HALF = { road: 4.2, dirt: 2.6, rail: 2.6 };
+const HALF = { road: 6.6, dirt: 2.6, rail: 2.6 }; // 포장도로는 4차선
+const TOWN_HALF = 4.2; // 마을 도로 타일의 아스팔트 반폭
 
 // 점들을 지나는 매끄러운 곡선(Catmull-Rom)을 STEP 간격으로 다시 찍는다.
 function resample(pts) {
@@ -73,14 +74,25 @@ for (const r of ROADS) {
     const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     p.tx = (b.x - a.x) / l; p.tz = (b.z - a.z) / l;
   });
-  paths.push({ type: r.type, half: HALF[r.type], pts });
+  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined });
 }
+
+// 흙길이 포장도로에서 갈라져 나오는지(같은 너비에서 시작해 좁아진다)
+for (const path of paths) path.joined = path.type === 'dirt' && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - path.pts[0].x, q.z - path.pts[0].z) < 9));
+// 길의 반폭: 마을 타일과 만나는 곳은 타일 너비에서 시작해 서서히 넓어진다.
+export function halfAt(path, p) {
+  if (path.type === 'road' && path.pin) return lerp(TOWN_HALF, path.half, smoothstep(6, 56, p.s));
+  if (path.joined) return lerp(HALF.road, path.half, smoothstep(0, 40, p.s));
+  return path.half;
+}
+// 시가지 길 위의 점에서 가장 가까운 네거리까지의 거리
+function jdist(path, p) { let d = 1e9; if (path.city) for (const j of JUNCTIONS) if (j.city === path.city) d = Math.min(d, Math.hypot(j.x - p.x, j.z - p.z)); return d; }
 
 // 가까운 길 점을 빨리 찾기 위한 칸 나누기
 const CELL = 24, hash = new Map();
 const key = (x, z) => Math.floor(x / CELL) * 73856093 ^ Math.floor(z / CELL) * 19349663;
 for (const path of paths) for (const p of path.pts) {
-  p.half = path.half;
+  p.half = halfAt(path, p);
   const k = key(p.x, p.z);
   if (!hash.has(k)) hash.set(k, []);
   hash.get(k).push(p);
@@ -131,7 +143,7 @@ export function buildRoads(h) {
   const railMat = flatMat('bridgeRail', '#e8e4dc', scene);
   const pierMat = flatMat('bridgePier', '#8f95a8', scene);
   const pos = [], col = [], idx = [], nor = [];
-  const ASPH = [0.34, 0.35, 0.41], EDGE = [0.74, 0.76, 0.83], DIRT = [0.72, 0.6, 0.42], DIRT2 = [0.62, 0.52, 0.36], LINE = [0.93, 0.93, 0.9];
+  const ASPH = [0.34, 0.35, 0.41], EDGE = [0.74, 0.76, 0.83], DIRT = [0.72, 0.6, 0.42], DIRT2 = [0.62, 0.52, 0.36], LINE = [0.93, 0.93, 0.9], YELLOW = [0.96, 0.78, 0.2];
   const quad = (a, b, c, d, color) => {
     const base = pos.length / 3;
     for (const p of [a, b, c, d]) { pos.push(p[0], p[1], p[2]); nor.push(0, 1, 0); col.push(color[0], color[1], color[2], 1); }
@@ -156,19 +168,22 @@ export function buildRoads(h) {
       continue;
     }
     const road = path.type === 'road';
-    // 흙길이 포장도로에서 갈라져 나올 때는 같은 너비에서 시작해 서서히 좁아진다(뚝 끊겨 보이지 않게).
-    const joined = !road && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - path.pts[0].x, q.z - path.pts[0].z) < 9));
-    const width = (p) => (joined ? lerp(4.2, path.half, smoothstep(0, 36, p.s)) : path.half);
-    const across = (p, o, lift) => { const k = width(p) / path.half; return [p.x - p.tz * o * k, p.y + lift, p.z + p.tx * o * k]; };
+    const joined = path.joined;
+    const across = (p, o, lift) => { const k = halfAt(path, p) / path.half; return [p.x - p.tz * o * k, p.y + lift, p.z + p.tx * o * k]; };
     const hw = path.half;
     for (let i = 0; i < path.pts.length - 1; i++) {
       const a = path.pts[i], b = path.pts[i + 1];
       const lift = 0.1;
       if (road) {
-        quad(across(a, -hw, lift), across(b, -hw, lift), across(a, -hw + 0.55, lift), across(b, -hw + 0.55, lift), EDGE);
-        quad(across(a, -hw + 0.55, lift), across(b, -hw + 0.55, lift), across(a, hw - 0.55, lift), across(b, hw - 0.55, lift), ASPH);
-        quad(across(a, hw - 0.55, lift), across(b, hw - 0.55, lift), across(a, hw, lift), across(b, hw, lift), EDGE);
-        if (i % 3 === 0) quad(across(a, -0.16, lift + 0.03), across(b, -0.16, lift + 0.03), across(a, 0.16, lift + 0.03), across(b, 0.16, lift + 0.03), LINE);
+        // 4차선: 가장자리 턱, 아스팔트, 가운데 노란 두 줄, 차선 점선. 네거리 안은 표시 없이 아스팔트만, 그 앞은 횡단보도.
+        const L = lift + (path.ns ? 0.035 : 0), jd = Math.min(jdist(path, a), jdist(path, b));
+        const Q = (o1, o2, up, c) => quad(across(a, o1, L + up), across(b, o1, L + up), across(a, o2, L + up), across(b, o2, L + up), c);
+        if (jd < 9.4) Q(-hw, hw, 0, ASPH);
+        else {
+          Q(-hw, -hw + 0.55, 0, EDGE); Q(-hw + 0.55, hw - 0.55, 0, ASPH); Q(hw - 0.55, hw, 0, EDGE);
+          if (jd < 13.6) for (let o = -5.2; o <= 5.21; o += 1.3) Q(o - 0.42, o + 0.42, 0.03, LINE);
+          else { Q(-0.3, -0.14, 0.03, YELLOW); Q(0.14, 0.3, 0.03, YELLOW); if (i % 2 === 0) { Q(-3.12, -2.98, 0.03, LINE); Q(2.98, 3.12, 0.03, LINE); } }
+        }
       } else {
         // 갈라지는 곳은 아스팔트 색에서 흙색으로 물든다.
         const tA = joined ? smoothstep(4, 30, a.s) : 1, base = i % 2 ? DIRT : DIRT2;

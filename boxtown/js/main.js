@@ -11,6 +11,7 @@ import { Weapons } from './weapons.js';
 import { Police } from './police.js';
 import { Health } from './health.js';
 import { Train } from './train.js';
+import { Traffic } from './traffic.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
 const B = window.BABYLON;
@@ -121,8 +122,8 @@ async function boot() {
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.jobs = jobs;
   interiors.init(player, jobs);
-  let train0 = null;
-  player.onUse = () => (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use(); // 문 앞에서는 드나들기가 먼저다
+  let train0 = null, traffic0 = null;
+  player.onUse = () => (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
   let health = null;
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.weapons = weapons;
@@ -132,6 +133,8 @@ async function boot() {
   health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
   const train = new Train({ scene, player, jobs, assets, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   train0 = train;
+  const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  weapons.traffic = traffic; traffic0 = traffic;
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(70, vx, vz, 'train'); };
   mark('actors');
   const map = new MapView(() => ({
@@ -175,8 +178,9 @@ async function boot() {
     police.update(dt);
     health.update(dt);
     train.update(dt);
+    traffic.update(dt);
     interiors.update(dt);
-    const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : '');
+    const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
@@ -230,7 +234,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

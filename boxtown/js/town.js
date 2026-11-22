@@ -2,6 +2,7 @@
 import { CELL, GRID, BUILDINGS, PROPS, DYNAMIC, BOATS, PIER, LIGHTHOUSE, JOB_SITES } from './mapdata.js';
 import { height, SEA } from './terrain.js';
 import { buildRoads } from './roads.js';
+import { buildCity } from './city.js';
 import { buildDistricts } from './districts.js';
 import { scatterNature } from './nature.js';
 import { rng, flatMat } from './util.js';
@@ -106,6 +107,7 @@ export function buildTown(scene, assets, mark = () => {}) {
   let cur = { id: 'town', x: 66, z: 48 };
   const bucket = (id, x, z) => { cur = { id, x, z }; };
 
+  const houses = []; // 살 수 있는 집들
   // ---------- 도로와 바닥 ----------
   for (let cz = 0; cz < GRID.length; cz++) {
     for (let cx = 0; cx < GRID[cz].length; cx++) {
@@ -145,7 +147,6 @@ export function buildTown(scene, assets, mark = () => {}) {
   addBox(0, ROAD_Y - 1, 48, 12, 2, 12);
   addBox(12, ROAD_Y - 1, 96, 12, 2, 12);
 
-  const houses = []; // 살 수 있는 집들
   // ---------- 건물 ----------
   for (const b of BUILDINGS) {
     const x = b.cx * CELL, z = b.cz * CELL, yaw = FACE[b.f];
@@ -315,6 +316,7 @@ export function buildTown(scene, assets, mark = () => {}) {
   bucket('roads', 66, 48);
   mark('town.grid');
   buildRoads({ scene, addBox, casters });
+  buildCity({ scene, assets, box, addBox, collideModel, bucket, houses });
   mark('town.roads');
   buildDistricts({ scene, assets, box, addBox, collideModel, bucket, boats: extraBoats, boatSpots, docks, houses });
   mark('town.districts');

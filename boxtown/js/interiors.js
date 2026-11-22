@@ -105,8 +105,8 @@ const DROP = {
   jail: (c, w) => (c === '#8f95a8' && (w === 3 || w === 0.7)) || (c === '#f4f1ea' && w === 2.8),
   taxi: (c, w) => c === '#ffd84a' && w === 3.6, fire: (c, w) => c === '#b9814f' && w === 4,
 };
-const PRICE = { town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
-const AREA_NAME = { town: '항구 마을', lake: '호수 마을', gull: '갈매기섬', farm: '서쪽 농장', mill: '풍차섬', twin: '쌍둥이섬', woods: '고요숲 섬', wind: '풍차 언덕' };
+const PRICE = { midtown: 6000, north: 3800, east: 3400, west: 3000, town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
+const AREA_NAME = { midtown: '중심가', north: '북쪽 주택가', east: '동쪽 시가지', west: '서쪽 마을', town: '항구 마을', lake: '호수 마을', gull: '갈매기섬', farm: '서쪽 농장', mill: '풍차섬', twin: '쌍둥이섬', woods: '고요숲 섬', wind: '풍차 언덕' };
 const $ = (id) => document.getElementById(id);
 const won = (n) => n.toLocaleString('ko-KR');
 
