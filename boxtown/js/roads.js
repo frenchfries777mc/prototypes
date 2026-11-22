@@ -77,12 +77,74 @@ for (const r of ROADS) {
   paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined });
 }
 
+// 길과 길이 겹치는 곳(교차로, 합류)은 높이를 하나로 맞춘다. 따로 다듬은 길들이 서로 다른 높이로 겹치면 턱과 벽이 생긴다.
+// 철길은 도로를 따라가고, 도로끼리는 평균으로 만난다. 차이는 앞뒤 구간으로 퍼뜨려 서서히 이어지게 한다.
+(function reconcile() {
+  const ok = (p) => !p.water;
+  for (let it = 0; it < 24; it++) {
+    const cellMap = new Map(), ck = (x, z) => Math.floor(x / 16) * 73856093 ^ Math.floor(z / 16) * 19349663;
+    paths.forEach((P, pi) => P.pts.forEach((p) => { const k = ck(p.x, p.z); if (!cellMap.has(k)) cellMap.set(k, []); cellMap.get(k).push([pi, p]); }));
+    const deltas = paths.map((P) => new Float32Array(P.pts.length));
+    let worst = 0;
+    paths.forEach((P, pi) => P.pts.forEach((p, i) => {
+      if (!ok(p)) return;
+      const best = new Map();
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        const list = cellMap.get(ck(p.x + a * 16, p.z + b * 16)); if (!list) continue;
+        for (const [qi, q] of list) {
+          if (qi === pi) continue;
+          const d = Math.hypot(p.x - q.x, p.z - q.z);
+          if (d < P.half + paths[qi].half + 1.5 && (!best.has(qi) || d < best.get(qi).d)) best.set(qi, { d, q });
+        }
+      }
+      if (!best.size) return;
+      let sum = p.y, n = 1;
+      for (const [qi, { q }] of best) {
+        const Q = paths[qi];
+        if (P.type === 'rail' && Q.type !== 'rail') { sum = q.y * 1000; n = 1000; break; } // 철길은 도로 높이를 따른다
+        if (Q.type === 'rail' && P.type !== 'rail') continue; // 도로는 철길을 따르지 않는다
+        sum += q.y; n++;
+      }
+      let t = sum / n - p.y;
+      // 마을 타일에 닿은 끝은 움직이지 않는다
+      if (P.pin) t *= smoothstep(10, 50, p.s);
+      deltas[pi][i] = t; worst = Math.max(worst, Math.abs(t));
+    }));
+    paths.forEach((P, pi) => {
+      const RAD = P.type === 'rail' ? 26 : 14, d = deltas[pi], L = P.pts.length, ny = new Float32Array(L);
+      for (let i = 0; i < L; i++) {
+        let acc = 0;
+        for (let k = -RAD; k <= RAD; k++) { const j = i + k; if (j < 0 || j >= L) continue; const w = 1 - Math.abs(k) / (RAD + 1); acc = Math.abs(d[j] * w) > Math.abs(acc) ? d[j] * w : acc; }
+        ny[i] = P.pts[i].y + acc * (P.type === 'rail' ? 1 : 0.7);
+      }
+      P.pts.forEach((p, i) => { p.y = P.pts[i].water ? Math.max(ny[i], SEA + 3.2) : ny[i]; });
+    });
+    if (worst < 0.03) break;
+  }
+})();
+
+// 갈림길: 길이 다른 도로 몸통에 와서 닿는 곳은 양쪽 모두 연석과 차선 표시를 빼고 아스팔트만 깐다(줄이 서로 가로지르지 않게).
+for (const A of paths) {
+  if (A.type !== 'road') continue;
+  for (const e of [A.pts[0], A.pts[A.pts.length - 1]]) for (const B of paths) {
+    if (B === A || B.type !== 'road') continue;
+    let q = null, bd = 1e9;
+    for (const p of B.pts) { const d = Math.hypot(p.x - e.x, p.z - e.z); if (d < bd) { bd = d; q = p; } }
+    if (!q || bd > B.half + 3 || (q === B.pts[0] || q === B.pts[B.pts.length - 1])) continue;
+    for (const p of B.pts) if (Math.hypot(p.x - q.x, p.z - q.z) < 17) p.jn = true;
+    for (const p of A.pts) if (Math.hypot(p.x - e.x, p.z - e.z) < 17) p.jn = true;
+  }
+}
+
 // 흙길이 포장도로에서 갈라져 나오는지(같은 너비에서 시작해 좁아진다)
-for (const path of paths) path.joined = path.type === 'dirt' && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - path.pts[0].x, q.z - path.pts[0].z) < 9));
+const touches = (path, e) => path.type === 'dirt' && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - e.x, q.z - e.z) < 9));
+for (const path of paths) { path.len = path.pts[path.pts.length - 1].s; path.joined = touches(path, path.pts[0]); path.joinedEnd = touches(path, path.pts[path.pts.length - 1]); }
+// 갈라지는 끝에서 잰 거리(끝이 도로에 닿지 않으면 큰 값)
+const joinS = (path, p) => Math.min(path.joined ? p.s : 1e9, path.joinedEnd ? path.len - p.s : 1e9);
 // 길의 반폭: 마을 타일과 만나는 곳은 타일 너비에서 시작해 서서히 넓어진다.
 export function halfAt(path, p) {
   if (path.type === 'road' && path.pin) return lerp(TOWN_HALF, path.half, smoothstep(6, 56, p.s));
-  if (path.joined) return lerp(HALF.road, path.half, smoothstep(0, 40, p.s));
+  if (path.joined || path.joinedEnd) return lerp(HALF.road, path.half, smoothstep(0, Math.min(40, path.len * 0.45), joinS(path, p)));
   return path.half;
 }
 // 시가지 길 위의 점에서 가장 가까운 네거리까지의 거리
@@ -176,17 +238,17 @@ export function buildRoads(h) {
       const lift = 0.1;
       if (road) {
         // 4차선: 가장자리 턱, 아스팔트, 가운데 노란 두 줄, 차선 점선. 네거리 안은 표시 없이 아스팔트만, 그 앞은 횡단보도.
-        const L = lift + (path.ns ? 0.035 : 0), jd = Math.min(jdist(path, a), jdist(path, b));
+        const L = lift + (path.ns ? 0.035 : 0), jd = (a.jn || b.jn) ? 0 : Math.min(jdist(path, a), jdist(path, b));
         const Q = (o1, o2, up, c) => quad(across(a, o1, L + up), across(b, o1, L + up), across(a, o2, L + up), across(b, o2, L + up), c);
         if (jd < 9.4) Q(-hw, hw, 0, ASPH);
         else {
           Q(-hw, -hw + 0.55, 0, EDGE); Q(-hw + 0.55, hw - 0.55, 0, ASPH); Q(hw - 0.55, hw, 0, EDGE);
           if (jd < 13.6) for (let o = -5.2; o <= 5.21; o += 1.3) Q(o - 0.42, o + 0.42, 0.03, LINE);
-          else { Q(-0.3, -0.14, 0.03, YELLOW); Q(0.14, 0.3, 0.03, YELLOW); if (i % 2 === 0) { Q(-3.12, -2.98, 0.03, LINE); Q(2.98, 3.12, 0.03, LINE); } }
+          else { Q(-0.3, -0.14, 0.03, YELLOW); Q(0.14, 0.3, 0.03, YELLOW); if (i % 2 === 0 && !(path.pin && a.s < 52)) { Q(-3.12, -2.98, 0.03, LINE); Q(2.98, 3.12, 0.03, LINE); } }
         }
       } else {
         // 갈라지는 곳은 아스팔트 색에서 흙색으로 물든다.
-        const tA = joined ? smoothstep(4, 30, a.s) : 1, base = i % 2 ? DIRT : DIRT2;
+        const tA = smoothstep(4, Math.min(30, path.len * 0.4), joinS(path, a)), base = i % 2 ? DIRT : DIRT2;
         quad(across(a, -hw, lift), across(b, -hw, lift), across(a, hw, lift), across(b, hw, lift), [lerp(ASPH[0], base[0], tA), lerp(ASPH[1], base[1], tA), lerp(ASPH[2], base[2], tA)]);
       }
       // 다리 구간(양 끝 한 칸씩 더 덮어서 둑과 이어지게 한다)
