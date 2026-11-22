@@ -6,7 +6,7 @@ import { paths } from './roads.js';
 import { clamp, angDiff, flatMat } from './util.js';
 const B = window.BABYLON;
 
-const LOT = [[123.4, 20, 0], [123.4, 27, 0], [123.4, 34, 0]]; // 평소 세워 두는 자리(동쪽 세로길 가)
+const LOT = [[123.7, 20, 0], [123.7, 27, 0], [123.7, 34, 0]]; // 평소 세워 두는 자리(동쪽 세로길 가)
 const LOSE_DIST = 150; // 이보다 멀어지면 따돌리기 시작
 const $ = (id) => document.getElementById(id);
 const isRoad = (cx, cz) => { const c = GRID[cz] && GRID[cz][cx]; return c === '#' || c === 'x'; };
