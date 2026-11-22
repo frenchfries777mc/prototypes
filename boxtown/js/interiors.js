@@ -9,7 +9,7 @@ const FACE = { S: 0, W: Math.PI / 2, N: Math.PI, E: (3 * Math.PI) / 2 };
 // 가구 한 줄: [색, 가로, 높이, 세로, x, z, 바닥에서 띄운 높이=0, 충돌=1]. 색 앞의 *는 스스로 빛나는 것.
 // 방 좌표: 문은 남쪽 벽 가운데, +z가 안쪽.
 const ROOMS = {
-  pizza: { w: 14, d: 11, floor: '#e9d2a0', wall: '#fbe9c6', clerk: [-1, 3.6], items: [
+  pizza: { w: 14, d: 11, floor: '#b8564a', wall: '#fbe9c6', clerk: [-1, 3.6], items: [
     ['#c8442f', 6, 1.1, 1, -1, 2.2], ['#fff7e6', 6.3, 0.12, 1.3, -1, 2.2, 1.1, 0], ['#8a4b3a', 3, 2.7, 1.6, 4.8, 4.5], ['*#ffb03a', 1.7, 0.9, 0.1, 4.8, 3.66, 0.9, 0],
     ['#d8dcec', 1.4, 2.4, 1.2, -5.4, 4.6], ['#2c2c36', 4.2, 1.2, 0.1, -1, 5.42, 2.7, 0], ['#fff3d6', 0.8, 0.12, 0.8, 0.6, 2.2, 1.18, 0], ['#fff3d6', 0.8, 0.12, 0.8, 0.6, 2.2, 1.32, 0],
     ['#b9814f', 1.7, 0.85, 1.7, -4.6, -1], ['#b9814f', 1.7, 0.85, 1.7, -4.6, -3.9], ['#b9814f', 1.7, 0.85, 1.7, 4.6, -1.2], ['#b9814f', 1.7, 0.85, 1.7, 4.6, -3.9],
@@ -51,7 +51,7 @@ const ROOMS = {
   store: { name: '편의점', w: 14, d: 10, floor: '#eef1f7', wall: '#dff3e6', clerk: [-4.6, -2.2, 0], items: [
     ['#3fa868', 3, 1.1, 1.2, -4.6, -1], ['#8f95a8', 1.2, 2, 5, -1, 1.6], ['#8f95a8', 1.2, 2, 5, 2.4, 1.6], ['#e5553f', 1.24, 0.4, 4.6, -1, 1.6, 0.5, 0], ['#ffd84a', 1.24, 0.4, 4.6, -1, 1.6, 1.2, 0], ['#4f9bea', 1.24, 0.4, 4.6, 2.4, 1.6, 0.5, 0], ['#f08fb0', 1.24, 0.4, 4.6, 2.4, 1.6, 1.2, 0],
     ['#d8dcec', 5.4, 2.4, 1, 3.8, 4.4], ['*#bfe6ff', 5, 1.8, 0.1, 3.8, 3.88, 0.4, 0], ['#3f8fe8', 1.2, 2.2, 1, -6, 4.2], ['#e5553f', 1.2, 2.2, 1, -4.6, 4.2]] },
-  cafe: { name: '카페', w: 13, d: 10, floor: '#c79a5b', wall: '#f3e3cf', clerk: [3.6, 3.2], items: [
+  cafe: { name: '카페', w: 13, d: 10, floor: '#6f8f86', wall: '#f3e3cf', clerk: [3.6, 3.2], items: [
     ['#5a3d24', 5, 1.1, 1, 3.6, 2], ['#f4f1ea', 5.2, 0.1, 1.2, 3.6, 2, 1.1, 0], ['#3a3d4d', 0.8, 0.9, 0.7, 5, 2, 1.2, 0], ['#8b5d3a', 5, 2.4, 0.5, 3.6, 4.6], ['#f4f1ea', 0.4, 0.4, 0.4, 2.4, 4.5, 1.4, 0], ['#e5553f', 0.4, 0.4, 0.4, 3.6, 4.5, 1.4, 0], ['#3fa868', 0.4, 0.4, 0.4, 4.8, 4.5, 1.4, 0],
     ['#8b5d3a', 1.3, 0.85, 1.3, -4, 2.6], ['#8b5d3a', 1.3, 0.85, 1.3, -4, -0.4], ['#8b5d3a', 1.3, 0.85, 1.3, -4, -3.2], ['#f4c542', 0.6, 0.5, 0.6, -5.3, 2.6], ['#f4c542', 0.6, 0.5, 0.6, -2.7, -0.4], ['#f4c542', 0.6, 0.5, 0.6, -5.3, -3.2], ['#3fa868', 0.6, 1.5, 0.6, 5.6, -3.6], ['#e5553f', 3, 0.04, 2, 2, -2, 0, 0]] },
   hotel: { name: '호텔', w: 16, d: 12, floor: '#e6d9b8', wall: '#f7f0e0', clerk: [0, 4.2], items: [
@@ -77,6 +77,33 @@ const ROOMS = {
     ['#6b7a99', 1.4, 0.9, 1.2, 4.5, -3], ['#6b7a99', 1, 0.7, 1, 5.7, -3.2], ['#3a3d4d', 0.12, 1.3, 0.12, 3.4, -2.6], ['#8f95a8', 0.5, 0.2, 0.2, 3.4, -2.6, 1.3, 0],
     ['*#ffd84a', 1.6, 0.05, 1.6, -1.6, -3.2, 0, 0], ['*#f28b3c', 1.6, 0.05, 1.6, 4.6, -1.6, 0, 0], ['#5a4636', 0.12, 2.6, 1.5, 7.9, 3], ['*#d9473c', 1.6, 0.05, 1.6, 6.8, 3, 0, 0]] },
   home: { w: 13, d: 10, items: [] }, // 집 내부는 buildHome이 집마다 따로 만든다
+};
+// 가게마다 놓는 가구 모델과, 그 자리에 있던 상자 가구를 빼는 규칙
+const set4 = (x, z, t = 'table') => [[t, x, z], ['chair', x, z - 1.25, 180, 0, 0], ['chair', x, z + 1.25, 0, 0, 0]];
+const DRESS = {
+  pizza: [...set4(-4.6, -1), ...set4(-4.6, -3.9), ...set4(4.6, -1.2), ...set4(4.6, -3.9), ['plantSmall1', -4.6, -1, 0, 0.98, 0], ['plantSmall1', 4.6, -3.9, 0, 0.98, 0]],
+  cafe: [...set4(-4, 2.6, 'tableRound'), ...set4(-4, -0.9, 'tableRound'), ['loungeSofa', -4.6, -4.2, 180], ['tableCoffee', -4.6, -2.9, 0], ['loungeChair', 3.2, -3.9, 180], ['kitchenCoffeeMachine', 2.2, 2, 0, 1.2, 0], ['bookcaseOpen', -6, 4.4, 0]],
+  hotel: [['loungeSofa', -5.6, -0.4, 0], ['tableCoffee', -5.6, -2.2, 0], ['loungeChair', -7.2, -2.2, -90], ['loungeSofa', 5.6, -0.4, 0], ['tableCoffee', 5.6, -2.2, 0], ['loungeChair', 7.2, -2.2, 90], ['lampRoundFloor', -7.3, -0.3, 0], ['lampRoundFloor', 7.3, -0.3, 0], ['pottedPlant', -7.2, 5, 0], ['pottedPlant', 7.2, 5, 0], ['rugRectangle', -5.6, -1.8, 0, 0, 0], ['rugRectangle', 5.6, -1.8, 0, 0, 0], ['bench', -3, -5.2, 180], ['bench', 3, -5.2, 180]],
+  hospital: [['bedSingle', -6.2, 3.9, 0], ['bedSingle', -2.6, 3.9, 0], ['cabinetBedDrawerTable', -7.5, 5.4, 0], ['cabinetBedDrawerTable', -1.3, 5.4, 0], ['chairDesk', -4.5, -2.4, 0, 0, 0], ['computerScreen', -5.4, -1.2, 180, 1.1, 0], ['benchCushion', 0.2, -4.9, 180], ['benchCushion', 1.8, -4.9, 180], ['bathroomSink', 7.4, 1, 90]],
+  jail: [['bedSingle', 6.6, 3.9, 0], ['toilet', 1.2, 4.6, 0], ['desk', -5, 1.2, 180], ['chairDesk', -5, 2.4, 180, 0, 0], ['computerScreen', -5, 1.2, 0, 1.16, 0], ['bench', -7.3, -3, -90], ['bookcaseClosedWide', -2, 5, 0]],
+  store: [['kitchenFridge', 6.2, -1, 90], ['kitchenFridge', 6.2, 0.4, 90], ['stoolBar', -4.6, 0.4, 180, 0, 0]],
+  taxi: [['chairDesk', -3, 3.2, 0, 0, 0], ['computerScreen', -3.6, 2, 180, 1.0, 0], ['benchCushion', 2, -3.9, 180], ['benchCushion', 3.6, -3.9, 180], ['bookcaseClosedWide', -4.6, 4.5, 0], ['tableCoffee', 3, -2.4, 0]],
+  fire: [['chairDesk', 5, 3.2, 180, 0, 0], ['computerScreen', 5, 4.6, 0, 1.0, 0], ['bench', -4.9, 2.9, 180], ['bench', -3.5, 2.9, 180], ['bedSingle', 6.8, -3.4, 90], ['bedSingle', 3.6, -3.4, 90]],
+  clean: [['washer', 5.3, 2.2, 90], ['washer', 5.3, 3.4, 90], ['chairDesk', 3.4, 3.2, 0, 0, 0], ['bench', 0, -3.9, 180]],
+  fish: [['bench', 0.6, -3.6, 180], ['sideTable', -4.4, -0.4, -90], ['radio', -4.4, -0.4, -90, 1.16, 0]],
+  arms: [['chairDesk', 0, 3.6, 0, 0, 0], ['bench', -5.6, 2.4, -90], ['bench', 5.6, 2.4, 90]],
+  farmer: [['chairDesk', 2.6, 2.4, 0, 0, 0], ['bench', 0, -3, 180]], cargo: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['computerScreen', -2.6, 1, 180, 1.0, 0]],
+  mail: [['bench', 3, -3.2, 180], ['sideTable', -3.6, -0.6, -90]], ferry: [['benchCushion', 0, -3.2, 180], ['radio', -2.4, 1.1, 180, 1.1, 0]],
+  race: [['loungeSofa', 0, -3.2, 180], ['televisionModern', 2.6, 3.7, 0, 1.6, 0]], guard: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['bedSingle', 1, 3.1, 90]],
+  treasure: [['chair', -1.6, -0.9, 180, 0, 0], ['bookcaseOpen', 0.6, 3.6, 0]], ranger: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['radio', -2.6, 1, 180, 1.0, 0], ['bear', 3.8, 1.6, 0, 0.92, 0]],
+};
+const DROP = {
+  pizza: (c, w) => (c === '#b9814f' && w === 1.7) || (c === '#e5553f' && w === 0.6) || c === '#ffd35a' || (c === '#3fa868' && w === 0.5),
+  cafe: (c, w) => (c === '#8b5d3a' && w === 1.3) || (c === '#f4c542' && w === 0.6) || (c === '#3fa868' && w === 0.6),
+  hotel: (c, w) => c === '#4f6fb0' || (c === '#8b5d3a' && w === 1.4) || (c === '#3fa868' && w === 0.7),
+  hospital: (c, w) => (c === '#8f95a8' && w === 2.2) || (c === '#f4f1ea' && w === 2) || c === '#6fb6d9' || (c === '#3fa868' && w === 0.6) || (c === '#4f6fb0' && w === 3.2),
+  jail: (c, w) => (c === '#8f95a8' && (w === 3 || w === 0.7)) || (c === '#f4f1ea' && w === 2.8),
+  taxi: (c, w) => c === '#ffd84a' && w === 3.6, fire: (c, w) => c === '#b9814f' && w === 4,
 };
 const PRICE = { town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
 const AREA_NAME = { town: '항구 마을', lake: '호수 마을', gull: '갈매기섬', farm: '서쪽 농장', mill: '풍차섬', twin: '쌍둥이섬', woods: '고요숲 섬', wind: '풍차 언덕' };
@@ -133,75 +160,75 @@ function buildHome(h, M, id, cx, cz, y0, seed, big) {
   for (const [x, z] of [[-W2 * 0.5, -D2 * 0.3], [W2 * 0.5, D2 * 0.3], [-W2 * 0.5, D2 * 0.55]]) { P('#f4f1ea', 0.1, 0.5, 0.1, x, z, HH - 0.5); P('*#fff2c2', 0.9, 0.3, 0.9, x, z, HH - 0.8); }
   const plant = (x, z, tall) => { P('#c9703f', 0.55, 0.5, 0.55, x, z, 0, 1); P('#3fa868', 0.7, tall ? 1.1 : 0.6, 0.7, x, z, 0.5); P('#57c27a', 0.45, 0.5, 0.45, x, z, tall ? 1.5 : 1.0); };
 
+  // 가구 모델 하나를 놓는다. rot(도): 0이면 정면이 남쪽(-z), -90이면 동쪽(+x). solid면 부딪힌다.
+  const assets = h.assets, DEG = Math.PI / 180;
+  const F = (name, x, z, rot = 0, lift = 0, solid = 1, scale = 1) => {
+    const key = 'furniture/' + name, yaw = (sx > 0 ? rot : -rot) * DEG;
+    assets.place(key, cx + sx * x, y0 + lift, cz + z, yaw, scale, 'in_' + id);
+    if (solid) { const bb = assets.bounds(key), q = Math.abs(rot) === 90, bw = (bb.max.x - bb.min.x) * scale, bd = (bb.max.z - bb.min.z) * scale, bh = (bb.max.y - bb.min.y) * scale; col.add(cx + sx * x, y0 + lift + bh / 2, cz + z, q ? bd : bw, bh, q ? bw : bd); }
+  };
   // ----- 거실(서쪽 앞): 소파, 깔개, 탁자, TV -----
-  const sofaX = -W2 + 1.0, lz = -D2 + 3.1;
-  P(acc[0], 3.6, 0.03, 4.6, sofaX + 2.4, lz, 0); P(T.wall, 3.2, 0.035, 4.2, sofaX + 2.4, lz, 0);
-  P(acc[0], 1.3, 0.5, 3.6, sofaX, lz, 0.18, 1); P(acc[0], 0.4, 1.15, 3.6, sofaX - 0.5, lz, 0.18); // 방석과 등받이
-  P(acc[0], 1.3, 0.75, 0.4, sofaX, lz - 1.9, 0.18); P(acc[0], 1.3, 0.75, 0.4, sofaX, lz + 1.9, 0.18);
-  for (const o of [-1.1, 0, 1.1]) P(o ? acc[1] : '#f4f1ea', 0.35, 0.5, 0.75, sofaX - 0.2, lz + o, 0.7);
-  for (const [a, b] of [[-0.5, -1.6], [0.5, -1.6], [-0.5, 1.6], [0.5, 1.6]]) P(T.wood, 0.14, 0.18, 0.14, sofaX + a, lz + b, 0);
-  P(T.wood, 1.2, 0.1, 2, sofaX + 2.3, lz, 0.5, 1); // 탁자
-  for (const [a, b] of [[-0.5, -0.9], [0.5, -0.9], [-0.5, 0.9], [0.5, 0.9]]) P(T.wood, 0.1, 0.5, 0.1, sofaX + 2.3 + a, lz + b, 0);
-  P(acc[1], 0.4, 0.14, 0.3, sofaX + 2.2, lz + 0.4, 0.6); P('#f4f1ea', 0.3, 0.05, 0.42, sofaX + 2.4, lz - 0.45, 0.6);
-  // TV는 현관과 거실을 나누는 낮은 벽에 건다.
-  const tvX = -1.5;
-  P(T.wall, 0.24, 2.7, 4.2, tvX, lz, 0, 1); P(T.wood, 0.3, 0.1, 4.3, tvX, lz, 2.7);
-  P(T.wood, 0.6, 0.55, 3, tvX - 0.4, lz, 0, 1); P('#22202b', 0.1, 1.35, 2.3, tvX - 0.18, lz, 1.0); P('*#7fb8e0', 0.04, 1.15, 2.1, tvX - 0.24, lz, 1.1);
-  P('#22202b', 0.3, 0.14, 0.5, tvX - 0.4, lz + 1.1, 0.55); plant(tvX - 0.5, lz - 1.75, false);
-  if (r() < 0.6) { P('#f4f1ea', 0.1, 1.9, 0.1, sofaX, lz + 2.6, 0); P('*#ffe9a8', 0.55, 0.5, 0.55, sofaX, lz + 2.6, 1.7); } // 스탠드
-  pic(-W2 + 0.05, lz + 0.2 < -D2 + 4.6 ? D2 - 5.2 : lz, true, acc[1]);
+  const sofaX = -W2 + 0.75, lz = -D2 + 3.2, tvX = -1.5;
+  P(acc[0], 3.4, 0.03, 4.8, sofaX + 2.2, lz, 0); P(T.wall, 3, 0.035, 4.4, sofaX + 2.2, lz, 0); // 깔개
+  F('loungeSofa', sofaX, lz, -90);
+  F('tableCoffee', sofaX + 2.2, lz, 90);
+  F(r() < 0.5 ? 'books' : 'plantSmall1', sofaX + 2.2, lz + 0.4, 30, 0.69, 0);
+  if (r() < 0.7) F('loungeChair', sofaX + 1.6, lz + 2.9 > D2 - 4.2 ? lz - 2.6 : lz + 2.9, lz + 2.9 > D2 - 4.2 ? 180 : 0);
+  // TV는 현관과 거실을 나누는 낮은 벽 앞에 둔다.
+  P(T.wall, 0.24, 2.9, 4.6, tvX, lz, 0, 1); P(T.wood, 0.34, 0.1, 4.7, tvX, lz, 2.9);
+  F('cabinetTelevision', tvX - 0.52, lz, 90);
+  F(seed % 4 === 1 ? 'televisionVintage' : 'televisionModern', tvX - 0.52, lz, 90, 0.93, 0);
+  F('speaker', tvX - 0.45, lz - 1.75, 90); F('pottedPlant', tvX - 0.5, lz + 1.9, 0);
+  F('lampRoundFloor', sofaX + 0.1, lz - 2.1 < -D2 + 0.6 ? lz + 2.2 : lz - 2.1, 0);
+  pic(-W2 + 0.05, D2 - 5.2, true, acc[1]);
 
-  // ----- 부엌과 식탁(서쪽 안쪽) -----
-  const kz = D2 - 0.55, kx0 = -W2 + 0.6;
-  P('#d8dcec', 1.1, 2.4, 1, kx0, kz, 0, 1); P('#8f95a8', 0.06, 0.9, 0.06, kx0 + 0.45, kz - 0.52, 1.1); P('#b9bfd0', 1.1, 0.04, 0.02, kx0, kz - 0.5, 1.45); // 냉장고
-  const cl = W2 - 2.4; // 조리대 길이
-  P(T.kit, cl, 0.95, 0.9, kx0 + 0.7 + cl / 2, kz, 0, 1); P('#5f6577', cl + 0.1, 0.1, 1, kx0 + 0.7 + cl / 2, kz, 0.95);
-  for (let x = kx0 + 1.1; x < kx0 + 0.7 + cl; x += 0.9) P('#8f95a8', 0.3, 0.05, 0.04, x, kz - 0.47, 0.6);
-  P('#3a3d4d', 0.9, 0.04, 0.6, kx0 + 1.5, kz, 1.05); P('#8f95a8', 0.08, 0.35, 0.08, kx0 + 1.5, kz + 0.32, 1.05); // 개수대
-  P('#22202b', 1, 0.04, 0.7, kx0 + 3.1, kz, 1.05); for (const [a, b] of [[-0.25, -0.17], [0.25, -0.17], [-0.25, 0.17], [0.25, 0.17]]) P('*#f2644b', 0.2, 0.02, 0.2, kx0 + 3.1 + a, kz + b, 1.09);
-  P(T.kit, cl, 0.9, 0.5, kx0 + 0.7 + cl / 2, kz + 0.2, 2.5); P('#f4f1ea', 1.1, 0.5, 0.6, kx0 + 3.1, kz + 0.1, 1.95);
-  const tz = D2 - 3.3, tx = -W2 * 0.5, round = r() < 0.4, seats = big || r() < 0.5 ? 4 : 2;
-  P(T.wood, round ? 1.6 : 2.4, 0.1, round ? 1.6 : 1.3, tx, tz, 0.85, 1); P(T.wood, 0.3, 0.85, 0.3, tx, tz, 0);
-  const chair = (x, z, back) => { P(T.wood, 0.55, 0.08, 0.55, x, z, 0.5); P(acc[1], 0.5, 0.06, 0.5, x, z, 0.58); P(T.wood, back[0] ? 0.08 : 0.55, 0.7, back[0] ? 0.55 : 0.08, x + back[0] * 0.27, z + back[1] * 0.27, 0.5); for (const [a, b] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) P(T.wood, 0.07, 0.5, 0.07, x + a, z + b, 0); };
-  chair(tx, tz - 1.15, [0, -1]); chair(tx, tz + 1.15, [0, 1]);
-  if (seats === 4) { chair(tx - (round ? 1.25 : 1.65), tz, [-1, 0]); chair(tx + (round ? 1.25 : 1.65), tz, [1, 0]); }
-  P('#f4f1ea', 0.5, 0.06, 0.5, tx, tz, 0.95); P(acc[0], 0.25, 0.3, 0.25, tx, tz, 1.0);
+  // ----- 부엌(북쪽 벽 서쪽) -----
+  const px = 1.6; // 침실 칸막이벽의 x
+  const kz = D2 - 0.7, U = 1.29; // 장 하나의 너비
+  let kx = -W2 + 0.7;
+  F('kitchenFridge', kx, D2 - 0.46, 0); kx += U;
+  const line = ['kitchenCabinet', 'kitchenSink', 'kitchenStove', 'kitchenCabinet'];
+  const fit = Math.max(2, Math.min(4, Math.floor((px - 0.5 - kx) / U) + 1)); // 칸막이벽 앞까지 들어가는 만큼
+  for (let i = 0; i < fit; i++) { F(line[i], kx, kz, 0); if (line[i] !== 'kitchenStove') F('kitchenCabinetUpper', kx, D2 - 0.36, 0, 2.15, 0); else P('#d8dcec', 1.2, 0.5, 0.7, kx, D2 - 0.36, 2.3); kx += U; }
+  F(r() < 0.5 ? 'kitchenCoffeeMachine' : 'kitchenMicrowave', -W2 + 0.7 + U, kz + 0.1, 0, 1.36, 0);
+  // ----- 식탁 -----
+  const tz = D2 - 3.9, tx = -W2 * 0.52, round = r() < 0.4, four = big || r() < 0.5, ch = r() < 0.5 ? 'chair' : 'chairCushion';
+  F(round ? 'tableRound' : 'table', tx, tz, 0);
+  F(ch, tx, tz - 1.25, 180, 0, 0); F(ch, tx, tz + 1.25, 0, 0, 0);
+  if (four) { F(ch, tx - (round ? 1.55 : 1.75), tz, -90, 0, 0); F(ch, tx + (round ? 1.55 : 1.75), tz, 90, 0, 0); }
+  F('plantSmall1', tx, tz, 0, round ? 1.1 : 0.98, 0, 1.6);
 
-  // ----- 침실(동쪽): 칸막이벽, 침대, 협탁, 옷장 -----
-  const px = 1.6;
+  // ----- 침실(동쪽 안쪽): 칸막이벽, 침대, 협탁, 옷장 -----
   P(T.wall, 0.24, HH, d * 0.5, px, D2 - d * 0.25, 0, 1);
-  const bedX = W2 - 1.25, bedZ = D2 - 2.4, bunk = !big && r() < 0.25;
-  P(T.wood, 2.3, 0.45, 3.6, bedX, bedZ, 0, 1); P('#f4f1ea', 2.1, 0.3, 3.4, bedX, bedZ, 0.45); P(acc[0], 2.14, 0.32, 2.1, bedX, bedZ - 0.65, 0.47);
-  P(T.wood, 2.3, 1.3, 0.2, bedX, bedZ + 1.8, 0); P('#f4f1ea', 0.8, 0.2, 0.5, bedX - 0.5, bedZ + 1.3, 0.75); P('#f4f1ea', 0.8, 0.2, 0.5, bedX + 0.5, bedZ + 1.3, 0.75);
-  if (bunk) { for (const [a, b] of [[-1.1, -1.75], [1.1, -1.75], [-1.1, 1.75], [1.1, 1.75]]) P(T.wood, 0.14, 2.6, 0.14, bedX + a, bedZ + b, 0); P(T.wood, 2.3, 0.2, 3.6, bedX, bedZ, 1.9); P('#f4f1ea', 2.1, 0.25, 3.4, bedX, bedZ, 2.1); P(acc[1], 2.14, 0.27, 2, bedX, bedZ - 0.7, 2.12); }
-  P(T.wood, 0.7, 0.6, 0.7, bedX - 1.7, bedZ + 1.5, 0, 1); P('#f4f1ea', 0.08, 0.35, 0.08, bedX - 1.7, bedZ + 1.5, 0.6); P('*#ffe9a8', 0.4, 0.32, 0.4, bedX - 1.7, bedZ + 1.5, 0.9);
-  P(acc[1], 2.6, 0.03, 1.6, bedX - 1.5, bedZ - 0.6, 0);
-  const wz = D2 - 0.5, wx = px + 1.3; // 옷장
-  P(T.wood, 2, 2.9, 0.8, wx, wz, 0, 1); P('#22202b', 0.03, 2.7, 0.02, wx, wz - 0.41, 0.1); P('*#ffd84a', 0.07, 0.3, 0.05, wx - 0.12, wz - 0.42, 1.3); P('*#ffd84a', 0.07, 0.3, 0.05, wx + 0.12, wz - 0.42, 1.3);
-  pic(W2 - 0.05, -D2 + 4.2 > bedZ - 2.2 ? -D2 + 2.2 : -D2 + 4.2, true, acc[0]);
+  const bunk = !big && r() < 0.3, bedX = W2 - (bunk ? 1.0 : 1.55), bedZ = D2 - 1.75;
+  F(bunk ? 'bedBunk' : big ? 'bedDouble' : r() < 0.5 ? 'bedDouble' : 'bedSingle', bedX, bedZ, 0);
+  F('cabinetBedDrawerTable', bedX - (bunk ? 1.4 : 2.0), D2 - 0.4, 0); F('lampRoundTable', bedX - (bunk ? 1.4 : 2.0), D2 - 0.4, 0, 0.8, 0);
+  P(acc[1], 2.8, 0.03, 1.7, bedX - 1.2, bedZ - 2.3, 0);
+  F('bookcaseClosedWide', px + 1.4, D2 - 0.4, 0); // 옷장
+  if (r() < 0.6) F('bear', bedX, bedZ - 0.4, 20, 1.13, 0, 0.8);
+  pic(W2 - 0.05, -D2 + 4.4, true, acc[0]);
 
-  // ----- 동쪽 앞: 집마다 다른 취미 공간 -----
-  const hx = W2 - 1.1, hz = -D2 + 2.4, hobby = seed % 5;
-  if (hobby === 0) { // 책상과 컴퓨터
-    P(T.wood, 1.1, 0.1, 2.6, hx, hz, 0.85, 1); for (const b of [-1.2, 1.2]) P(T.wood, 1, 0.85, 0.1, hx, hz + b, 0);
-    P('#22202b', 0.1, 0.75, 1.2, hx + 0.3, hz, 1.05); P('*#7fd0a0', 0.04, 0.6, 1.05, hx + 0.24, hz, 1.13); P('#d8dcec', 0.3, 0.04, 0.8, hx - 0.15, hz, 0.96);
-    chair(hx - 1.1, hz, [-1, 0]);
-  } else if (hobby === 1) { // 피아노
-    P('#22202b', 1, 1.3, 2.6, hx, hz, 0, 1); P('#f4f1ea', 0.4, 0.08, 2.3, hx - 0.65, hz, 0.8); P('#22202b', 0.45, 0.1, 2.5, hx - 0.65, hz, 0.72); P(T.wood, 0.6, 0.5, 1.2, hx - 1.5, hz, 0, 1);
-  } else if (hobby === 2) { // 어항
-    P(T.wood, 1, 0.9, 2.4, hx, hz, 0, 1); P('*#4fb3e8', 0.8, 1, 2.2, hx, hz, 0.9); P('#ff9d4a', 0.14, 0.2, 0.4, hx, hz - 0.4, 1.4); P('#f2644b', 0.14, 0.16, 0.3, hx, hz + 0.5, 1.15); P('#57c27a', 0.2, 0.5, 0.2, hx, hz + 0.9, 0.95); P('#22202b', 0.84, 0.1, 2.24, hx, hz, 1.9);
-  } else if (hobby === 3) { // 벽난로와 안락의자
+  // ----- 동쪽 앞: 집마다 다른 공간 -----
+  const hx = W2 - 0.7, hz = -D2 + 2.6, hobby = seed % 5;
+  if (hobby === 0) { // 컴퓨터 책상
+    F('desk', hx, hz, 90); F('computerScreen', hx + 0.15, hz, 90, 1.16, 0); F('computerKeyboard', hx - 0.3, hz, 90, 1.16, 0); F('chairDesk', hx - 1.3, hz, -90, 0, 0);
+  } else if (hobby === 1) { // 책 읽는 자리
+    F('bookcaseOpen', hx + 0.3, hz - 0.7, 90); F('bookcaseOpen', hx + 0.3, hz + 0.6, 90); F('loungeChair', hx - 1.6, hz, 60); F('lampRoundFloor', hx - 0.1, hz + 1.6, 0);
+    F('books', hx + 0.3, hz - 0.7, 90, 1.0, 0); F('books', hx + 0.3, hz + 0.6, 60, 1.52, 0);
+  } else if (hobby === 2) { // 음악 듣는 자리
+    F('sideTable', hx + 0.25, hz, 90); F('radio', hx + 0.25, hz, 90, 1.16, 0); F('speaker', hx + 0.2, hz - 1.3, 90); F('speaker', hx + 0.2, hz + 1.3, 90); F('benchCushion', hx - 1.7, hz, -90);
+  } else if (hobby === 3) { // 작은 바
+    F('kitchenBar', hx - 0.6, hz - 0.65, 90); F('kitchenBar', hx - 0.6, hz + 0.64, 90); F('stoolBar', hx - 1.6, hz - 0.65, -90, 0, 0); F('stoolBar', hx - 1.6, hz + 0.64, -90, 0, 0); F('kitchenCoffeeMachine', hx - 0.6, hz + 0.6, 90, 1.26, 0);
+  } else { // 벽난로와 안락의자
     P('#b9654a', 0.9, 2.2, 2.4, hx + 0.1, hz, 0, 1); P('#22202b', 0.3, 1, 1.3, hx - 0.25, hz, 0.15); P('*#ffb03a', 0.2, 0.5, 0.9, hx - 0.28, hz, 0.2); P(T.wood, 1.1, 0.14, 2.7, hx + 0.05, hz, 2.2); P('#b9654a', 0.7, HH - 2.3, 1.2, hx + 0.2, hz, 2.3);
-    P(acc[1], 1.1, 0.5, 1.1, hx - 2, hz + 0.2, 0.15, 1); P(acc[1], 0.3, 1.1, 1.1, hx - 2.5, hz + 0.2, 0.15);
-  } else { // 운동 공간
-    P('#3a3d4d', 1.2, 0.2, 2.6, hx, hz, 0, 1); P('#22202b', 0.1, 1.2, 0.1, hx + 0.3, hz + 1.1, 0.2); P('#22202b', 0.1, 1.2, 0.1, hx - 0.3, hz + 1.1, 0.2); P('#8f95a8', 0.9, 0.1, 0.5, hx, hz + 1.1, 1.3);
-    P('#22202b', 0.3, 0.3, 0.3, hx - 1.5, hz - 0.6, 0); P('#22202b', 0.3, 0.3, 0.3, hx - 1.5, hz + 0.2, 0); P('#8f95a8', 0.1, 0.1, 1.1, hx - 1.5, hz - 0.2, 0.1); P(acc[0], 0.9, 0.04, 2.2, hx - 2.6, hz, 0);
+    F('loungeChair', hx - 2.3, hz, -90); F('rugRound', hx - 1.6, hz, 0, 0, 0);
   }
-  // 책장: 칸막이벽의 침실 쪽
-  const bx = px + 0.4, bz = D2 - d * 0.36;
-  P(T.wood, 0.5, 2.6, 2.4, bx, bz, 0, 1);
-  for (let row = 0; row < 4; row++) { P(T.wood, 0.52, 0.06, 2.4, bx, bz, 0.5 + row * 0.6); for (let i = 0; i < 7; i++) if (r() < 0.82) P(BOOKS[Math.floor(r() * BOOKS.length)], 0.34, 0.3 + r() * 0.2, 0.2, bx - 0.06, bz - 0.95 + i * 0.31, 0.14 + row * 0.6); }
-  plant(-W2 + 0.6, -D2 + 0.7, true); if (r() < 0.6) plant(px - 0.6, -D2 + 0.6, r() < 0.5);
+  // 책장과 화분, 옷걸이, 천장등
+  F('bookcaseOpen', px + 0.45, D2 - d * 0.36, -90); F('books', px + 0.45, D2 - d * 0.36, 0, 1.0, 0);
+  F('coatRackStanding', 1.7, -D2 + 0.6, 0); F('pottedPlant', -W2 + 0.55, -D2 + 0.6, 0);
+  if (r() < 0.6) F('pottedPlant', px - 0.6, -D2 + 0.6, 0);
+  if (r() < 0.5) F('trashcan', -W2 + 0.5, D2 - 2.3 - U, 0);
+  assets.flush();
   col.done();
   h.mergeBuckets('in_' + id);
   return { id, key: 'home', cx, cz, y0, w, d, in: new B.Vector3(cx, y0, cz - D2 + 2.2), out: { x: cx, z: cz - D2 + 1.0 } };
@@ -226,7 +253,14 @@ export function buildInteriors(h) {
     put('wallE', 0.4, HH, d, w / 2 + 0.2, HH / 2, 0, R.wall); put('wallW', 0.4, HH, d, -w / 2 - 0.2, HH / 2, 0, R.wall);
     put('door', 1.7, 2.7, 0.1, 0, 1.35, -d / 2 + 0.05, '#5a4636', false); put('mat', 2.2, 0.05, 1.3, 0, 0.03, -d / 2 + 0.95, '*#3fc1c9', false);
     for (const sx of [-1, 1]) { put('win' + sx, 0.1, 1.7, d * 0.36, sx * (w / 2 - 0.05), 2.5, d * 0.12, '*#bfe6ff', false); put('lamp' + sx, 1.6, 0.14, 1.6, sx * w * 0.22, HH - 0.08, 0, '*#fff2c2', false); }
-    R.items.forEach(([c, bw, bh, bd, x, z, lift = 0, col = 1], i) => put('f' + i, bw, bh, bd, x, lift + bh / 2, z, c, !!col));
+    const drop = DROP[key];
+    R.items.forEach(([c, bw, bh, bd, x, z, lift = 0, col = 1], i) => { if (drop && drop(c, bw)) return; put('f' + i, bw, bh, bd, x, lift + bh / 2, z, c, !!col); });
+    // 가구 모델: [이름, x, z, 방향(도), 띄운 높이, 부딪힘]
+    for (const [name, x, z, rot = 0, lift = 0, solid = 1] of [...(DRESS[key] || []), ['pottedPlant', -w / 2 + 0.6, -d / 2 + 0.6], ['trashcan', w / 2 - 0.6, -d / 2 + 0.6], ['lampSquareCeiling', 0, -1, 0, HH - 0.7, 0], ['lampSquareCeiling', 0, 2.2, 0, HH - 0.7, 0]]) {
+      const k = 'furniture/' + name;
+      assets.place(k, cx + x, y0 + lift, cz + z, (rot * Math.PI) / 180, 1, 'in_' + id);
+      if (solid) { const bb = assets.bounds(k), q = Math.abs(rot) === 90; h.addBox(cx + x, y0 + lift + (bb.max.y - bb.min.y) / 2, cz + z, q ? bb.max.z - bb.min.z : bb.max.x - bb.min.x, bb.max.y - bb.min.y, q ? bb.max.x - bb.min.x : bb.max.z - bb.min.z); }
+    }
     if (R.clerk) {
       const chr = new Character(scene, randomLook(7000 + level * 31));
       const pos = new B.Vector3(cx + R.clerk[0], y0, cz + R.clerk[1]), yaw = R.clerk[2] === undefined ? Math.PI : R.clerk[2];

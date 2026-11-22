@@ -125,3 +125,11 @@ export const DISTRICT_KEYS = [
 
 // 철도역: 노선 위의 위치(0~1)와 이름
 export const STATIONS = [[0.02, '항구역'], [0.33, '공단역'], [0.6, '해변역'], [0.98, '야영장역']];
+
+// 실내 가구(Kenney Furniture Kit)와 기차(Train Kit) 모델
+export const FURNITURE_KEYS = ['bedDouble', 'bedSingle', 'bedBunk', 'loungeSofa', 'loungeChair', 'table', 'tableRound', 'tableCoffee', 'chair', 'chairCushion', 'chairDesk', 'desk',
+  'kitchenFridge', 'kitchenCabinet', 'kitchenSink', 'kitchenStove', 'kitchenCabinetUpper', 'kitchenBar', 'stoolBar', 'bookcaseOpen', 'bookcaseClosedWide', 'cabinetTelevision',
+  'televisionModern', 'televisionVintage', 'lampRoundFloor', 'lampRoundTable', 'lampSquareCeiling', 'pottedPlant', 'plantSmall1', 'rugRectangle', 'rugRound', 'sideTable',
+  'cabinetBedDrawerTable', 'bench', 'benchCushion', 'toilet', 'computerScreen', 'computerKeyboard', 'trashcan', 'speaker', 'radio', 'books', 'coatRackStanding', 'bear', 'laptop',
+  'kitchenCoffeeMachine', 'kitchenMicrowave', 'washer', 'bathroomSink'].map((k) => 'furniture/' + k);
+export const TRAIN_KEYS = ['train/train-electric-subway-a', 'train/train-electric-subway-b', 'train/train-electric-subway-c'];

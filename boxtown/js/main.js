@@ -130,7 +130,7 @@ async function boot() {
   weapons.toast = (text, good) => jobs.toast(text, good);
   weapons.onCrime = (amount) => police.report(amount);
   health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
-  const train = new Train({ scene, player, jobs, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  const train = new Train({ scene, player, jobs, assets, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   train0 = train;
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(70, vx, vz, 'train'); };
   mark('actors');

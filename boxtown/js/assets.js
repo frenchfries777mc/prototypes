@@ -15,6 +15,8 @@ export const KITS = {
   pirate: { scale: 1.0, tex: true },
   watercraft: { scale: 1.7, tex: true },
   nature: { scale: 6, tex: false },
+  furniture: { scale: 1.5, tex: false }, // 캐릭터가 통통해서 가구도 1.5배
+  train: { scale: 3, tex: true },
 };
 
 // 바닥에 붙은 타일과 작은 풀은 그림자를 드리우지 않는다(그려야 할 양이 크게 준다).
@@ -187,13 +189,13 @@ export class Assets {
 
   // 고정 배치. 실제 그리기는 flush()에서 "모델 × 구역"별로 한꺼번에 등록된다.
   // 구역(192m)으로 나눠 두면 화면 밖이거나 먼 구역은 통째로 건너뛸 수 있다.
-  place(key, x, y, z, rotY = 0, scale = 1) {
+  place(key, x, y, z, rotY = 0, scale = 1, tag = '') {
     this.tpl(key);
     const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
     const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));
     const ix = Math.floor((x - WORLD.x0) / REGION), iz = Math.floor((z - WORLD.z0) / REGION);
-    const id = `${key}#${ix},${iz}`;
-    if (!this.pending.has(id)) this.pending.set(id, { key, ix, iz, mats: [] });
+    const id = `${key}#${ix},${iz}#${tag}`;
+    if (!this.pending.has(id)) this.pending.set(id, { key, ix, iz, tag, mats: [] });
     this.pending.get(id).mats.push(m);
     return m;
   }
@@ -212,7 +214,7 @@ export class Assets {
       mesh.isPickable = false;
       const small = NO_SHADOW.test(g.key);
       const range = /nature\/(grass|flower|plant|crop)/.test(g.key) ? 160 : g.key.startsWith('nature/') || g.key.startsWith('roads/light') ? 620 : 1300;
-      this.groups.push({ mesh, x: WORLD.x0 + (g.ix + 0.5) * REGION, z: WORLD.z0 + (g.iz + 0.5) * REGION, range, shadow: !small, on: true, lit: false });
+      this.groups.push({ mesh, x: WORLD.x0 + (g.ix + 0.5) * REGION, z: WORLD.z0 + (g.iz + 0.5) * REGION, range, shadow: !small && !g.tag, on: true, lit: false, tag: g.tag });
     }
     this.pending.clear();
   }
