@@ -1,7 +1,7 @@
 // 건물 내부와 내 집 마련.
 // 건물 모델은 속이 막혀 있어서, 문 앞에서 E를 누르면 하늘 높이 따로 지어 둔 방으로 옮겨 간다(나올 때는 들어간 문 앞으로).
 // 방은 상자로 짓는다: 바닥·벽·천장 + 가구 목록.
-import { flatMat } from './util.js';
+import { flatMat, rng } from './util.js';
 import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
 
@@ -63,15 +63,136 @@ const ROOMS = {
     ['#2a2c36', 0.9, 0.22, 0.18, 1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 1.6, -1], ['#55693f', 1.3, 0.3, 0.3, 4.6, -1, 0.9, 0], ['#d9473c', 0.3, 0.22, 0.22, 5.3, -1, 0.94, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 4.6, -1],
     ['#2a2c36', 0.5, 0.2, 0.1, -3, 4.4, 1.6, 0], ['#2a2c36', 0.9, 0.2, 0.1, 0, 4.4, 1.9, 0], ['#55693f', 1.3, 0.3, 0.1, 3, 4.4, 1.5, 0]],
     buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6]] },
-  home: { w: 13, d: 10, floor: '#d8b98a', wall: '#f3ead6', items: [
-    ['#4f6fb0', 3.6, 0.7, 1.4, -3.6, -1.6], ['#4f6fb0', 3.6, 1.3, 0.4, -3.6, -2.4, 0, 0], ['#e5553f', 4.4, 0.04, 3, -3.6, 0.2, 0, 0], ['#8b5d3a', 1.6, 0.5, 1, -3.6, 0.4], ['#2c2c36', 3, 0.9, 0.5, -3.6, 2.6], ['#22202b', 2.6, 1.5, 0.14, -3.6, 2.6, 1.0, 0], ['*#7fb8e0', 2.3, 1.2, 0.04, -3.6, 2.52, 1.15, 0],
-    ['#f4f1ea', 4.4, 1, 0.9, 4, 4.4], ['#8f95a8', 4.6, 0.1, 1, 4, 4.4, 1, 0], ['#d8dcec', 1.1, 2.3, 0.9, 1.2, 4.4], ['#b9814f', 1.8, 0.9, 1.2, 3.2, 1.4], ['#c79a5b', 0.5, 0.5, 0.5, 3.2, 0.3], ['#c79a5b', 0.5, 0.5, 0.5, 3.2, 2.5],
-    ['#8b5d3a', 2.2, 0.5, 3.4, 5.2, -2.6], ['#f4f1ea', 2, 0.3, 3, 5.2, -2.6, 0.5, 0], ['#57c27a', 2, 0.32, 1.9, 5.2, -3.1, 0.52, 0], ['#f4f1ea', 1.4, 0.24, 0.5, 5.2, -1.3, 0.8, 0], ['#8b5d3a', 0.6, 2.4, 2.6, -6.1, 3.2], ['#e5553f', 0.2, 0.5, 0.4, -5.9, 2.6, 1.2, 0], ['#3fa868', 0.2, 0.5, 0.4, -5.9, 3.4, 1.2, 0], ['#4f9bea', 0.2, 0.5, 0.4, -5.9, 3.8, 0.5, 0], ['#3fa868', 0.6, 1.4, 0.6, -5.8, -4.2]] },
+  home: { w: 13, d: 10, items: [] }, // 집 내부는 buildHome이 집마다 따로 만든다
 };
 const PRICE = { town: 5200, lake: 3400, gull: 4200, farm: 2800, mill: 3000, twin: 3600, woods: 2600, wind: 2400 };
 const AREA_NAME = { town: '항구 마을', lake: '호수 마을', gull: '갈매기섬', farm: '서쪽 농장', mill: '풍차섬', twin: '쌍둥이섬', woods: '고요숲 섬', wind: '풍차 언덕' };
 const $ = (id) => document.getElementById(id);
 const won = (n) => n.toLocaleString('ko-KR');
+
+// ---------- 집 내부 생성기: 집마다 크기·색·배치·가구가 다르다 ----------
+const THEMES = [
+  { wall: '#f3ead6', floor: '#c99a66', line: '#b58450', wood: '#8b5d3a', a: '#4f6fb0', b: '#e5553f', kit: '#f4f1ea' },
+  { wall: '#e6efe6', floor: '#b9814f', line: '#a26f41', wood: '#6b4a30', a: '#3fa868', b: '#f4c542', kit: '#dfe7df' },
+  { wall: '#f7e3df', floor: '#d8b98a', line: '#c4a373', wood: '#a0703f', a: '#e58a8a', b: '#6fb6d9', kit: '#fff7f0' },
+  { wall: '#e3e8f3', floor: '#9c7a5a', line: '#876749', wood: '#5a3d24', a: '#34456f', b: '#ffd84a', kit: '#d8dcec' },
+  { wall: '#f6efc9', floor: '#c79a5b', line: '#b0864a', wood: '#8a5a2b', a: '#f28b3c', b: '#3fc1c9', kit: '#fff7e6' },
+  { wall: '#ece3f3', floor: '#b08a6a', line: '#987556', wood: '#70503a', a: '#b072e0', b: '#57c27a', kit: '#f2edf7' },
+  { wall: '#dfeef2', floor: '#d2c3a6', line: '#bcae92', wood: '#9a8466', a: '#3f9fd0', b: '#f08fb0', kit: '#f4f9fb' },
+  { wall: '#efe6dc', floor: '#7d5a40', line: '#6a4a33', wood: '#4a3323', a: '#b8322a', b: '#e9d2a0', kit: '#e8ded2' },
+];
+const BOOKS = ['#e5553f', '#3fa868', '#4f9bea', '#f4c542', '#b072e0', '#f28b3c', '#3fc1c9', '#f4f1ea'];
+
+function buildHome(h, M, id, cx, cz, y0, seed, big) {
+  const r = rng(seed), T = THEMES[seed % THEMES.length];
+  const w = (big ? 15 : 12.5) + Math.floor(r() * 3) * 0.5, d = (big ? 11.5 : 10) + Math.floor(r() * 3) * 0.5, HH = 4.6;
+  const sx = r() < 0.5 ? 1 : -1; // 좌우를 뒤집은 집도 있다
+  const acc = r() < 0.5 ? [T.a, T.b] : [T.b, T.a];
+  h.bucket('in_' + id, cx, cz);
+  const col = h.lazyCollider();
+  let k = 0;
+  // 가구 조각 하나: (색, 가로, 높이, 세로, x, z, 바닥에서 띄운 높이, 충돌 여부). x는 집의 좌우 뒤집기를 따른다.
+  const P = (c, bw, bh, bd, x, z, lift = 0, solid = 0) => {
+    if (solid) col.add(cx + sx * x, y0 + lift + bh / 2, cz + z, bw, bh, bd);
+    return h.box(`in_${id}_${k++}`, bw, bh, bd, cx + sx * x, y0 + lift + bh / 2, cz + z, M(c), { noShadow: true });
+  };
+  const W2 = w / 2, D2 = d / 2;
+  // 뼈대: 바닥(널빤지 줄무늬), 벽, 걸레받이, 천장, 문
+  P(T.floor, w + 0.8, 0.4, d + 0.8, 0, 0, -0.4, 1);
+  for (let z = -D2 + 1.1; z < D2; z += 1.1) P(T.line, w, 0.02, 0.05, 0, z, 0);
+  P('#f4f1ea', w + 0.8, 0.4, d + 0.8, 0, 0, HH, 1);
+  P(T.wall, w + 0.8, HH, 0.4, 0, D2 + 0.2, 0, 1); P(T.wall, w + 0.8, HH, 0.4, 0, -D2 - 0.2, 0, 1);
+  P(T.wall, 0.4, HH, d, W2 + 0.2, 0, 0, 1); P(T.wall, 0.4, HH, d, -W2 - 0.2, 0, 0, 1);
+  P('#f4f1ea', w, 0.22, 0.06, 0, D2 - 0.03, 0); P('#f4f1ea', 0.06, 0.22, d, W2 - 0.03, 0, 0); P('#f4f1ea', 0.06, 0.22, d, -W2 + 0.03, 0, 0);
+  P(T.wood, 1.9, 2.9, 0.1, 0, -D2 + 0.05, 0); P('#5a4636', 1.5, 2.6, 0.12, 0, -D2 + 0.07, 0); P('*#ffd84a', 0.12, 0.12, 0.08, 0.5 * sx, -D2 + 0.16, 1.2);
+  P('*#3fc1c9', 2.2, 0.05, 1.3, 0, -D2 + 0.95, 0);
+  P(acc[0], 1.6, 0.03, 0.9, 0, -D2 + 2.2, 0); // 현관 깔개
+  // 창문: 틀, 밝은 유리, 양쪽 커튼
+  const win = (x, z, alongZ) => {
+    const a = alongZ ? [0.12, 2.2] : [2.2, 0.12], g = alongZ ? [0.1, 1.9] : [1.9, 0.1], c = alongZ ? [0.14, 0.5] : [0.5, 0.14];
+    P('#f4f1ea', a[0], 1.9, a[1], x, z, 1.3); P('*#cfeaff', g[0], 1.6, g[1], x, z, 1.45); P('#f4f1ea', alongZ ? 0.13 : 0.06, 1.6, alongZ ? 0.06 : 0.13, x, z, 1.45);
+    for (const o of [-1.3, 1.3]) P(acc[1], c[0], 2.2, c[1], x + (alongZ ? 0 : o), z + (alongZ ? o : 0), 1.15);
+  };
+  win(-W2 + 0.06, -D2 + 2.8, true); win(W2 - 0.06, D2 - 3, true); win(-W2 * 0.45, D2 - 0.06, false);
+  // 액자
+  const pic = (x, z, alongZ, col) => { P(T.wood, alongZ ? 0.08 : 1.3, 1, alongZ ? 1.3 : 0.08, x, z, 2.1); P(col, alongZ ? 0.1 : 1.05, 0.76, alongZ ? 1.05 : 0.1, x, z, 2.22); };
+  // 천장등
+  for (const [x, z] of [[-W2 * 0.5, -D2 * 0.3], [W2 * 0.5, D2 * 0.3], [-W2 * 0.5, D2 * 0.55]]) { P('#f4f1ea', 0.1, 0.5, 0.1, x, z, HH - 0.5); P('*#fff2c2', 0.9, 0.3, 0.9, x, z, HH - 0.8); }
+  const plant = (x, z, tall) => { P('#c9703f', 0.55, 0.5, 0.55, x, z, 0, 1); P('#3fa868', 0.7, tall ? 1.1 : 0.6, 0.7, x, z, 0.5); P('#57c27a', 0.45, 0.5, 0.45, x, z, tall ? 1.5 : 1.0); };
+
+  // ----- 거실(서쪽 앞): 소파, 깔개, 탁자, TV -----
+  const sofaX = -W2 + 1.0, lz = -D2 + 3.1;
+  P(acc[0], 3.6, 0.03, 4.6, sofaX + 2.4, lz, 0); P(T.wall, 3.2, 0.035, 4.2, sofaX + 2.4, lz, 0);
+  P(acc[0], 1.3, 0.5, 3.6, sofaX, lz, 0.18, 1); P(acc[0], 0.4, 1.15, 3.6, sofaX - 0.5, lz, 0.18); // 방석과 등받이
+  P(acc[0], 1.3, 0.75, 0.4, sofaX, lz - 1.9, 0.18); P(acc[0], 1.3, 0.75, 0.4, sofaX, lz + 1.9, 0.18);
+  for (const o of [-1.1, 0, 1.1]) P(o ? acc[1] : '#f4f1ea', 0.35, 0.5, 0.75, sofaX - 0.2, lz + o, 0.7);
+  for (const [a, b] of [[-0.5, -1.6], [0.5, -1.6], [-0.5, 1.6], [0.5, 1.6]]) P(T.wood, 0.14, 0.18, 0.14, sofaX + a, lz + b, 0);
+  P(T.wood, 1.2, 0.1, 2, sofaX + 2.3, lz, 0.5, 1); // 탁자
+  for (const [a, b] of [[-0.5, -0.9], [0.5, -0.9], [-0.5, 0.9], [0.5, 0.9]]) P(T.wood, 0.1, 0.5, 0.1, sofaX + 2.3 + a, lz + b, 0);
+  P(acc[1], 0.4, 0.14, 0.3, sofaX + 2.2, lz + 0.4, 0.6); P('#f4f1ea', 0.3, 0.05, 0.42, sofaX + 2.4, lz - 0.45, 0.6);
+  // TV는 현관과 거실을 나누는 낮은 벽에 건다.
+  const tvX = -1.5;
+  P(T.wall, 0.24, 2.7, 4.2, tvX, lz, 0, 1); P(T.wood, 0.3, 0.1, 4.3, tvX, lz, 2.7);
+  P(T.wood, 0.6, 0.55, 3, tvX - 0.4, lz, 0, 1); P('#22202b', 0.1, 1.35, 2.3, tvX - 0.18, lz, 1.0); P('*#7fb8e0', 0.04, 1.15, 2.1, tvX - 0.24, lz, 1.1);
+  P('#22202b', 0.3, 0.14, 0.5, tvX - 0.4, lz + 1.1, 0.55); plant(tvX - 0.5, lz - 1.75, false);
+  if (r() < 0.6) { P('#f4f1ea', 0.1, 1.9, 0.1, sofaX, lz + 2.6, 0); P('*#ffe9a8', 0.55, 0.5, 0.55, sofaX, lz + 2.6, 1.7); } // 스탠드
+  pic(-W2 + 0.05, lz + 0.2 < -D2 + 4.6 ? D2 - 5.2 : lz, true, acc[1]);
+
+  // ----- 부엌과 식탁(서쪽 안쪽) -----
+  const kz = D2 - 0.55, kx0 = -W2 + 0.6;
+  P('#d8dcec', 1.1, 2.4, 1, kx0, kz, 0, 1); P('#8f95a8', 0.06, 0.9, 0.06, kx0 + 0.45, kz - 0.52, 1.1); P('#b9bfd0', 1.1, 0.04, 0.02, kx0, kz - 0.5, 1.45); // 냉장고
+  const cl = W2 - 2.4; // 조리대 길이
+  P(T.kit, cl, 0.95, 0.9, kx0 + 0.7 + cl / 2, kz, 0, 1); P('#5f6577', cl + 0.1, 0.1, 1, kx0 + 0.7 + cl / 2, kz, 0.95);
+  for (let x = kx0 + 1.1; x < kx0 + 0.7 + cl; x += 0.9) P('#8f95a8', 0.3, 0.05, 0.04, x, kz - 0.47, 0.6);
+  P('#3a3d4d', 0.9, 0.04, 0.6, kx0 + 1.5, kz, 1.05); P('#8f95a8', 0.08, 0.35, 0.08, kx0 + 1.5, kz + 0.32, 1.05); // 개수대
+  P('#22202b', 1, 0.04, 0.7, kx0 + 3.1, kz, 1.05); for (const [a, b] of [[-0.25, -0.17], [0.25, -0.17], [-0.25, 0.17], [0.25, 0.17]]) P('*#f2644b', 0.2, 0.02, 0.2, kx0 + 3.1 + a, kz + b, 1.09);
+  P(T.kit, cl, 0.9, 0.5, kx0 + 0.7 + cl / 2, kz + 0.2, 2.5); P('#f4f1ea', 1.1, 0.5, 0.6, kx0 + 3.1, kz + 0.1, 1.95);
+  const tz = D2 - 3.3, tx = -W2 * 0.5, round = r() < 0.4, seats = big || r() < 0.5 ? 4 : 2;
+  P(T.wood, round ? 1.6 : 2.4, 0.1, round ? 1.6 : 1.3, tx, tz, 0.85, 1); P(T.wood, 0.3, 0.85, 0.3, tx, tz, 0);
+  const chair = (x, z, back) => { P(T.wood, 0.55, 0.08, 0.55, x, z, 0.5); P(acc[1], 0.5, 0.06, 0.5, x, z, 0.58); P(T.wood, back[0] ? 0.08 : 0.55, 0.7, back[0] ? 0.55 : 0.08, x + back[0] * 0.27, z + back[1] * 0.27, 0.5); for (const [a, b] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) P(T.wood, 0.07, 0.5, 0.07, x + a, z + b, 0); };
+  chair(tx, tz - 1.15, [0, -1]); chair(tx, tz + 1.15, [0, 1]);
+  if (seats === 4) { chair(tx - (round ? 1.25 : 1.65), tz, [-1, 0]); chair(tx + (round ? 1.25 : 1.65), tz, [1, 0]); }
+  P('#f4f1ea', 0.5, 0.06, 0.5, tx, tz, 0.95); P(acc[0], 0.25, 0.3, 0.25, tx, tz, 1.0);
+
+  // ----- 침실(동쪽): 칸막이벽, 침대, 협탁, 옷장 -----
+  const px = 1.6;
+  P(T.wall, 0.24, HH, d * 0.5, px, D2 - d * 0.25, 0, 1);
+  const bedX = W2 - 1.25, bedZ = D2 - 2.4, bunk = !big && r() < 0.25;
+  P(T.wood, 2.3, 0.45, 3.6, bedX, bedZ, 0, 1); P('#f4f1ea', 2.1, 0.3, 3.4, bedX, bedZ, 0.45); P(acc[0], 2.14, 0.32, 2.1, bedX, bedZ - 0.65, 0.47);
+  P(T.wood, 2.3, 1.3, 0.2, bedX, bedZ + 1.8, 0); P('#f4f1ea', 0.8, 0.2, 0.5, bedX - 0.5, bedZ + 1.3, 0.75); P('#f4f1ea', 0.8, 0.2, 0.5, bedX + 0.5, bedZ + 1.3, 0.75);
+  if (bunk) { for (const [a, b] of [[-1.1, -1.75], [1.1, -1.75], [-1.1, 1.75], [1.1, 1.75]]) P(T.wood, 0.14, 2.6, 0.14, bedX + a, bedZ + b, 0); P(T.wood, 2.3, 0.2, 3.6, bedX, bedZ, 1.9); P('#f4f1ea', 2.1, 0.25, 3.4, bedX, bedZ, 2.1); P(acc[1], 2.14, 0.27, 2, bedX, bedZ - 0.7, 2.12); }
+  P(T.wood, 0.7, 0.6, 0.7, bedX - 1.7, bedZ + 1.5, 0, 1); P('#f4f1ea', 0.08, 0.35, 0.08, bedX - 1.7, bedZ + 1.5, 0.6); P('*#ffe9a8', 0.4, 0.32, 0.4, bedX - 1.7, bedZ + 1.5, 0.9);
+  P(acc[1], 2.6, 0.03, 1.6, bedX - 1.5, bedZ - 0.6, 0);
+  const wz = D2 - 0.5, wx = px + 1.3; // 옷장
+  P(T.wood, 2, 2.9, 0.8, wx, wz, 0, 1); P('#22202b', 0.03, 2.7, 0.02, wx, wz - 0.41, 0.1); P('*#ffd84a', 0.07, 0.3, 0.05, wx - 0.12, wz - 0.42, 1.3); P('*#ffd84a', 0.07, 0.3, 0.05, wx + 0.12, wz - 0.42, 1.3);
+  pic(W2 - 0.05, -D2 + 4.2 > bedZ - 2.2 ? -D2 + 2.2 : -D2 + 4.2, true, acc[0]);
+
+  // ----- 동쪽 앞: 집마다 다른 취미 공간 -----
+  const hx = W2 - 1.1, hz = -D2 + 2.4, hobby = seed % 5;
+  if (hobby === 0) { // 책상과 컴퓨터
+    P(T.wood, 1.1, 0.1, 2.6, hx, hz, 0.85, 1); for (const b of [-1.2, 1.2]) P(T.wood, 1, 0.85, 0.1, hx, hz + b, 0);
+    P('#22202b', 0.1, 0.75, 1.2, hx + 0.3, hz, 1.05); P('*#7fd0a0', 0.04, 0.6, 1.05, hx + 0.24, hz, 1.13); P('#d8dcec', 0.3, 0.04, 0.8, hx - 0.15, hz, 0.96);
+    chair(hx - 1.1, hz, [-1, 0]);
+  } else if (hobby === 1) { // 피아노
+    P('#22202b', 1, 1.3, 2.6, hx, hz, 0, 1); P('#f4f1ea', 0.4, 0.08, 2.3, hx - 0.65, hz, 0.8); P('#22202b', 0.45, 0.1, 2.5, hx - 0.65, hz, 0.72); P(T.wood, 0.6, 0.5, 1.2, hx - 1.5, hz, 0, 1);
+  } else if (hobby === 2) { // 어항
+    P(T.wood, 1, 0.9, 2.4, hx, hz, 0, 1); P('*#4fb3e8', 0.8, 1, 2.2, hx, hz, 0.9); P('#ff9d4a', 0.14, 0.2, 0.4, hx, hz - 0.4, 1.4); P('#f2644b', 0.14, 0.16, 0.3, hx, hz + 0.5, 1.15); P('#57c27a', 0.2, 0.5, 0.2, hx, hz + 0.9, 0.95); P('#22202b', 0.84, 0.1, 2.24, hx, hz, 1.9);
+  } else if (hobby === 3) { // 벽난로와 안락의자
+    P('#b9654a', 0.9, 2.2, 2.4, hx + 0.1, hz, 0, 1); P('#22202b', 0.3, 1, 1.3, hx - 0.25, hz, 0.15); P('*#ffb03a', 0.2, 0.5, 0.9, hx - 0.28, hz, 0.2); P(T.wood, 1.1, 0.14, 2.7, hx + 0.05, hz, 2.2); P('#b9654a', 0.7, HH - 2.3, 1.2, hx + 0.2, hz, 2.3);
+    P(acc[1], 1.1, 0.5, 1.1, hx - 2, hz + 0.2, 0.15, 1); P(acc[1], 0.3, 1.1, 1.1, hx - 2.5, hz + 0.2, 0.15);
+  } else { // 운동 공간
+    P('#3a3d4d', 1.2, 0.2, 2.6, hx, hz, 0, 1); P('#22202b', 0.1, 1.2, 0.1, hx + 0.3, hz + 1.1, 0.2); P('#22202b', 0.1, 1.2, 0.1, hx - 0.3, hz + 1.1, 0.2); P('#8f95a8', 0.9, 0.1, 0.5, hx, hz + 1.1, 1.3);
+    P('#22202b', 0.3, 0.3, 0.3, hx - 1.5, hz - 0.6, 0); P('#22202b', 0.3, 0.3, 0.3, hx - 1.5, hz + 0.2, 0); P('#8f95a8', 0.1, 0.1, 1.1, hx - 1.5, hz - 0.2, 0.1); P(acc[0], 0.9, 0.04, 2.2, hx - 2.6, hz, 0);
+  }
+  // 책장: 칸막이벽의 침실 쪽
+  const bx = px + 0.4, bz = D2 - d * 0.36;
+  P(T.wood, 0.5, 2.6, 2.4, bx, bz, 0, 1);
+  for (let row = 0; row < 4; row++) { P(T.wood, 0.52, 0.06, 2.4, bx, bz, 0.5 + row * 0.6); for (let i = 0; i < 7; i++) if (r() < 0.82) P(BOOKS[Math.floor(r() * BOOKS.length)], 0.34, 0.3 + r() * 0.2, 0.2, bx - 0.06, bz - 0.95 + i * 0.31, 0.14 + row * 0.6); }
+  plant(-W2 + 0.6, -D2 + 0.7, true); if (r() < 0.6) plant(px - 0.6, -D2 + 0.6, r() < 0.5);
+  col.done();
+  h.mergeBuckets('in_' + id);
+  return { id, key: 'home', cx, cz, y0, w, d, in: new B.Vector3(cx, y0, cz - D2 + 2.2), out: { x: cx, z: cz - D2 + 1.0 } };
+}
 
 // h: { scene, assets, box, addBox, bucket, groundY, jobSites, houses }
 export function buildInteriors(h) {
@@ -142,9 +263,9 @@ export function buildInteriors(h) {
     signPlane(ROOMS[s.id].name, f.x + Math.sin(s.yaw) * 0.9, y + 3.5, f.z + Math.cos(s.yaw) * 0.9, s.yaw, s.bg);
   }
   // 살 수 있는 집: 안은 모두 같은 방을 쓴다.
-  buildRoom('home', 'home', 66, 48);
   const forSale = M('#d9473c'), mine = M('*#57c27a'), post = M('#f4f1ea');
   const count = {};
+  let homeSeed = 0;
   const homes = h.houses.map((hs) => {
     const area = hs.area.startsWith('cabin') ? 'cabin' : hs.area;
     count[hs.area] = (count[hs.area] || 0) + 1;
@@ -158,7 +279,9 @@ export function buildInteriors(h) {
     pole.position.set(sx, y + 0.75, sz); pole.material = post; pole.isPickable = false;
     const board = B.MeshBuilder.CreateBox('houseBoard', { width: 0.9, height: 0.55, depth: 0.1 }, scene);
     board.position.set(sx, y + 1.5, sz); board.rotation.y = hs.yaw; board.material = forSale; board.isPickable = false;
-    const d = { id, house: true, room: 'home', x: f.x, y, z: f.z, yaw: hs.yaw, price, board, name: (AREA_NAME[area] || '외딴') + ' 집' };
+    // 집마다 제 내부가 따로 있다(씨앗은 집 번호). 42채를 미리 다 지으면 로딩이 길어져서, 처음 들어갈 때 짓는다.
+    const plan = [f.x, f.z, 600 + 14 * level++, homeSeed++ * 7 + 3, size > 330];
+    const d = { id, house: true, room: 'home_' + id, x: f.x, y, z: f.z, yaw: hs.yaw, price, board, plan, name: (AREA_NAME[area] || '외딴') + ' 집' };
     doors.push(d);
     return d;
   });
@@ -217,6 +340,7 @@ export function buildInteriors(h) {
         if (!this.atExit()) return false;
         const d = this.inside;
         this.inside = null; P.inside = false; P.dist = 6.8;
+        assets.activeInterior = null;
         this.fade();
         P.teleport(d.x, d.y, d.z); P.yaw = d.yaw + Math.PI; P.chr.heading = d.yaw + Math.PI;
         return true;
@@ -230,8 +354,10 @@ export function buildInteriors(h) {
         return true;
       }
       if (d.house) save('boxtown.home', d.id);
+      if (!rooms[d.room]) { rooms[d.room] = buildHome(h, M, d.room, ...d.plan); h.bucket('town', 66, 48); }
       const r = rooms[d.room];
       this.inside = d; P.inside = true; P.dist = 4.6;
+      assets.activeInterior = 'in_' + d.room; // 들어간 방만 그린다
       this.fade();
       P.teleport(r.in.x, r.in.y, r.in.z); P.yaw = 0; P.pitch = 0.32; P.chr.heading = 0;
       return true;

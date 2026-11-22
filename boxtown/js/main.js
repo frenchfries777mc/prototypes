@@ -112,7 +112,7 @@ async function boot() {
   assets.shadowRange = quality === 'low' ? 110 : 185;
   const fixedCasters = [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes];
   assets.cull(player.cam.position, rl, fixedCasters);
-  let cullT = 0;
+  let cullT = 0, lastInterior = null;
 
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.jobs = jobs;
@@ -155,7 +155,7 @@ async function boot() {
   const tick = (dt) => {
     town.update(dt);
     cullT -= dt;
-    if (cullT <= 0) { cullT = 0.3; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
+    if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
     residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car }, garage.cars);

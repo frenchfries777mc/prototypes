@@ -218,14 +218,15 @@ export class Assets {
   }
 
   // 직접 만든 메시(합친 상자 등)도 같은 방식으로 거리에 따라 켜고 끈다.
-  addGroup(mesh, x, z, range, shadow) { this.groups.push({ mesh, x, z, range, shadow, on: true, lit: false }); }
+  // tag가 'in_'으로 시작하면 건물 내부다: 그 방에 들어가 있을 때만 그린다(평소엔 하늘에 떠 보이지 않게).
+  addGroup(mesh, x, z, range, shadow, tag = '') { this.groups.push({ mesh, x, z, range, shadow, on: true, lit: false, tag }); }
 
   // 카메라에서 먼 구역은 끄고, 그림자는 가까운 구역만 드리운다. 가끔(0.3초마다) 부르면 된다.
   cull(cam, shadowList, fixed) {
     let changed = false;
     for (const g of this.groups) {
       const d = Math.hypot(g.x - cam.x, g.z - cam.z) - REGION * 0.71;
-      const on = d < g.range;
+      const on = g.tag && g.tag.startsWith('in_') ? g.tag === this.activeInterior : d < g.range;
       if (on !== g.on) { g.on = on; g.mesh.setEnabled(on); }
       const lit = g.shadow && d < (this.shadowRange || 185);
       if (lit !== g.lit) { g.lit = lit; changed = true; }
