@@ -58,7 +58,7 @@ function natural(x, z, withSites = true) {
   if (inland > 0) {
     const hills = noise.fbm(x * 0.0105 + 3.1, z * 0.0105 - 1.7, 4);
     // 항구 마을 둘레는 완만하게: 마을에서 멀어질수록 언덕이 제 높이를 찾는다.
-    const calm = isl.i === 0 ? 0.1 + 0.9 * smoothstep(50, 380, sdRect(x, z, TOWN)) : 1;
+    const calm = isl.i <= 1 ? 0.1 + 0.9 * smoothstep(50, 380, sdRect(x, z, TOWN)) : 1;
     h += inland * (isl.base + Math.pow(hills, 1.6) * isl.hills * calm);
     for (const m of MOUNTAINS) {
       const d = Math.hypot(x - m.x, z - m.z);

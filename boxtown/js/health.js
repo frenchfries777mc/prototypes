@@ -1,11 +1,12 @@
 // 플레이어 체력, 다치는 일들(차에 치임, 주먹, 폭발, 물), 병원과 감옥.
 import { SEA } from './terrain.js';
-import { clamp } from './util.js';
+import { clamp, angDiff } from './util.js';
 import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
 const $ = (id) => document.getElementById(id);
 const won = (n) => n.toLocaleString('ko-KR');
-const HEAL = [5.6, -2.6], PAY = [-1.6, -3.2], LABOR = [4.6, -1.6], ESCAPE = [6.8, 3]; // 방 안의 발판 위치
+const HEAL = [5.6, -2.6], PAY = [-9, -6], LABOR = [-10.5, 1], ESCAPE = [13.8, 5]; // 방 안의 발판 위치
+const CELL = [-2.5, 8.6]; // 갇히는 감방
 
 export class Health {
   constructor({ player, jobs, garage, residents, police, interiors, weapons }) {
@@ -18,7 +19,7 @@ export class Health {
   }
 
   hurt(amount, dx = 0, dz = 0, cause = '', kick = 0) {
-    if (this.hp <= 0 || this.jailed) return;
+    if (this.hp <= 0 || (this.jailed && !this.alarm)) return; // 갇혀 있을 때는 탈옥 경보 중에만 다친다
     this.hp = Math.max(0, this.hp - amount);
     this.calm = 0;
     const P = this.player;
@@ -40,20 +41,87 @@ export class Health {
     this.jobs.toast(cause === 'water' ? `물에 빠져 병원에 실려 왔어요${fee ? ` (치료비 ${won(fee)}원)` : ''}` : `병원에서 깨어났어요${fee ? ` (치료비 ${won(fee)}원)` : ''}`);
   }
   jail() {
+    const P = this.player;
     this.fine = 800 + this.police.level * 400;
+    P.jailed = true; P.jailAlarm = false; this.alarm = false;
     this.police.clear();
     if (this.jobs.active) this.jobs.quit(true);
-    this.interiors.send('jail', 4, 3.4);
+    this.interiors.send('jail', CELL[0], CELL[1]);
     this.interiors.locked = true;
-    this.jailed = true; this.hp = 100; this.labor = 0; this.esc = 0; this.waterT = 0; this.spotted = false;
+    this.jailed = true; this.hp = 100; this.labor = 0; this.esc = 0; this.waterT = 0;
     this.weapons.confiscate(); // 무기는 압수된다
-    this.jobs.toast('감옥에 갇혔어요. 무기는 압수됐어요');
+    this.setupJail();
+    this.jobs.toast('교도소에 갇혔어요. 무기는 압수됐어요');
   }
-  release(text, good = true) {
-    this.jailed = false; this.interiors.locked = false;
+  // chase: 나가자마자 쫓기는지(탈옥)
+  release(text, good = true, chase = false) {
+    const P = this.player;
+    this.jailed = false; this.interiors.locked = false; P.jailed = false; P.jailAlarm = false; this.alarm = false;
     this.interiors.leave();
     this.jobs.toast(text, good);
-    if (this.spotted) { this.spotted = false; this.police.report(200); } // 탈옥하다 들켰으면 나가서도 쫓긴다
+    if (chase) this.police.report(200);
+  }
+
+  // 교도소 사람들: 간수 둘(하나는 출입 금지 복도를 오간다)과 죄수 여섯.
+  setupJail() {
+    const r = this.interiors.rooms.jail, scene = this.player.scene;
+    if (!this.guards) {
+      const cop = (seed) => new Character(scene, { ...randomLook(seed), shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' });
+      const con = (seed) => new Character(scene, { ...randomLook(seed), shirt: '#f28b3c', pants: '#f28b3c', shoes: '#22202b', head: 'hair' });
+      this.guards = [
+        { chr: cop(4242), strip: true, path: [[12.5, 8.6], [12.5, -4]], wait: [2.8, 1.0] }, // 복도 간수: 북쪽 끝에서 잠깐 서 있는다
+        { chr: cop(4343), strip: false, path: [[-12, 3.6], [8, 3.6]], wait: [1.5, 1.5] },
+      ];
+      this.inmates = [[-3, -4.4], [4.5, -4.2], [-6, 2.5], [1, 2.2], [-12.5, 8.4], [7.5, 8.4]].map((h, i) => ({ chr: con(5100 + i * 17), home: h, celled: i >= 4 }));
+      for (const m of [...this.guards, ...this.inmates]) { m.pos = new B.Vector3(); m.vel = new B.Vector3(); m.t = 0; }
+    }
+    for (const g of this.guards) { g.i = 0; g.pause = 0; g.hitT = 0; g.pos.set(r.cx + g.path[1][0], r.y0, r.cz + g.path[1][1]); g.chr.heading = 0; }
+    for (const m of this.inmates) { m.pos.set(r.cx + m.home[0], r.y0, r.cz + m.home[1]); m.goal = null; m.t = Math.random() * 3; }
+  }
+  jailStep(dt) {
+    const r = this.interiors.rooms.jail, P = this.player, me = P.feet, px = me.x - r.cx, pz = me.z - r.cz;
+    const walk = (m, tx, tz, speed) => {
+      const dx = tx - m.pos.x, dz = tz - m.pos.z, d = Math.hypot(dx, dz);
+      if (d < 0.15) { m.vel.set(0, 0, 0); return true; }
+      m.vel.set((dx / d) * speed, 0, (dz / d) * speed);
+      m.pos.x += m.vel.x * dt; m.pos.z += m.vel.z * dt;
+      return false;
+    };
+    for (const g of this.guards) {
+      let wish = null;
+      const dx = me.x - g.pos.x, dz = me.z - g.pos.z, dist = Math.hypot(dx, dz);
+      if (this.alarm) {
+        // 경보: 쫓아와서 때린다.
+        g.hitT -= dt;
+        if (dist > 1.5) walk(g, me.x, me.z, 5.2); else g.vel.set(0, 0, 0);
+        wish = Math.atan2(dx, dz);
+        if (dist < 1.9 && g.hitT <= 0) { g.hitT = 0.9; g.chr.swing = 1; g.chr.swingTime = 0.3; this.hurt(18, dx / (dist || 1), dz / (dist || 1), 'cop', 2); }
+      } else {
+        if (g.pause > 0) { g.pause -= dt; g.vel.set(0, 0, 0); }
+        else {
+          const t = g.path[g.i];
+          wish = Math.atan2(r.cx + t[0] - g.pos.x, r.cz + t[1] - g.pos.z);
+          if (walk(g, r.cx + t[0], r.cz + t[1], 1.7)) { g.pause = g.wait[g.i]; g.i = (g.i + 1) % g.path.length; wish = null; }
+        }
+        // 출입 금지 복도에 들어온 것을 간수가 보면 경보가 울린다(등 뒤는 보지 못한다).
+        if (g.strip && px > 10.3 && pz > -6.2 && dist < 13 && Math.abs(angDiff(g.chr.heading, Math.atan2(dx, dz))) < 1.05) {
+          this.alarm = true; P.jailAlarm = true;
+          this.police.report(200, true);
+          this.jobs.toast('들켰어요! 간수들이 쫓아와요');
+        }
+      }
+      g.chr.update(dt, { pos: g.pos, vel: g.vel, grounded: true, wishHeading: wish, landed: 0, jumped: false });
+    }
+    // 죄수들은 제자리 근처를 어슬렁거린다.
+    for (const m of this.inmates) {
+      m.t -= dt;
+      if (m.t <= 0) { m.t = 2 + Math.random() * 5; const k = m.celled ? 1.2 : 3; m.goal = Math.random() < 0.7 ? [m.home[0] + (Math.random() - 0.5) * 2 * k, m.home[1] + (Math.random() - 0.5) * (m.celled ? 2.4 : 2 * k)] : null; }
+      let wish = null;
+      if (m.goal) { wish = Math.atan2(r.cx + m.goal[0] - m.pos.x, r.cz + m.goal[1] - m.pos.z); if (walk(m, r.cx + m.goal[0], r.cz + m.goal[1], 1.3)) m.goal = null; } else m.vel.set(0, 0, 0);
+      const dx = me.x - m.pos.x, dz = me.z - m.pos.z, near = Math.hypot(dx, dz) < 3.5;
+      m.chr.wave = near && !m.goal ? 1 : 0;
+      m.chr.update(dt, { pos: m.pos, vel: m.vel, grounded: true, wishHeading: wish === null && near ? Math.atan2(dx, dz) : wish, landed: 0, jumped: false });
+    }
   }
 
   // 지금 서 있는 발판: 방 좌표 [x, z]에서 1.5m 안
@@ -67,7 +135,7 @@ export class Health {
     if (!this.jailed) return '';
     if (this.at(PAY, 'jail')) return `벌금 내고 나가기 (${won(this.fine)}원)`;
     if (this.at(LABOR, 'jail')) return `꾹 눌러 돌 깨기 (${Math.round((this.labor / 20) * 100)}%)`;
-    if (this.at(ESCAPE, 'jail')) return this.watching ? '간수가 보고 있어요… 기다리세요' : `지금! 꾹 눌러 문 따기 (${Math.round((this.esc / 4) * 100)}%)`;
+    if (this.at(ESCAPE, 'jail')) return `꾹 눌러 뒷문 따기 (${Math.round((this.esc / 2.5) * 100)}%)`;
     return '';
   }
   use() {
@@ -79,24 +147,11 @@ export class Health {
     }
     if (!this.jailed) return false;
     if (this.at(PAY, 'jail')) {
+      if (this.alarm) { this.jobs.toast('경보가 울리는 중에는 받아 주지 않아요'); return true; }
       if (!this.jobs.spend(this.fine)) this.jobs.toast(`돈이 모자라요 (${won(this.fine)}원 필요)`); else this.release('벌금을 내고 풀려났어요');
       return true;
     }
     return this.at(LABOR, 'jail') || this.at(ESCAPE, 'jail');
-  }
-
-  // 간수: 감방 앞을 지키며 몇 초마다 감방 쪽을 봤다가 등을 돌린다.
-  guardStep(dt) {
-    const r = this.interiors.rooms.jail;
-    if (!this.guard) {
-      this.guard = new Character(this.player.scene, { ...randomLook(4242), shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' });
-      this.guardPos = new B.Vector3(r.cx + 2.6, r.y0, r.cz - 0.2);
-      this.guard.heading = 0.8; this.watching = true; this.guardT = 3;
-    }
-    this.guardT -= dt;
-    if (this.guardT <= 0) { this.watching = !this.watching; this.guardT = this.watching ? 2.2 + Math.random() * 2 : 2.6 + Math.random() * 2.4; }
-    // 볼 때는 탈옥 문 쪽(북동), 안 볼 때는 반대쪽
-    this.guard.update(dt, { pos: this.guardPos, vel: B.Vector3.Zero(), grounded: true, wishHeading: this.watching ? 0.9 : 0.9 + Math.PI, landed: 0, jumped: false });
   }
 
   update(dt) {
@@ -129,16 +184,11 @@ export class Health {
     } else this.waterT = 0;
     // 감옥: 노동과 탈옥은 꾹 누르고 있어야 한다.
     if (this.jailed) {
+      // 노동과 문 따기는 꾹 누르고 있어야 한다.
       const held = P.input.useHeld;
-      if (held && this.at(LABOR, 'jail')) { this.labor += dt; P.chr.sSquash.v -= dt * 9; if (this.labor >= 20) this.release('일을 마치고 풀려났어요'); }
-      // 탈옥: 간수가 등을 돌린 동안에만 문을 딴다. 보는 중에 건드리면 들킨다(진행은 남는다).
-      this.guardStep(dt);
-      if (held && this.at(ESCAPE, 'jail')) {
-        if (this.watching) {
-          if (!this.caughtCd || this.caughtCd <= 0) { this.caughtCd = 2.5; this.spotted = true; this.fine += 600; this.esc = Math.max(0, this.esc - 1.5); this.jobs.toast('들켰어요! 벌금이 오르고, 나가면 경찰이 쫓아와요'); }
-        } else { this.esc += dt; if (this.esc >= 4) { this.spotted = false; this.release('탈옥했어요! 경찰이 눈에 불을 켜고 찾아요', false); this.police.report(200); } }
-      }
-      this.caughtCd = (this.caughtCd || 0) - dt;
+      if (held && this.at(LABOR, 'jail') && !this.alarm) { this.labor += dt; P.chr.sSquash.v -= dt * 9; if (this.labor >= 20) this.release('일을 마치고 풀려났어요'); }
+      if (this.jailed && held && this.at(ESCAPE, 'jail')) { this.esc += dt; if (this.esc >= 2.5) this.release('탈옥했어요! 경찰이 눈에 불을 켜고 찾아요', false, true); } else this.esc = Math.max(0, this.esc - dt);
+      if (this.jailed) this.jailStep(dt);
     }
     const w = Math.round(this.hp);
     if (w !== this.shown) { this.shown = w; $('hpFill').style.width = w + '%'; $('hpFill').classList.toggle('low', w <= 30); }

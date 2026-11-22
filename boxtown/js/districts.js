@@ -245,6 +245,28 @@ export function buildDistricts(h) {
     if (sh) { dock('twinDock', sh.x + 8, sh.z, -Math.PI / 2, 30); h.boats.push({ m: 'watercraft/boat-sail-b', x: sh.x - 60, z: sh.z + 20, r: 200 }); }
   }
 
+  // ===================== 교도소 =====================
+  {
+    const S = SITES.prison, { Bx } = at(S, 'prison'), G = '#aab0c2', D = '#6b7285';
+    Bx('yard', 46, 0.12, 40, 0, 0.06, 0, M('#b9bfd0'), { noShadow: true, base: S.y });
+    Bx('block', 22, 7.5, 15, 0, 3.75, 0, M(G), { base: S.y, collide: true }); Bx('roof', 23, 0.6, 16, 0, 7.8, 0, M(D), { base: S.y });
+    Bx('wing', 9, 5, 9, -14, 2.5, -2, M(G), { base: S.y, collide: true }); Bx('wingRoof', 9.8, 0.5, 9.8, -14, 5.25, -2, M(D), { base: S.y });
+    Bx('door', 2.2, 3, 0.3, 0, 1.5, 7.6, M('#34456f'), { base: S.y }); Bx('doorTop', 4, 0.5, 1.4, 0, 3.4, 8, M(D), { base: S.y });
+    // 쇠창살 창문
+    for (const lx of [-8, -4, 4, 8]) for (const ly of [2.2, 5.2]) { Bx('win', 2, 1.3, 0.12, lx, ly, 7.56, M('#22202b'), { base: S.y, noShadow: true }); for (const k of [-0.6, 0, 0.6]) Bx('bar', 0.1, 1.3, 0.16, lx + k, ly, 7.6, M(D), { base: S.y, noShadow: true }); }
+    // 담장과 망루
+    const W = 23, Dp = 20;
+    for (const [w, d, lx, lz] of [[2 * W, 0.6, 0, -Dp], [0.6, 2 * Dp, -W, 0], [0.6, 2 * Dp, W, 0], [W - 4, 0.6, -W / 2 - 2, Dp], [W - 4, 0.6, W / 2 + 2, Dp]]) {
+      Bx('wall', w, 4.2, d, lx, 2.1, lz, M(G), { base: S.y, collide: true }); Bx('wire', w, 0.3, d + 0.2, lx, 4.35, lz, M('#3a3d4d'), { base: S.y, noShadow: true });
+    }
+    for (const [lx, lz] of [[-W, -Dp], [W, -Dp], [-W, Dp], [W, Dp]]) {
+      Bx('tower', 3.4, 8, 3.4, lx, 4, lz, M(G), { base: S.y, collide: true }); Bx('towerDeck', 4.6, 0.4, 4.6, lx, 8.2, lz, M(D), { base: S.y });
+      Bx('towerGlass', 3, 1.6, 3, lx, 9.2, lz, M('#7fc4f0', { emissive: '#2a5f86' }), { base: S.y, noShadow: true }); Bx('towerRoof', 4.6, 0.5, 4.6, lx, 10.25, lz, M('#d9473c'), { base: S.y });
+    }
+    Bx('gateL', 0.8, 5, 0.8, -4, 2.5, Dp, M(D), { base: S.y, collide: true }); Bx('gateR', 0.8, 5, 0.8, 4, 2.5, Dp, M(D), { base: S.y, collide: true }); Bx('gateTop', 9, 0.8, 1, 0, 5.4, Dp, M(D), { base: S.y });
+    Bx('signBack', 7, 1.5, 0.3, 0, 6.6, Dp, M('#34456f'), { base: S.y });
+  }
+
   // ===================== 외딴 오두막들 =====================
   [['cabinA', 'k', 40], ['cabinB', 'h', 200], ['cabinC', 'i', 120], ['cabinD', 'q', 300]].forEach(([id, c, yaw]) => {
     const S = SITES[id], { P } = at(S, id);
