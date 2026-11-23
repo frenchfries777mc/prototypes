@@ -3,6 +3,18 @@ extends RefCounted
 ## 월드의 정적 그래픽: 지형 메시, 소품(벽·모래주머니·상자), 죽은 나무, 철조망, 거점 깃발.
 ## 전부 World(시드)에서 결정적으로 만들어지므로 클라이언트마다 같은 모양이다.
 
+## 호환 모드(주소 끝에 ?safe=1): 지형·소품을 텍스처 없는 단색 재질로 그린다.
+## 일부 GPU 에서 텍스처 셰이더가 링크되지 않아 땅·소품이 통째로 사라질 때, 원인이 셰이더인지 가려내고 임시로 화면을 살린다.
+static var safe_gfx := false
+
+
+static func _safe_mat() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true
+	m.roughness = 0.95
+	return m
+
+
 static func terrain(w: World) -> MeshInstance3D:
 	var gw := w.gw
 	var gh := w.gh
@@ -25,7 +37,11 @@ static func terrain(w: World) -> MeshInstance3D:
 			var cav := clampf(((hl + hr + hd + hu) * 0.25 - h) * 0.7, 0.0, 1.0)
 			var vx: float = w.gx0 + i * World.GRID
 			var vz: float = w.gz0 + j * World.GRID
-			cols[k] = Color(1.0 - cav * 0.5, w.road_mask(vx, vz), clampf((vz - w.road_z(vx)) / 4.0, -1.0, 1.0) * 0.5 + 0.5, 1.0)
+			if safe_gfx:
+				var sc := Color(0.17, 0.21, 0.08).lerp(Color(0.34, 0.27, 0.18), w.road_mask(vx, vz)) * (1.0 - cav * 0.5)
+				cols[k] = Color(sc.r, sc.g, sc.b, 1.0)
+			else:
+				cols[k] = Color(1.0 - cav * 0.5, w.road_mask(vx, vz), clampf((vz - w.road_z(vx)) / 4.0, -1.0, 1.0) * 0.5 + 0.5, 1.0)
 	var idx := PackedInt32Array()
 	idx.resize((gw - 1) * (gh - 1) * 6)
 	var q := 0
@@ -58,7 +74,7 @@ static func terrain(w: World) -> MeshInstance3D:
 	mat.set_shader_parameter("points", pts)
 	for pair in [["g", "forrest_ground_01"], ["d", "forest_ground_04"], ["m", "brown_mud_03"], ["r", "mossy_rock"]]:
 		mat.set_shader_parameter(pair[0] + "_d", load("res://assets/textures/%s_diff.jpg" % pair[1]))
-	m.surface_set_material(0, mat)
+	m.surface_set_material(0, _safe_mat() if safe_gfx else mat)
 	var mi := MeshInstance3D.new()
 	mi.mesh = m
 	mi.name = "Terrain"
@@ -292,7 +308,9 @@ static func flag(color: Color) -> ArrayMesh:
 	return mesh
 
 
-static func prop_material() -> ShaderMaterial:
+static func prop_material() -> Material:
+	if safe_gfx:
+		return _safe_mat()
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/props.gdshader")
 	for pair in [["brick", "red_brick_03"], ["plaster", "plaster_grey_04"], ["roof", "ceramic_roof_01"],
