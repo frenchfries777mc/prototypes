@@ -64,6 +64,10 @@ const ROOMS = {
     ['#2a2c36', 0.9, 0.22, 0.18, 1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 1.6, -1], ['#55693f', 1.3, 0.3, 0.3, 4.6, -1, 0.9, 0], ['#d9473c', 0.3, 0.22, 0.22, 5.3, -1, 0.94, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 4.6, -1],
     ['#2a2c36', 0.5, 0.2, 0.1, -3, 4.4, 1.6, 0], ['#2a2c36', 0.9, 0.2, 0.1, 0, 4.4, 1.9, 0], ['#55693f', 1.3, 0.3, 0.1, 3, 4.4, 1.5, 0]],
     buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6], ['rifle', 9500, 0, 4.2]] },
+  clothes: { name: '옷가게', w: 13, d: 10, floor: '#e9dcc9', wall: '#f6d9e3', clerk: [4.2, 3.2], items: [
+    ['#f4f1ea', 4, 1.1, 1.1, 4.2, 2], ['#f08fb0', 4.2, 0.1, 1.3, 4.2, 2, 1.1, 0], ['#8b5d3a', 0.2, 1.8, 3.6, -5.8, 1], ['#e5553f', 0.5, 0.9, 0.7, -5.6, 2.2, 0.8, 0], ['#4f9bea', 0.5, 0.9, 0.7, -5.6, 1.2, 0.8, 0], ['#57c27a', 0.5, 0.9, 0.7, -5.6, 0.2, 0.8, 0], ['#f4c542', 0.5, 0.9, 0.7, -5.6, -0.6, 0.8, 0],
+    ['#8b5d3a', 5, 0.2, 0.6, -2, 4.6, 1.5, 0], ['#3a2a22', 0.6, 0.3, 0.5, -3.6, 4.6, 1.7, 0], ['#d9473c', 0.6, 0.4, 0.5, -2.4, 4.6, 1.7, 0], ['#ffd84a', 0.5, 0.25, 0.45, -1.2, 4.6, 1.7, 0], ['#b072e0', 0.6, 0.5, 0.5, 0, 4.6, 1.7, 0],
+    ['*#fff3d6', 1.6, 2.4, 0.1, 1.2, -4.85, 0.2, 0], ['#c9a36a', 1.8, 2.6, 0.08, 1.2, -4.9, 0.1, 0], ['#f08fb0', 3, 0.04, 2.2, -1, -1.4, 0, 0], ['#f4f1ea', 0.7, 0.5, 0.7, -1, -1.4]] },
   hospital: { name: '병원', w: 16, d: 12, floor: '#e8f1f4', wall: '#f7fbfc', clerk: [-4.5, -2.4, 0], items: [
     ['#f4f1ea', 4, 1.1, 1.1, -4.5, -1.2], ['#d9473c', 0.9, 0.3, 0.06, -4.5, -1.78, 0.5, 0], ['#d9473c', 0.3, 0.9, 0.06, -4.5, -1.78, 0.2, 0],
     ['#8f95a8', 2.2, 0.5, 3.6, -6.2, 3.6], ['#f4f1ea', 2, 0.3, 3.4, -6.2, 3.6, 0.5, 0], ['#6fb6d9', 2.04, 0.32, 2, -6.2, 3.1, 0.52, 0],
@@ -309,6 +313,7 @@ export function buildInteriors(h) {
     { id: 'hotel', key: 'commercial/building-n', x: 456, z: 154, yaw: 0, bg: '#34456f' },
     { id: 'hospital', key: 'commercial/building-n', x: 8.15 * 12, z: 2.5 * 12, yaw: FACE.S, bg: '#d9473c' },
     { id: 'jail', door: { x: SITES.prison.x, z: SITES.prison.z + 9.2 }, yaw: FACE.N, bg: '#34456f' }, // 교도소 건물은 districts.js에서 짓는다
+    { id: 'clothes', key: 'commercial/building-g', x: 24, z: 5.0 * 12, yaw: FACE.S, bg: '#c9457a' },
     { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
@@ -374,6 +379,7 @@ export function buildInteriors(h) {
     atExit() { const r = this.inside && rooms[this.inside.room], p = this.player.feet; return r && Math.hypot(r.out.x - p.x, r.out.z - p.z) < 1.7; },
     prompt() {
       if (this.player.vehicle) return '';
+      if (this.inside && this.inside.id === 'clothes' && !this.atExit()) return this.wardrobe && this.wardrobe.open ? '' : '옷 고르기';
       if (this.inside) { const b = this.atStand(); return this.atExit() ? '나가기' : b ? (this.weapons.owned.has(b[0]) ? `${b[3]} (이미 있음)` : `${b[3]} 사기 (${won(b[1])}원)`) : ''; }
       const d = this.near();
       if (!d) return '';
@@ -398,6 +404,7 @@ export function buildInteriors(h) {
     },
     use() {
       const P = this.player;
+      if (this.inside && this.inside.id === 'clothes' && !this.atExit() && this.wardrobe) { this.wardrobe.toggle(true); return true; }
       if (this.inside) {
         const b = this.atStand();
         if (b && !this.atExit()) {

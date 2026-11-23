@@ -13,6 +13,7 @@ import { Health } from './health.js';
 import { Train } from './train.js';
 import { Traffic } from './traffic.js';
 import { Music } from './music.js';
+import { Wardrobe } from './cosmetics.js';
 import { islandAt } from './terrain.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
@@ -123,6 +124,13 @@ async function boot() {
   { const r = interiors.rooms.hospital; town.jobSites.nurse = { x: r.cx + 1.5, z: r.cz + 0.3, y: r.y0, room: r }; }
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.jobs = jobs;
+  // 치장품: 새로 단 부품도 그림자를 드리우게 목록을 고쳐 준다.
+  character.onMeshes = (old, added) => {
+    for (const o of old) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); }
+    for (const a of added) { fixedCasters.push(a); rl.push(a); }
+  };
+  const wardrobe = new Wardrobe({ character, player, jobs });
+  interiors.wardrobe = wardrobe;
   interiors.init(player, jobs);
   let train0 = null, traffic0 = null;
   player.onUse = () => (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
@@ -244,7 +252,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');
