@@ -117,11 +117,13 @@ export class Train {
     return st && !this.player.vehicle && Math.hypot(st.x - p.x, st.z - p.z) < 13 && Math.abs(st.y - p.y) < 3 ? st : null;
   }
   prompt() {
-    if (this.player.riding) return this.atStation() ? `${this.atStation().name}에서 내리기` : '';
+    if (this.player.riding === this) return this.atStation() ? `${this.atStation().name}에서 내리기` : '';
+    if (this.player.riding) return '';
     return this.nearPlatform() ? '기차 타기' : '';
   }
   use() {
     const P = this.player;
+    if (P.riding && P.riding !== this) return false; // 친구 차에 타고 있다
     if (P.riding) {
       const st = this.atStation();
       if (!st) return true;

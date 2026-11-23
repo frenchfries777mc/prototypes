@@ -2,6 +2,7 @@
 // 물리 강체 없이 직접 움직이며, 플레이어가 밀면 비켜나고 차에 치이면 날아갔다가 일어난다.
 import { Character, randomLook } from './character.js';
 import { rng, clamp, damp, angDiff } from './util.js';
+import { CITY } from './world.js';
 const B = window.BABYLON;
 
 // 블록을 한 바퀴 도는 인도(블록 터 가장자리에서 0.75m 바깥). 좌표는 mapdata의 도로 격자에서 나온다.
@@ -12,6 +13,15 @@ export const RINGS = [
   { x0: 18 - E, x1: 54 + E, z0: 54 - E, z1: 78 + E }, // C
   { x0: 66 - E, x1: 114 + E, z0: 54 - E, z1: 78 + E }, // D
 ];
+// 시가지: 길로 둘러싸인 블록마다 보도를 한 바퀴 도는 고리를 하나씩 둔다(보도는 길 가운데에서 7.9m).
+const TOWN_RINGS = RINGS.length;
+for (const c of CITY) {
+  const o = c.offsets;
+  for (let i = 0; i < o.length - 1; i++) for (let j = 0; j < o.length - 1; j++) {
+    const r = { x0: c.x + o[i] + 7.9, x1: c.x + o[i + 1] - 7.9, z0: c.z + o[j] + 7.9, z1: c.z + o[j + 1] - 7.9 };
+    if ([[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]].every(([x, z]) => Math.hypot(x - c.x, z - c.z) < c.r - 8)) RINGS.push(r);
+  }
+}
 // 횡단보도: 두 인도 고리를 잇는다.
 const CROSSINGS = [
   { a: 0, b: 2, pa: [36, 42 + E], pb: [36, 54 - E] },
@@ -65,15 +75,16 @@ export class Residents {
     n.mark = m;
   }
   constructor(scene, groundY, walkers = 16) {
+    const townN = Math.min(walkers, 16); // 항구 마을에 16명, 나머지는 시가지 블록에
     this.groundY = groundY;
     this.list = [];
     this.meshes = [];
     const r = rng(31337);
     for (let i = 0; i < walkers; i++) {
-      const kind = [2, 6, 9, 13, 17, 20, 22].includes(i) ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
+      const kind = [2, 6, 9, 13, 17, 20, 22, 27, 33, 39].includes(i) ? 'thug' : i === 5 || i === 12 || i === 14 || i === 30 || i === 41 ? 'cop' : 'citizen';
       const chr = new Character(scene, lookFor(kind, 1000 + i * 7));
       // 불량배는 켤 때마다 다른 곳에서 어슬렁거린다.
-      const ring = kind === 'thug' ? Math.floor(Math.random() * RINGS.length) : i % RINGS.length;
+      const ring = kind === 'thug' ? Math.floor(Math.random() * RINGS.length) : i < townN ? i % TOWN_RINGS : TOWN_RINGS + ((i - townN) * 5) % Math.max(1, RINGS.length - TOWN_RINGS);
       const n = { chr, kind, mode: 'walk', ring, s: (kind === 'thug' ? Math.random() : r()) * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
         pos: new B.Vector3(), vel: new B.Vector3(), vy: 0, lie: 0, t: 0, r: rng(500 + i) };
       const [x, z] = ringPoint(RINGS[ring], n.s);

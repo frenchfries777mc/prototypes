@@ -63,6 +63,7 @@ export const ROADS = [
 // 터: 건물이 설 자리를 평평하게 다진다. r 안쪽은 평지, blend만큼 주변과 이어진다.
 export const SITES = {
   prison: { x: 240, z: 28, r: 30, name: '교도소' },
+  dealer: { x: 196, z: 80, r: 17, name: '자동차 판매장' },
   farm: { x: -320, z: 172, r: 76, name: '서쪽 농장' },
   wind: { x: -318, z: 590, r: 46, name: '풍차 언덕' },
   works: { x: 300, z: 262, r: 84, name: '공단' },
