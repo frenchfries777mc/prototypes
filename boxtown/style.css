@@ -282,3 +282,8 @@ body.touch.driving:not(.flying) .pedal.heli { display: none; }
 body.touch #clock { right: 124px; font-size: 12px; }
 #btnFurn { position: absolute; left: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 96px); width: 46px; height: 46px; border: 0; border-radius: 12px; background: rgba(242, 100, 75, .9); font-size: 22px; pointer-events: auto; cursor: pointer; }
 #btnFurn[hidden] { display: none; }
+
+#btnBag { position: absolute; right: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 390px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; pointer-events: auto; cursor: pointer; }
+body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
+#buff { position: absolute; left: 172px; top: calc(max(12px, env(safe-area-inset-top)) + 42px); padding: 3px 9px; border-radius: 8px; background: rgba(22, 34, 58, .68); font-size: 12px; font-weight: 800; white-space: nowrap; }
+#buff[hidden] { display: none; }

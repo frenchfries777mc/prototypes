@@ -22,6 +22,7 @@ import { Panel } from './panel.js';
 import { Heist } from './heist.js';
 import { DayNight } from './daynight.js';
 import { Furnish } from './furnish.js';
+import { Bag } from './items.js';
 import { stats } from './stats.js';
 import { islandAt } from './terrain.js';
 import { Character } from './character.js';
@@ -150,7 +151,7 @@ async function boot() {
   interiors.wardrobe = wardrobe;
   interiors.init(player, jobs);
   let train0 = null, traffic0 = null;
-  player.onUse = () => (netRef && netRef.use()) || (dealerRef && dealerRef.use()) || (extraRef && (extraRef.heist.use() || extraRef.furnish.use())) || (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
+  player.onUse = () => (netRef && netRef.use()) || (dealerRef && dealerRef.use()) || (extraRef && (extraRef.heist.use() || extraRef.furnish.use() || extraRef.bag.use())) || (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
   let health = null;
   Panel.init();
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
@@ -215,7 +216,8 @@ async function boot() {
   const heist = new Heist({ player, jobs, police, interiors, input, weapons });
   const furnish = new Furnish({ assets, player, jobs, interiors });
   const daynight = new DayNight({ scene, env, sun, hemi, player });
-  extraRef = { heist, furnish };
+  const bag = new Bag({ player, jobs, health, interiors, garage, weapons, police });
+  extraRef = { heist, furnish, bag };
   // 멀티플레이
   const net = new Net({ scene, assets, player, character, wardrobe, weapons, health, train, traffic, garage, daynight, local: params.get('net') === 'local',
     addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }),
@@ -248,8 +250,8 @@ async function boot() {
     lobby.update(dt);
     net.update(dt);
     dealer.update(dt);
-    heist.update(dt); furnish.update(); daynight.update(dt);
-    const text = net.prompt() || dealer.prompt() || heist.prompt() || furnish.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
+    heist.update(dt); furnish.update(); daynight.update(dt); bag.update(dt);
+    const text = net.prompt() || dealer.prompt() || heist.prompt() || furnish.prompt() || bag.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
@@ -312,7 +314,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

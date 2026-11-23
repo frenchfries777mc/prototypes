@@ -64,6 +64,7 @@ export const ROADS = [
 export const SITES = {
   prison: { x: 240, z: 28, r: 30, name: '교도소' },
   dealer: { x: 196, z: 80, r: 17, name: '자동차 판매장' },
+  plaza: { x: 186, z: 30, r: 25, name: '마트와 버거 가게' },
   farm: { x: -320, z: 172, r: 76, name: '서쪽 농장' },
   wind: { x: -318, z: 590, r: 46, name: '풍차 언덕' },
   works: { x: 300, z: 262, r: 84, name: '공단' },
