@@ -114,7 +114,7 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
   <section class="body">
    <h2>전체 프로토타입</h2>
    <div class="grid">
-    <a class="card" href="#ironline" style="--c:#e8b04a"><img src="img/ironline.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">3D 점령전</span><h3>Ironline</h3><p>1인칭 3D 거점 점령전. 3v3 + 봇.</p></div><i></i></a>
+    <a class="card" href="#ironline" style="--c:#e8b04a"><img src="img/ironline.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">3D 점령전</span><h3>Ironline</h3><p>1인칭 3D 거점 점령전. 브라우저에서 바로, 봇과 함께.</p></div><i></i></a>
     <a class="card" href="#ffscript" style="--c:#6fb3ff"><img src="img/ffscript.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">편집기</span><h3>FF Script</h3><p>스크립트를 쓰면 바로 게임이 돌아가는 편집기.</p></div><i></i></a>
     <a class="card" href="#lodestar" style="--c:#35e0c4"><img src="img/lodestar.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">2D 쟁탈전</span><h3>로드스타</h3><p>한가운데의 성석을 제단까지 운반하는 5대5 쟁탈전.</p></div><i></i></a>
     <a class="card" href="#resonance" style="--c:#b79cff"><img src="img/resonance.jpg" alt=""><span class="badge">PROTOTYPE</span><div class="in"><span class="pill">3D 퍼즐</span><h3>잔향의 탑</h3><p>종 네 개와 문 하나. 아는 만큼만 열리는 1인칭 퍼즐 탑.</p></div><i></i></a>
@@ -146,7 +146,7 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},kitchendefense:{t:'주방 사수대',u:'kitchendefense/'},trilantern:{t:'삼원의 등불',u:'trilantern/'},boxtown:{t:'박스타운',u:'boxtown/'}};
+  var APPS={ironline:{t:'Ironline',u:'ironline-web/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},kitchendefense:{t:'주방 사수대',u:'kitchendefense/'},trilantern:{t:'삼원의 등불',u:'trilantern/'},boxtown:{t:'박스타운',u:'boxtown/'}};
   var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
   document.getElementById('cnt').textContent=Object.keys(APPS).length;
   frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
