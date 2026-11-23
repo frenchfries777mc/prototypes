@@ -17,6 +17,11 @@ import { Music } from './music.js';
 import { Wardrobe } from './cosmetics.js';
 import { Lobby } from './lobby.js';
 import { Net } from './net.js';
+import { Dealer } from './dealer.js';
+import { Panel } from './panel.js';
+import { Heist } from './heist.js';
+import { DayNight } from './daynight.js';
+import { Furnish } from './furnish.js';
 import { stats } from './stats.js';
 import { islandAt } from './terrain.js';
 import { Character } from './character.js';
@@ -107,7 +112,7 @@ async function boot() {
   const spawn = { ...SPAWN, y: groundY(SPAWN.x, SPAWN.z) };
   const garage = new Garage(scene, assets, PARKED, CELL, ROAD_Y, height);
   garage.addBoats(scene, assets, town.boatSpots);
-  const residents = new Residents(scene, groundY, 24);
+  const residents = new Residents(scene, groundY, 48);
   const player = new Player(scene, input, character, spawn, garage);
   const police = new Police({ scene, assets, garage, player, jobs: null, height, groundY });
   const interiors = town.interiors;
@@ -145,8 +150,9 @@ async function boot() {
   interiors.wardrobe = wardrobe;
   interiors.init(player, jobs);
   let train0 = null, traffic0 = null;
-  player.onUse = () => (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
+  player.onUse = () => (netRef && netRef.use()) || (dealerRef && dealerRef.use()) || (extraRef && (extraRef.heist.use() || extraRef.furnish.use())) || (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
   let health = null;
+  Panel.init();
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.weapons = weapons;
   interiors.weapons = weapons;
@@ -171,13 +177,14 @@ async function boot() {
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(9999, vx, vz, 'train'); };
   train.onCarHit = (c) => { if (c === player.vehicle) player.shake = 1; };
   mark('actors');
-  let netRef = null;
+  let netRef = null, dealerRef = null, extraRef = null;
   const map = new MapView(() => ({
     x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
     pads: [
       ...jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
       ...interiors.homes.filter((d) => interiors.owned.has(d.id)).map((d) => ({ x: d.x, z: d.z, color: '#57c27a', name: '내 집' })),
       ...police.marks().map((m) => ({ x: m.x, z: m.z, color: '#2f6bff', name: '' })),
+      ...(dealerRef ? dealerRef.marks() : []),
       ...(netRef ? netRef.marks().map((m) => ({ x: m.x, z: m.z, color: '#ff5fa2', name: m.name })) : []),
     ],
   }));
@@ -201,13 +208,21 @@ async function boot() {
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
   let promptText = '';
+  // 자동차 판매장과 내 차, 헬리콥터
+  const dealer = new Dealer({ scene, assets, player, jobs, garage, weapons, groundY, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  weapons.byBody.set(dealer.heli.body, dealer.heli);
+  dealerRef = dealer;
+  const heist = new Heist({ player, jobs, police, interiors, input, weapons });
+  const furnish = new Furnish({ assets, player, jobs, interiors });
+  const daynight = new DayNight({ scene, env, sun, hemi, player });
+  extraRef = { heist, furnish };
   // 멀티플레이
-  const net = new Net({ scene, assets, player, character, wardrobe, weapons, health, train, traffic, local: params.get('net') === 'local',
+  const net = new Net({ scene, assets, player, character, wardrobe, weapons, health, train, traffic, garage, daynight, local: params.get('net') === 'local',
     addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }),
     dropShadow: (ms) => { for (const o of ms) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } } });
   weapons.net = net; netRef = net;
   wardrobe.onChange = () => net.sendLook();
-  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality, net });
+  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality, net, dealer });
   setupChat(net, input, lobby);
   stats.onReward = (n) => { jobs.money += n; try { localStorage.setItem('boxtown.money', String(jobs.money)); } catch (e) { /* 무시 */ } jobs.renderMoney(); };
   let useLabel = '', quitT = 0, carShown = -1;
@@ -232,7 +247,9 @@ async function boot() {
     interiors.update(dt);
     lobby.update(dt);
     net.update(dt);
-    const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
+    dealer.update(dt);
+    heist.update(dt); furnish.update(); daynight.update(dt);
+    const text = net.prompt() || dealer.prompt() || heist.prompt() || furnish.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
@@ -295,7 +312,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');

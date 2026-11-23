@@ -229,7 +229,8 @@ export class Police {
       u.lamps[0].setEnabled(on); u.lamps[1].setEnabled(!on);
     }
     // 따돌리기: 멀리 떨어지거나, 건물 안에 숨거나, 경찰이 올 수 없는 곳이면 수배가 식는다.
-    const hidden = !P.jailAlarm && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중에는 식지 않는다
+    this.hotT = Math.max(0, (this.hotT || 0) - dt); // 은행을 턴 직후에는 숨어도 식지 않는다
+    const hidden = !P.jailAlarm && this.hotT <= 0 && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중에는 식지 않는다
     if (hidden) { this.lostT += dt; if (this.lostT > 5) this.heat -= dt * 22; } else this.lostT = 0;
     if (this.heat <= 0) { stats.bump('escapes'); this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면

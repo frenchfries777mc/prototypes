@@ -135,6 +135,7 @@ export class Input {
     for (const ev of ['touchend', 'touchcancel']) atk.addEventListener(ev, () => { this.attackHeld = false; atk.classList.remove('on'); });
     wp.addEventListener('touchstart', (e) => { e.preventDefault(); this.weaponNext = true; }, { passive: false });
     pedal('btnGas', 'gas');
+    pedal('btnHeliUp', 'heliUp'); pedal('btnHeliDown', 'heliDown');
     pedal('btnBrake', 'pedalBrake');
     // 터치가 한 번이라도 들어오면 터치 조작 화면으로 바꾼다(터치 되는 노트북·태블릿 대응).
     addEventListener('touchstart', () => { this.isTouch = true; document.body.classList.add('touch'); }, { once: true, passive: true });
@@ -154,7 +155,9 @@ export class Input {
     const k = this.keys;
     const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + this.wheel;
     const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.gas - this.pedalBrake;
-    return { throttle: clamp(y, -1, 1), steer: clamp(x, -1, 1), handbrake: this.brake };
+    // lift: 헬리콥터 오르내리기(Space 상승, Shift 하강, 화면의 ▲▼)
+    const lift = (k.has('Space') || this.heliUp ? 1 : 0) - (k.has('ShiftLeft') || k.has('ShiftRight') || this.heliDown ? 1 : 0);
+    return { throttle: clamp(y, -1, 1), steer: clamp(x, -1, 1), handbrake: this.brake, lift };
   }
 
   move() {
@@ -224,6 +227,7 @@ export class Player {
   enter(car) {
     this.vehicle = car;
     this.input.setDriving(true);
+    document.body.classList.toggle('flying', !!car.isHeli);
     this.chr.setVisible(false);
     this.cc.setPosition(new B.Vector3(car.pos.x, car.pos.y + 400, car.pos.z)); // 캐릭터 충돌체는 멀리 치워 둔다
     this.cc.setVelocity(B.Vector3.Zero());
@@ -253,6 +257,7 @@ export class Player {
     if (!out) out = car.pos.add(new B.Vector3(0, car.height + 0.6, 0));
     this.vehicle = null;
     this.input.setDriving(false);
+    document.body.classList.remove('flying');
     this.cc.setPosition(new B.Vector3(out.x, out.y + 0.4, out.z));
     this.cc.setVelocity(B.Vector3.Zero());
     this.vel.set(0, 0, 0);
