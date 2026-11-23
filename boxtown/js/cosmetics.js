@@ -74,6 +74,7 @@ export class Wardrobe {
     this.note = '';
     this.look[slot] = id;
     this.character.setLook(this.look);
+    if (this.onChange) this.onChange();
     this.save(); this.render();
   }
   toggle(shop) { if (this.open) this.close(); else this.show(shop); }

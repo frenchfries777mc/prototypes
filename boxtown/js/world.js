@@ -6,9 +6,9 @@ export const WORLD = { x0: -1062, x1: 1242, z0: -870, z1: 1434, cell: 4, chunk: 
 
 // 섬: 타원 + 해안선 굴곡(warp). base는 내륙 기본 높이, hills는 언덕 높이, forest는 숲 밀도 배율.
 export const ISLANDS = [
-  { id: 'main', cx: 100, cz: 430, rx: 620, rz: 470, rot: 0, warp: 0.3, base: 4, hills: 52, forest: 1 },
+  { id: 'main', cx: 100, cz: 430, rx: 620, rz: 470, rot: 0, warp: 0.3, base: 4, hills: 30, forest: 1 },
   // 본토: 북쪽으로 지도 밖까지 이어지는 큰 땅. 시작 지역은 섬이 아니라 이 대륙의 남쪽 끝이다.
-  { id: 'mainland', cx: 150, cz: 2400, rx: 700, rz: 1560, rot: 0, warp: 0.12, base: 8, hills: 46, forest: 1.3 },
+  { id: 'mainland', cx: 150, cz: 2400, rx: 700, rz: 1560, rot: 0, warp: 0.12, base: 8, hills: 30, forest: 1.3 },
   { id: 'gull', cx: 360, cz: -300, rx: 170, rz: 128, rot: 0.2, warp: 0.22, base: 3, hills: 20, forest: 0.7 },
   { id: 'fort', cx: 770, cz: -390, rx: 150, rz: 118, rot: -0.3, warp: 0.25, base: 4, hills: 30, forest: 0.6 },
   { id: 'woods', cx: -700, cz: -120, rx: 235, rz: 180, rot: 0.35, warp: 0.3, base: 4, hills: 34, forest: 2.6 },
@@ -26,11 +26,11 @@ export const ISLANDS = [
 // 산: 중심에서 r까지 서서히 낮아지는 봉우리 무리. h는 대략의 최고 높이.
 export const MOUNTAINS = [
   { x: 150, z: 1340, r: 520, h: 190, s: 12.4 }, // 북쪽 산맥: 지도 끝을 가린다
-  { x: 240, z: 730, r: 310, h: 118, s: 1.7 },
-  { x: -330, z: 640, r: 190, h: 52, s: 5.1 },
+  { x: 240, z: 730, r: 330, h: 92, s: 1.7 },
+  { x: -330, z: 640, r: 200, h: 34, s: 5.1 },
   { x: 900, z: 960, r: 120, h: 150, s: 9.3 }, // 뾰족섬
   { x: -700, z: -120, r: 150, h: 30, s: 3.3 },
-  { x: 520, z: 600, r: 170, h: 60, s: 7.7 },
+  { x: 520, z: 600, r: 190, h: 40, s: 7.7 },
 ];
 
 // 강과 호수는 해수면 높이로 파낸 물길이다(바다 물이 그대로 들어온다).

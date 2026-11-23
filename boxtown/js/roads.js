@@ -226,7 +226,7 @@ for (const path of paths) path.pts.forEach((p, i) => { p.prev = path.pts[i - 1] 
 const near = { d: 1e9, y: 0, half: 0, water: false, hit: false };
 function nearest(x, z) {
   let best = null, bd = 1e9;
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { // 48m 안은 빠짐없이 찾는다(다짐 폭보다 넓게)
     const list = hash.get(key(x + i * CELL, z + j * CELL));
     if (!list) continue;
     for (const p of list) { const d = Math.hypot(p.x - x, p.z - z); if (d < bd) { bd = d; best = p; } }
@@ -251,10 +251,10 @@ export function roadDist(x, z) { return nearest(x, z).d; }
 setRoadMod((x, z, h) => {
   const n = nearest(x, z);
   if (!n.hit || n.water) return h;
+  // 역 터를 먼저 다지고, 그 위에 길을 낸다(역 옆으로 내려가는 선로가 땅에 묻히지 않게).
+  for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 26) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 26, d)); }
   const flat = n.half + 6;
-  h = lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 16, n.d));
-  for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 14) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 14, d)); }
-  return h;
+  return lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 30, n.d)); // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
 });
 
 // h: { scene, addBox, casters }

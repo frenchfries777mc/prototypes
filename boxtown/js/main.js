@@ -16,6 +16,7 @@ import { Traffic } from './traffic.js';
 import { Music } from './music.js';
 import { Wardrobe } from './cosmetics.js';
 import { Lobby } from './lobby.js';
+import { Net } from './net.js';
 import { stats } from './stats.js';
 import { islandAt } from './terrain.js';
 import { Character } from './character.js';
@@ -23,6 +24,13 @@ import { Input, Player } from './player.js';
 const B = window.BABYLON;
 
 const $ = (id) => document.getElementById(id);
+// 글자를 입력하는 칸에서 누른 키는 게임 단축키(E, C, M, N…)로 새지 않게 막고, 그 칸에만 따로 알려 준다.
+addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA')) return;
+  e.stopPropagation();
+  t.dispatchEvent(new CustomEvent('inputkey', { detail: e.key, bubbles: true }));
+}, true);
 const setProgress = (p, text) => { $('bar').style.width = Math.round(p * 100) + '%'; if (text) $('loadText').textContent = text; };
 
 async function boot() {
@@ -101,7 +109,7 @@ async function boot() {
   garage.addBoats(scene, assets, town.boatSpots);
   const residents = new Residents(scene, groundY, 24);
   const player = new Player(scene, input, character, spawn, garage);
-  const police = new Police({ scene, assets, garage, player, jobs: null, height });
+  const police = new Police({ scene, assets, garage, player, jobs: null, height, groundY });
   const interiors = town.interiors;
   scene.activeCamera = player.cam;
 
@@ -163,12 +171,14 @@ async function boot() {
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(9999, vx, vz, 'train'); };
   train.onCarHit = (c) => { if (c === player.vehicle) player.shake = 1; };
   mark('actors');
+  let netRef = null;
   const map = new MapView(() => ({
     x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
     pads: [
       ...jobs.pads.map((p) => ({ x: p.s.x, z: p.s.z, color: p.color, name: p.name })),
       ...interiors.homes.filter((d) => interiors.owned.has(d.id)).map((d) => ({ x: d.x, z: d.z, color: '#57c27a', name: '내 집' })),
       ...police.marks().map((m) => ({ x: m.x, z: m.z, color: '#2f6bff', name: '' })),
+      ...(netRef ? netRef.marks().map((m) => ({ x: m.x, z: m.z, color: '#ff5fa2', name: m.name })) : []),
     ],
   }));
 
@@ -191,7 +201,14 @@ async function boot() {
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
   let promptText = '';
-  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality });
+  // 멀티플레이
+  const net = new Net({ scene, assets, player, character, wardrobe, weapons, health, train, traffic, local: params.get('net') === 'local',
+    addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }),
+    dropShadow: (ms) => { for (const o of ms) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } } });
+  weapons.net = net; netRef = net;
+  wardrobe.onChange = () => net.sendLook();
+  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality, net });
+  setupChat(net, input, lobby);
   stats.onReward = (n) => { jobs.money += n; try { localStorage.setItem('boxtown.money', String(jobs.money)); } catch (e) { /* 무시 */ } jobs.renderMoney(); };
   let useLabel = '', quitT = 0, carShown = -1;
   const carHp = $('carHp');
@@ -214,6 +231,7 @@ async function boot() {
     music.update(dt);
     interiors.update(dt);
     lobby.update(dt);
+    net.update(dt);
     const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
@@ -277,7 +295,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');
@@ -290,6 +308,33 @@ async function boot() {
   if (isTouch) document.body.classList.add('touch');
   window.__ready = true;
   try { sessionStorage.removeItem('boxtown.retry'); } catch (e) { /* 무시 */ }
+}
+
+// 채팅과 방 표시: T나 Enter로 입력창을 열고, 방에 있을 때만 보인다.
+function setupChat(net, input, lobby) {
+  const box = $('netBox'), log = $('chatLog'), form = $('chatForm'), field = $('chatInput'), btn = $('btnChat');
+  let fadeT = 0;
+  const paint = () => {
+    box.hidden = btn.hidden = !net.on;
+    if (net.on) box.textContent = `👥 ${net.code} · ${net.count}명`;
+    if (!net.on) close();
+  };
+  const lines = () => {
+    log.innerHTML = '';
+    for (const l of net.log.slice(-6)) { const p = document.createElement('p'); if (l.who) { const b = document.createElement('b'); b.textContent = l.who + ' '; p.appendChild(b); } else p.className = 'sys'; p.appendChild(document.createTextNode(l.text)); log.appendChild(p); }
+    log.classList.add('show'); clearTimeout(fadeT); fadeT = setTimeout(() => { if (form.hidden) log.classList.remove('show'); }, 9000);
+  };
+  const open = () => { if (!net.on || lobby.open) return; form.hidden = false; input.blocked = true; input.keys.clear(); if (document.pointerLockElement) document.exitPointerLock(); log.classList.add('show'); setTimeout(() => field.focus(), 0); };
+  function close() { if (form.hidden) return; form.hidden = true; field.value = ''; field.blur(); if (!lobby.open) input.blocked = false; lines(); }
+  net.onChat = lines;
+  const prev = net.onChange; net.onChange = () => { paint(); if (prev) prev(); };
+  // 입력창에서 누른 키가 게임 단축키(E, C, M…)로 새지 않게 막는다.
+  field.addEventListener('inputkey', (e) => { if (e.detail === 'Escape') close(); });
+  form.addEventListener('submit', (e) => { e.preventDefault(); net.chat(field.value); close(); });
+  addEventListener('keydown', (e) => { if ((e.code === 'KeyT' || e.code === 'Enter') && form.hidden && net.on && !lobby.open) { e.preventDefault(); open(); } });
+  btn.addEventListener('click', () => (form.hidden ? open() : close()));
+  box.addEventListener('click', () => { lobby.show(); lobby.act('multi'); });
+  paint();
 }
 
 boot().catch((e) => {

@@ -358,7 +358,7 @@ export class Player {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
     const inp = this.input;
     if (inp.viewNext) { inp.viewNext = false; this.nextView(); }
-    const first = this.view === 1;
+    const first = this.view === 1 && !this.riding; // 기차 안에서는 1인칭을 쓰지 않는다(객차 속이 뒤집혀 보인다)
     if (inp.blocked) inp.lookX = inp.lookY = 0;
     this.yaw += inp.lookX * 0.0028;
     this.pitch = clamp(this.pitch + inp.lookY * 0.0024, first ? -1.2 : -0.45, 1.3);
