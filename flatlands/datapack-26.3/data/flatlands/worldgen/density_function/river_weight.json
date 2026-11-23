@@ -1,0 +1,41 @@
+{
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:spline",
+    "spline": {
+      "coordinate": "flatlands:river_distance",
+      "points": [
+        {
+          "location": 0.0,
+          "value": 1.0,
+          "derivative": 0.0
+        },
+        {
+          "location": 0.01275,
+          "value": 0.93,
+          "derivative": -8.845316
+        },
+        {
+          "location": 0.0255,
+          "value": 0.64,
+          "derivative": -21.349693
+        },
+        {
+          "location": 0.0425,
+          "value": 0.3,
+          "derivative": -11.605416
+        },
+        {
+          "location": 0.068,
+          "value": 0.1,
+          "derivative": -5.228758
+        },
+        {
+          "location": 0.0935,
+          "value": 0.0,
+          "derivative": 0.0
+        }
+      ]
+    }
+  }
+}

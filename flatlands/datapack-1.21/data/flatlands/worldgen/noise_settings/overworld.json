@@ -24,7 +24,7 @@
       "xz_scale": 1.0,
       "y_scale": 0.5
     },
-    "continents": "minecraft:overworld/continents",
+    "continents": "flatlands:mountain_height",
     "depth": "flatlands:depth",
     "erosion": "minecraft:overworld/erosion",
     "final_density": {
@@ -337,7 +337,7 @@
     {
       "continentalness": [
         -1.0,
-        1.0
+        0.08
       ],
       "depth": 0.0,
       "erosion": [
@@ -354,7 +354,7 @@
         1.0
       ],
       "weirdness": [
-        0.095,
+        0.06739999999999999,
         1.0
       ]
     }

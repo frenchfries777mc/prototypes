@@ -57,7 +57,7 @@
       "label": "V"
     },
     {
-      "function": "minecraft:overworld/continents",
+      "function": "flatlands:mountain_height",
       "label": "C"
     },
     {
@@ -110,7 +110,7 @@
   },
   "noise_router": {
     "chunk_surface_level": "flatlands:chunk_surface_level",
-    "continents": "minecraft:overworld/continents",
+    "continents": "flatlands:mountain_height",
     "depth": "flatlands:depth",
     "erosion": "minecraft:overworld/erosion",
     "final_density": "flatlands:final_density",
@@ -121,16 +121,16 @@
   "sea_level": 63,
   "spawn_target": [
     {
-      "minecraft:overworld/continents": [
+      "flatlands:mountain_height": [
         -1.0,
-        1.0
+        0.08
       ],
       "minecraft:overworld/erosion": [
         -1.0,
         1.0
       ],
       "flatlands:river_distance": [
-        0.095,
+        0.06739999999999999,
         1.0
       ],
       "minecraft:overworld/temperature": [

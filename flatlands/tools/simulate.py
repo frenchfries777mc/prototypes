@@ -107,7 +107,8 @@ class World:
         return self.fn_cache[rid]
     def _noise(self, rid):
         if rid not in self.noises:
-            d = json.load(open(os.path.join(self.v, "data/minecraft/worldgen/noise", rid.split(":")[1] + ".json")))
+            ns_, nm_ = rid.split(":")
+            d = json.load(open(os.path.join(self.p if ns_ == "flatlands" else self.v, "data", ns_, "worldgen/noise", nm_ + ".json")))
             rng = np.random.default_rng(zlib.crc32(rid.encode()) ^ self.seed)
             self.noises[rid] = Normal(rng, d.get("base_octave", d.get("firstOctave")), d.get("amplitude_modifiers", d.get("amplitudes")))
         return self.noises[rid]
@@ -203,8 +204,13 @@ def save_png(path, h, water, d, step, scale=4):
     gx, gz = np.gradient(h.astype(float)); shade = np.clip(0.5 + (-gx - gz)*0.18, 0.15, 1.0)   # 북서쪽 광원
     t = np.clip((h - 62)/10.0, 0, 1)
     r = 70 + 70*t; g = 150 + 60*t; b = 60 + 40*t
-    rgb = np.stack([r, g, b], axis=-1)*shade[..., None]
-    bank = (d < 0.065) & ~water
+    rgb = np.stack([r, g, b], axis=-1)
+    rock = np.clip((h - 72)/20.0, 0, 1)[..., None]            # 72 이상은 회색 바위로, 100 이상은 눈 덮인 흰색으로
+    snow = np.clip((h - 100)/25.0, 0, 1)[..., None]
+    rgb = rgb*(1 - rock) + np.array([125, 120, 115])*rock
+    rgb = rgb*(1 - snow) + np.array([240, 240, 245])*snow
+    rgb = rgb*shade[..., None]
+    bank = (d < 0.0374) & ~water
     rgb[bank] = rgb[bank]*0.8 + np.array([45, 45, 25])
     depth = np.clip((62 - h)/5.0, 0, 1)
     rgb[water] = np.stack([60 - 30*depth, 120 - 50*depth, 215 - 50*depth], axis=-1)[water]
@@ -216,7 +222,7 @@ def main():
     ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3", "1.21", "1.21-bop"], default="26.3"); ap.add_argument("--pack")
     ap.add_argument("--size", type=int, default=1536, help="한 변 길이(블록)"); ap.add_argument("--step", type=int, default=8)
     ap.add_argument("--preset", default="flatlands"); ap.add_argument("--seed", type=int, default=12345)
-    ap.add_argument("--ymin", type=int, default=52); ap.add_argument("--ymax", type=int, default=84)
+    ap.add_argument("--ymin", type=int, default=52); ap.add_argument("--ymax", type=int, default=140)
     ap.add_argument("--png", help="지형 창을 위에서 본 그림으로 저장할 경로(PNG)")
     ap.add_argument("--climate-size", dest="climate_size", type=int, default=40960); ap.add_argument("--climate-step", dest="climate_step", type=int, default=64)
     a = ap.parse_args()
@@ -232,7 +238,7 @@ def main():
 
     # 각 열의 지표 = 밀도 > 0 인 가장 높은 y (동굴 무시)
     top = np.full(X.shape, a.ymin - 1.0)
-    for y in range(a.ymin, a.ymax + 1):
+    for y in list(range(a.ymin, 92)) + list(range(92, a.ymax + 1, 2)):    # 높은 곳은 2블록 간격(산 통계용)
         dens = w.ev("flatlands:sloped_cheese", ctx(y), {})
         top = np.where(dens > 0, float(y), top)
     solid_top = top
@@ -249,6 +255,12 @@ def main():
     far = land & (d > 0.2)   # 강에서 멀리 떨어진 평지만
     hf = solid_top[far]
     print(f"  강에서 먼 평지(d>0.2): 평균 {hf.mean():.1f}  표준편차 {hf.std():.2f}  5~95% 범위 {np.percentile(hf,5):.0f}~{np.percentile(hf,95):.0f}")
+    mh = G("flatlands:mountain_rise")
+    mm = mh > 3.0
+    print(f"  산(솟은 높이>3블록) 면적 {mm.mean()*100:.1f}%  /  >15블록 {(mh>15).mean()*100:.2f}%  /  >30블록 {(mh>30).mean()*100:.2f}%  / 지표 최고 y {solid_top.max():.0f}")
+    if mm.any():
+        sl_m = np.abs(np.gradient(solid_top.reshape(n, n), a.step)[0]).ravel()[mm]
+        print(f"  산 위 가로 기울기(높이차/블록): 중앙값 {np.median(sl_m):.2f}  90% {np.percentile(sl_m,90):.2f}  (1.0 = 45도)")
     hw = solid_top[water]
     if hw.size: print(f"  강바닥 y: 평균 {hw.mean():.1f}  최소 {hw.min():.0f}  최대 {hw.max():.0f}")
     g = solid_top.reshape(n, n)
@@ -286,9 +298,10 @@ def main():
         cT = w.ev(rt["temperature"], cc, {}); cH = w.ev(rt["vegetation"], cc, {})
     else:
         cT = GC("minecraft:overworld/temperature"); cH = GC("minecraft:overworld/vegetation")
-    cC = GC("minecraft:overworld/continents"); cE = GC("minecraft:overworld/erosion")
+    nsr = json.load(open(os.path.join(pack, "data/flatlands/worldgen/noise_settings/overworld.json")))["noise_router"]
+    cC = GC(nsr["continents"]); cE = GC(nsr["erosion"])    # 라우터의 continents = 산 높이 신호
     print(f"\n[넓은 창 {big}x{big} 블록, 간격 {cs}, 표본 {m*m}개]")
-    for nm, v in (("temperature", cT), ("vegetation", cH), ("continents", cC), ("erosion", cE), ("river_distance", cd)):
+    for nm, v in (("temperature", cT), ("vegetation", cH), ("산 높이 신호", cC), ("erosion", cE), ("river_distance", cd)):
         print(f"  {nm:14s} 평균 {v.mean():+.3f}  표준편차 {v.std():.3f}  5~95% [{np.percentile(v,5):+.2f}, {np.percentile(v,95):+.2f}]")
     names, who = biome_lookup(entries, cT, cH, cC, cE, np.zeros_like(cT), cd)
     print(f"\n[바이옴 면적 비율 — 프리셋 {a.preset}, 지표 기준]")
@@ -296,6 +309,9 @@ def main():
     for nm, v in sorted(counts.items(), key=lambda kv: -kv[1]):
         if v > 0: print(f"  {nm.split(':')[1]:20s} {v:5.1f}%")
     PLAINSY = ("plains", "sunflower_plains", "river", "frozen_river", "field", "grassland", "prairie", "pasture", "lavender_field", "shrubland")
+    MTN = ("stony_peaks", "frozen_peaks", "windswept_hills", "snowy_slopes")
+    mt = sum(v for k, v in counts.items() if k.split(":")[1] in MTN)
+    print(f"  (돌산·산기슭 바이옴 합계 {mt:.1f}%)")
     pr = sum(v for k, v in counts.items() if k.split(":")[1] in PLAINSY)
     bop = sum(v for k, v in counts.items() if k.startswith("biomesoplenty:"))
     if bop: print(f"  (Biomes O' Plenty 바이옴 합계 {bop:.1f}%)")

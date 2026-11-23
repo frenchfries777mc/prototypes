@@ -1,4 +1,15 @@
 {
-  "type": "minecraft:abs",
-  "argument": "flatlands:river_noise"
+  "type": "minecraft:min",
+  "argument1": {
+    "type": "minecraft:abs",
+    "argument": "flatlands:river_main"
+  },
+  "argument2": {
+    "type": "minecraft:mul",
+    "argument1": {
+      "type": "minecraft:abs",
+      "argument": "flatlands:river_branch"
+    },
+    "argument2": 0.8
+  }
 }
