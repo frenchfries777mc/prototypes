@@ -155,7 +155,10 @@ export class Vehicle {
     // 바다에 빠지면 마지막으로 멀쩡히 서 있던 곳으로 돌아간다.
     this.safeT += dt;
     if (this.safeT > 1 && grounded >= 3 && this.up.y > 0.85 && p.y > SEA + 0.9) { this.safeT = 0; this.safe = { x: p.x, y: p.y, z: p.z, yaw: this.yaw }; }
-    if (p.y < SEA - 2.5) { const f = this.safe; if (f) this.reset(f.x, f.y + 0.6, f.z, f.yaw); else this.reset(this.home.pos.x, this.home.pos.y + 0.5, this.home.pos.z, null); }
+    // 물에 빠지면 건져 주지 않는다: 3초 잠겨 있으면 가라앉은 것으로 본다(차는 사라져 제자리에 새로 나타나고, 타고 있던 사람은 쓰러진다).
+    this.sunkT = p.y < SEA - 0.75 ? (this.sunkT || 0) + dt : 0;
+    if (this.sunkT > 3) { this.sunkT = 0; this.drowned = true; }
+    if (p.y < SEA - 40) this.reset(this.home.pos.x, this.home.pos.y + 0.5, this.home.pos.z, null);
   }
 
   reset(x, y, z, yaw) {
