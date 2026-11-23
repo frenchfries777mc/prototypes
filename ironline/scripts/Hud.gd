@@ -16,6 +16,7 @@ var font_b: Font
 var font_st: Font
 var font_cd: Font
 var xp_gain := 0
+var debug_text := ""
 var spec_id := -1
 var feed: Array = []
 var indicators: Array = []
@@ -190,6 +191,8 @@ func _draw() -> void:
 		_t(Vector2(0, H * 0.23), msg, 24, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, W)
 	if show_score:
 		_draw_scoreboard(W, H)
+	if debug_text != "":
+		_t(Vector2(8, H - 14 * u), debug_text, 12, Color(1, 1, 0.6))
 	if sim.winner >= 0:
 		_draw_end(W, H, me)
 	elif not captured:
