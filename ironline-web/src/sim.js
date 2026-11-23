@@ -121,7 +121,13 @@ export class Sim {
     u.vx += (wx - u.vx) * k; u.vz += (wz - u.vz) * k;
     if (u.jump && u.onGround) { u.vy = JUMP; u.onGround = false; }
     u.vy -= GRAV * dt;
-    u.x += u.vx * dt; u.z += u.vz * dt; u.y += u.vy * dt;
+    {
+      const lim = u.y + 0.62, R = RADIUS;
+      const nx = u.x + u.vx * dt, nz = u.z + u.vz * dt;
+      if (w.heightAt(nx + Math.sign(u.vx) * R, u.z) <= lim) u.x = nx; else u.vx = 0;
+      if (w.heightAt(u.x, nz + Math.sign(u.vz) * R) <= lim) u.z = nz; else u.vz = 0;
+      u.y += u.vy * dt;
+    }
     const ground = w.resolve(u, RADIUS);
     if (u.y <= ground + 0.001) { u.y = ground; if (u.vy < 0) u.vy = 0; u.onGround = true; } else u.onGround = false;
     u.speedNow = Math.hypot(u.vx, u.vz);

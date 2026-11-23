@@ -47,7 +47,7 @@ const tex = { grass, dirt, mud, rock, brick, plaster, roof, plank, sand: sandbag
 const sim = new Sim(SEED, 16);
 const world = sim.world;
 const sky = makeSky(); scene.add(sky);
-scene.add(makeTerrain(world, tex), makeBoxProps(world, tex), makeHouses(world, tex));
+scene.add(makeTerrain(world), makeBoxProps(world, tex), makeHouses(world, tex));
 const fx = new Fx(scene, camera);
 const models = new Models();
 await models.load(MODEL_NAMES);
@@ -196,6 +196,9 @@ function placeCamera(alpha, dt) {
   const u = me;
   let x = u.x, y = u.y, z = u.z;
   if (S.prev && u.alive) { x = S.prev.x + (u.x - S.prev.x) * alpha; y = S.prev.y + (u.y - S.prev.y) * alpha; z = S.prev.z + (u.z - S.prev.z) * alpha; }
+  // 계단을 오를 때 시점이 툭툭 튀지 않게 높이를 부드럽게 따라간다
+  if (S.camY === undefined || !u.alive || Math.abs(S.camY - y) > 2) S.camY = y; else S.camY += (y - S.camY) * Math.min(1, dt * 16);
+  y = Math.max(S.camY, u.alive ? y - 0.5 : y);
   const speed = u.alive ? u.speedNow : 0;
   if (u.onGround) S.bob += speed * dt * 1.7;
   const bobY = u.onGround ? Math.sin(S.bob * 2) * 0.018 * Math.min(speed / 4.8, 1.2) : 0;

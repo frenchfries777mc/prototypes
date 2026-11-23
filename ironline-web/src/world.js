@@ -2,6 +2,7 @@
 // 충돌은 물리 엔진 없이 높이 격자 + 직육면체 목록으로 직접 계산한다(봇 수십 명을 가볍게 돌리기 위해).
 
 export const HALF_X = 180, HALF_Z = 100, GRID = 1.25, MARGIN = 40;
+export const BSTEP = 0.5;
 export const POINT_R = 14, FLAT_Y = 0.5, STEP_H = 0.55;
 export const POINT_X = [-140, -70, 0, 70, 140];
 export const POINT_Z = [8, -14, 10, -12, 6];
@@ -61,9 +62,24 @@ export class World {
     this.gz0 = -(HALF_Z + MARGIN);
     this.gw = Math.floor((HALF_X + MARGIN) * 2 / GRID) + 1;
     this.gh = Math.floor((HALF_Z + MARGIN) * 2 / GRID) + 1;
-    this.hmap = new Float32Array(this.gw * this.gh);
-    for (let j = 0; j < this.gh; j++) for (let i = 0; i < this.gw; i++) {
-      this.hmap[j * this.gw + i] = this.rawHeight(this.gx0 + i * GRID, this.gz0 + j * GRID);
+    // 블록 지형: 한 칸(GRID)마다 높이를 STEP 단위로 깎아 한 덩어리로 만든다. 이웃과의 차이는 한 계단(STEP)까지만 허용해
+    // 걸어서 오를 수 있게 한다(낮은 칸을 이웃보다 한 계단 아래까지만 남기고 메운다).
+    this.bw = this.gw - 1; this.bh = this.gh - 1;
+    const bm = this.bmap = new Float32Array(this.bw * this.bh);
+    for (let j = 0; j < this.bh; j++) for (let i = 0; i < this.bw; i++) {
+      bm[j * this.bw + i] = Math.round(this.rawHeight(this.gx0 + (i + 0.5) * GRID, this.gz0 + (j + 0.5) * GRID) / BSTEP) * BSTEP;
+    }
+    for (let pass = 0, ch = true; ch && pass < 12; pass++) {
+      ch = false;
+      for (let j = 0; j < this.bh; j++) for (let i = 0; i < this.bw; i++) {
+        const k = j * this.bw + i;
+        let m = bm[k];
+        if (i > 0) m = Math.max(m, bm[k - 1] - BSTEP);
+        if (i < this.bw - 1) m = Math.max(m, bm[k + 1] - BSTEP);
+        if (j > 0) m = Math.max(m, bm[k - this.bw] - BSTEP);
+        if (j < this.bh - 1) m = Math.max(m, bm[k + this.bw] - BSTEP);
+        if (m > bm[k] + 1e-6) { bm[k] = m; ch = true; }
+      }
     }
     this.boxes = [];
     this.houses = [];
@@ -109,12 +125,8 @@ export class World {
     return h;
   }
   heightAt(x, z) {
-    const fx = (x - this.gx0) / GRID, fz = (z - this.gz0) / GRID;
-    const i = clamp(Math.floor(fx), 0, this.gw - 2), j = clamp(Math.floor(fz), 0, this.gh - 2);
-    const tx = clamp(fx - i, 0, 1), tz = clamp(fz - j, 0, 1);
-    const a = this.hmap[j * this.gw + i], b = this.hmap[j * this.gw + i + 1];
-    const c = this.hmap[(j + 1) * this.gw + i], d = this.hmap[(j + 1) * this.gw + i + 1];
-    return lerp(lerp(a, b, tx), lerp(c, d, tx), tz);
+    const i = clamp(Math.floor((x - this.gx0) / GRID), 0, this.bw - 1), j = clamp(Math.floor((z - this.gz0) / GRID), 0, this.bh - 1);
+    return this.bmap[j * this.bw + i];
   }
   pointPos(i) { return { x: POINT_X[i], y: this.heightAt(POINT_X[i], POINT_Z[i]), z: POINT_Z[i] }; }
 

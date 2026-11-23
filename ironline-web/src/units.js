@@ -8,30 +8,31 @@ const std = (c, r = 0.9, m = 0) => new THREE.MeshStandardMaterial({ color: c, ro
 const box = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; };
 
 const TEAM = [
-  { coat: 0x38507c, pants: 0x2a3550, helmet: 0x56688a, band: 0x5a8cff },
-  { coat: 0x6e6747, pants: 0x4d492f, helmet: 0x6b6c5a, band: 0xffc83c },
+  { coat: 0x3a62b8, pants: 0x2a3f7a, helmet: 0x5a78c0, band: 0xbcd0ff },
+  { coat: 0xb8923a, pants: 0x7a5a28, helmet: 0xc9a850, band: 0xfff0b0 },
 ];
 const mats = TEAM.map((t) => ({ coat: std(t.coat), pants: std(t.pants), helmet: std(t.helmet, 0.55, 0.35), band: new THREE.MeshBasicMaterial({ color: t.band }) }));
-const skin = std(0xc89a7a, 0.8), gunMat = std(0x3a2e22, 0.6, 0.1), metal = std(0x6a7078, 0.45, 0.3);
+const skin = std(0xd9a77e, 1), gunMat = std(0x3a2e22, 0.6, 0.1), metal = std(0x6a7078, 0.45, 0.3);
 
 export function makeSoldier(team) {
   const M = mats[team];
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const torso = box(0.46, 0.6, 0.27, M.coat, 0, 1.13, 0);
-  body.add(torso, box(0.48, 0.1, 0.29, M.pants, 0, 0.84, 0), box(0.3, 0.1, 0.03, M.band, 0, 1.3, -0.15));
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), skin); head.position.set(0, 1.56, 0); body.add(head);
-  const hel = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), M.helmet); hel.position.set(0, 1.6, 0); hel.scale.set(1, 0.9, 1.08); body.add(hel);
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.165, 0.165, 0.02, 14), M.helmet); rim.position.set(0, 1.585, 0); body.add(rim);
+  const dark = std(0x1c1a18, 1), eye = std(0x16120e, 1);
+  // 몸통·머리·철모: 전부 상자
+  body.add(box(0.52, 0.66, 0.28, M.coat, 0, 1.12, 0), box(0.54, 0.1, 0.3, std(0x3a2a1c, 1), 0, 0.84, 0), box(0.3, 0.12, 0.03, M.band, 0, 1.32, -0.15));
+  const head = box(0.32, 0.32, 0.32, skin, 0, 1.62, 0); body.add(head);
+  body.add(box(0.07, 0.07, 0.02, eye, -0.08, 1.64, -0.165), box(0.07, 0.07, 0.02, eye, 0.08, 1.64, -0.165));
+  body.add(box(0.36, 0.14, 0.36, M.helmet, 0, 1.82, 0), box(0.4, 0.04, 0.4, M.helmet, 0, 1.75, 0), box(0.12, 0.04, 0.1, M.band, 0, 1.87, -0.19));
   const legL = new THREE.Group(), legR = new THREE.Group();
-  legL.position.set(-0.11, 0.82, 0); legR.position.set(0.11, 0.82, 0);
-  legL.add(box(0.17, 0.8, 0.19, M.pants, 0, -0.4, 0), box(0.18, 0.1, 0.27, gunMat, 0, -0.79, -0.04));
-  legR.add(box(0.17, 0.8, 0.19, M.pants, 0, -0.4, 0), box(0.18, 0.1, 0.27, gunMat, 0, -0.79, -0.04));
+  legL.position.set(-0.13, 0.82, 0); legR.position.set(0.13, 0.82, 0);
+  for (const l of [legL, legR]) l.add(box(0.22, 0.58, 0.24, M.pants, 0, -0.29, 0), box(0.23, 0.24, 0.25, dark, 0, -0.7, -0.01));
   g.add(legL, legR);
-  const arms = new THREE.Group(); arms.position.set(0, 1.35, 0); body.add(arms);
-  arms.add(box(0.12, 0.12, 0.5, M.coat, -0.2, -0.05, -0.2), box(0.12, 0.12, 0.45, M.coat, 0.18, -0.08, -0.3));
-  const gun = new THREE.Group(); gun.position.set(0.02, -0.08, -0.34); arms.add(gun);
-  gun.add(box(0.05, 0.07, 0.62, gunMat, 0, 0, 0), box(0.025, 0.025, 0.6, metal, 0, 0.01, -0.5));
+  // 팔: 총을 앞으로 겨눈 모양
+  const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms);
+  arms.add(box(0.16, 0.16, 0.5, M.coat, -0.22, -0.06, -0.22), box(0.16, 0.16, 0.46, M.coat, 0.2, -0.1, -0.32), box(0.15, 0.15, 0.12, skin, -0.22, -0.06, -0.52), box(0.15, 0.15, 0.12, skin, 0.2, -0.1, -0.58));
+  const gun = new THREE.Group(); gun.position.set(0.0, -0.08, -0.36); arms.add(gun);
+  gun.add(box(0.07, 0.09, 0.7, gunMat, 0, 0, 0), box(0.04, 0.04, 0.5, metal, 0, 0.01, -0.55));
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   g.userData = { body, legL, legR, arms };
   return g;
@@ -68,7 +69,7 @@ export class UnitViews {
 // ---- 1인칭 무기 ----
 export function makeViewmodel(weapon) {
   const g = new THREE.Group();
-  const wood = std(0x5a3d24, 0.7), hand = skin;
+  const wood = std(0x5a3d24, 0.7), hand = std(0xc89a7a, 0.8);
   if (weapon === 0) {            // 볼트액션 소총
     g.add(box(0.05, 0.08, 0.55, wood, 0, -0.01, 0.12), box(0.035, 0.05, 0.5, metal, 0, 0.02, -0.28), box(0.02, 0.02, 0.5, metal, 0, 0.025, -0.72));
     g.add(box(0.012, 0.035, 0.012, metal, 0, 0.065, -0.95), box(0.015, 0.03, 0.02, metal, 0, 0.06, -0.02), box(0.1, 0.012, 0.012, metal, 0.04, 0.0, -0.05));

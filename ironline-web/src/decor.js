@@ -2,10 +2,40 @@
 // 월드 좌표에 놓일 위치는 시드에서 결정적으로 뽑는다(모든 플레이어가 같은 풍경을 본다).
 import * as THREE from 'three';
 import { GLTFLoader } from '../vendor/loaders/GLTFLoader.js';
+import { mergeGeometries } from '../vendor/utils/BufferGeometryUtils.js';
 import { RNG, TRENCH_X, POINT_R, POINT_X, POINT_Z, HALF_X, HALF_Z } from './world.js';
 
+
+// ---- 블록(복셀) 모형: 나무·덤불·바위를 상자 몇 개로 만든다 ----
+const voxMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+function vox(list) {
+  const geos = list.map(([x, y, z, w, h, d, c]) => {
+    const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y + h / 2, z);
+    const col = new THREE.Color(c), n = g.attributes.position.count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = col.r; a[i * 3 + 1] = col.g; a[i * 3 + 2] = col.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g;
+  });
+  const geo = mergeGeometries(geos, false); geo.computeBoundingBox();
+  const bb = geo.boundingBox, size = bb.getSize(new THREE.Vector3());
+  return { parts: [{ geo, mat: voxMat }], size, minY: bb.min.y, cx: (bb.min.x + bb.max.x) / 2, cz: (bb.min.z + bb.max.z) / 2 };
+}
+const TRUNK = 0x6b4a2c, L1 = 0x4c7a34, L2 = 0x5d8c3c, L3 = 0x3f6a2e;
+function registerVox(models) {
+  const set = (n, l) => models.cache.set('vox/' + n, vox(l));
+  set('pine', [[0, 0, 0, 0.36, 2.0, 0.36, TRUNK], [0, 1.4, 0, 2.6, 0.9, 2.6, L3], [0, 2.3, 0, 1.9, 0.9, 1.9, L1], [0, 3.2, 0, 1.2, 0.9, 1.2, L3], [0, 4.1, 0, 0.6, 0.7, 0.6, L2]]);
+  set('pine2', [[0, 0, 0, 0.4, 1.6, 0.4, TRUNK], [0, 1.1, 0, 3.0, 0.8, 3.0, L1], [0, 1.9, 0, 2.2, 0.8, 2.2, L3], [0, 2.7, 0, 1.4, 0.8, 1.4, L1], [0, 3.5, 0, 0.7, 0.6, 0.7, L2]]);
+  set('oak', [[0, 0, 0, 0.5, 2.4, 0.5, TRUNK], [0, 2.1, 0, 3.0, 1.5, 3.0, L1], [0.4, 3.4, -0.2, 2.0, 1.0, 2.0, L2], [-1.4, 2.6, 0.8, 1.2, 1.0, 1.2, L3], [1.3, 2.3, -1.0, 1.1, 1.0, 1.1, L3]]);
+  set('oak2', [[0, 0, 0, 0.45, 2.0, 0.45, TRUNK], [0, 1.7, 0, 2.6, 1.3, 2.6, L2], [-0.3, 2.8, 0.2, 1.7, 1.0, 1.7, L1], [1.2, 1.9, 0.9, 1.0, 0.9, 1.0, L1]]);
+  set('tall', [[0, 0, 0, 0.34, 3.2, 0.34, TRUNK], [0, 2.6, 0, 1.6, 1.3, 1.6, L1], [0, 3.8, 0, 1.1, 1.0, 1.1, L2]]);
+  set('bush', [[0, 0, 0, 1.0, 0.7, 1.0, L1], [0.55, 0, 0.3, 0.6, 0.5, 0.6, L2], [-0.4, 0, -0.5, 0.6, 0.55, 0.6, L3]]);
+  set('bush2', [[0, 0, 0, 0.8, 0.8, 0.8, L2], [0.5, 0, -0.2, 0.5, 0.45, 0.5, L1]]);
+  set('rock', [[0, 0, 0, 1.0, 0.6, 0.8, 0x8a8a86], [0.5, 0, 0.3, 0.6, 0.9, 0.6, 0x77777a], [-0.4, 0, 0.1, 0.5, 0.4, 0.5, 0x9a9a94]]);
+  set('rock2', [[0, 0, 0, 0.9, 0.5, 0.9, 0x8f8f8a], [0.3, 0.5, 0, 0.5, 0.4, 0.5, 0x7e7e7c]]);
+  set('rockbig', [[0, 0, 0, 2.2, 1.4, 1.8, 0x85858a], [0.3, 1.4, 0, 1.4, 1.1, 1.2, 0x76767a], [-0.9, 0, 0.8, 1.0, 0.8, 0.9, 0x929290]]);
+}
+
 export class Models {
-  constructor() { this.loader = new GLTFLoader(); this.cache = new Map(); }
+  constructor() { this.loader = new GLTFLoader(); this.cache = new Map(); registerVox(this); }
   url(name) { return name.includes('/') ? `assets/models/${name}.glb` : `assets/models/${name}/${name}.gltf`; }
   async load(names) {
     await Promise.all([...new Set(names)].map(async (name) => {
@@ -72,11 +102,10 @@ export class Batch {
   }
 }
 
-const TREES = ['kenney/tree_pineTallA', 'kenney/tree_pineTallB', 'kenney/tree_pineTallC', 'kenney/tree_pineTallD', 'kenney/tree_pineDefaultA', 'kenney/tree_pineRoundA',
-  'kenney/tree_default', 'kenney/tree_oak', 'kenney/tree_thin', 'kenney/tree_tall', 'kenney/tree_simple', 'kenney/tree_fat', 'kenney/tree_oak_fall', 'kenney/tree_default_dark', 'kenney/tree_thin_fall'];
-const BUSHES = ['kenney/plant_bush', 'kenney/plant_bushLarge', 'kenney/plant_bushSmall', 'kenney/plant_bushDetailed', 'kenney/plant_bushLargeTriangle'];
-const ROCKS = ['kenney/rock_smallA', 'kenney/rock_smallB', 'kenney/rock_smallC', 'kenney/rock_smallD', 'kenney/rock_smallFlatA', 'kenney/rock_smallFlatB', 'kenney/rock_largeA', 'kenney/rock_largeB', 'kenney/rock_largeC', 'kenney/rock_tallD', 'kenney/stone_largeA'];
-const BIG_ROCKS = ['kenney/rock_largeD', 'kenney/rock_largeE', 'kenney/rock_tallA', 'kenney/rock_tallC', 'kenney/stone_tallA'];
+const TREES = ['vox/pine', 'vox/pine', 'vox/pine2', 'vox/oak', 'vox/oak2', 'vox/tall', 'vox/pine2', 'vox/oak'];
+const BUSHES = ['vox/bush', 'vox/bush2'];
+const ROCKS = ['vox/rock', 'vox/rock2'];
+const BIG_ROCKS = ['vox/rockbig'];
 const LOGS = ['kenney/log', 'kenney/log_large', 'kenney/log_stack', 'kenney/stump_old', 'kenney/stump_round', 'kenney/stump_square', 'kenney/stump_oldTall'];
 const FENCES = ['kenney/fence_simple', 'kenney/fence_planks', 'kenney/fence_simple', 'kenney/fence_simpleLow'];
 const FLOWERS = ['kenney/flower_redA', 'kenney/flower_redB', 'kenney/flower_redC', 'kenney/flower_redA', 'kenney/flower_yellowA', 'kenney/flower_purpleA'];
@@ -85,7 +114,7 @@ const PH = ['wooden_ladder_02', 'wooden_bucket_01', 'picke_dirty_01', 'wooden_ax
 export const MODEL_NAMES = [...TREES, ...BUSHES, ...ROCKS, ...BIG_ROCKS, ...LOGS, ...FENCES, ...FLOWERS, 'kenney/mushroom_redGroup', 'kenney/mushroom_tanGroup', 'kenney/campfire_logs', ...PH];
 
 // Kenney 의 파스텔을 전장의 어두운 올리브·갈색으로 끌어내리는 곱셈 색(잎·덤불·나무에 쓴다)
-const LEAF = [0x6f8a4a, 0x7a8f4c, 0x62804a, 0x8a8648];
+const LEAF = [0xffffff, 0xf0f6e0, 0xe6f0d8, 0xfff8dc];
 const WOOD = 0x8a7a66;
 
 function freeSpot(w, x, z, nearR, trenchR, allowRoad = false) {
@@ -122,7 +151,7 @@ export function scatter(world, batch) {
     const big = rng.next() < 0.16, cnt = big ? 1 : rng.int(1, 3);
     for (let k = 0; k < cnt; k++) {
       const px = x + (k ? rng.range(-0.9, 0.9) : 0), pz = z + (k ? rng.range(-0.9, 0.9) : 0);
-      batch.add(rng.pick(big ? BIG_ROCKS : ROCKS), px, gy(px, pz) - 0.06, pz, rng.next() * 6.283, big ? rng.range(1.8, 3.4) : rng.range(0.55, 1.3), false, 0xb4aca0);
+      batch.add(rng.pick(big ? BIG_ROCKS : ROCKS), px, gy(px, pz) - 0.06, pz, rng.next() * 6.283, big ? rng.range(1.8, 3.4) : rng.range(0.55, 1.3), false, 0xffffff);
     }
     n++;
   }
