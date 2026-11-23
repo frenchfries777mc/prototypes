@@ -1,4 +1,4 @@
-// 교통: 주민이 모는 차, 신호등, 신호 위반 단속.
+// 교통: 주민이 모는 차, 신호등.
 // 차는 물리 없이 차선을 따라 달린다(우측통행). 플레이어가 건드리면(타기, 쏘기, 들이받기, 폭발) 진짜 물리 자동차로 바뀐다.
 import { paths, halfAt } from './roads.js';
 import { JUNCTIONS } from './world.js';
@@ -164,14 +164,13 @@ export class Traffic {
       const j = this.junctions.find((q) => Math.abs(q.x - me.x) < q.h + 0.5 && Math.abs(q.z - me.z) < q.h + 0.5 && Math.abs((q.h > 5 ? this.jy(q) : ROAD_Y) - me.y) < 4) || null;
       if (j && j !== this.inJ && sp > 3.5 && this.redCd <= 0) {
         const ns = Math.abs(v.z) > Math.abs(v.x);
-        if (!this.green(ns) && !this.yellow(ns)) { this.redCd = 4; this.police.report(30); this.jobs.toast('신호 위반!'); }
+        if (!this.green(ns) && !this.yellow(ns)) this.redCd = 4; // 신호 위반으로는 경찰이 오지 않는다(요청으로 뺌)
       }
       this.inJ = j;
     } else this.inJ = null;
 
-    // 길을 막는 것들: 플레이어, 서 있는 차, 주민
+    // 길을 막는 것들: 서 있는 차, 주민. 플레이어 앞에서는 멈추지 않는다(치고 달아나면 경찰이 그 차를 쫓는다).
     const obs = [];
-    if (!P.inside) obs.push(me);
     for (const g of this.garage.cars) if (Math.hypot(g.pos.x - me.x, g.pos.z - me.z) < 300) obs.push(g.pos);
     for (const n of this.residents.list) if (n.mode !== 'sky') obs.push(n.pos);
 
@@ -181,13 +180,15 @@ export class Traffic {
       const far = Math.hypot(c.pos.x - me.x, c.pos.z - me.z);
       c.root.setEnabled(far < 430);
       if (far > 520) continue;
-      const L = c.L, top = L.town ? 8 : 13;
+      const L = c.L, top = (L.town ? 8 : 13) * (c.fugitive ? 1.5 : 1);
       let limit = 99, hardBlock = false;
+      // 경찰에게 붙잡힌 뺑소니 차는 한동안 서 있다가 풀려난다.
+      if (c.caught > 0) { c.caught -= dt; limit = 0; if (c.caught <= 0) c.fugitive = false; }
       // 끝에 다다르면 속도를 줄이고 돌아선다.
       const toEnd = c.dir > 0 ? L.len - c.s : c.s;
       limit = Math.min(limit, toEnd - 1);
       // 빨간불: 정지선 앞에 선다(이미 들어섰으면 지나간다).
-      for (const cr of L.cross) { const ds = (cr.s - c.s) * c.dir - (cr.j.h + 3.5); if (ds > -1.5 && ds < 16 && !this.green(cr.ns)) limit = Math.min(limit, ds); }
+      for (const cr of L.cross) { const ds = (cr.s - c.s) * c.dir - (cr.j.h + 3.5); if (ds > -1.5 && ds < 16 && !this.green(cr.ns) && !c.fugitive) limit = Math.min(limit, ds); }
       // 건널목 차단기가 내려와 있으면 그 앞에 선다.
       if (this.blocked) for (const x of this.blocked) { const dx = x.x - c.pos.x, dz = x.z - c.pos.z, fw = dx * c.fx + dz * c.fz; if (fw > 5 && fw < 26 && Math.abs(dx * c.fz - dz * c.fx) < 8) limit = Math.min(limit, fw - 8); }
       // 앞차
@@ -219,6 +220,7 @@ export class Traffic {
           this.hitCd = 0.9;
           P.kick = new B.Vector3(c.fx * c.v * 0.9, 6 + c.v * 0.2, c.fz * c.v * 0.9);
           this.health.hurt(clamp(c.v * 4.2, 15, 75), c.fx, c.fz, 'car');
+          if (!c.fugitive && this.police.pursue(c)) c.fugitive = true; // 뺑소니: 경찰이 그 차를 잡으러 간다
         }
       }
     }

@@ -217,3 +217,35 @@ body.lobby #wardrobe { top: 46%; }
 #lobby .sheet .rec b { margin: 0; text-align: right; color: #fff; }
 @media (max-height: 460px) { #lobby .note { display: none; } #lobby .n1 { display: block; top: 56px; } }
 #lobby.closet .note, #lobby.closet .money { display: none; }
+
+/* ----- 멀티플레이: 방 표시, 채팅 ----- */
+#netBox { position: absolute; left: 14px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 40px); padding: 6px 12px; border-radius: 10px; background: rgba(22, 34, 58, .78); font-size: 13px; font-weight: 800; pointer-events: auto; cursor: pointer; }
+#netBox[hidden] { display: none; }
+#chatLog { position: absolute; left: 14px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 76px); width: min(340px, 46vw); display: grid; gap: 3px; opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+#chatLog.show { opacity: 1; }
+#chatLog p { margin: 0; padding: 4px 9px; border-radius: 8px; background: rgba(22, 34, 58, .62); font-size: 13px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; justify-self: start; }
+#chatLog p b { color: #ffd84a; font-weight: 800; }
+#chatLog p.sys { opacity: .8; font-style: italic; }
+#chatForm { position: absolute; left: 14px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 4px); width: min(340px, 60vw); pointer-events: auto; z-index: 2; }
+#chatForm[hidden] { display: none; }
+#chatInput { width: 100%; padding: 9px 12px; border: 2px solid #ffd84a; border-radius: 10px; background: rgba(22, 34, 58, .92); color: #fff; font: 600 15px inherit; outline: none; }
+#btnChat { position: absolute; right: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 294px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; pointer-events: auto; cursor: pointer; }
+#btnChat[hidden] { display: none; }
+body.touch #btnChat { top: calc(max(12px, env(safe-area-inset-top)) + 262px); }
+body.touch #netBox { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 46px); }
+body.touch #chatLog { left: 14px; bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 108px); width: min(260px, 44vw); }
+body.touch #chatForm { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 84px); }
+#lobby nav button em { font-style: normal; font-size: .7em; padding: 2px 8px; margin-left: 6px; border-radius: 8px; background: #57c27a; }
+#lobby .multi label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
+#lobby .multi input { padding: 11px 13px; border: 2px solid rgba(255, 255, 255, .3); border-radius: 11px; background: rgba(0, 0, 0, .25); color: #fff; font: 800 17px inherit; outline: none; min-width: 0; }
+#lobby .multi input:focus { border-color: #ffd84a; }
+#lobby .multi .primary { justify-content: center; background: #57c27a; font-size: 18px; }
+#lobby .multi .join { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+#lobby .multi .join input { text-transform: uppercase; letter-spacing: 4px; text-align: center; }
+#lobby .multi .code { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 216, 74, .16); }
+#lobby .multi .code small { grid-column: 1 / -1; font-size: 12px; opacity: .8; font-weight: 700; }
+#lobby .multi .code b { font-size: 34px; letter-spacing: 6px; color: #ffd84a; font-weight: 900; }
+#lobby .multi .who { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-weight: 800; font-size: 15px; }
+#lobby .multi .who em { font-style: normal; opacity: .6; font-size: 12px; }
+#lobby .multi .tip { margin: 0; font-size: 12px; opacity: .8; font-weight: 600; line-height: 1.5; }
+#lobby .multi .tip.warn { color: #ffb4a6; opacity: 1; }

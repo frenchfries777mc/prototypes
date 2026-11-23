@@ -130,6 +130,9 @@ export class Weapons {
     const tc = !res && this.traffic && this.traffic.rayHit(o, d, t);
     if (tc) { const v = this.traffic.convert(tc.car); return { t: tc.t, point: o.add(d.scale(tc.t)), car: v, hit: true }; }
     if (res) return { t: res.t, point: o.add(d.scale(res.t)), resident: res.n };
+    // 다른 플레이어
+    const rem = this.net && this.net.on && this.net.rayHit(o, d, t);
+    if (rem) return { t: rem.t, point: o.add(d.scale(rem.t)), remote: rem.r, hit: true };
     return { t, point: o.add(d.scale(t)), car: body ? this.byBody.get(body) : null, dyn: body ? this.dynByBody.get(body) : null, hit: !!body };
   }
 
@@ -164,6 +167,7 @@ export class Weapons {
     // 총: 맞는 즉시 판정
     const sd = d.add(new B.Vector3((Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread)).normalize();
     const hit = this.trace(o, sd, w.range);
+    if (this.net && this.net.on) { this.net.shot(hit.point); if (hit.remote) { this.net.hit(hit.remote, w.dmg, sd.x, sd.z); this.sfx.play('hit'); } }
     if (hit.resident) {
       const gone = this.residents.damage(hit.resident, w.dmg, sd.x, sd.z);
       this.crimeOn(hit.resident, gone);
@@ -184,6 +188,11 @@ export class Weapons {
     if (this.traffic) this.traffic.convertNear(me.x, me.z, 4);
     let landed = false;
     const front = (dx, dz, dist, extra = 0) => dist < 0.9 + extra || (dist < w.range + extra && (dx * fx + dz * fz) / (dist || 1) > w.arc);
+    if (this.net && this.net.on) for (const r of this.net.near(me.x, me.y, me.z, w.range + 0.4)) {
+      const p = r.car ? r.car.root.position : r.pos, dx = p.x - me.x, dz = p.z - me.z, dist = Math.hypot(dx, dz);
+      if (!front(dx, dz, dist, r.car ? 1.6 : 0)) continue;
+      this.net.hit(r, w.dmg, fx, fz); this.emit('star', p.x, p.y + 1.2, p.z, 12); landed = true;
+    }
     for (const n of this.residents.list) {
       if (!this.residents.alive(n)) continue;
       const dx = n.pos.x - me.x, dz = n.pos.z - me.z, dist = Math.hypot(dx, dz);
@@ -263,6 +272,7 @@ export class Weapons {
     this.emit('boom', x, y + 0.5, z, 130); this.emit('puff', x, y + 1, z, 46); this.emit('spark', x, y + 0.5, z, 60);
     this.sfx.play('boom');
     if (this.traffic) this.traffic.convertNear(x, z, radius + 4);
+    if (this.net && this.net.on) this.net.blast(x, y, z, radius);
     this.residents.scare(x, z, 60);
     for (const n of this.residents.list) {
       if (!this.residents.alive(n)) continue;

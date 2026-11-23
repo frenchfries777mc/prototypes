@@ -7,8 +7,9 @@ const NEWS = ['불량배, 오늘도 주먹 쥐어 보여', '기차는 멈추지 
   '옷가게 사장 "변기 뚜껑은 등에 메는 것"', '오늘의 날씨: 네모나게 맑음', '택시 손님 "기사님 여기 바다인데요"', '교도소 탈옥범 "간수 눈만 피하면 돼요"'];
 
 export class Lobby {
-  constructor({ player, jobs, wardrobe, music, interiors, input, quality }) {
-    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality });
+  constructor({ player, jobs, wardrobe, music, interiors, input, quality, net }) {
+    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality, net });
+    net.onChange = () => { if (this.open && this.panel === 'multi') this.render(); };
     this.open = false; this.t = 0; this.panel = null;
     this.el = $('lobby');
     this.el.addEventListener('click', (e) => {
@@ -18,8 +19,10 @@ export class Lobby {
     addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && !this.open && !wardrobe.open) this.show();
       else if (e.code === 'Enter' && this.open && !this.panel) this.act('start');
+
     });
     $('btnLobby').addEventListener('click', () => this.show());
+    this.el.addEventListener('inputkey', (e) => { if (e.detail === 'Enter' && e.target.id === 'mpCode') this.act('mjoin'); });
   }
   show() {
     if (this.open) return;
@@ -40,12 +43,20 @@ export class Lobby {
   act(a) {
     if (a === 'start') return this.hide();
     if (a === 'closet') { this.panel = null; this.render(); return this.wardrobe.toggle(false); }
+    // 같이 하기: 이름과 코드는 다시 그리기 전에 입력칸에서 읽어 둔다.
+    const nameEl = document.getElementById('mpName'), codeEl = document.getElementById('mpCode');
+    if (nameEl) this.net.setName(nameEl.value);
+    if (codeEl) this.codeDraft = codeEl.value;
+    if (a === 'mhost') { this.net.host(); return this.render(); }
+    if (a === 'mjoin') { this.net.join(this.codeDraft); return this.render(); }
+    if (a === 'mleave') { this.net.leave(); return this.render(); }
+    if (a === 'mcopy') { try { navigator.clipboard.writeText(this.net.code); this.copied = true; } catch (e) { /* 무시 */ } return this.render(); }
     if (a === 'music') this.music.toggle();
     else if (a === 'view') this.player.nextView();
     else if (a === 'quality') { const q = this.quality === 'low' ? 'high' : 'low'; try { localStorage.setItem('boxtown.quality', q); } catch (e) { /* 무시 */ } location.reload(); return; }
     else if (a === 'wipe') { if (this.wipeArmed) { try { Object.keys(localStorage).filter((k) => k.startsWith('boxtown.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ } location.reload(); return; } this.wipeArmed = true; }
     else if (a === 'back') this.panel = null;
-    else { this.wardrobe.close(); this.panel = this.panel === a ? null : a; this.wipeArmed = false; }
+    else { this.wardrobe.close(); this.panel = this.panel === a ? null : a; this.wipeArmed = false; this.copied = false; }
     this.render();
   }
   render() {
@@ -58,6 +69,19 @@ export class Lobby {
       <button data-act="quality">그래픽 <b>${this.quality === 'low' ? '가볍게' : '좋게'}</b><small>바꾸면 다시 불러와요</small></button>
       <button data-act="wipe" class="danger">${this.wipeArmed ? '정말요? 한 번 더 누르면 전부 지워져요' : '저장 지우고 처음부터'}</button>
       <button data-act="back" class="back">닫기</button></div>`;
+    else if (this.panel === 'multi') {
+      const N = this.net, esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const who = N.list().map((p) => `<li>${p.host ? '👑' : '🙂'} ${esc(p.name)}${p.me ? ' <em>(나)</em>' : ''}</li>`).join('');
+      panel = `<div class="sheet multi"><h3>👥 같이 하기</h3>
+        <label>내 이름<input id="mpName" maxlength="12" value="${esc(N.name)}" ${N.mode ? 'disabled' : ''}></label>
+        ${N.on ? `<div class="code"><small>방 코드 (친구에게 알려 주세요)</small><b>${N.code}</b><button data-act="mcopy">${this.copied ? '복사됨!' : '복사'}</button></div><ul class="who">${who}</ul>
+          <p class="tip">게임 중 T 또는 Enter로 채팅해요. 주민·경찰·일거리는 각자 따로 돌아가요.</p><button data-act="mleave" class="danger">방 나가기</button>`
+        : N.mode ? `<p class="tip">${esc(N.status || '연결하는 중…')}</p><button data-act="mleave" class="danger">그만두기</button>`
+        : `<button data-act="mhost" class="primary">방 만들기</button>
+          <div class="join"><input id="mpCode" maxlength="5" placeholder="방 코드" value="${esc(this.codeDraft || '')}" autocapitalize="characters" autocomplete="off"><button data-act="mjoin" class="primary">들어가기</button></div>
+          ${N.status ? `<p class="tip warn">${esc(N.status)}</p>` : '<p class="tip">한 사람이 방을 만들고, 나머지는 코드로 들어와요. 최대 8명.</p>'}`}
+        <button data-act="back" class="back">닫기</button></div>`;
+    }
     else if (this.panel === 'credits') panel = `<div class="sheet"><h3>🎵 크레딧</h3><div class="text">
       <b>음악</b>"Dentaneosuchus Hunt"<br>"Morning"<br>"Night in Venice"<br>"Zazie"<br>"Divertimento K131"<br>"Galway"<br>Kevin MacLeod (incompetech.com)<br>Licensed under Creative Commons: By Attribution 4.0 License<br>http://creativecommons.org/licenses/by/4.0/
       <b>3D 모델</b>Kenney (kenney.nl) · CC0
@@ -70,7 +94,7 @@ export class Lobby {
     const news = NEWS.slice().sort(() => Math.random() - 0.5).map((n) => '📢 ' + n).join('　·　');
     this.el.innerHTML = `<div class="shade"></div>
       <div class="left"><h1>박스타운</h1><p class="sub">★ 오늘도 평화로운(?) 네모 마을 ★</p>
-        <nav><button data-act="start" class="go">▶ 게임 시작</button><button data-act="closet">👕 옷장</button><button data-act="records">🏆 내 기록</button><button data-act="settings">⚙ 설정</button><button data-act="credits">🎵 크레딧</button></nav></div>
+        <nav><button data-act="start" class="go">▶ 게임 시작</button><button data-act="multi">👥 같이 하기${this.net.on ? ` <em>${this.net.count}명</em>` : ''}</button><button data-act="closet">👕 옷장</button><button data-act="records">🏆 내 기록</button><button data-act="settings">⚙ 설정</button><button data-act="credits">🎵 크레딧</button></nav></div>
       <div class="money">💰 ${won(this.jobs.money)}원</div>
       <div class="note n1"><h3>📌 오늘의 일거리</h3><ul>${quest}</ul></div>
       <div class="note n2"><h3>🏠 내 살림</h3>집 ${this.interiors.owned.size}채 · 치장품 ${this.wardrobe.owned.size}개<br>해낸 일 ${won(s('jobs'))}번</div>
