@@ -249,3 +249,36 @@ body.touch #chatForm { left: 50%; transform: translateX(-50%); bottom: auto; top
 #lobby .multi .who em { font-style: normal; opacity: .6; font-size: 12px; }
 #lobby .multi .tip { margin: 0; font-size: 12px; opacity: .8; font-weight: 600; line-height: 1.5; }
 #lobby .multi .tip.warn { color: #ffb4a6; opacity: 1; }
+
+/* ----- 고르기 창(판매장, 차고, 가구) ----- */
+#shop { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); width: min(340px, 52vw); max-height: 84vh; display: flex; flex-direction: column; border-radius: 16px; background: rgba(22, 34, 58, .94); pointer-events: auto; overflow: hidden; z-index: 6; }
+#shop[hidden] { display: none; }
+#shop header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; }
+#shop header b { font-size: 18px; font-weight: 900; color: #ffd84a; white-space: nowrap; }
+#shop header span { flex: 1; font-size: 12px; font-weight: 600; opacity: .85; }
+#shop button { font: inherit; color: #fff; border: 0; cursor: pointer; }
+#shop header button { width: 32px; height: 32px; border-radius: 9px; background: rgba(255, 255, 255, .14); font-weight: 900; flex: none; }
+#shop .list { display: grid; gap: 6px; padding: 0 12px 14px; overflow-y: auto; }
+#shop .list button { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 13px; border-radius: 11px; background: rgba(255, 255, 255, .1); border: 2px solid transparent; text-align: left; }
+#shop .list button b { font-size: 15px; font-weight: 800; }
+#shop .list button small { font-size: 12px; font-weight: 700; opacity: .8; white-space: nowrap; }
+#shop .list button.on { border-color: #ffd84a; background: rgba(255, 216, 74, .18); }
+#shop .list button.buy small { color: #ffd84a; opacity: 1; }
+#shop .list button.lock { opacity: .45; }
+body.lobby #hud > #shop:not([hidden]) { display: flex !important; }
+#btnCar { position: absolute; right: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 342px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; pointer-events: auto; cursor: pointer; }
+#btnCar[hidden] { display: none; }
+body.touch #btnCar { top: calc(max(12px, env(safe-area-inset-top)) + 310px); }
+.pedal.heli { display: none; right: calc(max(22px, env(safe-area-inset-right)) + 196px); width: 70px; height: 62px; background: rgba(79, 155, 234, .85); color: #fff; font: 900 20px inherit; border: 0; border-radius: 16px; }
+.pedal.heli small { display: block; font-size: 11px; }
+#btnHeliUp { bottom: calc(max(26px, env(safe-area-inset-bottom)) + 72px); }
+#btnHeliDown { bottom: max(26px, env(safe-area-inset-bottom)); }
+body.touch.driving.flying .pedal.heli { display: block; }
+body.touch.driving:not(.flying) .pedal.heli { display: none; }
+
+#loot { position: absolute; left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 62px); transform: translateX(-50%); padding: 6px 14px; border-radius: 10px; background: rgba(229, 85, 63, .9); font-size: 14px; font-weight: 900; white-space: nowrap; }
+#loot[hidden] { display: none; }
+#clock { position: absolute; right: 152px; top: max(14px, env(safe-area-inset-top)); padding: 4px 10px; border-radius: 9px; background: rgba(22, 34, 58, .68); font-size: 13px; font-weight: 800; }
+body.touch #clock { right: 124px; font-size: 12px; }
+#btnFurn { position: absolute; left: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 96px); width: 46px; height: 46px; border: 0; border-radius: 12px; background: rgba(242, 100, 75, .9); font-size: 22px; pointer-events: auto; cursor: pointer; }
+#btnFurn[hidden] { display: none; }

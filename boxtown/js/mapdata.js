@@ -167,4 +167,6 @@ PARKED.push(
   { m: 'cars/hatchback-sports', x: -76, z: 62, r: 250 },
 );
 
-export const carKeys = () => [...new Set(PARKED.map((p) => p.m))];
+// 길에 세워 두지는 않지만 판매장에서 파는 차
+export const EXTRA_CARS = ['cars/kart-oobi', 'cars/race-future', 'cars/ambulance', 'cars/truck-flat', 'cars/tractor-shovel'];
+export const carKeys = () => [...new Set([...PARKED.map((p) => p.m), ...EXTRA_CARS])];

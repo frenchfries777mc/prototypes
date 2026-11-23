@@ -7,8 +7,8 @@ const NEWS = ['불량배, 오늘도 주먹 쥐어 보여', '기차는 멈추지 
   '옷가게 사장 "변기 뚜껑은 등에 메는 것"', '오늘의 날씨: 네모나게 맑음', '택시 손님 "기사님 여기 바다인데요"', '교도소 탈옥범 "간수 눈만 피하면 돼요"'];
 
 export class Lobby {
-  constructor({ player, jobs, wardrobe, music, interiors, input, quality, net }) {
-    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality, net });
+  constructor({ player, jobs, wardrobe, music, interiors, input, quality, net, dealer }) {
+    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality, net, dealer });
     net.onChange = () => { if (this.open && this.panel === 'multi') this.render(); };
     this.open = false; this.t = 0; this.panel = null;
     this.el = $('lobby');
@@ -42,6 +42,7 @@ export class Lobby {
   }
   act(a) {
     if (a === 'start') return this.hide();
+    if (a === 'garage') { this.panel = null; this.wardrobe.close(); this.render(); return this.dealer.open(false); }
     if (a === 'closet') { this.panel = null; this.render(); return this.wardrobe.toggle(false); }
     // 같이 하기: 이름과 코드는 다시 그리기 전에 입력칸에서 읽어 둔다.
     const nameEl = document.getElementById('mpName'), codeEl = document.getElementById('mpCode');
@@ -94,7 +95,7 @@ export class Lobby {
     const news = NEWS.slice().sort(() => Math.random() - 0.5).map((n) => '📢 ' + n).join('　·　');
     this.el.innerHTML = `<div class="shade"></div>
       <div class="left"><h1>박스타운</h1><p class="sub">★ 오늘도 평화로운(?) 네모 마을 ★</p>
-        <nav><button data-act="start" class="go">▶ 게임 시작</button><button data-act="multi">👥 같이 하기${this.net.on ? ` <em>${this.net.count}명</em>` : ''}</button><button data-act="closet">👕 옷장</button><button data-act="records">🏆 내 기록</button><button data-act="settings">⚙ 설정</button><button data-act="credits">🎵 크레딧</button></nav></div>
+        <nav><button data-act="start" class="go">▶ 게임 시작</button><button data-act="multi">👥 같이 하기${this.net.on ? ` <em>${this.net.count}명</em>` : ''}</button><button data-act="closet">👕 옷장</button><button data-act="garage">🚗 차고</button><button data-act="records">🏆 내 기록</button><button data-act="settings">⚙ 설정</button><button data-act="credits">🎵 크레딧</button></nav></div>
       <div class="money">💰 ${won(this.jobs.money)}원</div>
       <div class="note n1"><h3>📌 오늘의 일거리</h3><ul>${quest}</ul></div>
       <div class="note n2"><h3>🏠 내 살림</h3>집 ${this.interiors.owned.size}채 · 치장품 ${this.wardrobe.owned.size}개<br>해낸 일 ${won(s('jobs'))}번</div>
