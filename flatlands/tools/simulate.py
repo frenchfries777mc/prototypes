@@ -109,13 +109,14 @@ class World:
         if rid not in self.noises:
             d = json.load(open(os.path.join(self.v, "data/minecraft/worldgen/noise", rid.split(":")[1] + ".json")))
             rng = np.random.default_rng(zlib.crc32(rid.encode()) ^ self.seed)
-            self.noises[rid] = Normal(rng, d["base_octave"], d["amplitude_modifiers"])
+            self.noises[rid] = Normal(rng, d.get("base_octave", d.get("firstOctave")), d.get("amplitude_modifiers", d.get("amplitudes")))
         return self.noises[rid]
     def ev(self, node, c, memo):
         if isinstance(node, (int, float)): return float(node)
         if isinstance(node, str):
             if node not in memo: memo[node] = self.ev(self._load_fn(node), c, memo)
             return memo[node]
+        node = self.norm(node)
         t = node["type"].split(":")[1]; E = lambda k: self.ev(node[k], c, memo)
         if t == "add": return E("left") + E("right")
         if t == "sub": return E("left") - E("right")
@@ -151,6 +152,19 @@ class World:
             return self.blended[key].value(c["x"], c["y"], c["z"])
         if t == "spline": return self.spline(node["spline"], c, memo)
         raise NotImplementedError(t)
+    @staticmethod
+    def norm(node):
+        """1.21~1.21.1 의 옛 문법을 26.3 문법으로 바꿔 읽는다."""
+        t = node["type"].split(":")[1]; n = dict(node)
+        if "argument1" in n: n["left"] = n.pop("argument1"); n["right"] = n.pop("argument2")
+        if "argument" in n:
+            if t in ("shift_a", "shift_b"): n["noise"] = n.pop("argument")   # 노이즈 ID 가 argument 에 들어 있다
+            else: n["input"] = n.pop("argument")
+        if t in ("flat_cache", "cache_2d", "cache_once"): n["type"] = "minecraft:cache"
+        if t == "y_clamped_gradient":
+            n.update(type="minecraft:gradient", axis="y", from_coordinate=n["from_y"], to_coordinate=n["to_y"])
+        if t == "shifted_noise": n["type"] = "minecraft:noise"
+        return n
     def spline(self, sp, c, memo):
         if isinstance(sp, (int, float)): return float(sp)
         x = self.ev(sp["coordinate"], c, memo); pts = sp["points"]
@@ -199,14 +213,14 @@ def save_png(path, h, water, d, step, scale=4):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--vanilla", required=True); ap.add_argument("--pack", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datapack"))
+    ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3", "1.21"], default="26.3"); ap.add_argument("--pack")
     ap.add_argument("--size", type=int, default=1536, help="한 변 길이(블록)"); ap.add_argument("--step", type=int, default=8)
     ap.add_argument("--preset", default="flatlands"); ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--ymin", type=int, default=52); ap.add_argument("--ymax", type=int, default=84)
     ap.add_argument("--png", help="지형 창을 위에서 본 그림으로 저장할 경로(PNG)")
     ap.add_argument("--climate-size", dest="climate_size", type=int, default=40960); ap.add_argument("--climate-step", dest="climate_step", type=int, default=64)
     a = ap.parse_args()
-    pack = os.path.abspath(a.pack); w = World(a.vanilla, pack, a.seed)
+    pack = os.path.abspath(a.pack or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", f"datapack-{a.target}")); w = World(a.vanilla, pack, a.seed)
     n = a.size//a.step; ax = (np.arange(n) - n/2)*a.step + 0.5
     X, Z = np.meshgrid(ax, ax, indexing="ij"); X = X.ravel(); Z = Z.ravel()
     def ctx(y): return {"x": X, "z": Z, "y": np.full_like(X, float(y))}
@@ -267,7 +281,11 @@ def main():
     cc = {"x": CX, "z": CZ, "y": np.zeros_like(CX)}
     GC = lambda rid: w.ev(rid, cc, {})
     cd = GC("flatlands:river_distance"); cS = GC("flatlands:surface_height")
-    cT = GC("minecraft:overworld/temperature"); cH = GC("minecraft:overworld/vegetation")
+    if a.target == "1.21":
+        rt = json.load(open(os.path.join(a.vanilla, "data/minecraft/worldgen/noise_settings/overworld.json")))["noise_router"]
+        cT = w.ev(rt["temperature"], cc, {}); cH = w.ev(rt["vegetation"], cc, {})
+    else:
+        cT = GC("minecraft:overworld/temperature"); cH = GC("minecraft:overworld/vegetation")
     cC = GC("minecraft:overworld/continents"); cE = GC("minecraft:overworld/erosion")
     print(f"\n[넓은 창 {big}x{big} 블록, 간격 {cs}, 표본 {m*m}개]")
     for nm, v in (("temperature", cT), ("vegetation", cH), ("continents", cC), ("erosion", cE), ("river_distance", cd)):

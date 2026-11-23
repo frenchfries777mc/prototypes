@@ -7,7 +7,8 @@
 
 사용법:
     # 서버 jar 안쪽의 server-26.3.jar 에서 data/ 를 풀어 둔 폴더를 --vanilla 로 넘긴다.
-    python3 tools/generate.py --vanilla /path/to/extracted      # 안에 data/minecraft/worldgen 이 있어야 함
+    python3 tools/generate.py --target 26.3 --vanilla /path/to/extracted    # 안에 data/minecraft/worldgen 이 있어야 함
+    python3 tools/generate.py --target 1.21 --vanilla /path/to/extracted    # 1.21 / 1.21.1 서버 jar 에서 푼 데이터
 
 모든 튜닝 값은 아래 PARAMS 한 곳에 모여 있다.
 """
@@ -77,67 +78,81 @@ def write(root, rel, data):
         json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
 
 
-def noise_fn(noise, scale, shifted=True):
-    d = {"type": "minecraft:noise", "noise": noise}
-    if shifted:
-        d["shift_x"] = "minecraft:shift_x"; d["shift_z"] = "minecraft:shift_z"
-    d["xz_scale"] = scale; d["y_scale"] = 0.0
-    return d
+class Syn:
+    """버전별 밀도 함수 문법 차이를 감싼다. 26.3: left/right/input, 1.21~1.21.1: argument1/argument2/argument."""
+    def __init__(self, ver): self.new = (ver == "26.3")
+    def bin(self, t, l, r):
+        return {"type": f"minecraft:{t}", "left": l, "right": r} if self.new else {"type": f"minecraft:{t}", "argument1": l, "argument2": r}
+    def add(self, l, r): return self.bin("add", l, r)
+    def mul(self, l, r): return self.bin("mul", l, r)
+    def sub(self, l, r): return self.bin("sub", l, r) if self.new else self.add(l, self.mul(-1.0, r))   # 1.21 에는 sub 가 없다
+    def un(self, t, x): return {"type": f"minecraft:{t}", "input" if self.new else "argument": x}
+    def clamp(self, x, lo, hi): return {"type": "minecraft:clamp", "input": x, "min": lo, "max": hi}
+    def cache2d(self, x):
+        return {"type": "minecraft:cache", "input": x} if self.new else {"type": "minecraft:flat_cache", "argument": {"type": "minecraft:cache_2d", "argument": x}}
+    def noise(self, noise, scale):
+        if self.new:
+            return {"type": "minecraft:noise", "noise": noise, "shift_x": "minecraft:shift_x", "shift_z": "minecraft:shift_z", "xz_scale": scale, "y_scale": 0.0}
+        return {"type": "minecraft:shifted_noise", "noise": noise, "shift_x": "minecraft:shift_x", "shift_y": 0.0, "shift_z": "minecraft:shift_z", "xz_scale": scale, "y_scale": 0.0}
+    def ygrad(self, y0, v0, y1, v1):
+        if self.new: return {"type": "minecraft:gradient", "axis": "y", "from_coordinate": y0, "from_value": v0, "to_coordinate": y1, "to_value": v1}
+        return {"type": "minecraft:y_clamped_gradient", "from_y": y0, "from_value": v0, "to_y": y1, "to_value": v1}
 
 
-def build_functions(root, vdir, P):
+def build_functions(root, vdir, P, ver):
+    S = Syn(ver)
     F = lambda n: f"{NS}:{n}"
     V = lambda n: f"minecraft:overworld/{n}"
 
     # 1) 강 노이즈: 바닐라 ridges 와 같은 노이즈. 0 근처가 강의 중심선이 된다.
-    write(root, "density_function/river_noise", {"type": "minecraft:cache", "input": noise_fn("minecraft:ridge", P["river_scale"])})
+    write(root, "density_function/river_noise", S.cache2d(S.noise("minecraft:ridge", P["river_scale"])))
     # 2) 강 중심선까지의 거리 대용 값 d = |노이즈|. 지형 깎기와 바이옴 선택(router.ridges)이 모두 이 값을 쓴다.
-    write(root, "density_function/river_distance", {"type": "minecraft:abs", "input": F("river_noise")})
+    write(root, "density_function/river_distance", S.un("abs", F("river_noise")))
 
     # 3) 완만한 육지 기복(블록). 바닐라 erosion 노이즈를 더 촘촘한 배율로 읽는다.
-    raw = {"type": "minecraft:add", "left": P["land_base"], "right": {"type": "minecraft:mul", "left": noise_fn("minecraft:erosion", P["land_scale"]), "right": P["land_amp"]}}
-    write(root, "density_function/land_height", {"type": "minecraft:cache", "input": {"type": "minecraft:clamp", "input": raw, "min": P["land_min"], "max": P["land_max"]}})
+    raw = S.add(P["land_base"], S.mul(S.noise("minecraft:erosion", P["land_scale"]), P["land_amp"]))
+    write(root, "density_function/land_height", S.cache2d(S.clamp(raw, P["land_min"], P["land_max"])))
 
     # 4) 강 단면 가중치 w(d) → 표면 높이 = 육지 + w*(강바닥-육지)
     ders = pchip_derivs(RIVER_PROFILE)
     points = [{"location": x, "value": y, "derivative": dv} for (x, y), dv in zip(RIVER_PROFILE, ders)]
     w = {"type": "minecraft:spline", "spline": {"coordinate": F("river_distance"), "points": points}}
-    surface = {"type": "minecraft:add", "left": F("land_height"),
-               "right": {"type": "minecraft:mul", "left": w, "right": {"type": "minecraft:sub", "left": P["river_bed"], "right": F("land_height")}}}
-    write(root, "density_function/surface_height", {"type": "minecraft:cache", "input": surface})
+    surface = S.add(F("land_height"), S.mul(w, S.sub(P["river_bed"], F("land_height"))))
+    write(root, "density_function/surface_height", S.cache2d(surface))
 
     # 5) offset: 바닐라 depth = (1 - y/128) + offset 이므로 표면이 y=S 이려면 offset = S/128 - 1
-    write(root, "density_function/offset", {"type": "minecraft:cache", "input": {"type": "minecraft:add", "left": {"type": "minecraft:mul", "left": F("surface_height"), "right": 0.0078125}, "right": -1.0}})
+    write(root, "density_function/offset", S.cache2d(S.add(S.mul(F("surface_height"), 0.0078125), -1.0)))
     write(root, "density_function/factor", P["factor"])
-    write(root, "density_function/depth", {"type": "minecraft:add", "left": {"type": "minecraft:gradient", "axis": "y", "from_coordinate": -64, "from_value": 1.5, "to_coordinate": 320, "to_value": -1.5}, "right": F("offset")})
+    write(root, "density_function/depth", S.add(S.ygrad(-64, 1.5, 320, -1.5), F("offset")))
 
     # 6) sloped_cheese: 바닐라와 같은 식에서 jaggedness(산 모서리)를 빼고, 3D 노이즈를 micro_k 배로 줄였다.
-    sc = {"type": "minecraft:cache", "input": {"type": "minecraft:add",
-          "left": {"type": "minecraft:mul", "left": {"type": "minecraft:quarter_negative", "input": {"type": "minecraft:mul", "left": F("depth"), "right": F("factor")}}, "right": 4.0},
-          "right": {"type": "minecraft:mul", "left": P["micro_k"], "right": V("base_3d_noise")}}}
-    write(root, "density_function/sloped_cheese", sc)
+    core = S.add(S.mul(S.un("quarter_negative", S.mul(F("depth"), F("factor"))), 4.0), S.mul(P["micro_k"], V("base_3d_noise")))
+    write(root, "density_function/sloped_cheese", {"type": "minecraft:cache", "input": core} if S.new else core)
 
-    # 7) 바닐라 복사본(참조만 교체): 동굴·광맥·베어디파이어는 바닐라 그대로 쓴다.
     mapping = {V("sloped_cheese"): F("sloped_cheese"), V("offset"): F("offset"), V("factor"): F("factor"), V("depth"): F("depth"),
                V("preliminary_surface_level"): F("preliminary_surface_level")}
-    write(root, "density_function/final_density", sub_refs(load(vdir, "density_function/overworld/final_density"), mapping))
-    write(root, "density_function/preliminary_surface_level", sub_refs(load(vdir, "density_function/overworld/preliminary_surface_level"), mapping))
-    write(root, "density_function/chunk_surface_level", sub_refs(load(vdir, "density_function/overworld/chunk_surface_level"), mapping))
+    if S.new:
+        # 26.3: 바닐라 복사본(참조만 교체). 동굴·광맥·베어디파이어는 바닐라 그대로 쓴다.
+        for n in ("final_density", "preliminary_surface_level", "chunk_surface_level"):
+            write(root, f"density_function/{n}", sub_refs(load(vdir, f"density_function/overworld/{n}"), mapping))
     return mapping
 
 
-def build_noise_settings(root, vdir, mapping, P):
+def build_noise_settings(root, vdir, mapping, P, ver):
     ns = load(vdir, "noise_settings/overworld")
     V = lambda n: f"minecraft:overworld/{n}"
     m = dict(mapping); m[V("ridges")] = f"{NS}:river_distance"
-    m[V("final_density")] = f"{NS}:final_density"; m[V("chunk_surface_level")] = f"{NS}:chunk_surface_level"
-    ns = sub_refs(ns, m)
-    # 스폰은 강이 아닌 육지에서 찾는다(river_distance 가 클수록 강에서 먼 곳).
-    full = [-1.0, 1.0]
-    ns["spawn_target"] = [{V("continents"): full, V("erosion"): full, f"{NS}:river_distance": [P["river_biome_width"] + 0.03, 1.0], V("temperature"): full, V("vegetation"): full}]
+    full = [-1.0, 1.0]; far = [P["river_biome_width"] + 0.03, 1.0]   # 스폰은 강이 아닌 육지에서 찾는다
+    if ver == "26.3":
+        m[V("final_density")] = f"{NS}:final_density"; m[V("chunk_surface_level")] = f"{NS}:chunk_surface_level"
+        ns = sub_refs(ns, m)
+        ns["spawn_target"] = [{V("continents"): full, V("erosion"): full, f"{NS}:river_distance": far, V("temperature"): full, V("vegetation"): full}]
+    else:
+        # 1.21~1.21.1: 노이즈 라우터가 설정 안에 인라인이다. depth/factor/sloped_cheese/ridges 참조만 교체하면
+        # final_density 와 initial_density_without_jaggedness 도 함께 바뀐다.
+        ns = sub_refs(ns, m)
+        ns["spawn_target"] = [{"continentalness": full, "depth": 0.0, "erosion": full, "humidity": full, "offset": 0.0, "temperature": full, "weirdness": far}]
     write(root, "noise_settings/overworld", ns)
-    r = ns["noise_router"]
-    return r
 
 
 # ───────────────────────── 바이옴 목록 ─────────────────────────
@@ -186,7 +201,7 @@ def biomes_pure(P):
     return L + cave_biomes()
 
 
-def build_presets(root, vdir, P, router):
+def build_presets(root, vdir, P):
     normal = load(vdir, "world_preset/normal")
     for name, biomes in (("flatlands", biomes_mixed(P)), ("plains_and_rivers", biomes_pure(P))):
         d = json.loads(json.dumps(normal))
@@ -200,14 +215,20 @@ def build_presets(root, vdir, P, router):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--vanilla", required=True, help="data/minecraft/worldgen 이 들어 있는 폴더")
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "datapack"))
+    ap.add_argument("--target", choices=["26.3", "1.21"], required=True, help="26.3 또는 1.21(=1.21~1.21.1)")
+    ap.add_argument("--vanilla", required=True, help="해당 버전의 data/minecraft/worldgen 이 들어 있는 폴더")
+    ap.add_argument("--out", help="기본값: datapack-<target>")
     a = ap.parse_args()
-    root = os.path.abspath(a.out)
+    root = os.path.abspath(a.out or os.path.join(os.path.dirname(__file__), "..", f"datapack-{a.target}"))
     shutil.rmtree(os.path.join(root, "data"), ignore_errors=True)
-    mapping = build_functions(root, a.vanilla, PARAMS)
-    router = build_noise_settings(root, a.vanilla, mapping, PARAMS)
-    build_presets(root, a.vanilla, PARAMS, router)
+    mapping = build_functions(root, a.vanilla, PARAMS, a.target)
+    build_noise_settings(root, a.vanilla, mapping, PARAMS, a.target)
+    build_presets(root, a.vanilla, PARAMS)
+    mc = os.path.join(root, "pack.mcmeta")
+    if not os.path.exists(mc):
+        fmt = {"26.3": {"min_format": 121, "max_format": 121}, "1.21": {"pack_format": 48, "supported_formats": [48, 48]}}[a.target]
+        label = {"26.3": "26.3", "1.21": "1.21~1.21.1"}[a.target]
+        json.dump({"pack": {"description": f"Flatlands - 평원과 강 위주의 평평하고 자연스러운 지형 ({label})", **fmt}}, open(mc, "w"), indent=2, ensure_ascii=False)
     print("written to", root)
 
 if __name__ == "__main__":

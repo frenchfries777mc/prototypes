@@ -2,16 +2,16 @@
 """정적 검증: 데이터 팩이 가리키는 모든 ID(밀도 함수·노이즈·바이옴·노이즈 설정)가 실제로 존재하는지,
 밀도 함수 참조에 순환이 없는지, 바이옴 목록의 형식이 맞는지 확인한다. (게임을 실행하지는 않는다.)
 
-    python3 tools/validate.py --vanilla /path/to/extracted
+    python3 tools/validate.py --target 26.3|1.21 --vanilla /path/to/extracted
 """
 import argparse, glob, json, os, sys
 
 NON_REF_KEYS = {"type", "axis", "noise", "metric", "biome"}
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datapack")
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--pack", default=ROOT)
-    a = ap.parse_args(); pack = os.path.abspath(a.pack)
+    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3","1.21"], required=True); ap.add_argument("--pack")
+    a = ap.parse_args(); pack = os.path.abspath(a.pack or os.path.join(ROOT, f"datapack-{a.target}"))
     errors = []
 
     def path_of(rid, kind):
@@ -60,10 +60,20 @@ def main():
         if ":" in x and not x.startswith("minecraft:overworld/caves") and (x.startswith("flatlands:") or x.startswith("minecraft:overworld/") or x.startswith("minecraft:shift")):
             if not exists(x, "density_function"): errors.append(f"noise_settings: 없는 함수 {x}")
     for k, v in ns["noise_router"].items():
-        if not exists(v, "density_function"): errors.append(f"noise_router.{k}: 없는 함수 {v}")
-    if not exists(ns["material_rule"], "material_rule"): errors.append("material_rule 없음: " + ns["material_rule"])
-    for k in ns["spawn_target"][0]:
-        if not exists(k, "density_function"): errors.append(f"spawn_target 키 없음: {k}")
+        if isinstance(v, str) and not exists(v, "density_function"): errors.append(f"noise_router.{k}: 없는 함수 {v}")
+    if a.target == "26.3":
+        if not exists(ns["material_rule"], "material_rule"): errors.append("material_rule 없음: " + ns["material_rule"])
+        for k in ns["spawn_target"][0]:
+            if not exists(k, "density_function"): errors.append(f"spawn_target 키 없음: {k}")
+    else:
+        need = {"continentalness", "depth", "erosion", "humidity", "offset", "temperature", "weirdness"}
+        for pt in ns["spawn_target"]:
+            if set(pt) != need: errors.append(f"spawn_target 키가 이상함: {sorted(pt)}")
+        for k in ("surface_rule", "final_density" if False else "noise_router", "noise"):
+            if k not in ns: errors.append(f"noise_settings 에 {k} 없음")
+        left = json.dumps(ns["noise_router"])
+        for bad in ("overworld/offset", "overworld/factor", "overworld/depth", "overworld/sloped_cheese", "overworld/jaggedness", "overworld/ridges\""):
+            if f"minecraft:{bad}" in left: errors.append(f"1.21 라우터에 바닐라 지형 함수 참조가 남아 있음: {bad}")
 
     # 4) 월드 프리셋 / 바이옴
     for f in sorted(glob.glob(os.path.join(pack, "data/flatlands/worldgen/world_preset/*.json"))):

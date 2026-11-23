@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""datapack/ 과 resourcepack/ 을 dist/ 아래 zip 으로 묶는다. (pack.mcmeta 가 zip 최상위에 와야 한다.)
+"""datapack-*/ 과 resourcepack-*/ 을 dist/ 아래 zip 으로 묶는다. (pack.mcmeta 가 zip 최상위에 와야 한다.)
 항상 같은 결과가 나오도록 파일 순서와 시간을 고정한다."""
 import os, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
-VERSION = "26.3"
-
+TARGETS = [("26.3", "26.3"), ("1.21", "1.21-1.21.1")]   # (폴더 접미사, 파일 이름에 쓸 버전)
 def pack(src, dst):
     src = os.path.abspath(src); os.makedirs(os.path.dirname(dst), exist_ok=True)
     files = sorted(os.path.relpath(os.path.join(d, f), src) for d, _, fs in os.walk(src) for f in fs)
@@ -16,5 +15,6 @@ def pack(src, dst):
             z.writestr(info, open(os.path.join(src, rel), "rb").read())
     print(f"{os.path.relpath(dst, ROOT)}  ({len(files)}개 파일, {os.path.getsize(dst)//1024} KB)")
 
-pack(os.path.join(ROOT, "datapack"), os.path.join(ROOT, "dist", f"flatlands-datapack-{VERSION}.zip"))
-pack(os.path.join(ROOT, "resourcepack"), os.path.join(ROOT, "dist", f"flatlands-names-resourcepack-{VERSION}.zip"))
+for suffix, label in TARGETS:
+    pack(os.path.join(ROOT, f"datapack-{suffix}"), os.path.join(ROOT, "dist", f"flatlands-datapack-{label}.zip"))
+    pack(os.path.join(ROOT, f"resourcepack-{suffix}"), os.path.join(ROOT, "dist", f"flatlands-names-resourcepack-{label}.zip"))

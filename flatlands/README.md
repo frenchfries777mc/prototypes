@@ -1,6 +1,6 @@
 # Flatlands — 평원과 강 위주의 평평하고 자연스러운 세계
 
-마인크래프트 **26.3** (데이터 팩 포맷 121)용 데이터 팩입니다. 새 월드를 만들 때 월드 유형에서 고르면,
+마인크래프트 데이터 팩입니다. 새 월드를 만들 때 월드 유형에서 고르면,
 
 - 바이옴 대부분이 **평원**과 **강**이고
 - 지상 높이가 대체로 **y≈63~69 안에 모여 있는**, 평평하지만 밋밋하지 않은 지형이 나옵니다.
@@ -10,6 +10,17 @@
 ![시뮬레이션으로 그린 위에서 본 지형 (2048×2048 블록)](docs/simulated-terrain.png)
 
 > 위 그림은 게임 화면이 아니라, 이 데이터 팩의 밀도 함수를 파이썬으로 평가해 그린 **시뮬레이션**입니다(`tools/simulate.py`). 파랑=물, 연한 초록=강둑. 실제 게임의 지형 모양은 시드마다 다르지만 통계는 비슷해야 합니다.
+
+## 버전별 파일
+
+세계 생성 데이터 형식이 버전마다 달라서 팩이 따로 있습니다. 지형 모양과 수치는 두 버전이 같습니다.
+
+| 마인크래프트 | 데이터 팩 | 리소스 팩(이름 표시, 선택) | 데이터 팩 포맷 |
+|---|---|---|---|
+| **1.21 ~ 1.21.1** | [`flatlands-datapack-1.21-1.21.1.zip`](dist/flatlands-datapack-1.21-1.21.1.zip) | [`flatlands-names-resourcepack-1.21-1.21.1.zip`](dist/flatlands-names-resourcepack-1.21-1.21.1.zip) | 48 (리소스 34) |
+| **26.3** | [`flatlands-datapack-26.3.zip`](dist/flatlands-datapack-26.3.zip) | [`flatlands-names-resourcepack-26.3.zip`](dist/flatlands-names-resourcepack-26.3.zip) | 121 (리소스 97) |
+
+1.21.2~1.21.11 등 그 사이 버전용은 만들지 않았습니다. 형식이 바뀐 시점이 달라서 그대로는 안 될 가능성이 큽니다.
 
 ## 월드 유형 두 가지
 
@@ -44,25 +55,25 @@
 
 ## 설치
 
-1. [`dist/flatlands-datapack-26.3.zip`](dist/flatlands-datapack-26.3.zip)을 받습니다. (압축을 풀지 않습니다.)
+1. 위 표에서 **내 버전에 맞는** 데이터 팩 zip을 받습니다. (압축을 풀지 않습니다.)
 2. **새 월드 만들기** 화면에서 데이터 팩 화면을 열어 zip을 추가하고 활성화합니다. (월드 만들기 → 더보기 탭 → 데이터 팩. 메뉴 이름은 버전마다 조금 다를 수 있습니다.)
 3. 월드 유형에서 **Flatlands (Plains & Rivers)** 를 고릅니다.
 
-월드 유형 이름이 `generator.flatlands.flatlands` 처럼 키 그대로 보이면, 선택 사항인 [`dist/flatlands-names-resourcepack-26.3.zip`](dist/flatlands-names-resourcepack-26.3.zip)을 리소스 팩으로 켜 주세요. 이름만 바뀌고 지형에는 영향이 없습니다.
+월드 유형 이름이 `generator.flatlands.flatlands` 처럼 키 그대로 보이면, 선택 사항인 리소스 팩 zip을 켜 주세요. 이름만 바뀌고 지형에는 영향이 없습니다.
 
 ### 서버 (확인하지 못한 방법)
 
-월드를 처음 만들기 전에 zip을 `world/datapacks/`에 넣고, `server.properties`에 `level-type=flatlands:flatlands` 와 `initial-enabled-packs=vanilla,file/flatlands-datapack-26.3.zip` 을 지정하는 방식일 것입니다. 이 방법은 직접 해 보지 못했고, 속성 이름과 동작이 맞는지는 서버 로그로 확인해야 합니다.
+월드를 처음 만들기 전에 zip을 `world/datapacks/`에 넣고, `server.properties`에 `level-type=flatlands:flatlands` 와 `initial-enabled-packs=vanilla,file/<zip 파일 이름>` 을 지정하는 방식일 것입니다. 이 방법은 직접 해 보지 못했고, 속성 이름과 동작이 맞는지는 서버 로그로 확인해야 합니다.
 
 ### 주의
 
 - **새 월드 전용**입니다. 이미 만든 월드에 켜면 청크 경계에서 지형이 뚝 끊깁니다.
-- **26.3 전용**으로 만들었습니다. 노이즈·밀도 함수 형식이 버전마다 달라서 다른 버전에서는 로딩이 실패할 수 있습니다. 데이터 팩 포맷이 다르면 게임이 경고를 띄웁니다.
+- **위 표의 버전에서만** 씁니다. 노이즈·밀도 함수 형식이 버전마다 달라서 다른 버전에서는 로딩이 실패할 수 있습니다. 데이터 팩 포맷이 다르면 게임이 경고를 띄웁니다.
 - 바다와 해변이 없으므로 해저 신전·난파선·따뜻한 바다 같은 바다 구조물은 생기지 않습니다.
 
 ## 어떻게 동작하나
 
-바닐라 지형은 `offset`(기본 높이) · `factor`(경사) · `jaggedness`(봉우리 모서리) 세 함수를 대륙성·침식·능선 노이즈의 스플라인으로 계산해서 산과 바다를 만듭니다. 이 팩은 **그 세 함수만 자기 것으로 바꾸고**, 나머지(동굴, 광맥, 지표 블록 규칙, 대수층, 몹)는 바닐라를 그대로 참조합니다.
+두 버전 모두 같은 설계입니다(26.3은 새 문법, 1.21은 옛 문법 `argument1/2`·`flat_cache`·`shifted_noise`로 같은 식을 씁니다). 바닐라 지형은 `offset`(기본 높이) · `factor`(경사) · `jaggedness`(봉우리 모서리) 세 함수를 대륙성·침식·능선 노이즈의 스플라인으로 계산해서 산과 바다를 만듭니다. 이 팩은 **그 세 함수만 자기 것으로 바꾸고**, 나머지(동굴, 광맥, 지표 블록 규칙, 대수층, 몹)는 바닐라를 그대로 참조합니다. 1.21에서는 노이즈 라우터와 지표 규칙이 `noise_settings` 안에 인라인이라, 바닐라 설정을 복사해 `depth`/`factor`/`sloped_cheese`/`ridges` 참조만 바꿉니다.
 
 ```
 river_noise ─ abs ─▶ river_distance ──┬─▶ surface_height ─▶ offset ─▶ depth ─┐
@@ -98,37 +109,39 @@ river_noise ─ abs ─▶ river_distance ──┬─▶ surface_height ─▶ 
 **확인한 것**
 
 - `tools/validate.py` — 팩이 가리키는 모든 밀도 함수·노이즈·바이옴·노이즈 설정·월드 프리셋이 26.3 바닐라 데이터와 이 팩 안에 실제로 존재하고, 참조에 순환이 없으며, 바이옴 파라미터 형식이 맞는지.
+- 1.21.1 서버 jar에서 푼 바닐라 데이터와 대조해, 1.21 팩이 쓰는 문법(`argument1/2`, `flat_cache`, `shifted_noise`, `y_clamped_gradient`, 노이즈 `firstOctave/amplitudes`, 인라인 `spawn_target` 파라미터 점)이 바닐라 파일에 실제로 쓰이는 형태와 같은지 확인했습니다. 1.21(.0)은 jar를 따로 받아 보지 않았고 1.21.1과 같은 데이터 팩 포맷(48)이라는 점에 기댔습니다.
 - 26.3 서버 jar의 클래스 문자열로 `multi_noise` 인라인 `biomes` 목록, `spawn_target`의 키(밀도 함수 참조), `pack.mcmeta`의 `min_format`/`max_format`, 노이즈 정의 필드 이름을 대조했습니다.
-- `tools/simulate.py` — 이 팩의 JSON 밀도 함수를 그대로 평가해서 지표 높이, 기울기, 물 면적, 바이옴 비율을 추정했습니다(시드 3종, 두 프리셋).
+- `tools/simulate.py` — 이 팩의 JSON 밀도 함수를 그대로 평가해서 지표 높이, 기울기, 물 면적, 바이옴 비율을 추정했습니다(시드 3종, 두 프리셋, 두 버전). 구형·신형 문법 팩이 같은 시드에서 **같은 수치**를 냈습니다.
 
 **확인하지 못한 것**
 
-- **실제 게임/서버에서 월드를 생성해 보지 못했습니다.** 이 작업 환경에서는 26.3 서버에 필요한 Java 25를 실행할 수 없었습니다. 따라서 "게임이 이 팩을 오류 없이 불러오는지", "월드 유형 목록에 보이는지"는 직접 확인해 보셔야 합니다. 문제가 생기면 `logs/latest.log`의 오류 줄을 알려 주세요.
-- 시뮬레이터는 근사입니다. 알려진 노이즈 알고리즘을 옮긴 것이지만 시드가 다르고, 4×8×4 셀 보간·동굴·구조물·`beardifier`는 무시하며, 26.3의 새 노이즈 정의(`amplitude_modifiers`)를 옛 `amplitudes`와 같은 뜻으로 읽었습니다. 수치는 "대략 이 정도"로 보세요.
+- **실제 게임/서버에서 월드를 생성해 보지 못했습니다.** 이 작업 환경에서는 26.3 서버에 필요한 Java 25를 실행할 수 없었고, 1.21 서버도 같은 이유로 돌려 보지 않았습니다. 따라서 "게임이 이 팩을 오류 없이 불러오는지", "월드 유형 목록에 보이는지"는 직접 확인해 보셔야 합니다. 문제가 생기면 `logs/latest.log`의 오류 줄을 알려 주세요.
+- 시뮬레이터는 근사입니다. 알려진 노이즈 알고리즘을 옮긴 것이지만 시드가 다르고, 4×8×4 셀 보간·동굴·구조물·`beardifier`는 무시하며, 26.3의 새 노이즈 정의(`amplitude_modifiers`)를 옛 `amplitudes`와 같은 뜻으로 읽었습니다(1.21은 옛 정의라 이 가정이 필요 없습니다). 수치는 "대략 이 정도"로 보세요.
 
 ## 폴더 구조와 도구
 
 ```
 flatlands/
-├─ datapack/            ← 데이터 팩 본체 (tools/generate.py 가 만든 결과물을 커밋해 둠)
-├─ resourcepack/        ← 월드 유형 이름만 넣는 선택 리소스 팩
+├─ datapack-26.3/       ← 26.3 데이터 팩 (tools/generate.py 가 만든 결과물을 커밋해 둠)
+├─ datapack-1.21/       ← 1.21~1.21.1 데이터 팩
+├─ resourcepack-*/      ← 월드 유형 이름만 넣는 선택 리소스 팩
 ├─ dist/                ← 바로 쓸 수 있는 zip (tools/make_zip.py 결과)
 ├─ docs/                ← README 그림
 └─ tools/
-   ├─ generate.py       ← 튜닝 값 → 데이터 팩 JSON 생성 (바닐라 데이터가 필요)
+   ├─ generate.py       ← 튜닝 값 → 데이터 팩 JSON 생성 (--target 26.3 | 1.21, 바닐라 데이터 필요)
    ├─ validate.py       ← 정적 검증
    ├─ simulate.py       ← 지형·바이옴 시뮬레이션 (numpy, PIL)
    └─ make_zip.py       ← zip 만들기
 ```
 
-생성기·검증기·시뮬레이터는 바닐라 데이터가 필요합니다. 서버 jar(`server.jar`)를 풀면 `META-INF/versions/26.3/server-26.3.jar`가 나오고, 그 안의 `data/`를 풀어 둔 폴더를 `--vanilla`로 넘깁니다.
+생성기·검증기·시뮬레이터는 해당 버전의 바닐라 데이터가 필요합니다. 서버 jar를 풀면 `META-INF/versions/<버전>/server-<버전>.jar`가 나오고, 그 안의 `data/`를 풀어 둔 폴더를 `--vanilla`로 넘깁니다. 26.3은 `--target 26.3`, 1.21·1.21.1은 `--target 1.21`입니다.
 
 ```bash
-# 바닐라 데이터 풀기 (한 번만)
-mkdir vanilla && cd vanilla && unzip -q ../server-26.3.jar 'data/minecraft/worldgen/*' 'data/minecraft/tags/worldgen/*' && cd ..
+# 바닐라 데이터 풀기 (버전마다 한 번, 예: 1.21.1)
+mkdir vanilla && cd vanilla && unzip -q ../server-1.21.1.jar 'data/minecraft/worldgen/*' 'data/minecraft/tags/worldgen/*' && cd ..
 
-python3 tools/generate.py --vanilla vanilla   # datapack/ 다시 생성
-python3 tools/validate.py --vanilla vanilla   # 참조·형식 검증
-python3 -I tools/simulate.py --vanilla vanilla --png /tmp/map.png   # 지형 시뮬레이션 + 지도 그림
-python3 tools/make_zip.py                     # dist/ 갱신
+python3 tools/generate.py --target 1.21 --vanilla vanilla   # datapack-1.21/ 다시 생성
+python3 tools/validate.py --target 1.21 --vanilla vanilla   # 참조·형식 검증
+python3 -I tools/simulate.py --target 1.21 --vanilla vanilla --png /tmp/map.png   # 지형 시뮬레이션 + 지도 그림
+python3 tools/make_zip.py                                   # dist/ 갱신
 ```
