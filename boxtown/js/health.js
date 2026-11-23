@@ -1,5 +1,6 @@
 // 플레이어 체력, 다치는 일들(차에 치임, 주먹, 폭발, 물), 병원과 감옥.
 import { SEA } from './terrain.js';
+import { stats } from './stats.js';
 import { clamp, angDiff } from './util.js';
 import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
@@ -34,6 +35,7 @@ export class Health {
   // 쓰러지면: 경찰에게 당했거나 수배 중이면 감옥, 아니면 병원에서 깨어난다.
   die(cause) {
     if (cause === 'cop' || cause === 'police' || this.police.level > 0) return this.jail();
+    stats.bump('downs');
     const fee = Math.min(this.jobs.money, 150);
     this.jobs.spend(fee);
     if (this.jobs.active) this.jobs.quit(true);
@@ -43,6 +45,7 @@ export class Health {
   }
   jail() {
     const P = this.player;
+    stats.bump('arrests');
     this.fine = 800 + this.police.level * 400;
     P.jailed = true; P.jailAlarm = false; this.alarm = false;
     this.police.clear();
