@@ -1,5 +1,6 @@
 // 교통: 주민이 모는 차, 신호등.
 // 차는 물리 없이 차선을 따라 달린다(우측통행). 플레이어가 건드리면(타기, 쏘기, 들이받기, 폭발) 진짜 물리 자동차로 바뀐다.
+import { Character, randomLook } from './character.js';
 import { paths, halfAt } from './roads.js';
 import { JUNCTIONS } from './world.js';
 import { Vehicle } from './vehicles.js';
@@ -130,11 +131,52 @@ export class Traffic {
   use() {
     const c = this.nearCar();
     if (!c) return false;
+    this.eject(c);
     const v = this.convert(c);
     this.player.enter(v);
     this.police.report(22);
     this.jobs.toast('남의 차를 빼앗았어요!');
     return true;
+  }
+  // 차를 뺏으면 타고 있던 주민이 문밖으로 밀쳐져 날아갔다가, 일어나서 달아난다.
+  eject(c) {
+    if (!this.drivers) this.drivers = [];
+    let d = this.drivers.find((x) => !x.on);
+    if (!d) { if (this.drivers.length >= 3) d = this.drivers[0]; else { d = { chr: new Character(this.scene, randomLook(1)), pos: new B.Vector3(), vel: new B.Vector3() }; this.drivers.push(d); } }
+    d.chr.setLook(randomLook(Math.floor(Math.random() * 1e6)));
+    const P = this.player.feet, rx = c.fz, rz = -c.fx; // 차의 오른쪽
+    const side = (P.x - c.pos.x) * rx + (P.z - c.pos.z) * rz > 0 ? -1 : 1; // 플레이어 반대쪽 문으로
+    d.pos.set(c.pos.x + rx * side * (c.width / 2 + 0.3), c.pos.y + 0.6, c.pos.z + rz * side * (c.width / 2 + 0.3));
+    d.vel.set(rx * side * 7 + c.fx * c.v * 0.5, 0, rz * side * 7 + c.fz * c.v * 0.5); d.vy = 7.5; d.lie = 0; d.spin = (Math.random() < 0.5 ? -1 : 1) * 9;
+    d.mode = 'fly'; d.t = 0; d.on = true; d.chr.setVisible(true); d.chr.heading = Math.atan2(rx * side, rz * side);
+    d.chr.bump(rx * side, rz * side, 2.5);
+    if (this.weapons && this.weapons.sfx.ctx) this.weapons.sfx.play('hit');
+  }
+  updateDrivers(dt) {
+    if (!this.drivers) return;
+    const P = this.player.feet, gY = this.residents.groundY;
+    for (const d of this.drivers) {
+      if (!d.on) continue;
+      let grounded = true, wish = null, landed = 0;
+      if (d.mode === 'fly') {
+        d.vy -= 24 * dt; d.pos.x += d.vel.x * dt; d.pos.z += d.vel.z * dt; d.pos.y += d.vy * dt; d.lie += d.spin * dt; grounded = false;
+        const g = gY(d.pos.x, d.pos.z);
+        if (d.pos.y <= g && d.vy < 0) { d.pos.y = g; landed = -d.vy; d.mode = 'down'; d.t = 1.3; d.vel.set(0, 0, 0); d.lie = (Math.PI / 2) * Math.sign(d.spin); }
+      } else if (d.mode === 'down') {
+        d.t -= dt; if (d.t < 0.45) d.lie = damp(d.lie, 0, 12, dt);
+        if (d.t <= 0) { d.lie = 0; d.mode = 'flee'; d.t = 6; }
+      } else {
+        // 플레이어 반대쪽으로 달아나다가 사라진다.
+        d.t -= dt;
+        const dx = d.pos.x - P.x, dz = d.pos.z - P.z, l = Math.hypot(dx, dz) || 1;
+        d.vel.set((dx / l) * 5.6, 0, (dz / l) * 5.6);
+        const nx = d.pos.x + d.vel.x * dt, nz = d.pos.z + d.vel.z * dt, g = gY(nx, nz);
+        if (g > -1.2) d.pos.set(nx, g, nz); else d.vel.set(0, 0, 0);
+        wish = Math.atan2(dx, dz);
+        if (d.t <= 0 || l > 60) { d.on = false; d.chr.setVisible(false); continue; }
+      }
+      d.chr.update(dt, { pos: d.pos, vel: d.vel, grounded, wishHeading: wish, landed, jumped: false, lie: d.lie });
+    }
   }
   cleanup() {
     const P = this.player, me = P.feet;
@@ -224,6 +266,7 @@ export class Traffic {
         }
       }
     }
+    this.updateDrivers(dt);
     this.cleanup();
   }
   respawn(c, me) {

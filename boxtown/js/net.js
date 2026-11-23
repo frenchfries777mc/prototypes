@@ -113,7 +113,7 @@ class Remote {
   push(m, now) {
     if (!Array.isArray(m.p) || m.p.length !== 3 || !m.p.every(num) || !num(m.h)) return;
     const s = { t: now, p: m.p, h: m.h, v: Array.isArray(m.v) && m.v.every(num) ? m.v : [0, 0, 0], g: m.g ? 1 : 0, f: m.f | 0, n: m.n | 0, c: null };
-    if (Array.isArray(m.c) && typeof m.c[0] === 'string' && m.c.length === 9 && m.c.slice(1, 8).every(num)) s.c = m.c;
+    if (Array.isArray(m.c) && typeof m.c[0] === 'string' && m.c.length === 10 && m.c.slice(1, 8).every(num)) s.c = m.c;
     this.snaps.push(s); this.heard = now;
     if (this.snaps.length > 12) this.snaps.shift();
     this.seen = true;
@@ -159,11 +159,20 @@ class Remote {
     const stale = now - S[S.length - 1].t > 4; // 한동안 소식이 없으면 숨긴다
     const inside = !!(b.f & 1), hidden = stale || !!(b.f & 16) || (inside && hideInside);
     // 탈것
-    const cs = b.c, car = cs && !stale ? this.carFor(cs[0], !!cs[8]) : null;
-    if (this.car && this.car !== car) { this.car.root.position.set(0, -500, 0); this.car.root.setEnabled(false); }
+    // 처음부터 세워져 있던 차는 모든 화면에 같은 번호로 있다. 그 차라면 내 화면의 그 차를 그대로 움직인다(두 대로 보이지 않게).
+    const cs = b.c;
+    let car = null;
+    if (cs && !stale) {
+      const L = cs[9] >= 0 ? this.net.garage.cars[cs[9]] : null;
+      if (L && L.netIndex === cs[9] && L.key === cs[0] && L !== this.net.player.vehicle && !L.dead && (!L.netHeld || L.netHeld === this.id)) {
+        if (!L.netHeld) { L.netHeld = this.id; L.body.disablePreStep = false; L.body.setMotionType(B.PhysicsMotionType.ANIMATED); }
+        car = this.heldCar && this.heldCar.held === L ? this.heldCar : (this.heldCar = { root: L.root, h: L.height, held: L });
+      } else car = this.carFor(cs[0], !!cs[8]);
+    }
+    if (this.car && this.car !== car) this.release(this.car);
     this.car = car;
     if (car) {
-      car.root.setEnabled(true);
+      if (!car.held) car.root.setEnabled(true);
       const ca = a.c && a.c[0] === cs[0] && !far ? a.c : cs, kk = Math.min(1, k);
       car.root.position.set(ca[1] + (cs[1] - ca[1]) * k, ca[2] + (cs[2] - ca[2]) * k, ca[3] + (cs[3] - ca[3]) * k);
       B.Quaternion.SlerpToRef(new B.Quaternion(ca[4], ca[5], ca[6], ca[7]), new B.Quaternion(cs[4], cs[5], cs[6], cs[7]), kk, car.root.rotationQuaternion);
@@ -181,7 +190,13 @@ class Remote {
     if (this.sayT > 0) { this.sayT -= dt; if (this.sayT <= 0) { this.say = ''; this.drawTag(); } }
     this.hidden = hidden;
   }
+  // 타던 차에서 내렸다: 빌려 쓰던 내 화면의 차는 그 자리에 두고 다시 물리로 돌려보낸다. 따로 만든 차는 치운다.
+  release(car) {
+    if (car.held) { const L = car.held; L.netHeld = null; L.body.setMotionType(B.PhysicsMotionType.DYNAMIC); L.body.setLinearVelocity(B.Vector3.Zero()); L.body.setAngularVelocity(B.Vector3.Zero()); L.restore = 2; this.heldCar = null; }
+    else { car.root.position.set(0, -500, 0); car.root.setEnabled(false); }
+  }
   dispose() {
+    if (this.car) this.release(this.car);
     this.net.dropShadow(this.chr.meshes); this.chr.onMeshes = null;
     this.chr.meshes.forEach((m) => m.dispose()); this.chr.root.dispose();
     this.tag.dispose(); this.tex.dispose();
@@ -191,7 +206,10 @@ class Remote {
 
 export class Net {
   constructor(o) {
-    Object.assign(this, o); // scene, assets, player, character, wardrobe, weapons, health, train, traffic, addShadow, local(시험용 연결)
+    Object.assign(this, o);
+    this.garage.cars.forEach((c, i) => { c.netIndex = i; }); // 처음부터 있던 탈것의 번호(모든 화면에서 같다)
+    this.seat = { seat: new B.Vector3(), r: null }; // 친구 차에 얻어 탈 때의 자리
+    // scene, assets, player, character, wardrobe, weapons, health, train, traffic, addShadow, local(시험용 연결)
     this.mode = null; this.code = ''; this.id = ''; this.status = ''; this.link = null; this.remotes = new Map(); this.sendT = 0; this.worldT = 0; this.swingN = 0; this.swingWas = 0; this.log = [];
     this.name = '';
     try { this.name = localStorage.getItem('boxtown.name') || ''; } catch (e) { /* 무시 */ }
@@ -235,6 +253,7 @@ export class Net {
     if (this.link) { this.link.close(); this.link = null; }
     for (const r of this.remotes.values()) r.dispose();
     this.remotes.clear();
+    if (this.player.riding === this.seat) this.getOff();
     const was = this.mode; this.mode = null; this.ready = false; this.code = '';
     if (!quiet) { this.status = ''; if (was) this.say('방에서 나왔어요'); this.changed(); }
   }
@@ -305,13 +324,14 @@ export class Net {
   send(m) { if (!this.on) return; if (this.mode === 'host') this.link.all(m); else this.link.sendTo('host', m); }
 
   // ----- 방장 기준으로 맞추는 것: 기차, 신호등 -----
-  world() { const T = this.train, F = this.traffic; return { tr: [r2(T.s), T.dir, r2(T.v), r2(T.wait), T.stop, T.next === undefined ? -1 : T.next], tt: r2(F.t) }; }
+  world() { const T = this.train, F = this.traffic; return { tr: [r2(T.s), T.dir, r2(T.v), r2(T.wait), T.stop, T.next === undefined ? -1 : T.next], tt: r2(F.t), day: r3(this.daynight.t) }; }
   applyWorld(w) {
     if (!w || !Array.isArray(w.tr) || !w.tr.every(num) || !num(w.tt)) return;
     const T = this.train, [s, dir, v, wait, stop, next] = w.tr;
     if (stop < 0 || stop >= T.stations.length || next >= T.stations.length || Math.abs(dir) !== 1) return;
     if (Math.abs(T.s - s) > 4 || T.dir !== dir || T.stop !== stop || (T.wait > 0) !== (wait > 0)) { T.s = Math.max(0, Math.min(T.len, s)); T.dir = dir; T.v = Math.max(0, Math.min(30, v)); T.wait = wait; T.stop = stop; if (next >= 0) T.next = next; T.place(); }
     if (Math.abs(this.traffic.t - w.tt) > 0.5) this.traffic.t = w.tt;
+    if (num(w.day) && w.day >= 0 && w.day < 1) { const d = Math.abs(this.daynight.t - w.day); if (Math.min(d, 1 - d) > 0.004) this.daynight.t = w.day; }
   }
 
   // ----- 서로 때리기 -----
@@ -343,6 +363,32 @@ export class Net {
     this.health.hurt(d * 0.4, dx, dz, 'player', 3); // 친구끼리는 덜 아프게
   }
 
+  // ----- 친구 차에 얻어 타기 -----
+  rideable() {
+    const P = this.player;
+    if (!this.on || P.vehicle || P.riding || P.inside) return null;
+    let best = null, bd = 3.6;
+    for (const r of this.remotes.values()) { if (!r.car || r.hidden) continue; const p = r.car.root.position, d = Math.hypot(p.x - P.feet.x, p.z - P.feet.z); if (d < bd && Math.abs(p.y - P.feet.y) < 3) { bd = d; best = r; } }
+    return best;
+  }
+  prompt() { const P = this.player; if (P.riding === this.seat) return '내리기'; const r = this.rideable(); return r ? `${r.name} 차에 타기` : ''; }
+  use() {
+    const P = this.player;
+    if (P.riding === this.seat) { this.getOff(); return true; }
+    const r = this.rideable();
+    if (!r) return false;
+    this.seat.r = r; this.seat.seat.copyFrom(r.car.root.position);
+    P.riding = this.seat; P.inside = true; P.chr.setVisible(false); // 타는 동안은 다치지 않는다
+    P.cc.setPosition(new B.Vector3(r.car.root.position.x, r.car.root.position.y + 400, r.car.root.position.z));
+    return true;
+  }
+  getOff() {
+    const P = this.player, s = this.seat.seat;
+    if (P.riding !== this.seat) return;
+    P.riding = null; P.inside = false; P.chr.setVisible(true);
+    P.teleport(s.x + 2.2, s.y + 0.4, s.z);
+    this.seat.r = null;
+  }
   chat(text) {
     text = String(text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 80);
     if (!text) return;
@@ -356,7 +402,9 @@ export class Net {
   update(dt) {
     if (!this.on) return;
     const now = performance.now() / 1000, P = this.player, chr = P.chr;
-    for (const r of this.remotes.values()) r.update(dt, now, !P.inside);
+    for (const r of this.remotes.values()) r.update(dt, now, !P.inside || P.riding === this.seat);
+    // 얻어 탄 차를 따라간다. 운전하던 친구가 내리거나 나가면 나도 내린다.
+    if (P.riding === this.seat) { const r = this.seat.r; if (!r || !this.remotes.has(r.id) || !r.car) this.getOff(); else { const p = r.car.root.position; this.seat.seat.set(p.x, p.y + 0.3, p.z); } }
     // 소식이 끊긴 사람 정리: 방장은 그 사람을 내보내고, 손님은 방장이 조용하면 방이 닫힌 것으로 본다.
     if (this.mode === 'host') { for (const r of [...this.remotes.values()]) if (now - r.heard > 15) this.drop(r.id, true); }
     else if (now - this.hostHeard > 15) { this.leave(true); this.status = '방장과 연결이 끊겼어요'; this.say('방장과 연결이 끊겼어요'); this.changed(); return; }
@@ -367,9 +415,11 @@ export class Net {
     if (this.sendT <= 0) {
       this.sendT = 1 / SEND_HZ;
       const f = P.feet, car = P.vehicle, hidden = !!P.riding;
+      // 내가 모는 차를 남이 붙잡고 있었다면(동시에 탄 경우) 내 쪽이 이긴다.
+      if (car && car.netHeld) { car.netHeld = null; car.body.setMotionType(B.PhysicsMotionType.DYNAMIC); }
       const m = { t: 's', p: [r2(f.x), r2(f.y), r2(f.z)], h: r3(chr.heading), v: [r2(P.vel.x), r2(P.vel.y), r2(P.vel.z)], g: P.grounded || P.airT < 0.1 ? 1 : 0,
         f: (P.inside ? 1 : 0) | (chr.wave > 0.5 ? 2 : 0) | (chr.aim > 0.5 ? 8 : 0) | (hidden ? 16 : 0), n: this.swingN };
-      if (car) { const q = car.root.rotationQuaternion, p = car.root.position; m.c = [car.key, r2(p.x), r2(p.y), r2(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w), car.isBoat ? 1 : 0]; }
+      if (car) { const q = car.root.rotationQuaternion, p = car.root.position; m.c = [car.key, r2(p.x), r2(p.y), r2(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w), car.isBoat ? 1 : 0, car.netIndex === undefined ? -1 : car.netIndex]; }
       if (this.mode === 'host') { m.i = 'host'; this.link.all(m); } else this.link.sendTo('host', m);
     }
     if (this.mode === 'host') { this.worldT -= dt; if (this.worldT <= 0) { this.worldT = 1; this.link.all({ t: 'w', w: this.world() }); } }
