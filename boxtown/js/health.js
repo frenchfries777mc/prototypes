@@ -179,6 +179,15 @@ export class Health {
       }
     }
     // 물에 빠진 채 3초가 지나면 쓰러진다.
+    // 가라앉은 차: 타고 있었다면 쓰러지고, 차는 제자리에 새로 나타난다.
+    for (const c of this.garage.cars) {
+      if (!c.drowned) continue;
+      c.drowned = false;
+      const mine = c === P.vehicle;
+      if (mine) P.exit();
+      c.hp = 100; c.reset(c.home.pos.x, c.home.pos.y + 0.5, c.home.pos.z, null);
+      if (mine) { this.hp = 0; this.die('water'); return; }
+    }
     if (onFoot && !P.inside && me.y < SEA - 0.9) {
       const before = Math.ceil(3 - this.waterT);
       this.waterT += dt;

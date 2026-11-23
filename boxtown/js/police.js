@@ -5,6 +5,7 @@ import { stats } from './stats.js';
 import { GRID, CELL, SPAWN } from './mapdata.js';
 import { paths } from './roads.js';
 import { clamp, angDiff, flatMat } from './util.js';
+import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
 
 const LOT = [[123.7, 20, 0], [123.7, 27, 0], [123.7, 34, 0]]; // 평소 세워 두는 자리(동쪽 세로길 가)
@@ -56,8 +57,9 @@ function route(from, to) {
 
 export const NAV = { NODES, nearestNode, route };
 export class Police {
-  constructor({ scene, assets, garage, player, jobs, height, weapons }) {
+  constructor({ scene, assets, garage, player, jobs, height, weapons, groundY }) {
     Object.assign(this, { scene, garage, player, jobs, height });
+    this.groundY = groundY || height;
     this.heat = 0; this.level = 0; this.lostT = 0; this.catchT = 0; this.t = 0; this.weapons = weapons || null;
     const red = flatMat('sirenRed', '#ff3b30', scene, { emissive: '#ff3b30' }), blue = flatMat('sirenBlue', '#2f6bff', scene, { emissive: '#2f6bff' });
     this.units = LOT.map(([x, z, yaw], i) => {
@@ -65,7 +67,10 @@ export class Police {
       car.police = true;
       garage.cars.push(car);
       const lamp = (m, dx) => { const b = B.MeshBuilder.CreateBox('siren', { width: 0.34, height: 0.2, depth: 0.3 }, scene); b.parent = car.root; b.position.set(dx, car.height + 0.1, car.zc - 0.1); b.material = m; b.isPickable = false; b.setEnabled(false); return b; };
-      const u = { car, i, active: false, stuck: 0, rev: 0, lamps: [lamp(red, -0.3), lamp(blue, 0.3)], way: null, wayT: 0, wi: 0, revSteer: 0 };
+      // 차에서 내려 뛰어 쫓는 경찰관
+      const chr = new Character(scene, { ...randomLook(8800 + i * 37), shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' });
+      chr.setVisible(false);
+      const u = { car, i, cop: { chr, pos: new B.Vector3(), vel: new B.Vector3(), out: false }, active: false, stuck: 0, rev: 0, lamps: [lamp(red, -0.3), lamp(blue, 0.3)], way: null, wayT: 0, wi: 0, revSteer: 0 };
       car.ai = (dt) => (u.active ? this.drive(u, dt) : null);
       return u;
     });
@@ -82,29 +87,53 @@ export class Police {
   }
 
   // 플레이어에게서 70~130m 떨어진 도로 위의 점
-  spawnPoint() {
-    const p = this.player.feet, c = [];
+  spawnPoint(p = this.player.feet) {
+    const c = [];
     for (let j = 0; j < GRID.length; j++) for (let i = 0; i < GRID[j].length; i++) if (isRoad(i, j)) c.push([i * CELL, j * CELL, 0.12]);
     for (const path of paths) if (path.type !== 'rail') for (let k = 0; k < path.pts.length; k += 5) { const q = path.pts[k]; if (!q.water) c.push([q.x, q.z, q.y]); }
     const ok = c.filter(([x, z]) => { const d = Math.hypot(x - p.x, z - p.z); return d > 70 && d < 130 && !this.units.some((u) => u.active && Math.hypot(u.car.pos.x - x, u.car.pos.z - z) < 12); });
     return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
   }
 
-  dispatch(u) {
-    const s = this.spawnPoint();
+  dispatch(u, at) {
+    const p = at || this.player.feet, s = this.spawnPoint(p);
     if (!s) return false;
-    const p = this.player.feet;
     u.car.hp = 100;
     // 길이 난 방향을 보고 나타난다(플레이어 쪽을 보면 건물이나 비탈로 곧장 들이받는다).
     let yaw = Math.atan2(p.x - s[0], p.z - s[1]);
     const r = route(nearestNode(s[0], s[1]), nearestNode(p.x, p.z));
     if (r && r.length > 2) { const n = NODES[r[Math.min(2, r.length - 1)]]; yaw = Math.atan2(n.x - s[0], n.z - s[1]); }
     u.car.reset(s[0], s[2] + 0.7, s[1], yaw);
-    u.active = true; u.stuck = 0; u.rev = 0; u.fails = 0; u.way = null; u.wayT = 0;
+    u.active = true; u.stuck = 0; u.rev = 0; u.fails = 0; u.way = null; u.wayT = 0; u.quarry = null; u.holdT = 0; this.copIn(u);
     return true;
   }
+  // 뺑소니 차를 잡으러 간다(쉬고 있는 경찰차 한 대). 보낼 차가 없으면 false.
+  pursue(c) {
+    const u = this.units.find((x) => !x.active && !x.car.dead);
+    if (!u || !this.dispatch(u, c.pos)) return false;
+    u.quarry = c; u.quarryT = 45;
+    return true;
+  }
+  copIn(u) { if (u.cop.out) { u.cop.out = false; u.cop.chr.setVisible(false); } }
+  // 경찰관이 내려서 뛰어 쫓는다. 플레이어에게 닿아 있으면 true.
+  footChase(u, dt) {
+    const P = this.player, cop = u.cop, car = u.car, me = P.feet;
+    const dCar = Math.hypot(car.pos.x - me.x, car.pos.z - me.z);
+    if (!cop.out) {
+      if (P.vehicle || P.inside || u.quarry || car.dead || dCar > 18 || Math.abs(car.speed) > 4) return false;
+      cop.out = true; cop.pos.set(car.pos.x + car.right.x * 1.7, car.pos.y, car.pos.z + car.right.z * 1.7); cop.chr.setVisible(true); cop.chr.heading = car.yaw;
+    }
+    const dx = me.x - cop.pos.x, dz = me.z - cop.pos.z, d = Math.hypot(dx, dz) || 1;
+    if (P.vehicle || P.inside || d > 55 || car.dead) { this.copIn(u); return false; }
+    const sp = d < 1.3 ? 0 : 7.6; // 걷는 것보다는 빠르고, 달리면 따돌릴 수 있다
+    cop.vel.set((dx / d) * sp, 0, (dz / d) * sp);
+    const nx = cop.pos.x + cop.vel.x * dt, nz = cop.pos.z + cop.vel.z * dt, gy = this.groundY(nx, nz);
+    if (gy > -1.2) cop.pos.set(nx, gy, nz); else cop.vel.set(0, 0, 0); // 물에는 들어가지 않는다
+    cop.chr.update(dt, { pos: cop.pos, vel: cop.vel, grounded: true, wishHeading: Math.atan2(dx, dz), landed: 0, jumped: false });
+    return d < 1.8 && Math.abs(me.y - cop.pos.y) < 2.2;
+  }
   recall(u) {
-    u.active = false;
+    u.active = false; u.quarry = null; this.copIn(u);
     u.lamps.forEach((l) => l.setEnabled(false));
     if (!u.car.dead) { u.car.hp = 100; u.car.reset(u.car.home.pos.x, u.car.home.pos.y + 0.3, u.car.home.pos.z, null); }
   }
@@ -112,7 +141,8 @@ export class Police {
   // 경찰차 한 대의 운전: 길 그물 위에서 가장 짧은 길을 따라가고, 굽이 앞에서는 속도를 줄인다.
   // 목표가 가깝거나 길에서 벗어나 있으면 곧장 쫓는다.
   drive(u, dt) {
-    const car = u.car, P = this.player, target = P.vehicle ? P.vehicle.pos : P.feet, onFoot = !P.vehicle;
+    const car = u.car, P = this.player, target = u.quarry ? u.quarry.pos : P.vehicle ? P.vehicle.pos : P.feet, onFoot = !u.quarry && !P.vehicle;
+    if (u.cop.out || u.holdT > 0) return { throttle: car.speed > 1 ? -1 : 0, steer: 0, handbrake: true }; // 경찰관이 내려 있거나 차를 붙잡는 중에는 서 있는다
     const dist = Math.hypot(target.x - car.pos.x, target.z - car.pos.z);
     u.wayT -= dt;
     if (u.wayT <= 0) {
@@ -172,7 +202,20 @@ export class Police {
   update(dt) {
     const P = this.player, me = P.vehicle ? P.vehicle.pos : P.feet, el = $('wanted');
     this.t += dt;
-    if (this.level === 0) { if (!el.hidden) el.hidden = true; this.siren(false); return; }
+    // 뺑소니 차 쫓기(수배와 상관없이 돌아간다)
+    let chasing = false;
+    for (const u of this.units) {
+      if (!u.active || !u.quarry) continue;
+      const q = u.quarry, d = Math.hypot(u.car.pos.x - q.pos.x, u.car.pos.z - q.pos.z);
+      const on = Math.floor(this.t * 4 + u.i) % 2 === 0;
+      u.lamps[0].setEnabled(on); u.lamps[1].setEnabled(!on);
+      u.quarryT -= dt;
+      if (u.holdT > 0) { u.holdT -= dt; if (u.holdT <= 0) this.recall(u); }
+      else if (d < 11) { q.caught = 7; u.holdT = 7; } // 붙잡았다: 둘 다 잠깐 서 있는다
+      else if (u.quarryT <= 0 || q.dead || u.car.dead || this.level > 0) { q.fugitive = false; if (this.level > 0) { u.quarry = null; u.holdT = 0; } else this.recall(u); }
+      if (u.active && Math.hypot(u.car.pos.x - me.x, u.car.pos.z - me.z) < 110) chasing = true;
+    }
+    if (this.level === 0) { if (!el.hidden) el.hidden = true; this.siren(chasing); return; }
     // 필요한 만큼 출동시킨다(터진 경찰차는 새로 나타난 뒤 다시 온다).
     let nearest = 1e9, active = 0;
     for (const u of this.units) {
@@ -191,8 +234,10 @@ export class Police {
     if (this.heat <= 0) { stats.bump('escapes'); this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면
     const mySpeed = P.vehicle ? Math.abs(P.vehicle.speed) : Math.hypot(P.vel.x, P.vel.z);
+    let tagged = false;
+    for (const u of this.units) if (u.active && !u.car.dead) tagged = this.footChase(u, dt) || tagged;
     const close = !P.inside && this.units.some((u) => u.active && !u.car.dead && Math.hypot(u.car.pos.x - me.x, u.car.pos.z - me.z) < (P.vehicle ? 6.5 : 4.2) && Math.abs(u.car.pos.y - me.y) < 3);
-    this.catchT = close && mySpeed < (P.vehicle ? 3 : 6.5) ? this.catchT + dt : Math.max(0, this.catchT - dt * 2);
+    this.catchT = (close && mySpeed < (P.vehicle ? 3 : 6.5)) || tagged ? this.catchT + dt : Math.max(0, this.catchT - dt * 2);
     if (this.catchT > (P.vehicle ? 2.2 : 1.3)) { this.arrest(); el.hidden = true; this.siren(false); return; }
     el.hidden = false;
     el.classList.toggle('flash', !hidden);
