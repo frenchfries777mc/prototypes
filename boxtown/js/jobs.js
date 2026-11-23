@@ -70,8 +70,9 @@ export class Jobs {
 
   // ---------- 공용 도구 ----------
   renderMoney() { $('money').textContent = won(this.money); }
+  // 벌이는 전체적으로 낮춰 잡는다(옷과 집, 무기를 사려면 일을 꾸준히 해야 하게).
   pay(n, text) {
-    n = Math.round(n);
+    n = Math.max(10, Math.round((n * 0.6) / 10) * 10);
     this.money += n;
     try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
     this.renderMoney();
@@ -86,11 +87,8 @@ export class Jobs {
     this.renderMoney();
     return true;
   }
-  toast(text, good = false) {
-    const el = $('toast');
-    el.textContent = text; el.className = good ? 'show good' : 'show';
-    this.toastT = 2.8;
-  }
+  // 화면 위쪽에 뜨던 상황 알림은 없앴다(호출하는 쪽은 그대로 두고 아무것도 띄우지 않는다).
+  toast() {}
   setTarget(x, z, label, y) { this.target = { x, z, y: y === undefined ? this.groundY(x, z) : y, label }; }
   panel(title, text, sub = '') {
     $('job').hidden = false;
@@ -823,7 +821,7 @@ function nurseJob(J, site) {
     use() {
       const i = station();
       if (i < 0) return false;
-      if (i === now[1]) { streak++; count++; J.pay(170 + Math.min(streak, 6) * 25, '딱 맞는 처방이에요'); next(); }
+      if (i === now[1]) { streak++; count++; J.pay(60 + Math.min(streak, 6) * 10, '딱 맞는 처방이에요'); next(); }
       else { streak = 0; J.toast('그 약이 아니에요. 증상을 다시 보세요'); }
       return true;
     },

@@ -64,6 +64,10 @@ const ROOMS = {
     ['#2a2c36', 0.9, 0.22, 0.18, 1.6, -1, 0.9, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 1.6, -1], ['#55693f', 1.3, 0.3, 0.3, 4.6, -1, 0.9, 0], ['#d9473c', 0.3, 0.22, 0.22, 5.3, -1, 0.94, 0], ['#8b5d3a', 1.2, 0.9, 1.2, 4.6, -1],
     ['#2a2c36', 0.5, 0.2, 0.1, -3, 4.4, 1.6, 0], ['#2a2c36', 0.9, 0.2, 0.1, 0, 4.4, 1.9, 0], ['#55693f', 1.3, 0.3, 0.1, 3, 4.4, 1.5, 0]],
     buy: [['bat', 900, -4.6], ['pistol', 2800, -1.6], ['smg', 6500, 1.6], ['rocket', 15000, 4.6], ['rifle', 9500, 0, 4.2]] },
+  clothes: { name: '옷가게', w: 13, d: 10, floor: '#e9dcc9', wall: '#f6d9e3', clerk: [4.2, 3.2], items: [
+    ['#f4f1ea', 4, 1.1, 1.1, 4.2, 2], ['#f08fb0', 4.2, 0.1, 1.3, 4.2, 2, 1.1, 0], ['#8b5d3a', 0.2, 1.8, 3.6, -5.8, 1], ['#e5553f', 0.5, 0.9, 0.7, -5.6, 2.2, 0.8, 0], ['#4f9bea', 0.5, 0.9, 0.7, -5.6, 1.2, 0.8, 0], ['#57c27a', 0.5, 0.9, 0.7, -5.6, 0.2, 0.8, 0], ['#f4c542', 0.5, 0.9, 0.7, -5.6, -0.6, 0.8, 0],
+    ['#8b5d3a', 5, 0.2, 0.6, -2, 4.6, 1.5, 0], ['#3a2a22', 0.6, 0.3, 0.5, -3.6, 4.6, 1.7, 0], ['#d9473c', 0.6, 0.4, 0.5, -2.4, 4.6, 1.7, 0], ['#ffd84a', 0.5, 0.25, 0.45, -1.2, 4.6, 1.7, 0], ['#b072e0', 0.6, 0.5, 0.5, 0, 4.6, 1.7, 0],
+    ['*#fff3d6', 1.6, 2.4, 0.1, 1.2, -4.85, 0.2, 0], ['#c9a36a', 1.8, 2.6, 0.08, 1.2, -4.9, 0.1, 0], ['#f08fb0', 3, 0.04, 2.2, -1, -1.4, 0, 0], ['#f4f1ea', 0.7, 0.5, 0.7, -1, -1.4]] },
   hospital: { name: '병원', w: 16, d: 12, floor: '#e8f1f4', wall: '#f7fbfc', clerk: [-4.5, -2.4, 0], items: [
     ['#f4f1ea', 4, 1.1, 1.1, -4.5, -1.2], ['#d9473c', 0.9, 0.3, 0.06, -4.5, -1.78, 0.5, 0], ['#d9473c', 0.3, 0.9, 0.06, -4.5, -1.78, 0.2, 0],
     ['#8f95a8', 2.2, 0.5, 3.6, -6.2, 3.6], ['#f4f1ea', 2, 0.3, 3.4, -6.2, 3.6, 0.5, 0], ['#6fb6d9', 2.04, 0.32, 2, -6.2, 3.1, 0.52, 0],
@@ -90,7 +94,7 @@ const DRESS = {
   pizza: [...set4(-4.6, -1), ...set4(-4.6, -3.9), ...set4(4.6, -1.2), ...set4(4.6, -3.9), ['plantSmall1', -4.6, -1, 0, 0.98, 0], ['plantSmall1', 4.6, -3.9, 0, 0.98, 0]],
   cafe: [...set4(-4, 2.6, 'tableRound'), ...set4(-4, -0.9, 'tableRound'), ['loungeSofa', -4.6, -4.2, 180], ['tableCoffee', -4.6, -2.9, 0], ['loungeChair', 3.2, -3.9, 180], ['kitchenCoffeeMachine', 2.2, 2, 0, 1.2, 0], ['bookcaseOpen', -6, 4.4, 0]],
   hotel: [['loungeSofa', -5.6, -0.4, 0], ['tableCoffee', -5.6, -2.2, 0], ['loungeChair', -7.2, -2.2, -90], ['loungeSofa', 5.6, -0.4, 0], ['tableCoffee', 5.6, -2.2, 0], ['loungeChair', 7.2, -2.2, 90], ['lampRoundFloor', -7.3, -0.3, 0], ['lampRoundFloor', 7.3, -0.3, 0], ['pottedPlant', -7.2, 5, 0], ['pottedPlant', 7.2, 5, 0], ['rugRectangle', -5.6, -1.8, 0, 0, 0], ['rugRectangle', 5.6, -1.8, 0, 0, 0], ['bench', -3, -5.2, 180], ['bench', 3, -5.2, 180]],
-  hospital: [['bedSingle', -6.2, 3.9, 0], ['bedSingle', -2.6, 3.9, 0], ['cabinetBedDrawerTable', -7.5, 5.4, 0], ['cabinetBedDrawerTable', -1.3, 5.4, 0], ['chairDesk', -4.5, -2.4, 0, 0, 0], ['computerScreen', -5.4, -1.2, 180, 1.1, 0], ['benchCushion', 0.2, -4.9, 180], ['benchCushion', 1.8, -4.9, 180], ['bathroomSink', 7.4, 1, 90]],
+  hospital: [['bedSingle', -6.2, 3.9, 0], ['bedSingle', -2.6, 3.9, 0], ['cabinetBedDrawerTable', -7.5, 5.4, 0], ['cabinetBedDrawerTable', -1.3, 5.4, 0], ['chairDesk', -4.5, -3.5, 0, 0, 0], ['computerScreen', -5.4, -1.2, 180, 1.1, 0], ['benchCushion', 3.6, -5.2, 180], ['benchCushion', 5.4, -5.2, 180], ['bathroomSink', 7.4, 1, 90]],
   jail: [...[-12.5, -7.5, -2.5, 2.5, 7.5].flatMap((c) => [['bedSingle', c - 1.2, 9.2, 0], ['toilet', c + 1.7, 10.2, 0, 0, 0]]), ['table', -3, -1.5, 0], ['benchCushion', -3, -3, 180], ['bench', -3, 0, 0], ['table', 4, -1.5, 0], ['bench', 4, -3, 180], ['bench', 4, 0, 0],
     ['chairDesk', -9, -9.6, 0, 0, 0], ['computerScreen', -10, -8, 180, 1.1, 0], ['bench', 2, -9.8, 180], ['bookcaseOpen', -14.3, -4, -90], ['televisionVintage', 0.5, 3.4, 180, 0, 0]],
   store: [['kitchenFridge', 6.2, -1, 90], ['kitchenFridge', 6.2, 0.4, 90], ['stoolBar', -4.6, 0.4, 180, 0, 0]],
@@ -98,7 +102,7 @@ const DRESS = {
   fire: [['chairDesk', 5, 3.2, 180, 0, 0], ['computerScreen', 5, 4.6, 0, 1.0, 0], ['bench', -4.9, 2.9, 180], ['bench', -3.5, 2.9, 180], ['bedSingle', 6.8, -3.4, 90], ['bedSingle', 3.6, -3.4, 90]],
   clean: [['washer', 5.3, 2.2, 90], ['washer', 5.3, 3.4, 90], ['chairDesk', 3.4, 3.2, 0, 0, 0], ['bench', 0, -3.9, 180]],
   fish: [['bench', 0.6, -3.6, 180], ['sideTable', -4.4, -0.4, -90], ['radio', -4.4, -0.4, -90, 1.16, 0]],
-  arms: [['chairDesk', 0, 3.6, 0, 0, 0], ['bench', -5.6, 2.4, -90], ['bench', 5.6, 2.4, 90]],
+  arms: [['chairDesk', 1.6, 3.9, 0, 0, 0], ['bench', -5.6, 2.4, -90], ['bench', 5.6, 2.4, 90]],
   farmer: [['chairDesk', 2.6, 2.4, 0, 0, 0], ['bench', 0, -3, 180]], cargo: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['computerScreen', -2.6, 1, 180, 1.0, 0]],
   mail: [['bench', 3, -3.2, 180], ['sideTable', -3.6, -0.6, -90]], ferry: [['benchCushion', 0, -3.2, 180], ['radio', -2.4, 1.1, 180, 1.1, 0]],
   race: [['loungeSofa', 0, -3.2, 180], ['televisionModern', 2.6, 3.7, 0, 1.6, 0]], guard: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['bedSingle', 1, 3.1, 90]],
@@ -260,10 +264,18 @@ export function buildInteriors(h) {
     put('door', 1.7, 2.7, 0.1, 0, 1.35, -d / 2 + 0.05, '#5a4636', false); put('mat', 2.2, 0.05, 1.3, 0, 0.03, -d / 2 + 0.95, '*#3fc1c9', false);
     for (const sx of [-1, 1]) { put('win' + sx, 0.1, 1.7, d * 0.36, sx * (w / 2 - 0.05), 2.5, d * 0.12, '*#bfe6ff', false); put('lamp' + sx, 1.6, 0.14, 1.6, sx * w * 0.22, HH - 0.08, 0, '*#fff2c2', false); }
     const drop = DROP[key];
-    R.items.forEach(([c, bw, bh, bd, x, z, lift = 0, col = 1], i) => { if (drop && drop(c, bw)) return; put('f' + i, bw, bh, bd, x, lift + bh / 2, z, c, !!col); });
+    // 출구 앞과 점원 자리는 비워 둔다: 거기 놓인 가구는 문 옆으로, 점원과 겹친 의자는 점원 뒤로 옮긴다.
+    const cyaw = R.clerk ? (R.clerk[2] === undefined ? Math.PI : R.clerk[2]) : 0;
+    const clear = (x, z, half = 0.6) => {
+      if (Math.abs(x) < 1.5 + half && z < -d / 2 + 2.7) x = (x >= 0 ? 1 : -1) * (1.7 + half);
+      if (R.clerk && Math.hypot(x - R.clerk[0], z - R.clerk[1]) < 0.8) { x = R.clerk[0] - Math.sin(cyaw) * 1.05; z = R.clerk[1] - Math.cos(cyaw) * 1.05; }
+      return [x, z];
+    };
+    R.items.forEach(([c, bw, bh, bd, x, z, lift = 0, col = 1], i) => { if (drop && drop(c, bw)) return; if (lift === 0 && bh > 0.3 && col) [x, z] = clear(x, z, bw / 2); put('f' + i, bw, bh, bd, x, lift + bh / 2, z, c, !!col); });
     // 가구 모델: [이름, x, z, 방향(도), 띄운 높이, 부딪힘]
-    for (const [name, x, z, rot = 0, lift = 0, solid = 1] of [...(DRESS[key] || []), ['pottedPlant', -w / 2 + 0.6, -d / 2 + 0.6], ['trashcan', w / 2 - 0.6, -d / 2 + 0.6], ['lampSquareCeiling', 0, -1, 0, HH - 0.7, 0], ['lampSquareCeiling', 0, 2.2, 0, HH - 0.7, 0]]) {
+    for (let [name, x, z, rot = 0, lift = 0, solid = 1] of [...(DRESS[key] || []), ['pottedPlant', -w / 2 + 0.6, -d / 2 + 0.6], ['trashcan', w / 2 - 0.6, -d / 2 + 0.6], ['lampSquareCeiling', 0, -1, 0, HH - 0.7, 0], ['lampSquareCeiling', 0, 2.2, 0, HH - 0.7, 0]]) {
       const k = 'furniture/' + name;
+      if (lift === 0) { const bb0 = assets.bounds(k); [x, z] = clear(x, z, (Math.abs(rot) === 90 ? bb0.max.z - bb0.min.z : bb0.max.x - bb0.min.x) / 2); }
       assets.place(k, cx + x, y0 + lift, cz + z, (rot * Math.PI) / 180, 1, 'in_' + id);
       if (solid) { const bb = assets.bounds(k), q = Math.abs(rot) === 90; h.addBox(cx + x, y0 + lift + (bb.max.y - bb.min.y) / 2, cz + z, q ? bb.max.z - bb.min.z : bb.max.x - bb.min.x, bb.max.y - bb.min.y, q ? bb.max.x - bb.min.x : bb.max.z - bb.min.z); }
     }
@@ -309,6 +321,7 @@ export function buildInteriors(h) {
     { id: 'hotel', key: 'commercial/building-n', x: 456, z: 154, yaw: 0, bg: '#34456f' },
     { id: 'hospital', key: 'commercial/building-n', x: 8.15 * 12, z: 2.5 * 12, yaw: FACE.S, bg: '#d9473c' },
     { id: 'jail', door: { x: SITES.prison.x, z: SITES.prison.z + 9.2 }, yaw: FACE.N, bg: '#34456f' }, // 교도소 건물은 districts.js에서 짓는다
+    { id: 'clothes', key: 'commercial/building-g', x: 24, z: 5.0 * 12, yaw: FACE.S, bg: '#c9457a' },
     { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
@@ -374,6 +387,7 @@ export function buildInteriors(h) {
     atExit() { const r = this.inside && rooms[this.inside.room], p = this.player.feet; return r && Math.hypot(r.out.x - p.x, r.out.z - p.z) < 1.7; },
     prompt() {
       if (this.player.vehicle) return '';
+      if (this.inside && this.inside.id === 'clothes' && !this.atExit()) return this.wardrobe && this.wardrobe.open ? '' : '옷 고르기';
       if (this.inside) { const b = this.atStand(); return this.atExit() ? '나가기' : b ? (this.weapons.owned.has(b[0]) ? `${b[3]} (이미 있음)` : `${b[3]} 사기 (${won(b[1])}원)`) : ''; }
       const d = this.near();
       if (!d) return '';
@@ -398,6 +412,7 @@ export function buildInteriors(h) {
     },
     use() {
       const P = this.player;
+      if (this.inside && this.inside.id === 'clothes' && !this.atExit() && this.wardrobe) { this.wardrobe.toggle(true); return true; }
       if (this.inside) {
         const b = this.atStand();
         if (b && !this.atExit()) {
