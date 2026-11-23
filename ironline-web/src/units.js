@@ -1,7 +1,7 @@
 // 병사 모델, 1인칭 무기, 거점 깃발·구역·빛기둥. 전부 코드로 만든 형상이라 이미지가 필요 없다.
 import * as THREE from 'three';
 import { NPOINTS, POINT_R } from './world.js';
-import { clothTexture } from './gfx.js';
+import { clothTexture, toonGradient } from './gfx.js';
 
 export const COL_A = new THREE.Color(0.33, 0.56, 1.0), COL_B = new THREE.Color(1.0, 0.78, 0.24), COL_N = new THREE.Color(0.75, 0.75, 0.75);
 const std = (c, r = 0.9, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
@@ -11,17 +11,19 @@ const TEAM = [
   { coat: 0x3a62b8, pants: 0x2a3f7a, helmet: 0x5a78c0, band: 0xbcd0ff },
   { coat: 0xb8923a, pants: 0x7a5a28, helmet: 0xc9a850, band: 0xfff0b0 },
 ];
-const mats = TEAM.map((t) => ({ coat: std(t.coat), pants: std(t.pants), helmet: std(t.helmet, 0.55, 0.35), band: new THREE.MeshBasicMaterial({ color: t.band }) }));
+const tn = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: toonGradient() });
+const mats = TEAM.map((t) => ({ coat: tn(t.coat), pants: tn(t.pants), helmet: tn(t.helmet), band: new THREE.MeshBasicMaterial({ color: t.band }) }));
+const skinT = tn(0xe0ac80), inkMat = new THREE.MeshBasicMaterial({ color: 0x14100c, side: THREE.BackSide });
 const skin = std(0xd9a77e, 1), gunMat = std(0x3a2e22, 0.6, 0.1), metal = std(0x6a7078, 0.45, 0.3);
 
 export function makeSoldier(team) {
   const M = mats[team];
   const g = new THREE.Group();
   const body = new THREE.Group(); g.add(body);
-  const dark = std(0x1c1a18, 1), eye = std(0x16120e, 1);
+  const dark = tn(0x2a2622), eye = new THREE.MeshBasicMaterial({ color: 0x16120e });
   // 몸통·머리·철모: 전부 상자
-  body.add(box(0.52, 0.66, 0.28, M.coat, 0, 1.12, 0), box(0.54, 0.1, 0.3, std(0x3a2a1c, 1), 0, 0.84, 0), box(0.3, 0.12, 0.03, M.band, 0, 1.32, -0.15));
-  const head = box(0.32, 0.32, 0.32, skin, 0, 1.62, 0); body.add(head);
+  body.add(box(0.52, 0.66, 0.28, M.coat, 0, 1.12, 0), box(0.54, 0.1, 0.3, tn(0x5a4026), 0, 0.84, 0), box(0.3, 0.12, 0.03, M.band, 0, 1.32, -0.15));
+  const head = box(0.32, 0.32, 0.32, skinT, 0, 1.62, 0); body.add(head);
   body.add(box(0.07, 0.07, 0.02, eye, -0.08, 1.64, -0.165), box(0.07, 0.07, 0.02, eye, 0.08, 1.64, -0.165));
   body.add(box(0.36, 0.14, 0.36, M.helmet, 0, 1.82, 0), box(0.4, 0.04, 0.4, M.helmet, 0, 1.75, 0), box(0.12, 0.04, 0.1, M.band, 0, 1.87, -0.19));
   const legL = new THREE.Group(), legR = new THREE.Group();
@@ -30,10 +32,15 @@ export function makeSoldier(team) {
   g.add(legL, legR);
   // 팔: 총을 앞으로 겨눈 모양
   const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms);
-  arms.add(box(0.16, 0.16, 0.5, M.coat, -0.22, -0.06, -0.22), box(0.16, 0.16, 0.46, M.coat, 0.2, -0.1, -0.32), box(0.15, 0.15, 0.12, skin, -0.22, -0.06, -0.52), box(0.15, 0.15, 0.12, skin, 0.2, -0.1, -0.58));
+  arms.add(box(0.16, 0.16, 0.5, M.coat, -0.22, -0.06, -0.22), box(0.16, 0.16, 0.46, M.coat, 0.2, -0.1, -0.32), box(0.15, 0.15, 0.12, skinT, -0.22, -0.06, -0.52), box(0.15, 0.15, 0.12, skinT, 0.2, -0.1, -0.58));
   const gun = new THREE.Group(); gun.position.set(0.0, -0.08, -0.36); arms.add(gun);
-  gun.add(box(0.07, 0.09, 0.7, gunMat, 0, 0, 0), box(0.04, 0.04, 0.5, metal, 0, 0.01, -0.55));
-  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  gun.add(box(0.07, 0.09, 0.7, tn(0x4a3a2a), 0, 0, 0), box(0.04, 0.04, 0.5, tn(0x6a7078), 0, 0.01, -0.55));
+  const meshes = []; g.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const o of meshes) {
+    o.castShadow = true;
+    if (o.material === eye || o.material === M.band) continue;
+    const ol = new THREE.Mesh(o.geometry, inkMat); ol.scale.setScalar(1.09); o.add(ol);   // 뒤집은 껍데기 윤곽선
+  }
   g.userData = { body, legL, legR, arms };
   return g;
 }

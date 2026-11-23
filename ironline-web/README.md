@@ -9,3 +9,4 @@ three.js 로 처음부터 다시 만든 1인칭 거점 점령전. 설치 없이 
 - 시험: `node tools/sim_test.mjs`
 - 에셋: CC0 (Kenney Nature Kit, Poly Haven) — `assets/models/LICENSES.md`. three.js 는 MIT (`vendor/LICENSE-three.txt`).
 - 한계: 온라인 멀티플레이는 아직 옮기지 않았습니다.
+- 지형 스타일: 기본은 카툰(`toon`). `?terrain=block|lowpoly|toon|paint|real|ps1` 로 바꿀 수 있고 메뉴에서도 고를 수 있습니다.
