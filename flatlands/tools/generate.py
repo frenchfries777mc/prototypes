@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""Flatlands 데이터 팩 생성기.
+
+바닐라 26.3의 worldgen 데이터를 읽어서, 지형을 정하는 몇 개의 함수만 직접 만든 것으로
+바꾼 복사본을 `datapack/` 아래에 쓴다. 지표 규칙(material_rule)·동굴·광맥 등은 바닐라를
+그대로 참조하므로 이 스크립트가 만들지 않는다.
+
+사용법:
+    # 서버 jar 안쪽의 server-26.3.jar 에서 data/ 를 풀어 둔 폴더를 --vanilla 로 넘긴다.
+    python3 tools/generate.py --vanilla /path/to/extracted      # 안에 data/minecraft/worldgen 이 있어야 함
+
+모든 튜닝 값은 아래 PARAMS 한 곳에 모여 있다.
+"""
+import argparse, json, os, shutil, sys
+
+NS = "flatlands"
+
+# ───────────────────────── 튜닝 값 ─────────────────────────
+PARAMS = dict(
+    # 육지 높이(블록). 바다 수면(y=63)보다 항상 위에 있도록 하한을 둔다.
+    land_base=66.5,      # 평균 육지 높이의 기준값
+    land_amp=3.0,        # 완만한 기복의 세기(블록). 클수록 언덕이 커진다
+    land_scale=1.0,      # 기복 노이즈의 xz 배율. 클수록 기복의 주기가 짧아진다
+    land_min=65.3,       # 육지 높이 하한 (수면 y=63 위에 강둑이 남도록)
+    land_max=72.0,       # 육지 높이 상한
+    # 강
+    river_scale=0.25,    # 강 노이즈의 xz 배율. 클수록 강이 촘촘하다(바닐라 ridges 와 같은 0.25)
+    river_bed=58.5,      # 강바닥 높이
+    river_biome_width=0.065,  # |노이즈| 가 이 값보다 작으면 river 바이옴(물이 있는 구간보다 약간 넓게)
+    # 미세 기복
+    micro_k=0.55,        # 바닐라 3D 노이즈(base_3d_noise)를 곱하는 비율. 0이면 완전 평탄
+    factor=6.25,         # 바닐라 평지와 같은 값. 높일수록 표면이 매끈해진다
+)
+
+# 강 단면: (|노이즈|, 강바닥 쪽 가중치 w).  표면 = 육지높이 + w * (강바닥 - 육지높이)
+RIVER_PROFILE = [(0.00, 1.00), (0.015, 0.93), (0.03, 0.64), (0.05, 0.30), (0.08, 0.10), (0.11, 0.00)]
+
+# 기후 경계(온도 T, 습도 H, 대륙성 C). 노이즈 분포: T 표준편차≈0.40, H≈0.24, C≈0.35
+T_COLD, T_HOT, H_WET, C_SUN = -0.55, 0.65, 0.35, 0.55
+
+
+def pchip_derivs(pts):
+    """단조 3차 에르미트(Fritsch–Carlson) 도함수. 스플라인이 출렁이지 않게 한다."""
+    xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+    n = len(xs); h = [xs[i+1]-xs[i] for i in range(n-1)]
+    d = [(ys[i+1]-ys[i])/h[i] for i in range(n-1)]
+    m = [0.0]*n
+    for i in range(1, n-1):
+        if d[i-1]*d[i] <= 0: m[i] = 0.0
+        else:
+            w1 = 2*h[i]+h[i-1]; w2 = h[i]+2*h[i-1]
+            m[i] = (w1+w2)/(w1/d[i-1]+w2/d[i])
+    m[0] = 0.0; m[-1] = 0.0          # 양 끝은 평평하게 → 강 중심·육지 쪽에서 매끈하게 이어짐
+    return [round(v, 6) for v in m]
+
+
+def load(vdir, rel):
+    with open(os.path.join(vdir, "data/minecraft/worldgen", rel + ".json")) as f:
+        return json.load(f)
+
+
+def sub_refs(obj, mapping):
+    """JSON 안의 문자열 참조를 통째로 치환한다(키 포함)."""
+    if isinstance(obj, str):
+        return mapping.get(obj, obj)
+    if isinstance(obj, list):
+        return [sub_refs(v, mapping) for v in obj]
+    if isinstance(obj, dict):
+        return {sub_refs(k, mapping): sub_refs(v, mapping) for k, v in obj.items()}
+    return obj
+
+
+def write(root, rel, data):
+    path = os.path.join(root, "data", NS, "worldgen", rel + ".json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False); f.write("\n")
+
+
+def noise_fn(noise, scale, shifted=True):
+    d = {"type": "minecraft:noise", "noise": noise}
+    if shifted:
+        d["shift_x"] = "minecraft:shift_x"; d["shift_z"] = "minecraft:shift_z"
+    d["xz_scale"] = scale; d["y_scale"] = 0.0
+    return d
+
+
+def build_functions(root, vdir, P):
+    F = lambda n: f"{NS}:{n}"
+    V = lambda n: f"minecraft:overworld/{n}"
+
+    # 1) 강 노이즈: 바닐라 ridges 와 같은 노이즈. 0 근처가 강의 중심선이 된다.
+    write(root, "density_function/river_noise", {"type": "minecraft:cache", "input": noise_fn("minecraft:ridge", P["river_scale"])})
+    # 2) 강 중심선까지의 거리 대용 값 d = |노이즈|. 지형 깎기와 바이옴 선택(router.ridges)이 모두 이 값을 쓴다.
+    write(root, "density_function/river_distance", {"type": "minecraft:abs", "input": F("river_noise")})
+
+    # 3) 완만한 육지 기복(블록). 바닐라 erosion 노이즈를 더 촘촘한 배율로 읽는다.
+    raw = {"type": "minecraft:add", "left": P["land_base"], "right": {"type": "minecraft:mul", "left": noise_fn("minecraft:erosion", P["land_scale"]), "right": P["land_amp"]}}
+    write(root, "density_function/land_height", {"type": "minecraft:cache", "input": {"type": "minecraft:clamp", "input": raw, "min": P["land_min"], "max": P["land_max"]}})
+
+    # 4) 강 단면 가중치 w(d) → 표면 높이 = 육지 + w*(강바닥-육지)
+    ders = pchip_derivs(RIVER_PROFILE)
+    points = [{"location": x, "value": y, "derivative": dv} for (x, y), dv in zip(RIVER_PROFILE, ders)]
+    w = {"type": "minecraft:spline", "spline": {"coordinate": F("river_distance"), "points": points}}
+    surface = {"type": "minecraft:add", "left": F("land_height"),
+               "right": {"type": "minecraft:mul", "left": w, "right": {"type": "minecraft:sub", "left": P["river_bed"], "right": F("land_height")}}}
+    write(root, "density_function/surface_height", {"type": "minecraft:cache", "input": surface})
+
+    # 5) offset: 바닐라 depth = (1 - y/128) + offset 이므로 표면이 y=S 이려면 offset = S/128 - 1
+    write(root, "density_function/offset", {"type": "minecraft:cache", "input": {"type": "minecraft:add", "left": {"type": "minecraft:mul", "left": F("surface_height"), "right": 0.0078125}, "right": -1.0}})
+    write(root, "density_function/factor", P["factor"])
+    write(root, "density_function/depth", {"type": "minecraft:add", "left": {"type": "minecraft:gradient", "axis": "y", "from_coordinate": -64, "from_value": 1.5, "to_coordinate": 320, "to_value": -1.5}, "right": F("offset")})
+
+    # 6) sloped_cheese: 바닐라와 같은 식에서 jaggedness(산 모서리)를 빼고, 3D 노이즈를 micro_k 배로 줄였다.
+    sc = {"type": "minecraft:cache", "input": {"type": "minecraft:add",
+          "left": {"type": "minecraft:mul", "left": {"type": "minecraft:quarter_negative", "input": {"type": "minecraft:mul", "left": F("depth"), "right": F("factor")}}, "right": 4.0},
+          "right": {"type": "minecraft:mul", "left": P["micro_k"], "right": V("base_3d_noise")}}}
+    write(root, "density_function/sloped_cheese", sc)
+
+    # 7) 바닐라 복사본(참조만 교체): 동굴·광맥·베어디파이어는 바닐라 그대로 쓴다.
+    mapping = {V("sloped_cheese"): F("sloped_cheese"), V("offset"): F("offset"), V("factor"): F("factor"), V("depth"): F("depth"),
+               V("preliminary_surface_level"): F("preliminary_surface_level")}
+    write(root, "density_function/final_density", sub_refs(load(vdir, "density_function/overworld/final_density"), mapping))
+    write(root, "density_function/preliminary_surface_level", sub_refs(load(vdir, "density_function/overworld/preliminary_surface_level"), mapping))
+    write(root, "density_function/chunk_surface_level", sub_refs(load(vdir, "density_function/overworld/chunk_surface_level"), mapping))
+    return mapping
+
+
+def build_noise_settings(root, vdir, mapping, P):
+    ns = load(vdir, "noise_settings/overworld")
+    V = lambda n: f"minecraft:overworld/{n}"
+    m = dict(mapping); m[V("ridges")] = f"{NS}:river_distance"
+    m[V("final_density")] = f"{NS}:final_density"; m[V("chunk_surface_level")] = f"{NS}:chunk_surface_level"
+    ns = sub_refs(ns, m)
+    # 스폰은 강이 아닌 육지에서 찾는다(river_distance 가 클수록 강에서 먼 곳).
+    full = [-1.0, 1.0]
+    ns["spawn_target"] = [{V("continents"): full, V("erosion"): full, f"{NS}:river_distance": [P["river_biome_width"] + 0.03, 1.0], V("temperature"): full, V("vegetation"): full}]
+    write(root, "noise_settings/overworld", ns)
+    r = ns["noise_router"]
+    return r
+
+
+# ───────────────────────── 바이옴 목록 ─────────────────────────
+FULL = [-1.0, 1.0]
+def rng(a, b): return [a, b]
+
+def entry(biome, T=FULL, H=FULL, C=FULL, E=FULL, D=0.0, W=FULL):
+    return {"biome": biome, "parameters": {"temperature": T, "humidity": H, "continentalness": C, "erosion": E, "depth": D, "weirdness": W, "offset": 0.0}}
+
+def surface(biome, **kw):
+    """지표 바이옴은 depth 0 과 1 두 항목을 넣는다(바닐라와 같은 방식 → 지하도 같은 바이옴이 이어진다)."""
+    return [entry(biome, D=0.0, **kw), entry(biome, D=1.0, **kw)]
+
+def cave_biomes():
+    return [entry("minecraft:dripstone_caves", C=rng(0.8, 1.0), D=rng(0.2, 0.9)),
+            entry("minecraft:lush_caves", H=rng(0.7, 1.0), D=rng(0.2, 0.9))]
+
+def biomes_mixed(P):
+    rw = P["river_biome_width"]
+    river, land = rng(0.0, rw), rng(rw, 1.0)
+    cold, hot = rng(-1.0, T_COLD), rng(T_HOT, 1.0)
+    L = []
+    # 강: 아주 추운 곳만 얼어붙은 강
+    L += surface("minecraft:frozen_river", T=cold, W=river)
+    L += surface("minecraft:river", T=rng(T_COLD, 1.0), W=river)
+    # 극단 기후: 눈 덮인 평원 / 사막(건조할 때만)
+    L += surface("minecraft:snowy_plains", T=cold, W=land)
+    L += surface("minecraft:desert", T=hot, H=rng(-1.0, 0.10), W=land)
+    L += surface("minecraft:plains", T=hot, H=rng(0.10, 1.0), W=land)
+    # 아주 습한 온대 지역에서만 숲 (온도에 따라 숲 종류가 달라짐)
+    L += surface("minecraft:forest", T=rng(T_COLD, -0.15), H=rng(H_WET, 1.0), W=land)
+    L += surface("minecraft:flower_forest", T=rng(-0.15, 0.20), H=rng(H_WET, 1.0), W=land)
+    L += surface("minecraft:birch_forest", T=rng(0.20, T_HOT), H=rng(H_WET, 1.0), W=land)
+    # 나머지 온대는 전부 평원. 대륙성 값이 높은 곳만 해바라기 평원
+    L += surface("minecraft:sunflower_plains", T=rng(T_COLD, T_HOT), H=rng(-1.0, H_WET), C=rng(C_SUN, 1.0), W=land)
+    L += surface("minecraft:plains", T=rng(T_COLD, T_HOT), H=rng(-1.0, H_WET), C=rng(-1.0, C_SUN), W=land)
+    return L + cave_biomes()
+
+def biomes_pure(P):
+    rw = P["river_biome_width"]
+    river, land = rng(0.0, rw), rng(rw, 1.0)
+    L = []
+    L += surface("minecraft:river", W=river)
+    L += surface("minecraft:sunflower_plains", C=rng(C_SUN, 1.0), W=land)
+    L += surface("minecraft:plains", C=rng(-1.0, C_SUN), W=land)
+    return L + cave_biomes()
+
+
+def build_presets(root, vdir, P, router):
+    normal = load(vdir, "world_preset/normal")
+    for name, biomes in (("flatlands", biomes_mixed(P)), ("plains_and_rivers", biomes_pure(P))):
+        d = json.loads(json.dumps(normal))
+        d["dimensions"]["minecraft:overworld"]["generator"] = {"type": "minecraft:noise", "settings": f"{NS}:overworld", "biome_source": {"type": "minecraft:multi_noise", "biomes": biomes}}
+        write(root, f"world_preset/{name}", d)
+    tag = os.path.join(root, "data/minecraft/tags/worldgen/world_preset/normal.json")
+    os.makedirs(os.path.dirname(tag), exist_ok=True)
+    with open(tag, "w") as f:
+        json.dump({"values": [f"{NS}:flatlands", f"{NS}:plains_and_rivers"]}, f, indent=2); f.write("\n")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--vanilla", required=True, help="data/minecraft/worldgen 이 들어 있는 폴더")
+    ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__), "..", "datapack"))
+    a = ap.parse_args()
+    root = os.path.abspath(a.out)
+    shutil.rmtree(os.path.join(root, "data"), ignore_errors=True)
+    mapping = build_functions(root, a.vanilla, PARAMS)
+    router = build_noise_settings(root, a.vanilla, mapping, PARAMS)
+    build_presets(root, a.vanilla, PARAMS, router)
+    print("written to", root)
+
+if __name__ == "__main__":
+    main()

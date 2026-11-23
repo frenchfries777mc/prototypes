@@ -1,0 +1,53 @@
+{
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:add",
+    "left": "flatlands:land_height",
+    "right": {
+      "type": "minecraft:mul",
+      "left": {
+        "type": "minecraft:spline",
+        "spline": {
+          "coordinate": "flatlands:river_distance",
+          "points": [
+            {
+              "location": 0.0,
+              "value": 1.0,
+              "derivative": 0.0
+            },
+            {
+              "location": 0.015,
+              "value": 0.93,
+              "derivative": -7.518519
+            },
+            {
+              "location": 0.03,
+              "value": 0.64,
+              "derivative": -18.147239
+            },
+            {
+              "location": 0.05,
+              "value": 0.3,
+              "derivative": -9.864603
+            },
+            {
+              "location": 0.08,
+              "value": 0.1,
+              "derivative": -4.444444
+            },
+            {
+              "location": 0.11,
+              "value": 0.0,
+              "derivative": 0.0
+            }
+          ]
+        }
+      },
+      "right": {
+        "type": "minecraft:sub",
+        "left": 58.5,
+        "right": "flatlands:land_height"
+      }
+    }
+  }
+}
