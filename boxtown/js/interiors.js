@@ -72,6 +72,14 @@ const ROOMS = {
     ['#8b5d3a', 4.4, 1.15, 1, -4.4, 0], ['#d8c58a', 4.6, 0.1, 1.2, -4.4, 0, 1.15, 0], ['#8b5d3a', 4.4, 1.15, 1, 4.4, 0], ['#d8c58a', 4.6, 0.1, 1.2, 4.4, 0, 1.15, 0],
     ['#6b7286', 4.2, 3.6, 0.5, 0, 5.2], ['#8f95a8', 2.6, 2.8, 0.3, 0, 4.86], ['#ffd84a', 0.9, 0.9, 0.12, 0, 4.66, 0.95, 0], ['#3a3d4d', 0.14, 0.7, 0.14, 0.0, 4.6, 1.05, 0], ['#3a3d4d', 0.7, 0.14, 0.14, 0, 4.6, 1.33, 0],
     ['*#ffd84a', 2.4, 0.05, 1.6, 0, 3.6, 0.02, 0], ['#b8322a', 3, 0.04, 6, 0, -2, 0, 0], ['#3fa868', 0.6, 1.6, 0.6, -6.2, 4.6], ['#3fa868', 0.6, 1.6, 0.6, 6.2, 4.6]] },
+  mart: { name: '마트', w: 18, d: 13, floor: '#eef1f7', wall: '#e3f1dc', clerk: [-6.2, -3.2, 0], items: [
+    ['#3fa868', 3.4, 1.1, 1.2, -6.2, -2], ['#22202b', 0.7, 0.5, 0.5, -5.4, -2, 1.1, 0],
+    ...[-1.5, 2, 5.5].flatMap((x, i) => [['#8f95a8', 1.2, 2, 6, x, 1.4], [['#e5553f', '#4f9bea', '#f4c542'][i], 1.24, 0.4, 5.6, x, 1.4, 0.5, 0], [['#ffd84a', '#57c27a', '#f08fb0'][i], 1.24, 0.4, 5.6, x, 1.4, 1.2, 0], [['#b072e0', '#f28b3c', '#3fc1c9'][i], 1.24, 0.3, 5.6, x, 1.4, 1.75, 0]]),
+    ['#d8dcec', 8, 2.4, 1, 3, 5.6], ['*#bfe6ff', 7.6, 1.8, 0.1, 3, 5.08, 0.4, 0], ['#c9a36a', 2.2, 0.9, 2.2, -6, 3.6], ['#57c27a', 0.5, 0.5, 0.5, -6.5, 3.2, 0.9, 0], ['#e5553f', 0.5, 0.5, 0.5, -5.6, 3.9, 0.9, 0], ['#f4c542', 0.5, 0.5, 0.5, -6.1, 4.2, 0.9, 0],
+    ['#8f95a8', 0.9, 0.9, 1.3, 7.6, -4.6], ['#8f95a8', 0.9, 0.9, 1.3, 7.6, -3.1]] },
+  burger: { name: '버거 가게', w: 14, d: 11, floor: '#f1dcc0', wall: '#ffe9b8', clerk: [2.6, 3.6], items: [
+    ['#d9473c', 7, 1.1, 1, 2.6, 2.4], ['#f4f1ea', 7.2, 0.1, 1.2, 2.6, 2.4, 1.1, 0], ['#22202b', 0.6, 0.45, 0.4, 0.4, 2.4, 1.2, 0], ['#8f95a8', 6, 2.2, 0.8, 2.6, 4.9], ['*#ffd84a', 5.4, 1.0, 0.08, 2.6, 4.46, 2.6, 0],
+    ['#f4c542', 0.5, 0.4, 0.5, 4.6, 2.4, 1.2, 0], ['#e5553f', 2.6, 0.04, 8, -4.4, -0.6, 0, 0]] },
   hospital: { name: '병원', w: 16, d: 12, floor: '#e8f1f4', wall: '#f7fbfc', clerk: [-4.5, -2.4, 0], items: [
     ['#f4f1ea', 4, 1.1, 1.1, -4.5, -1.2], ['#d9473c', 0.9, 0.3, 0.06, -4.5, -1.78, 0.5, 0], ['#d9473c', 0.3, 0.9, 0.06, -4.5, -1.78, 0.2, 0],
     ['#8f95a8', 2.2, 0.5, 3.6, -6.2, 3.6], ['#f4f1ea', 2, 0.3, 3.4, -6.2, 3.6, 0.5, 0], ['#6fb6d9', 2.04, 0.32, 2, -6.2, 3.1, 0.52, 0],
@@ -106,6 +114,8 @@ const DRESS = {
   fire: [['chairDesk', 5, 3.2, 180, 0, 0], ['computerScreen', 5, 4.6, 0, 1.0, 0], ['bench', -4.9, 2.9, 180], ['bench', -3.5, 2.9, 180], ['bedSingle', 6.8, -3.4, 90], ['bedSingle', 3.6, -3.4, 90]],
   clean: [['washer', 5.3, 2.2, 90], ['washer', 5.3, 3.4, 90], ['chairDesk', 3.4, 3.2, 0, 0, 0], ['bench', 0, -3.9, 180]],
   fish: [['bench', 0.6, -3.6, 180], ['sideTable', -4.4, -0.4, -90], ['radio', -4.4, -0.4, -90, 1.16, 0]],
+  mart: [['kitchenFridge', 8.2, 1, 90], ['kitchenFridge', 8.2, 2.4, 90], ['kitchenFridge', 8.2, 3.8, 90], ['pottedPlant', -8.2, 5.6, 0]],
+  burger: [...set4(-4.4, 1.8), ...set4(-4.4, -1.6), ['kitchenStove', 4.8, 4.2, 0], ['kitchenFridge', 6.2, 4.4, 0], ['stoolBar', 1.2, 1.2, 0, 0, 0], ['stoolBar', 3.2, 1.2, 0, 0, 0]],
   arms: [['chairDesk', 1.6, 3.9, 0, 0, 0], ['bench', -5.6, 2.4, -90], ['bench', 5.6, 2.4, 90]],
   farmer: [['chairDesk', 2.6, 2.4, 0, 0, 0], ['bench', 0, -3, 180]], cargo: [['chairDesk', -2.6, 2.4, 0, 0, 0], ['computerScreen', -2.6, 1, 180, 1.0, 0]],
   mail: [['bench', 3, -3.2, 180], ['sideTable', -3.6, -0.6, -90]], ferry: [['benchCushion', 0, -3.2, 180], ['radio', -2.4, 1.1, 180, 1.1, 0]],
@@ -290,7 +300,7 @@ export function buildInteriors(h) {
       chr.update(0.016, { pos, vel: B.Vector3.Zero(), grounded: true, wishHeading: yaw, landed: 0, jumped: false });
       clerks.push({ chr, pos, yaw, room: id });
     }
-    return (rooms[id] = { id, key, cx, cz, y0, w, d, in: new B.Vector3(cx, y0, cz - d / 2 + 2.2), out: { x: cx, z: cz - d / 2 + 1.0 } });
+    return (rooms[id] = { id, key, clerk: R.clerk || null, cx, cz, y0, w, d, in: new B.Vector3(cx, y0, cz - d / 2 + 2.2), out: { x: cx, z: cz - d / 2 + 1.0 } });
   };
 
   // 문 표시: 바닥의 빛나는 판과 떠 있는 표식
@@ -327,9 +337,13 @@ export function buildInteriors(h) {
     { id: 'jail', door: { x: SITES.prison.x, z: SITES.prison.z + 9.2 }, yaw: FACE.N, bg: '#34456f' }, // 교도소 건물은 districts.js에서 짓는다
     { id: 'clothes', key: 'commercial/building-g', x: 24, z: 5.0 * 12, yaw: FACE.S, bg: '#c9457a' },
     { id: 'bank', key: 'commercial/building-skyscraper-b', x: 6.3 * 12, z: 2.5 * 12, yaw: FACE.S, bg: '#3a5f3a' },
+    { id: 'mart', key: 'commercial/building-f', x: 176, z: 28, yaw: FACE.N, bg: '#3fa868', place: true },
+    { id: 'burger', key: 'commercial/building-i', x: 197, z: 28, yaw: FACE.N, bg: '#d9473c', place: true },
     { id: 'arms', key: 'commercial/building-c', x: 24, z: 2.98 * 12, yaw: FACE.N, bg: '#55693f' },
   ];
   for (const s of SHOPS) {
+    // 새로 짓는 가게: 건물 모델을 세우고 앞마당을 깐다.
+    if (s.place) { const gy = h.groundY(s.x, s.z); assets.place(s.key, s.x, gy - 0.05, s.z, s.yaw); h.collideModel(s.key, s.x, gy - 0.05, s.z, s.yaw, 1, 0.95); h.box('plaza_' + s.id, 16, 0.3, 9, s.x, gy + 0.02, s.z + 9, M('#c9cede'), { noShadow: true }); }
     const f = s.door || frontOf(s.key, s.x, s.z, s.yaw, 1.1), y = h.groundY(f.x, f.z);
     buildRoom(s.id, s.id, f.x, f.z);
     doors.push({ id: s.id, room: s.id, x: f.x, y, z: f.z, yaw: s.yaw, gem: marker(f.x, y, f.z) });
