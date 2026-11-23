@@ -284,10 +284,15 @@ async function boot() {
   if (params.get('lobby') !== '0') lobby.show();
   if (isTouch) document.body.classList.add('touch');
   window.__ready = true;
+  try { sessionStorage.removeItem('boxtown.retry'); } catch (e) { /* 무시 */ }
 }
 
 boot().catch((e) => {
   console.error(e);
+  // 업데이트 직후에는 브라우저에 남은 옛 화면 파일과 새 스크립트가 섞여 실패할 수 있다. 한 번은 새 주소로 다시 불러와 본다.
+  let tried = false;
+  try { tried = sessionStorage.getItem('boxtown.retry') === '1'; sessionStorage.setItem('boxtown.retry', '1'); } catch (err) { tried = true; }
+  if (!tried) { $('loadText').textContent = '새 버전을 불러오는 중…'; location.replace(location.pathname + '?fresh=' + Date.now()); return; }
   $('loadText').textContent = '실행하지 못했습니다: ' + (e.message || e);
   window.__ready = true;
 });
