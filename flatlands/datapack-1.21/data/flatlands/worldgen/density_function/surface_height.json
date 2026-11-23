@@ -5,20 +5,12 @@
     "argument": {
       "type": "minecraft:add",
       "argument1": {
-        "type": "minecraft:add",
+        "type": "minecraft:min",
         "argument1": "flatlands:land_height",
         "argument2": {
-          "type": "minecraft:mul",
-          "argument1": "flatlands:river_weight",
-          "argument2": {
-            "type": "minecraft:add",
-            "argument1": 58.5,
-            "argument2": {
-              "type": "minecraft:mul",
-              "argument1": -1.0,
-              "argument2": "flatlands:land_height"
-            }
-          }
+          "type": "minecraft:min",
+          "argument1": "flatlands:river_main_profile",
+          "argument2": "flatlands:river_branch_profile"
         }
       },
       "argument2": "flatlands:mountain_rise"

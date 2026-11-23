@@ -1,0 +1,59 @@
+{
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:cache_2d",
+    "argument": {
+      "type": "minecraft:spline",
+      "spline": {
+        "coordinate": "flatlands:river_main_abs",
+        "points": [
+          {
+            "location": 0.0,
+            "value": 56.5,
+            "derivative": 0.0
+          },
+          {
+            "location": 0.012,
+            "value": 57.0,
+            "derivative": 71.428571
+          },
+          {
+            "location": 0.024,
+            "value": 60.0,
+            "derivative": 206.043956
+          },
+          {
+            "location": 0.0384,
+            "value": 62.5,
+            "derivative": 210.118655
+          },
+          {
+            "location": 0.0444,
+            "value": 64.0,
+            "derivative": 44.974195
+          },
+          {
+            "location": 0.075,
+            "value": 64.6,
+            "derivative": 30.321877
+          },
+          {
+            "location": 0.114,
+            "value": 67.5,
+            "derivative": 100.019652
+          },
+          {
+            "location": 0.156,
+            "value": 74.0,
+            "derivative": 160.144928
+          },
+          {
+            "location": 0.216,
+            "value": 84.0,
+            "derivative": 0.0
+          }
+        ]
+      }
+    }
+  }
+}

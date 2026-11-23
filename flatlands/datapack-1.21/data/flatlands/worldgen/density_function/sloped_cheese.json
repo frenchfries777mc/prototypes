@@ -16,7 +16,11 @@
     "type": "minecraft:mul",
     "argument1": {
       "type": "minecraft:add",
-      "argument1": 0.55,
+      "argument1": {
+        "type": "minecraft:mul",
+        "argument1": "flatlands:relief",
+        "argument2": 0.3
+      },
       "argument2": {
         "type": "minecraft:mul",
         "argument1": "flatlands:rock_mask",

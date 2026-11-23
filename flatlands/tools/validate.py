@@ -2,7 +2,7 @@
 """정적 검증: 데이터 팩이 가리키는 모든 ID(밀도 함수·노이즈·바이옴·노이즈 설정)가 실제로 존재하는지,
 밀도 함수 참조에 순환이 없는지, 바이옴 목록의 형식이 맞는지 확인한다. (게임을 실행하지는 않는다.)
 
-    python3 tools/validate.py --target 26.3|1.21 --vanilla /path/to/extracted
+    python3 tools/validate.py --target 1.21|1.21-bop --vanilla /path/to/extracted
 """
 import argparse, glob, json, os, sys
 
@@ -10,7 +10,7 @@ NON_REF_KEYS = {"type", "axis", "noise", "metric", "biome"}
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3","1.21","1.21-bop"], required=True); ap.add_argument("--pack"); ap.add_argument("--mod-data", help="1.21-bop: 풀어 둔 Biomes O' Plenty jar 폴더(data/biomesoplenty/...)")
+    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["1.21","1.21-bop"], required=True); ap.add_argument("--pack"); ap.add_argument("--mod-data", help="1.21-bop: 풀어 둔 Biomes O' Plenty jar 폴더(data/biomesoplenty/...)")
     a = ap.parse_args(); pack = os.path.abspath(a.pack or os.path.join(ROOT, f"datapack-{a.target}"))
     errors = []
 
@@ -97,6 +97,20 @@ def main():
     tag = json.load(open(os.path.join(pack, "data/minecraft/tags/worldgen/world_preset/normal.json")))
     for v in tag["values"]:
         if not exists(v, "world_preset"): errors.append(f"world_preset 태그가 없는 프리셋을 가리킴: {v}")
+    # 동굴·용암호수 제거 확인
+    fd = json.dumps(ns["noise_router"]["final_density"]) if a.target != "26.3" else open(os.path.join(pack, "data/flatlands/worldgen/density_function/final_density.json")).read()
+    if "caves/" in fd or "cave_" in fd: errors.append("final_density 에 동굴 항이 남아 있음")
+    if a.target == "26.3":
+        d = json.load(open(os.path.join(pack, "data/minecraft/worldgen/carver/canyon.json")))
+        if d["probability"] != 0.0: errors.append("카버 canyon 확률이 0 이 아님")
+    else:
+        for c in ("cave", "cave_extra_underground", "canyon"):
+            d = json.load(open(os.path.join(pack, "data/minecraft/worldgen/configured_carver", c + ".json")))
+            if d["config"]["probability"] != 0.0: errors.append(f"카버 {c} 확률이 0 이 아님")
+    for f in ("lake_lava_surface", "lake_lava_underground"):
+        d = json.load(open(os.path.join(pack, "data/minecraft/worldgen/placed_feature", f + ".json")))
+        if d["placement"] != [{"type": "minecraft:count", "count": 0}]: errors.append(f"{f} 배치가 0개가 아님")
+    print("동굴(밀도·카버)·용암호수 제거 확인됨" if not errors else "")
     if a.target == "1.21-bop":
         tb = json.load(open(os.path.join(pack, "data/terrablender/tags/dimension_type/overworld_regions.json")))
         if tb != {"replace": True, "values": []}: errors.append(f"terrablender overworld_regions 태그가 비어 있지 않음: {tb}")

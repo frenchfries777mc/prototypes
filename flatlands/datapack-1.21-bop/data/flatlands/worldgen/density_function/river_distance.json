@@ -1,15 +1,24 @@
 {
-  "type": "minecraft:min",
-  "argument1": {
-    "type": "minecraft:abs",
-    "argument": "flatlands:river_main"
-  },
-  "argument2": {
-    "type": "minecraft:mul",
-    "argument1": {
-      "type": "minecraft:abs",
-      "argument": "flatlands:river_branch"
-    },
-    "argument2": 0.8
+  "type": "minecraft:flat_cache",
+  "argument": {
+    "type": "minecraft:cache_2d",
+    "argument": {
+      "type": "minecraft:clamp",
+      "input": {
+        "type": "minecraft:min",
+        "argument1": {
+          "type": "minecraft:mul",
+          "argument1": "flatlands:river_main_abs",
+          "argument2": 9.259259259259261
+        },
+        "argument2": {
+          "type": "minecraft:mul",
+          "argument1": "flatlands:river_branch_abs",
+          "argument2": 15.810276679841897
+        }
+      },
+      "min": 0.0,
+      "max": 2.0
+    }
   }
 }

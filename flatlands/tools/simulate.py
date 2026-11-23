@@ -198,7 +198,7 @@ def biome_lookup(entries, T, H, C, E, D, W):
         m = cost < best; best = np.where(m, cost, best); who = np.where(m, idx[e["biome"]], who)
     return names, who
 
-def save_png(path, h, water, d, step, scale=4):
+def save_png(path, h, water, d, step, scale=4, zone=None):
     """높이 음영 + 물(파랑). 육지는 높이에 따라 초록 농도, river 바이옴 영역(둑 포함)은 살짝 밝게."""
     from PIL import Image
     gx, gz = np.gradient(h.astype(float)); shade = np.clip(0.5 + (-gx - gz)*0.18, 0.15, 1.0)   # 북서쪽 광원
@@ -210,7 +210,9 @@ def save_png(path, h, water, d, step, scale=4):
     rgb = rgb*(1 - rock) + np.array([125, 120, 115])*rock
     rgb = rgb*(1 - snow) + np.array([240, 240, 245])*snow
     rgb = rgb*shade[..., None]
-    bank = (d < 0.0374) & ~water
+    if zone is not None:
+        rgb = rgb*(1 - 0.18*zone[..., None]) + np.array([40, 30, 0])*0.18*zone[..., None]    # 평탄 구역은 약간 노랗게
+    bank = (d < 0.40) & ~water
     rgb[bank] = rgb[bank]*0.8 + np.array([45, 45, 25])
     depth = np.clip((62 - h)/5.0, 0, 1)
     rgb[water] = np.stack([60 - 30*depth, 120 - 50*depth, 215 - 50*depth], axis=-1)[water]
@@ -219,7 +221,7 @@ def save_png(path, h, water, d, step, scale=4):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3", "1.21", "1.21-bop"], default="26.3"); ap.add_argument("--pack")
+    ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["1.21", "1.21-bop"], default="1.21"); ap.add_argument("--pack")
     ap.add_argument("--size", type=int, default=1536, help="한 변 길이(블록)"); ap.add_argument("--step", type=int, default=8)
     ap.add_argument("--preset", default="flatlands"); ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--ymin", type=int, default=52); ap.add_argument("--ymax", type=int, default=140)
@@ -252,15 +254,37 @@ def main():
     q = np.percentile(hl, [1, 5, 25, 50, 75, 95, 99])
     print(f"  육지 y: 평균 {hl.mean():.1f}  표준편차 {hl.std():.2f}  최소 {hl.min():.0f}  최대 {hl.max():.0f}")
     print("  육지 y 백분위 1/5/25/50/75/95/99%: " + " ".join(f"{v:.0f}" for v in q))
-    far = land & (d > 0.2)   # 강에서 멀리 떨어진 평지만
+    rise = G("flatlands:mountain_rise"); zone = G("flatlands:flat_zone")
+    far = land & (d > 1.1) & (rise < 0.5)   # 강변 숲 띠 바깥의 평지(산 제외)만
     hf = solid_top[far]
-    print(f"  강에서 먼 평지(d>0.2): 평균 {hf.mean():.1f}  표준편차 {hf.std():.2f}  5~95% 범위 {np.percentile(hf,5):.0f}~{np.percentile(hf,95):.0f}")
+    print(f"  강에서 먼 평지(산 제외): 평균 {hf.mean():.1f}  표준편차 {hf.std():.2f}  5~95% 범위 {np.percentile(hf,5):.0f}~{np.percentile(hf,95):.0f}")
+    # 평탄 구역 안/밖의 출렁임: 전체 표준편차와, 64블록 격자 안에서 평균을 뺀 국소 표준편차
+    gh = solid_top.reshape(n, n); gfar = far.reshape(n, n); gz = zone.reshape(n, n); b = max(1, 64 // a.step)
+    def local_sd(mask):
+        vals = []
+        for i in range(0, n - b + 1, b):
+            for j in range(0, n - b + 1, b):
+                m = mask[i:i+b, j:j+b]
+                if m.all(): blk = gh[i:i+b, j:j+b]; vals.append(blk - blk.mean())
+        return np.concatenate([v.ravel() for v in vals]).std() if vals else float("nan")
+    zin = far & (zone > 0.95); zout = far & (zone < 0.05)
+    print(f"  평탄 구역 면적(zone>0.95) 육지의 {(zone[land] > 0.95).mean()*100:.0f}%  /  구역 밖(zone<0.05) {(zone[land] < 0.05).mean()*100:.0f}%")
+    for nm, mk in (("일반 지형(구역 밖)", zout), ("평탄 구역 안", zin)):
+        if mk.sum() > 50:
+            print(f"  {nm}: 전체 표준편차 {solid_top[mk].std():.2f}  국소(64블록) 표준편차 {local_sd(mk.reshape(n, n)):.2f}  5~95% {np.percentile(solid_top[mk],5):.0f}~{np.percentile(solid_top[mk],95):.0f}")
     mh = G("flatlands:mountain_rise")
     mm = mh > 3.0
     print(f"  산(솟은 높이>3블록) 면적 {mm.mean()*100:.1f}%  /  >15블록 {(mh>15).mean()*100:.2f}%  /  >30블록 {(mh>30).mean()*100:.2f}%  / 지표 최고 y {solid_top.max():.0f}")
     if mm.any():
         sl_m = np.abs(np.gradient(solid_top.reshape(n, n), a.step)[0]).ravel()[mm]
         print(f"  산 위 가로 기울기(높이차/블록): 중앙값 {np.median(sl_m):.2f}  90% {np.percentile(sl_m,90):.2f}  (1.0 = 45도)")
+    # 본류/지류: 어느 단면이 표면을 정하는지로 구분
+    pm = G("flatlands:river_main_profile"); pb = G("flatlands:river_branch_profile")
+    is_main = pm <= pb
+    for nm, mk in (("본류", water & is_main), ("지류", water & ~is_main)):
+        if mk.any(): print(f"  {nm}: 물 열 {mk.mean()*100:.1f}%  강바닥 평균 y {solid_top[mk].mean():.1f}  (물 깊이 평균 {63 - solid_top[mk].mean():.1f})")
+    sh = (d > 0.40) & (d < 0.69) & land & (rise < 0.5)
+    if sh.any(): print(f"  하안단구 구간(D 0.40~0.69) 육지 열 중 y 63.5~65.5(평평한 선반): {((solid_top[sh] >= 63.5) & (solid_top[sh] <= 65.5)).mean()*100:.0f}%  평균 y {solid_top[sh].mean():.1f}")
     hw = solid_top[water]
     if hw.size: print(f"  강바닥 y: 평균 {hw.mean():.1f}  최소 {hw.min():.0f}  최대 {hw.max():.0f}")
     g = solid_top.reshape(n, n)
@@ -272,16 +296,20 @@ def main():
     print(f"\n[강 일관성 — 이 창 한정] river 바이옴 폭 d<{rivw:.2f}")
     inriv = d < rivw
     print(f"  물 밑 열 중 river 바이옴 영역 안: {inriv[water].mean()*100:.1f}%   |  river 영역 열 중 실제 물: {water[inriv].mean()*100:.1f}%")
-    runs = []; gw = water.reshape(n, n)
-    for row in gw:
-        c = 0
-        for v in row:
-            if v: c += 1
-            elif c: runs.append(c*a.step); c = 0
-        if c: runs.append(c*a.step)
-    if runs: print(f"  가로로 자른 물 폭(x방향; 비스듬한 강은 실제보다 넓게 나옴): 중앙값 {np.median(runs):.0f}블록  90% {np.percentile(runs,90):.0f}  최대 {max(runs)}")
+    def run_stats(mask2d):
+        runs = []
+        for row in mask2d:
+            c = 0
+            for v in row:
+                if v: c += 1
+                elif c: runs.append(c*a.step); c = 0
+            if c: runs.append(c*a.step)
+        return runs
+    for nm, mk in (("본류", water & is_main), ("지류", water & ~is_main)):
+        r_ = run_stats(mk.reshape(n, n))
+        if r_: print(f"  {nm} 물 폭(x방향 단면; 비스듬하면 실제보다 넓게 나옴): 중앙값 {np.median(r_):.0f}블록  90% {np.percentile(r_,90):.0f}  최대 {max(r_)}")
     if a.png:
-        save_png(a.png, solid_top.reshape(n, n), water.reshape(n, n), d.reshape(n, n), a.step)
+        save_png(a.png, solid_top.reshape(n, n), water.reshape(n, n), d.reshape(n, n), a.step, zone=zone.reshape(n, n))
     # 해석적 물 판정(S<62)과 실제 판정이 얼마나 다른지 → 아래 넓은 창 통계를 실제 값으로 환산할 때 쓴다
     wa = S < 62.0
     print(f"  (해석적 S<62 물 비율 {wa.mean()*100:.1f}% vs 밀도 기반 {water.mean()*100:.1f}%)")
@@ -308,6 +336,8 @@ def main():
     counts = {nm: (who == i).mean()*100 for i, nm in enumerate(names)}
     for nm, v in sorted(counts.items(), key=lambda kv: -kv[1]):
         if v > 0: print(f"  {nm.split(':')[1]:20s} {v:5.1f}%")
+    ring = sum(v for k, v in counts.items() if k.split(":")[1] in ("beach", "snowy_beach", "stony_shore"))
+    print(f"  (강변 모래·자갈 띠 {ring:.1f}%)")
     PLAINSY = ("plains", "sunflower_plains", "river", "frozen_river", "field", "grassland", "prairie", "pasture", "lavender_field", "shrubland")
     MTN = ("stony_peaks", "frozen_peaks", "windswept_hills", "snowy_slopes")
     mt = sum(v for k, v in counts.items() if k.split(":")[1] in MTN)

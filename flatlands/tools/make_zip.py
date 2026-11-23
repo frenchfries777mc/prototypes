@@ -4,7 +4,7 @@
 import os, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.join(HERE, "..")
-TARGETS = [("26.3", "26.3"), ("1.21", "1.21-1.21.1")]   # (폴더 접미사, 파일 이름에 쓸 버전)
+TARGETS = [("1.21", "1.21-1.21.1")]   # (폴더 접미사, 파일 이름에 쓸 버전)
 def pack(src, dst):
     src = os.path.abspath(src); os.makedirs(os.path.dirname(dst), exist_ok=True)
     files = sorted(os.path.relpath(os.path.join(d, f), src) for d, _, fs in os.walk(src) for f in fs)
