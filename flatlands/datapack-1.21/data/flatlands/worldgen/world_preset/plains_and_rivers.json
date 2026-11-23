@@ -30,7 +30,7 @@
                 "depth": 0.0,
                 "weirdness": [
                   0.0,
-                  0.4
+                  0.037399999999999996
                 ],
                 "offset": 0.0
               }
@@ -57,61 +57,7 @@
                 "depth": 1.0,
                 "weirdness": [
                   0.0,
-                  0.4
-                ],
-                "offset": 0.0
-              }
-            },
-            {
-              "biome": "minecraft:beach",
-              "parameters": {
-                "temperature": [
-                  -1.0,
-                  1.0
-                ],
-                "humidity": [
-                  -1.0,
-                  1.0
-                ],
-                "continentalness": [
-                  -1.0,
-                  1.0
-                ],
-                "erosion": [
-                  -1.0,
-                  1.0
-                ],
-                "depth": 0.0,
-                "weirdness": [
-                  0.4,
-                  0.52
-                ],
-                "offset": 0.0
-              }
-            },
-            {
-              "biome": "minecraft:beach",
-              "parameters": {
-                "temperature": [
-                  -1.0,
-                  1.0
-                ],
-                "humidity": [
-                  -1.0,
-                  1.0
-                ],
-                "continentalness": [
-                  -1.0,
-                  1.0
-                ],
-                "erosion": [
-                  -1.0,
-                  1.0
-                ],
-                "depth": 1.0,
-                "weirdness": [
-                  0.4,
-                  0.52
+                  0.037399999999999996
                 ],
                 "offset": 0.0
               }
@@ -138,7 +84,7 @@
                 "depth": 0.0,
                 "weirdness": [
                   -1.0,
-                  2.0
+                  1.0
                 ],
                 "offset": 0.0
               }
@@ -165,7 +111,7 @@
                 "depth": 1.0,
                 "weirdness": [
                   -1.0,
-                  2.0
+                  1.0
                 ],
                 "offset": 0.0
               }
@@ -191,8 +137,8 @@
                 ],
                 "depth": 0.0,
                 "weirdness": [
-                  0.52,
-                  1.05
+                  0.037399999999999996,
+                  1.0
                 ],
                 "offset": 0.0
               }
@@ -218,8 +164,8 @@
                 ],
                 "depth": 1.0,
                 "weirdness": [
-                  0.52,
-                  1.05
+                  0.037399999999999996,
+                  1.0
                 ],
                 "offset": 0.0
               }
@@ -245,8 +191,8 @@
                 ],
                 "depth": 0.0,
                 "weirdness": [
-                  0.52,
-                  1.05
+                  0.037399999999999996,
+                  1.0
                 ],
                 "offset": 0.0
               }
@@ -272,14 +218,14 @@
                 ],
                 "depth": 1.0,
                 "weirdness": [
-                  0.52,
-                  1.05
+                  0.037399999999999996,
+                  1.0
                 ],
                 "offset": 0.0
               }
             },
             {
-              "biome": "minecraft:sunflower_plains",
+              "biome": "minecraft:dripstone_caves",
               "parameters": {
                 "temperature": [
                   -1.0,
@@ -291,97 +237,49 @@
                 ],
                 "continentalness": [
                   -1.0,
-                  0.08
-                ],
-                "erosion": [
-                  0.45,
                   1.0
                 ],
-                "depth": 0.0,
+                "erosion": [
+                  0.7,
+                  1.0
+                ],
+                "depth": [
+                  0.2,
+                  0.9
+                ],
                 "weirdness": [
-                  1.05,
-                  2.0
+                  -1.0,
+                  1.0
                 ],
                 "offset": 0.0
               }
             },
             {
-              "biome": "minecraft:sunflower_plains",
+              "biome": "minecraft:lush_caves",
               "parameters": {
                 "temperature": [
                   -1.0,
                   1.0
                 ],
                 "humidity": [
-                  -1.0,
+                  0.7,
                   1.0
                 ],
                 "continentalness": [
                   -1.0,
-                  0.08
-                ],
-                "erosion": [
-                  0.45,
                   1.0
-                ],
-                "depth": 1.0,
-                "weirdness": [
-                  1.05,
-                  2.0
-                ],
-                "offset": 0.0
-              }
-            },
-            {
-              "biome": "minecraft:plains",
-              "parameters": {
-                "temperature": [
-                  -1.0,
-                  1.0
-                ],
-                "humidity": [
-                  -1.0,
-                  1.0
-                ],
-                "continentalness": [
-                  -1.0,
-                  0.08
                 ],
                 "erosion": [
                   -1.0,
-                  0.45
-                ],
-                "depth": 0.0,
-                "weirdness": [
-                  1.05,
-                  2.0
-                ],
-                "offset": 0.0
-              }
-            },
-            {
-              "biome": "minecraft:plains",
-              "parameters": {
-                "temperature": [
-                  -1.0,
                   1.0
                 ],
-                "humidity": [
+                "depth": [
+                  0.2,
+                  0.9
+                ],
+                "weirdness": [
                   -1.0,
                   1.0
-                ],
-                "continentalness": [
-                  -1.0,
-                  0.08
-                ],
-                "erosion": [
-                  -1.0,
-                  0.45
-                ],
-                "depth": 1.0,
-                "weirdness": [
-                  1.05,
-                  2.0
                 ],
                 "offset": 0.0
               }

@@ -10,19 +10,15 @@
         "argument2": {
           "type": "minecraft:mul",
           "argument1": {
-            "type": "minecraft:mul",
-            "argument1": {
-              "type": "minecraft:shifted_noise",
-              "noise": "flatlands:rolling",
-              "shift_x": "minecraft:shift_x",
-              "shift_y": 0.0,
-              "shift_z": "minecraft:shift_z",
-              "xz_scale": 1.0,
-              "y_scale": 0.0
-            },
-            "argument2": 1.9
+            "type": "minecraft:shifted_noise",
+            "noise": "flatlands:rolling",
+            "shift_x": "minecraft:shift_x",
+            "shift_y": 0.0,
+            "shift_z": "minecraft:shift_z",
+            "xz_scale": 1.0,
+            "y_scale": 0.0
           },
-          "argument2": "flatlands:relief"
+          "argument2": 3.0
         }
       },
       "min": 65.3,
