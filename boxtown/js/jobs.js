@@ -1,5 +1,6 @@
 // 직업 시스템. 직업 건물 앞 표시에서 E로 시작하고, 목표 지점은 빛기둥과 화면 화살표로 알려 준다.
 // 직업 하나는 { start, update, use, prompt, stop }만 구현하면 된다.
+import { stats } from './stats.js';
 import { BUILDINGS, CELL } from './mapdata.js';
 import { Character, randomLook } from './character.js';
 import { RINGS, ringPoint } from './npc.js';
@@ -74,6 +75,7 @@ export class Jobs {
   pay(n, text) {
     n = Math.max(10, Math.round((n * 0.6) / 10) * 10);
     this.money += n;
+    stats.bump('earned', n); stats.bump('jobs');
     try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
     this.renderMoney();
     this.toast(`${text}  +${won(n)}원`, true);

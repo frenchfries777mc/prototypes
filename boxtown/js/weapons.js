@@ -1,5 +1,6 @@
 // 무기: 주먹, 방망이, 권총, 기관단총, 로켓 발사기.
 // 주민은 체력이 다하면 하늘로 날아가 별이 되고(잠시 뒤 돌아온다), 차는 연기 → 불길 → 폭발 순서로 망가진다. 피는 없다.
+import { stats } from './stats.js';
 import { spark } from './jobs.js';
 import { flatMat, clamp, damp } from './util.js';
 import { SEA } from './terrain.js';
@@ -93,7 +94,7 @@ export class Weapons {
     // 처음에는 주먹뿐이다. 나머지는 사거나 빼앗아서 얻는다.
     this.owned = new Set(['fist']);
     try { const saved = JSON.parse(localStorage.getItem('boxtown.weapons') || '[]').filter((id) => id !== 'fist' && WEAPONS.some((w) => w.id === id)); if (saved.length) this.owned.add(saved[saved.length - 1]); } catch (e) { /* 무시 */ }
-    residents.onDefeat = (n) => { if (n.kind === 'thug') this.unlock('bat', '불량배에게서', '빼앗았어요'); else if (n.kind === 'cop') this.unlock('pistol', '경찰관에게서', '빼앗았어요'); };
+    residents.onDefeat = (n) => { if (n.kind === 'thug') stats.bump('kos'); if (n.kind === 'thug') this.unlock('bat', '불량배에게서', '빼앗았어요'); else if (n.kind === 'cop') this.unlock('pistol', '경찰관에게서', '빼앗았어요'); };
     this.renderBar();
     this.select(0);
   }
