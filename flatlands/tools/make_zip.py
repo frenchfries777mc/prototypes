@@ -18,3 +18,6 @@ def pack(src, dst):
 for suffix, label in TARGETS:
     pack(os.path.join(ROOT, f"datapack-{suffix}"), os.path.join(ROOT, "dist", f"flatlands-datapack-{label}.zip"))
     pack(os.path.join(ROOT, f"resourcepack-{suffix}"), os.path.join(ROOT, "dist", f"flatlands-names-resourcepack-{label}.zip"))
+
+# Biomes O' Plenty 연동 팩(1.21.1 NeoForge). 이름 표시용 리소스 팩은 1.21 것을 그대로 쓴다.
+pack(os.path.join(ROOT, "datapack-1.21-bop"), os.path.join(ROOT, "dist", "flatlands-datapack-1.21.1-BiomesOPlenty.zip"))

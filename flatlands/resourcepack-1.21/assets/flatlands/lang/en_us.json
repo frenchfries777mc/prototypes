@@ -1,4 +1,5 @@
 {
   "generator.flatlands.flatlands": "Flatlands (Plains & Rivers)",
-  "generator.flatlands.plains_and_rivers": "Flatlands (Plains & Rivers only)"
+  "generator.flatlands.plains_and_rivers": "Flatlands (Plains & Rivers only)",
+  "generator.flatlands.bop": "Flatlands (Plains & Rivers + Biomes O' Plenty)"
 }

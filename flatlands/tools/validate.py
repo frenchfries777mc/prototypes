@@ -10,7 +10,7 @@ NON_REF_KEYS = {"type", "axis", "noise", "metric", "biome"}
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3","1.21"], required=True); ap.add_argument("--pack")
+    ap = argparse.ArgumentParser(); ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3","1.21","1.21-bop"], required=True); ap.add_argument("--pack"); ap.add_argument("--mod-data", help="1.21-bop: 풀어 둔 Biomes O' Plenty jar 폴더(data/biomesoplenty/...)")
     a = ap.parse_args(); pack = os.path.abspath(a.pack or os.path.join(ROOT, f"datapack-{a.target}"))
     errors = []
 
@@ -19,7 +19,11 @@ def main():
         base = pack if ns == "flatlands" else os.path.join(a.vanilla)
         return os.path.join(base, "data", ns, "worldgen", kind, p + ".json")
 
-    def exists(rid, kind): return os.path.exists(path_of(rid, kind))
+    def exists(rid, kind):
+        if rid.startswith("biomesoplenty:"):
+            if not a.mod_data: errors.append("biomesoplenty 바이옴을 확인하려면 --mod-data 가 필요함"); return True
+            return os.path.exists(os.path.join(a.mod_data, "data/biomesoplenty/worldgen", kind, rid.split(":", 1)[1] + ".json"))
+        return os.path.exists(path_of(rid, kind))
 
     # 1) 모든 JSON 이 파싱되는가
     for f in glob.glob(os.path.join(pack, "**", "*.json"), recursive=True) + [os.path.join(pack, "pack.mcmeta")]:
@@ -93,6 +97,10 @@ def main():
     tag = json.load(open(os.path.join(pack, "data/minecraft/tags/worldgen/world_preset/normal.json")))
     for v in tag["values"]:
         if not exists(v, "world_preset"): errors.append(f"world_preset 태그가 없는 프리셋을 가리킴: {v}")
+    if a.target == "1.21-bop":
+        tb = json.load(open(os.path.join(pack, "data/terrablender/tags/dimension_type/overworld_regions.json")))
+        if tb != {"replace": True, "values": []}: errors.append(f"terrablender overworld_regions 태그가 비어 있지 않음: {tb}")
+        else: print("terrablender overworld_regions 태그: replace=true, values=[] (지역 주입 끔)")
     mc = json.load(open(os.path.join(pack, "pack.mcmeta")))["pack"]
     print("pack.mcmeta:", mc)
 

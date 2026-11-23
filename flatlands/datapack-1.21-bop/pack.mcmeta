@@ -1,0 +1,10 @@
+{
+  "pack": {
+    "description": "Flatlands - 평원과 강 위주의 평평하고 자연스러운 지형 (1.21.1 + Biomes O' Plenty)",
+    "pack_format": 48,
+    "supported_formats": [
+      48,
+      48
+    ]
+  }
+}

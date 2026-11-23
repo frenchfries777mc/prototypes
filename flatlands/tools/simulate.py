@@ -213,7 +213,7 @@ def save_png(path, h, water, d, step, scale=4):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3", "1.21"], default="26.3"); ap.add_argument("--pack")
+    ap.add_argument("--vanilla", required=True); ap.add_argument("--target", choices=["26.3", "1.21", "1.21-bop"], default="26.3"); ap.add_argument("--pack")
     ap.add_argument("--size", type=int, default=1536, help="한 변 길이(블록)"); ap.add_argument("--step", type=int, default=8)
     ap.add_argument("--preset", default="flatlands"); ap.add_argument("--seed", type=int, default=12345)
     ap.add_argument("--ymin", type=int, default=52); ap.add_argument("--ymax", type=int, default=84)
@@ -281,7 +281,7 @@ def main():
     cc = {"x": CX, "z": CZ, "y": np.zeros_like(CX)}
     GC = lambda rid: w.ev(rid, cc, {})
     cd = GC("flatlands:river_distance"); cS = GC("flatlands:surface_height")
-    if a.target == "1.21":
+    if a.target in ("1.21", "1.21-bop"):
         rt = json.load(open(os.path.join(a.vanilla, "data/minecraft/worldgen/noise_settings/overworld.json")))["noise_router"]
         cT = w.ev(rt["temperature"], cc, {}); cH = w.ev(rt["vegetation"], cc, {})
     else:
@@ -295,9 +295,12 @@ def main():
     counts = {nm: (who == i).mean()*100 for i, nm in enumerate(names)}
     for nm, v in sorted(counts.items(), key=lambda kv: -kv[1]):
         if v > 0: print(f"  {nm.split(':')[1]:20s} {v:5.1f}%")
-    pr = sum(v for k, v in counts.items() if k.split(":")[1] in ("plains", "sunflower_plains", "river", "frozen_river"))
+    PLAINSY = ("plains", "sunflower_plains", "river", "frozen_river", "field", "grassland", "prairie", "pasture", "lavender_field", "shrubland")
+    pr = sum(v for k, v in counts.items() if k.split(":")[1] in PLAINSY)
+    bop = sum(v for k, v in counts.items() if k.startswith("biomesoplenty:"))
+    if bop: print(f"  (Biomes O' Plenty 바이옴 합계 {bop:.1f}%)")
     rv = sum(v for k, v in counts.items() if k.endswith("river"))
-    print(f"  → 평원·해바라기 평원·강 합계 {pr:.1f}%   (강만 {rv:.1f}%)")
+    print(f"  → 평원 계열(바닐라+BoP 평원류)·강 합계 {pr:.1f}%   (강만 {rv:.1f}%)")
     print(f"  해석적 물(S<62) 면적 {(cS < 62).mean()*100:.1f}%   |  river 바이옴 면적 {rv:.1f}%")
 
 if __name__ == "__main__":

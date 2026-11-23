@@ -1,4 +1,5 @@
 {
   "generator.flatlands.flatlands": "플랫랜드 (평원과 강)",
-  "generator.flatlands.plains_and_rivers": "플랫랜드 (평원과 강만)"
+  "generator.flatlands.plains_and_rivers": "플랫랜드 (평원과 강만)",
+  "generator.flatlands.bop": "플랫랜드 (평원과 강 + Biomes O' Plenty 평원류)"
 }

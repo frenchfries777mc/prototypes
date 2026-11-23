@@ -53,6 +53,21 @@
 
 `river` 바이옴이 칠해진 곳에는 강둑이 포함되므로(물이 있는 면적의 약 2배), 강 바이옴 비율이 물 면적보다 큽니다. 물이 있는 곳은 항상 `river` 바이옴 안에 들어가도록 만들었고, 시뮬레이션에서도 100% 그랬습니다.
 
+## Biomes O' Plenty와 함께 쓰기 (1.21.1 NeoForge)
+
+Biomes O' Plenty(BoP)를 쓰신다면 일반 1.21 팩 대신 [`flatlands-datapack-1.21.1-BiomesOPlenty.zip`](dist/flatlands-datapack-1.21.1-BiomesOPlenty.zip)을 쓰세요. 월드 유형 이름은 **Flatlands (Plains & Rivers + Biomes O' Plenty)** 입니다. (이름 표시는 1.21용 리소스 팩에 들어 있습니다.)
+
+- **BoP 평원 계열만 섞입니다.** `field`(꽃밭), `grassland`(초원), `prairie`(프레리), `pasture`(목초지), `lavender_field`(라벤더 밭), `shrubland`(관목지)를 온도·습도 구간별로 배치합니다. 산·정글·화산·늪 같은 바이옴은 일부러 뺐습니다. 강은 바닐라 `river`입니다.
+- **TerraBlender의 overworld 지역 주입을 이 팩이 끕니다.** BoP는 TerraBlender로 자기 바이옴 지역을 월드에 끼워 넣는데, 그 지역은 바닐라 배치 규칙을 변형한 것이라 이 팩의 평탄한 지형·강 위치와 맞지 않아 산 바이옴이 평지에 뜰 수 있습니다. 그래서 `terrablender:overworld_regions` 태그를 비워(`replace: true`) 이 월드에서는 지역 주입을 끄고, 고른 BoP 바이옴만 목록에 직접 넣었습니다. 이 팩을 켠 월드의 **오버월드 전체**에 적용됩니다.
+- **BoP가 반드시 설치되어 있어야 합니다.** 없이 켜면 바이옴 참조 오류로 데이터 팩이 로딩되지 않습니다. 그래서 일반 팩과 분리했습니다. 일반 팩과 **동시에 켜지 마세요**(같은 월드 유형 ID를 공유합니다).
+
+시뮬레이션 추정치(1.21.1 기준): 바닐라 평원 약 22%, BoP 평원류 약 42%(grassland 10%, field 9%, shrubland 7%, prairie·pasture 각 6%, lavender_field 4%), 강 약 15%, 해바라기 평원 약 4%, 눈 평원·사막·숲류 약 17%. 평원 계열+강 합계는 약 83%입니다.
+
+**확인하지 못한 것(이 모드 연동에 한정)**: BoP 21.1.0.14와 TerraBlender 4.1.0.8의 jar를 풀어 읽고 판단한 것이고, 실제로 실행해 보지는 못했습니다.
+- 태그를 비우면 TerraBlender 주입이 꺼진다는 것은 클래스 문자열(`LevelUtils.getRegionTypeForDimension`이 `OVERWORLD_REGIONS` 태그를 읽음)로 추정한 것입니다. 안 꺼지면 평지에 BoP 지역이 섞일 수 있습니다.
+- BoP의 지표 블록 규칙(일부 바이옴의 잔디·흙 변형)은 TerraBlender가 주입하므로 이 팩에서는 적용되지 않습니다. 평원류는 대부분 기본 잔디/흙이라 영향이 작을 것으로 보지만, 바이옴별 지표가 의도와 조금 다를 수 있습니다.
+- BoP의 다른 버전에서는 바이옴 ID가 다를 수 있습니다. 검증기(`--mod-data`)로 ID 존재 여부를 확인합니다.
+
 ## 설치
 
 1. 위 표에서 **내 버전에 맞는** 데이터 팩 zip을 받습니다. (압축을 풀지 않습니다.)
@@ -124,6 +139,7 @@ river_noise ─ abs ─▶ river_distance ──┬─▶ surface_height ─▶ 
 flatlands/
 ├─ datapack-26.3/       ← 26.3 데이터 팩 (tools/generate.py 가 만든 결과물을 커밋해 둠)
 ├─ datapack-1.21/       ← 1.21~1.21.1 데이터 팩
+├─ datapack-1.21-bop/   ← 1.21.1 + Biomes O' Plenty 데이터 팩
 ├─ resourcepack-*/      ← 월드 유형 이름만 넣는 선택 리소스 팩
 ├─ dist/                ← 바로 쓸 수 있는 zip (tools/make_zip.py 결과)
 ├─ docs/                ← README 그림
@@ -134,7 +150,7 @@ flatlands/
    └─ make_zip.py       ← zip 만들기
 ```
 
-생성기·검증기·시뮬레이터는 해당 버전의 바닐라 데이터가 필요합니다. 서버 jar를 풀면 `META-INF/versions/<버전>/server-<버전>.jar`가 나오고, 그 안의 `data/`를 풀어 둔 폴더를 `--vanilla`로 넘깁니다. 26.3은 `--target 26.3`, 1.21·1.21.1은 `--target 1.21`입니다.
+생성기·검증기·시뮬레이터는 해당 버전의 바닐라 데이터가 필요합니다(BoP 팩은 `--target 1.21-bop`에 1.21.1 데이터를 쓰고, 검증 때 `--mod-data`로 풀어 둔 BoP jar 폴더를 넘깁니다). 서버 jar를 풀면 `META-INF/versions/<버전>/server-<버전>.jar`가 나오고, 그 안의 `data/`를 풀어 둔 폴더를 `--vanilla`로 넘깁니다. 26.3은 `--target 26.3`, 1.21·1.21.1은 `--target 1.21`입니다.
 
 ```bash
 # 바닐라 데이터 풀기 (버전마다 한 번, 예: 1.21.1)

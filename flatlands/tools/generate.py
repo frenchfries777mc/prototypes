@@ -201,33 +201,74 @@ def biomes_pure(P):
     return L + cave_biomes()
 
 
-def build_presets(root, vdir, P):
+def biomes_bop(P):
+    """바닐라 평원 위주 + Biomes O' Plenty 의 평원 계열 바이옴만 섞은 목록.
+    온대(T_COLD..T_HOT)·건조하지 않은 곳(H<H_WET)을 온도/습도 구간으로 나눠 상자가 겹치지 않게 배치한다."""
+    rw = P["river_biome_width"]
+    river, land = rng(0.0, rw), rng(rw, 1.0)
+    cold, hot = rng(-1.0, T_COLD), rng(T_HOT, 1.0)
+    BOP = lambda n: f"biomesoplenty:{n}"
+    sunC, restC = rng(C_SUN, 1.0), rng(-1.0, C_SUN)
+    L = []
+    L += surface("minecraft:frozen_river", T=cold, W=river)
+    L += surface("minecraft:river", T=rng(T_COLD, 1.0), W=river)
+    L += surface("minecraft:snowy_plains", T=cold, W=land)
+    L += surface("minecraft:desert", T=hot, H=rng(-1.0, 0.10), W=land)
+    L += surface("minecraft:plains", T=hot, H=rng(0.10, 1.0), W=land)
+    L += surface("minecraft:forest", T=rng(T_COLD, -0.15), H=rng(H_WET, 1.0), W=land)
+    L += surface("minecraft:flower_forest", T=rng(-0.15, 0.20), H=rng(H_WET, 1.0), W=land)
+    L += surface("minecraft:birch_forest", T=rng(0.20, T_HOT), H=rng(H_WET, 1.0), W=land)
+    # 대륙성 값이 높은 곳: 해바라기 평원 (바닐라와 동일)
+    L += surface("minecraft:sunflower_plains", T=rng(T_COLD, T_HOT), H=rng(-1.0, H_WET), C=sunC, W=land)
+    # 나머지 온대 평원 구역을 온도(T)×습도(H)로 쪼갠다. 바닐라 평원이 중앙을 계속 차지한다.
+    cool, mid, warm = rng(T_COLD, -0.15), rng(-0.15, 0.25), rng(0.25, T_HOT)
+    L += surface(BOP("shrubland"), T=rng(T_COLD, T_HOT), H=rng(-1.0, -0.30), C=restC, W=land)      # 건조: 관목지
+    L += surface("minecraft:plains", T=cool, H=rng(-0.30, 0.00), C=restC, W=land)
+    L += surface(BOP("field"), T=cool, H=rng(0.00, H_WET), C=restC, W=land)                          # 서늘+촉촉: 꽃밭
+    L += surface("minecraft:plains", T=mid, H=rng(-0.30, 0.05), C=restC, W=land)
+    L += surface(BOP("grassland"), T=mid, H=rng(0.05, H_WET), C=restC, W=land)                       # 온화+촉촉: 초원
+    L += surface(BOP("prairie"), T=warm, H=rng(-0.30, -0.05), C=restC, W=land)                       # 따뜻+건조: 프레리
+    L += surface(BOP("pasture"), T=warm, H=rng(-0.05, 0.15), C=restC, W=land)                        # 따뜻: 목초지
+    L += surface(BOP("lavender_field"), T=warm, H=rng(0.15, H_WET), C=restC, W=land)                 # 따뜻+촉촉: 라벤더 밭
+    return L + cave_biomes()
+
+
+def build_presets(root, vdir, P, target):
     normal = load(vdir, "world_preset/normal")
-    for name, biomes in (("flatlands", biomes_mixed(P)), ("plains_and_rivers", biomes_pure(P))):
+    presets = (("bop", biomes_bop(P)),) if target == "1.21-bop" else (("flatlands", biomes_mixed(P)), ("plains_and_rivers", biomes_pure(P)))
+    for name, biomes in presets:
         d = json.loads(json.dumps(normal))
         d["dimensions"]["minecraft:overworld"]["generator"] = {"type": "minecraft:noise", "settings": f"{NS}:overworld", "biome_source": {"type": "minecraft:multi_noise", "biomes": biomes}}
         write(root, f"world_preset/{name}", d)
     tag = os.path.join(root, "data/minecraft/tags/worldgen/world_preset/normal.json")
     os.makedirs(os.path.dirname(tag), exist_ok=True)
     with open(tag, "w") as f:
-        json.dump({"values": [f"{NS}:flatlands", f"{NS}:plains_and_rivers"]}, f, indent=2); f.write("\n")
+        json.dump({"values": [f"{NS}:{n}" for n, _ in presets]}, f, indent=2); f.write("\n")
+    if target == "1.21-bop":
+        # TerraBlender 는 차원 타입이 이 태그에 있어야 overworld 지역(BoP 의 지역 포함)을 주입한다.
+        # 태그를 비워서 이 월드에서는 주입을 끄고, 고른 BoP 바이옴은 위 목록에 직접 넣었다.
+        tb = os.path.join(root, "data/terrablender/tags/dimension_type/overworld_regions.json")
+        os.makedirs(os.path.dirname(tb), exist_ok=True)
+        with open(tb, "w") as f:
+            json.dump({"replace": True, "values": []}, f, indent=2); f.write("\n")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--target", choices=["26.3", "1.21"], required=True, help="26.3 또는 1.21(=1.21~1.21.1)")
+    ap.add_argument("--target", choices=["26.3", "1.21", "1.21-bop"], required=True, help="26.3 / 1.21(=1.21~1.21.1) / 1.21-bop(1.21.1 NeoForge + Biomes O' Plenty)")
     ap.add_argument("--vanilla", required=True, help="해당 버전의 data/minecraft/worldgen 이 들어 있는 폴더")
     ap.add_argument("--out", help="기본값: datapack-<target>")
     a = ap.parse_args()
     root = os.path.abspath(a.out or os.path.join(os.path.dirname(__file__), "..", f"datapack-{a.target}"))
     shutil.rmtree(os.path.join(root, "data"), ignore_errors=True)
-    mapping = build_functions(root, a.vanilla, PARAMS, a.target)
-    build_noise_settings(root, a.vanilla, mapping, PARAMS, a.target)
-    build_presets(root, a.vanilla, PARAMS)
+    base = "1.21" if a.target == "1.21-bop" else a.target      # 지형 함수·노이즈 설정은 1.21 과 같다
+    mapping = build_functions(root, a.vanilla, PARAMS, base)
+    build_noise_settings(root, a.vanilla, mapping, PARAMS, base)
+    build_presets(root, a.vanilla, PARAMS, a.target)
     mc = os.path.join(root, "pack.mcmeta")
     if not os.path.exists(mc):
-        fmt = {"26.3": {"min_format": 121, "max_format": 121}, "1.21": {"pack_format": 48, "supported_formats": [48, 48]}}[a.target]
-        label = {"26.3": "26.3", "1.21": "1.21~1.21.1"}[a.target]
+        fmt = {"26.3": {"min_format": 121, "max_format": 121}, "1.21": {"pack_format": 48, "supported_formats": [48, 48]}, "1.21-bop": {"pack_format": 48, "supported_formats": [48, 48]}}[a.target]
+        label = {"26.3": "26.3", "1.21": "1.21~1.21.1", "1.21-bop": "1.21.1 + Biomes O' Plenty"}[a.target]
         json.dump({"pack": {"description": f"Flatlands - 평원과 강 위주의 평평하고 자연스러운 지형 ({label})", **fmt}}, open(mc, "w"), indent=2, ensure_ascii=False)
     print("written to", root)
 
