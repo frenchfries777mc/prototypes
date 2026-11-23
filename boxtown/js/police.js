@@ -1,6 +1,7 @@
 // 경찰: 주민을 때리거나 차를 터뜨리면 수배되고, 경찰차가 쫓아온다.
 // 멀리 떨어지거나 건물 안에 숨으면 따돌린다. 붙잡히면 벌금을 내고 마을 앞에서 다시 시작한다.
 import { Vehicle } from './vehicles.js';
+import { stats } from './stats.js';
 import { GRID, CELL, SPAWN } from './mapdata.js';
 import { paths } from './roads.js';
 import { clamp, angDiff, flatMat } from './util.js';
@@ -187,7 +188,7 @@ export class Police {
     // 따돌리기: 멀리 떨어지거나, 건물 안에 숨거나, 경찰이 올 수 없는 곳이면 수배가 식는다.
     const hidden = !P.jailAlarm && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중에는 식지 않는다
     if (hidden) { this.lostT += dt; if (this.lostT > 5) this.heat -= dt * 22; } else this.lostT = 0;
-    if (this.heat <= 0) { this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
+    if (this.heat <= 0) { stats.bump('escapes'); this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면
     const mySpeed = P.vehicle ? Math.abs(P.vehicle.speed) : Math.hypot(P.vel.x, P.vel.z);
     const close = !P.inside && this.units.some((u) => u.active && !u.car.dead && Math.hypot(u.car.pos.x - me.x, u.car.pos.z - me.z) < (P.vehicle ? 6.5 : 4.2) && Math.abs(u.car.pos.y - me.y) < 3);

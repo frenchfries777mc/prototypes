@@ -150,6 +150,7 @@ export class Input {
   }
   // 운전 입력: 키보드와 화면 조작을 합친다. throttle +1 가속, -1 브레이크·후진.
   drive() {
+    if (this.blocked) return { throttle: 0, steer: 0, handbrake: true };
     const k = this.keys;
     const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + this.wheel;
     const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.gas - this.pedalBrake;
@@ -157,6 +158,7 @@ export class Input {
   }
 
   move() {
+    if (this.blocked) return { x: 0, y: 0 };
     const k = this.keys;
     let x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
     let y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
@@ -357,6 +359,7 @@ export class Player {
     const inp = this.input;
     if (inp.viewNext) { inp.viewNext = false; this.nextView(); }
     const first = this.view === 1;
+    if (inp.blocked) inp.lookX = inp.lookY = 0;
     this.yaw += inp.lookX * 0.0028;
     this.pitch = clamp(this.pitch + inp.lookY * 0.0024, first ? -1.2 : -0.45, 1.3);
     this.lookIdle = Math.abs(inp.lookX) + Math.abs(inp.lookY) > 0.5 ? 0 : this.lookIdle + dt;

@@ -2,6 +2,7 @@
 // 역 승강장에서 E로 타고, 다른 역에 섰을 때 E로 내린다.
 import { paths, STATION_PADS, CROSSINGS } from './roads.js';
 import { STATIONS } from './world.js';
+import { stats } from './stats.js';
 import { flatMat, clamp, lerp, smoothstep } from './util.js';
 const B = window.BABYLON;
 
@@ -129,6 +130,7 @@ export class Train {
       return true;
     }
     if (!this.nearPlatform()) return false;
+    stats.bump('rides');
     P.riding = this; P.inside = true; P.chr.setVisible(false); // 타는 동안은 다치지 않고 경찰도 못 찾는다
     P.cc.setPosition(new B.Vector3(this.seat.x, this.seat.y + 400, this.seat.z));
     this.jobs.toast('기차에 탔어요. 다른 역에 서면 E로 내려요');
