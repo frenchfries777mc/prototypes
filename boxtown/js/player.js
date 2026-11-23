@@ -306,7 +306,7 @@ export class Player {
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const wx = sy * mv.y + cy * mv.x, wz = cy * mv.y - sy * mv.x;
     const mag = Math.hypot(wx, wz);
-    const top = inp.sprint ? SPRINT : WALK;
+    const top = (inp.sprint ? SPRINT : WALK) * (this.speedBoost || 1); // 음료와 스케이트로 빨라진다
     const tx = wx * top, tz = wz * top;
     // 땅에서는 빠르게 붙고, 공중에서는 살짝만 방향을 바꿀 수 있다.
     const acc = (this.grounded ? (mag > 0.05 ? 46 : 38) : 14) * dt;
@@ -324,7 +324,7 @@ export class Player {
     }
     else vy = Math.max(vy + GRAVITY * dt, -45);
     if (this.jumpBuf > 0 && (this.grounded || this.airT < 0.12)) {
-      vy = JUMP_V; this.jumpBuf = 0; this.jumped = true; this.airT = 1; this.grounded = false; this.jumpGrace = 0.18;
+      vy = JUMP_V * (this.jumpBoost || 1); this.jumpBuf = 0; this.jumped = true; this.airT = 1; this.grounded = false; this.jumpGrace = 0.18;
     }
     if (kick) { hx += kick.x; hz += kick.z; vy = kick.y; this.grounded = false; this.jumpGrace = 0.25; this.airT = 1; }
     this.vel.set(hx, vy, hz);
