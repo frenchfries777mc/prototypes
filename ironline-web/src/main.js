@@ -12,7 +12,7 @@ import { Hud } from './hud.js';
 const $ = (id) => document.getElementById(id);
 const q = new URLSearchParams(location.search);
 const SEED = 20260101;
-const TS = q.get('terrain') || 'block';   // block · lowpoly · toon · paint · real · ps1
+const TS = q.get('terrain') || 'toon';   // block · lowpoly · toon · paint · real · ps1
 setDecorStyle(TS === 'block');
 const QUAL = [
   { pr: 1, shadow: 0, size: 1024, far: 700 },

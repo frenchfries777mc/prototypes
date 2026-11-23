@@ -169,10 +169,17 @@ export function makeRealTerrain(world, tex) {
 // ---- 부드러운 지형 시안들: 로우폴리 / 카툰 / 수채화 / PS1 ----
 const PAL = {
   lowpoly: { g: [0.34, 0.52, 0.2], d: [0.68, 0.54, 0.34], m: [0.4, 0.3, 0.22], r: [0.54, 0.52, 0.5] },
-  toon: { g: [0.32, 0.7, 0.22], d: [0.88, 0.66, 0.38], m: [0.52, 0.36, 0.24], r: [0.66, 0.64, 0.72] },
+  toon: { g: [0.30, 0.68, 0.20], d: [0.92, 0.68, 0.36], m: [0.50, 0.32, 0.22], r: [0.66, 0.64, 0.74] },
   paint: { g: [0.46, 0.62, 0.24], d: [0.84, 0.64, 0.38], m: [0.5, 0.36, 0.28], r: [0.66, 0.6, 0.56] },
   ps1: { g: [0.3, 0.5, 0.18], d: [0.56, 0.43, 0.29], m: [0.32, 0.24, 0.18], r: [0.46, 0.46, 0.44] },
 };
+let _tg = null;
+// 카툰 음영 단계(어두움 → 밝음 4단). 지형과 병사가 같이 쓴다.
+export function toonGradient() {
+  if (_tg) return _tg;
+  _tg = new THREE.DataTexture(new Uint8Array([85, 85, 85, 255, 150, 150, 150, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 4, 1, THREE.RGBAFormat);
+  _tg.magFilter = _tg.minFilter = THREE.NearestFilter; _tg.needsUpdate = true; return _tg;
+}
 export function makeSmoothTerrain(world, style) {
   const { gw, gh, gx0, gz0, hmap } = world, GR = GRID, pal = PAL[style];
   const st = style === 'lowpoly' || style === 'ps1' ? 2 : 1, flat = style === 'lowpoly';
@@ -221,9 +228,7 @@ export function makeSmoothTerrain(world, style) {
   let mat;
   if (style === 'lowpoly') mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
   else if (style === 'toon') {
-    const gm = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 150, 150, 150, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 4, 1, THREE.RGBAFormat);
-    gm.magFilter = gm.minFilter = THREE.NearestFilter; gm.needsUpdate = true;
-    mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gm });
+    mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient() });
   } else if (style === 'ps1') mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: pixelTexture(16, 0.8, 0.2), roughness: 1 });
   else {
     mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
