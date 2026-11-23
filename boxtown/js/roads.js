@@ -27,6 +27,27 @@ function resample(pts) {
   return out;
 }
 
+// 길 끝이 시가지 길 끝과 맞닿는 곳: 꺾여서 만나면 두 띠의 끝이 어긋나 틈과 턱이 생긴다.
+// 시가지 길이 뻗는 방향으로 16m 나간 점을 하나 끼워, 곧게 이어진 다음에 휘도록 한다.
+for (const r of ROADS) {
+  if (r.city || r.type === 'rail') continue;
+  for (const atEnd of [false, true]) {
+    const e = r.pts[atEnd ? r.pts.length - 1 : 0];
+    for (const o of ROADS) {
+      if (!o.city) continue;
+      for (const oEnd of [false, true]) {
+        const q = o.pts[oEnd ? o.pts.length - 1 : 0], n = o.pts[oEnd ? o.pts.length - 2 : 1];
+        if (Math.hypot(q[0] - e[0], q[1] - e[1]) > 3) continue;
+        const l = Math.hypot(q[0] - n[0], q[1] - n[1]) || 1, c = [q[0] + ((q[0] - n[0]) / l) * 16, q[1] + ((q[1] - n[1]) / l) * 16];
+        // 원래 있던 가까운 점은 치운다(끼운 점과 뒤엉켜 길이 꼬이지 않게).
+        const near = r.pts[atEnd ? r.pts.length - 2 : 1];
+        if (r.pts.length > 3 && Math.hypot(near[0] - c[0], near[1] - c[1]) < 26) r.pts.splice(atEnd ? r.pts.length - 2 : 1, 1);
+        r.pts.splice(atEnd ? r.pts.length - 1 : 1, 0, c);
+      }
+    }
+  }
+}
+
 const GRADE = { road: 0.13, dirt: 0.19, rail: 0.06 }; // 길이 가질 수 있는 가장 가파른 기울기
 export const paths = [];
 for (const r of ROADS) {
@@ -75,6 +96,16 @@ for (const r of ROADS) {
     p.tx = (b.x - a.x) / l; p.tz = (b.z - a.z) / l;
   });
   paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined });
+}
+
+// 끝과 끝이 맞닿은 길은 맞닿는 단면의 방향을 똑같이 맞춘다(띠의 끝 모서리가 정확히 겹치게).
+for (const A of paths) for (const B2 of paths) {
+  if (A === B2 || A.type === 'rail' || B2.type === 'rail' || !B2.city || A.city) continue;
+  for (const e of [A.pts[0], A.pts[A.pts.length - 1]]) for (const q of [B2.pts[0], B2.pts[B2.pts.length - 1]]) {
+    if (Math.hypot(e.x - q.x, e.z - q.z) > 3) continue;
+    const sgn = Math.sign(e.tx * q.tx + e.tz * q.tz) || 1;
+    e.x = q.x; e.z = q.z; e.tx = q.tx * sgn; e.tz = q.tz * sgn;
+  }
 }
 
 // 길과 길이 겹치는 곳(교차로, 합류)은 높이를 하나로 맞춘다. 따로 다듬은 길들이 서로 다른 높이로 겹치면 턱과 벽이 생긴다.

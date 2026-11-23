@@ -35,6 +35,7 @@ export class Lobby {
     document.body.classList.remove('lobby');
     this.input.blocked = false;
     this.player.freeCam = null; this.player.snap = true;
+    this.player.chr.wave = 0; // 로비에서 흔들던 손은 내린다
   }
   act(a) {
     if (a === 'start') return this.hide();
