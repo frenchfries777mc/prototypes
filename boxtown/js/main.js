@@ -95,7 +95,7 @@ async function boot() {
   const spawn = { ...SPAWN, y: groundY(SPAWN.x, SPAWN.z) };
   const garage = new Garage(scene, assets, PARKED, CELL, ROAD_Y, height);
   garage.addBoats(scene, assets, town.boatSpots);
-  const residents = new Residents(scene, groundY);
+  const residents = new Residents(scene, groundY, 24);
   const player = new Player(scene, input, character, spawn, garage);
   const police = new Police({ scene, assets, garage, player, jobs: null, height });
   const interiors = town.interiors;
@@ -141,7 +141,7 @@ async function boot() {
   weapons.toast = (text, good) => jobs.toast(text, good);
   weapons.onCrime = (amount) => police.report(amount);
   health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
-  const train = new Train({ scene, player, jobs, assets, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  const train = new Train({ scene, player, jobs, assets, garage, sfx: weapons.sfx, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   train0 = train;
   const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   weapons.traffic = traffic; traffic0 = traffic;
@@ -152,7 +152,8 @@ async function boot() {
     const id = islandAt(player.feet.x, player.feet.z).id;
     return id === 'main' || id === 'mainland' ? 'land' : 'island';
   });
-  train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(70, vx, vz, 'train'); };
+  train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(9999, vx, vz, 'train'); };
+  train.onCarHit = (c) => { if (c === player.vehicle) player.shake = 1; };
   mark('actors');
   const map = new MapView(() => ({
     x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
@@ -182,6 +183,9 @@ async function boot() {
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
   let promptText = '';
+  let useLabel = '', quitT = 0, carShown = -1;
+  const carHp = $('carHp');
+  $('btnView').addEventListener('click', () => player.nextView());
   const tick = (dt) => {
     town.update(dt);
     cullT -= dt;
@@ -195,6 +199,7 @@ async function boot() {
     police.update(dt);
     health.update(dt);
     train.update(dt);
+    traffic.blocked = train.closed;
     traffic.update(dt);
     music.update(dt);
     interiors.update(dt);
@@ -203,10 +208,19 @@ async function boot() {
       promptText = text;
       prompt.hidden = !text;
       $('promptText').textContent = text;
-      $('btnUse').textContent = text.length > 6 ? text.slice(0, 6) : text || '타기';
-      $('btnUse').style.visibility = text ? 'visible' : 'hidden';
+      useLabel = '';
       document.body.classList.toggle('driving', !!car);
     }
+    // 모바일 상호작용 버튼: 할 일이 있으면 그 이름을, 일하는 중에 달리 할 게 없으면 '일 끝내기(길게)'를 보여 준다.
+    const quitable = !text && !!jobs.active && !car;
+    const label = text ? (text.length > 7 ? text.slice(0, 7) : text) : quitable ? '일 끝내기' : '상호작용';
+    if (label !== useLabel) { useLabel = label; $('btnUse').textContent = label; $('btnUse').classList.toggle('idle', !text && !quitable); }
+    quitT = quitable && input.touchUse ? quitT + dt : 0;
+    if (quitT > 0.7) { quitT = 0; jobs.quit(); }
+    // 차 내구도
+    const showCar = !!car && !car.isBoat;
+    if (carHp.hidden === showCar) carHp.hidden = !showCar;
+    if (showCar) { const w = Math.max(0, Math.round(car.hp)); if (w !== carShown) { carShown = w; $('carHpFill').style.width = w + '%'; $('carHpFill').classList.toggle('low', w <= 35); } }
     speedo.hidden = !car;
     if (car) speedo.firstChild.textContent = Math.round(Math.abs(car.speed) * 3.6);
   };
