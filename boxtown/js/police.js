@@ -11,35 +11,49 @@ const LOSE_DIST = 150; // 이보다 멀어지면 따돌리기 시작
 const $ = (id) => document.getElementById(id);
 const isRoad = (cx, cz) => { const c = GRID[cz] && GRID[cz][cx]; return c === '#' || c === 'x'; };
 
-// 마을 도로 칸에서의 길 찾기(너비 우선). 다음에 갈 칸의 중심을 돌려준다.
-function nextCell(fx, fz, tx, tz) {
-  const key = (x, z) => x + z * 32, start = key(fx, fz), goal = key(tx, tz);
-  if (start === goal) return null;
-  const prev = new Map([[goal, -1]]), q = [[tx, tz]];
-  while (q.length) {
-    const [x, z] = q.shift();
-    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = x + dx, nz = z + dz, k = key(nx, nz);
-      if (!isRoad(nx, nz) || prev.has(k)) continue;
-      prev.set(k, key(x, z));
-      if (k === start) { const p = prev.get(k); return [(p % 32) * CELL, Math.floor(p / 32) * CELL]; }
-      q.push([nx, nz]);
+// ----- 길 그물: 마을 도로 칸과 마을 밖 길의 점들을 이어 놓고, 그 위에서 가장 짧은 길을 찾는다 -----
+const NODES = []; // { x, z, y, e: [[이웃 번호, 거리]] }
+(function buildNav() {
+  const link = (a, b) => { const d = Math.hypot(NODES[a].x - NODES[b].x, NODES[a].z - NODES[b].z); NODES[a].e.push([b, d]); NODES[b].e.push([a, d]); };
+  const cell = new Map();
+  for (let j = 0; j < GRID.length; j++) for (let i = 0; i < GRID[j].length; i++) if (isRoad(i, j)) { cell.set(i + j * 64, NODES.length); NODES.push({ x: i * CELL, z: j * CELL, y: 0.12, e: [], town: true }); }
+  for (const [k, n] of cell) { const i = k % 64, j = Math.floor(k / 64); for (const [di, dj] of [[1, 0], [0, 1]]) { const o = cell.get(i + di + (j + dj) * 64); if (o !== undefined) link(n, o); } }
+  const townN = NODES.length, starts = [];
+  for (const path of paths) {
+    if (path.type === 'rail') continue;
+    const first = NODES.length;
+    for (let k = 0; k < path.pts.length; k += 2) { const q = path.pts[Math.min(k, path.pts.length - 1)]; NODES.push({ x: q.x, z: q.z, y: q.y, e: [] }); if (NODES.length - 1 > first) link(NODES.length - 2, NODES.length - 1); }
+    const last = path.pts[path.pts.length - 1], tail = NODES[NODES.length - 1];
+    if (tail.x !== last.x || tail.z !== last.z) { NODES.push({ x: last.x, z: last.z, y: last.y, e: [] }); link(NODES.length - 2, NODES.length - 1); }
+    starts.push([first, NODES.length]);
+  }
+  // 서로 다른 길이 만나는 곳과 마을 어귀를 잇는다.
+  const near = (a, b, r) => Math.abs(NODES[a].x - NODES[b].x) < r && Math.abs(NODES[a].z - NODES[b].z) < r && Math.hypot(NODES[a].x - NODES[b].x, NODES[a].z - NODES[b].z) < r;
+  for (let p = 0; p < starts.length; p++) {
+    for (let a = starts[p][0]; a < starts[p][1]; a++) {
+      for (let q = p + 1; q < starts.length; q++) for (let b = starts[q][0]; b < starts[q][1]; b++) if (near(a, b, 8.5)) link(a, b);
+      for (let t = 0; t < townN; t++) if (near(a, t, 11)) link(a, t);
     }
   }
-  return null;
-}
-function roadCell(x, z) {
-  const cx = Math.round(x / CELL), cz = Math.round(z / CELL);
-  if (isRoad(cx, cz)) return [cx, cz];
-  let best = null, bd = 3.2;
-  for (let j = 0; j < GRID.length; j++) for (let i = 0; i < GRID[j].length; i++) {
-    if (!isRoad(i, j)) continue;
-    const d = Math.hypot(i - x / CELL, j - z / CELL);
-    if (d < bd) { bd = d; best = [i, j]; }
+})();
+function nearestNode(x, z) { let best = -1, bd = 1e9; for (let i = 0; i < NODES.length; i++) { const n = NODES[i], d = Math.abs(n.x - x) + Math.abs(n.z - z); if (d < bd) { bd = d; best = i; } } return best; }
+// 가장 짧은 길(다익스트라). 길 위의 점 번호들을 돌려준다.
+function route(from, to) {
+  const dist = new Float64Array(NODES.length).fill(1e9), prev = new Int32Array(NODES.length).fill(-1), heap = [[0, from]];
+  dist[from] = 0;
+  while (heap.length) {
+    let mi = 0; for (let i = 1; i < heap.length; i++) if (heap[i][0] < heap[mi][0]) mi = i;
+    const [d, u] = heap.splice(mi, 1)[0];
+    if (u === to) break;
+    if (d > dist[u]) continue;
+    for (const [v, w] of NODES[u].e) if (d + w < dist[v]) { dist[v] = d + w; prev[v] = u; heap.push([d + w, v]); }
   }
-  return best;
+  if (prev[to] < 0) return null;
+  const out = []; for (let u = to; u >= 0; u = prev[u]) out.push(u);
+  return out.reverse();
 }
 
+export const NAV = { NODES, nearestNode, route };
 export class Police {
   constructor({ scene, assets, garage, player, jobs, height, weapons }) {
     Object.assign(this, { scene, garage, player, jobs, height });
@@ -50,7 +64,7 @@ export class Police {
       car.police = true;
       garage.cars.push(car);
       const lamp = (m, dx) => { const b = B.MeshBuilder.CreateBox('siren', { width: 0.34, height: 0.2, depth: 0.3 }, scene); b.parent = car.root; b.position.set(dx, car.height + 0.1, car.zc - 0.1); b.material = m; b.isPickable = false; b.setEnabled(false); return b; };
-      const u = { car, i, active: false, stuck: 0, rev: 0, lamps: [lamp(red, -0.3), lamp(blue, 0.3)], way: null, wayT: 0 };
+      const u = { car, i, active: false, stuck: 0, rev: 0, lamps: [lamp(red, -0.3), lamp(blue, 0.3)], way: null, wayT: 0, wi: 0, revSteer: 0 };
       car.ai = (dt) => (u.active ? this.drive(u, dt) : null);
       return u;
     });
@@ -80,8 +94,12 @@ export class Police {
     if (!s) return false;
     const p = this.player.feet;
     u.car.hp = 100;
-    u.car.reset(s[0], s[2] + 0.7, s[1], Math.atan2(p.x - s[0], p.z - s[1]));
-    u.active = true; u.stuck = 0; u.rev = 0;
+    // 길이 난 방향을 보고 나타난다(플레이어 쪽을 보면 건물이나 비탈로 곧장 들이받는다).
+    let yaw = Math.atan2(p.x - s[0], p.z - s[1]);
+    const r = route(nearestNode(s[0], s[1]), nearestNode(p.x, p.z));
+    if (r && r.length > 2) { const n = NODES[r[Math.min(2, r.length - 1)]]; yaw = Math.atan2(n.x - s[0], n.z - s[1]); }
+    u.car.reset(s[0], s[2] + 0.7, s[1], yaw);
+    u.active = true; u.stuck = 0; u.rev = 0; u.fails = 0; u.way = null; u.wayT = 0;
     return true;
   }
   recall(u) {
@@ -90,29 +108,48 @@ export class Police {
     if (!u.car.dead) { u.car.hp = 100; u.car.reset(u.car.home.pos.x, u.car.home.pos.y + 0.3, u.car.home.pos.z, null); }
   }
 
-  // 경찰차 한 대의 운전: 마을 안에서는 도로 칸을 따라가고, 그 밖에서는 곧장 쫓는다.
+  // 경찰차 한 대의 운전: 길 그물 위에서 가장 짧은 길을 따라가고, 굽이 앞에서는 속도를 줄인다.
+  // 목표가 가깝거나 길에서 벗어나 있으면 곧장 쫓는다.
   drive(u, dt) {
-    const car = u.car, P = this.player, target = P.vehicle ? P.vehicle.pos : P.feet;
-    let tx = target.x, tz = target.z;
+    const car = u.car, P = this.player, target = P.vehicle ? P.vehicle.pos : P.feet, onFoot = !P.vehicle;
+    const dist = Math.hypot(target.x - car.pos.x, target.z - car.pos.z);
     u.wayT -= dt;
     if (u.wayT <= 0) {
-      u.wayT = 0.4;
+      u.wayT = 0.7 + u.i * 0.13;
       u.way = null;
-      const a = roadCell(car.pos.x, car.pos.z), b = roadCell(target.x, target.z);
-      if (a && b && Math.hypot(target.x - car.pos.x, target.z - car.pos.z) > 16) u.way = nextCell(a[0], a[1], b[0], b[1]);
+      const b = nearestNode(target.x, target.z), tb = NODES[b];
+      // 목표가 길에서 멀리 벗어나 있으면(들판, 해변) 가까워졌을 때 길을 버리고 곧장 간다.
+      const off = Math.hypot(tb.x - target.x, tb.z - target.z);
+      if (dist > Math.max(22, off + 8)) { const r = route(nearestNode(car.pos.x, car.pos.z), b); if (r && r.length > 2) { u.way = r; u.wi = 0; } }
     }
-    if (u.way) { tx = u.way[0]; tz = u.way[1]; }
-    const dx = tx - car.pos.x, dz = tz - car.pos.z, dist = Math.hypot(target.x - car.pos.x, target.z - car.pos.z);
-    const diff = angDiff(car.yaw, Math.atan2(dx, dz));
-    if (u.rev > 0) { u.rev -= dt; return { throttle: -1, steer: clamp(-diff * 2, -1, 1), handbrake: false }; }
-    // 걸어서 달아나는 사람 옆에서는 속도를 줄여 멈춰 선다.
-    const onFoot = !P.vehicle;
-    let throttle = Math.abs(diff) > 1.3 ? 0.45 : 1;
-    if (onFoot && dist < 14) throttle = car.speed > 6 ? -0.6 : 0.5;
-    if (onFoot && dist < 5) throttle = car.speed > 1 ? -1 : 0;
-    // 벽이나 나무에 막히면 잠깐 후진한다.
-    if (throttle > 0.3 && Math.abs(car.speed) < 0.8) { u.stuck += dt; if (u.stuck > 1.1) { u.stuck = 0; u.rev = 1.0; } } else u.stuck = 0;
-    return { throttle, steer: clamp(diff * 1.7, -1, 1), handbrake: false };
+    let tx = target.x, tz = target.z, bend = 0;
+    if (u.way) {
+      // 지나온 점은 넘기고, 속도에 맞춰 조금 앞의 점을 겨눈다.
+      const look = 7 + Math.abs(car.speed) * 0.45;
+      while (u.wi < u.way.length - 1 && Math.hypot(NODES[u.way[u.wi]].x - car.pos.x, NODES[u.way[u.wi]].z - car.pos.z) < look) u.wi++;
+      const n = NODES[u.way[u.wi]];
+      tx = n.x; tz = n.z;
+      // 앞쪽 길이 얼마나 꺾이는지(굽이 앞에서 미리 감속)
+      const far = NODES[u.way[Math.min(u.way.length - 1, u.wi + 5)]];
+      bend = Math.abs(angDiff(Math.atan2(tx - car.pos.x, tz - car.pos.z), Math.atan2(far.x - tx, far.z - tz)));
+      if (u.wi >= u.way.length - 1) u.way = null;
+    }
+    const diff = angDiff(car.yaw, Math.atan2(tx - car.pos.x, tz - car.pos.z));
+    if (u.rev > 0) { u.rev -= dt; return { throttle: -1, steer: clamp(-u.revSteer, -1, 1), handbrake: false }; }
+    // 낼 속도: 곧은 길은 빠르게, 굽이와 급한 방향 전환에서는 천천히.
+    let want = clamp(30 - bend * 20 - Math.abs(diff) * 16, 8, 30);
+    if (onFoot && dist < 16) want = 6; // 걸어서 달아나는 사람 옆에서는 속도를 줄여 멈춰 선다
+    if (onFoot && dist < 5) want = 0;
+    let throttle = car.speed < want - 1 ? 1 : car.speed > want + 5 ? -1 : car.speed > want + 1.5 ? -0.35 : 0.25;
+    if (want === 0) throttle = car.speed > 1 ? -1 : 0;
+    // 벽이나 나무에 막히면 반대로 꺾으며 후진한다.
+    if (throttle > 0.2 && Math.abs(car.speed) < 0.8) { u.stuck += dt; if (u.stuck > 0.9) { u.stuck = 0; u.rev = 1.3; u.revSteer = Math.sign(diff || 1); u.wayT = 0; u.fails = (u.fails || 0) + 1; } } else u.stuck = 0;
+    if (car.speed > 10) u.fails = 0;
+    // 여러 번 막혀서 못 빠져나오면, 보이지 않는 곳에서 길 위로 다시 출동한다.
+    if (u.fails >= 3 && dist > 45) { this.dispatch(u); return { throttle: 0, steer: 0, handbrake: false }; }
+    // 급하게 꺾을 때는 사이드 브레이크로 뒤를 돌린다.
+    const hb = Math.abs(diff) > 1.5 && car.speed > 9;
+    return { throttle: hb ? 0 : throttle, steer: clamp(diff * 2.2, -1, 1), handbrake: hb };
   }
 
   arrest() {

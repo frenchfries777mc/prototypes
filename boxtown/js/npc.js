@@ -43,7 +43,10 @@ function ringS(r, x, z) {
 }
 
 // 불량배와 경찰관은 옷차림으로 구분된다.
-const THUG = { shirt: '#22202b', pants: '#3b3b4d', shoes: '#b8322a', head: 'beanie', hat: '#b8322a', brim: '#22202b' };
+const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c' };
+// 체력: 불량배와 경찰관은 더 튼튼하다.
+const MAXHP = { citizen: 160, thug: 280, cop: 230 };
+const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
 const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' };
 function lookFor(kind, seed) {
   const base = randomLook(seed);
@@ -51,13 +54,23 @@ function lookFor(kind, seed) {
 }
 
 export class Residents {
+  // 종류에 맞는 체력과 덩치를 준다. 불량배는 머리 위에 빨간 표식이 떠 있어 멀리서도 보인다.
+  setup(n, scene) {
+    n.hp = MAXHP[n.kind]; n.scale = SCALE[n.kind];
+    n.chr.root.scaling.setAll(n.scale);
+    if (n.kind !== 'thug') return;
+    if (!this.markMat) { this.markMat = new B.StandardMaterial('thugMark', scene); this.markMat.emissiveColor = new B.Color3(1, 0.16, 0.1); this.markMat.disableLighting = true; }
+    const m = B.MeshBuilder.CreatePolyhedron('thugMark', { type: 1, size: 0.17 }, scene);
+    m.material = this.markMat; m.parent = n.chr.root; m.position.y = 2.25; m.scaling.y = 1.5; m.isPickable = false;
+    n.mark = m;
+  }
   constructor(scene, groundY, walkers = 16) {
     this.groundY = groundY;
     this.list = [];
     this.meshes = [];
     const r = rng(31337);
     for (let i = 0; i < walkers; i++) {
-      const kind = i === 2 || i === 9 ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
+      const kind = i === 2 || i === 6 || i === 9 || i === 13 ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
       const chr = new Character(scene, lookFor(kind, 1000 + i * 7));
       const ring = i % RINGS.length;
       const n = { chr, kind, mode: 'walk', ring, s: r() * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
@@ -65,6 +78,7 @@ export class Residents {
       const [x, z] = ringPoint(RINGS[ring], n.s);
       n.pos.set(x, groundY(x, z), z);
       chr.heading = r() * 6.28;
+      this.setup(n, scene);
       this.list.push(n);
       this.meshes.push(...chr.meshes);
     }
@@ -73,6 +87,7 @@ export class Residents {
       const chr = new Character(scene, lookFor(kind, 4000 + i * 13));
       chr.heading = yaw;
       const n = { chr, kind, mode: 'stand', home: [x, z, yaw], pos: new B.Vector3(x, groundY(x, z), z), vel: new B.Vector3(), vy: 0, lie: 0, t: r() * 5, look: 0, r: rng(900 + i) };
+      this.setup(n, scene);
       this.list.push(n);
       this.meshes.push(...chr.meshes);
     });
@@ -83,7 +98,6 @@ export class Residents {
   // 피해를 준다. (dx, dz)는 맞은 방향. 체력이 다하면 하늘로 날아간다.
   damage(n, amount, dx = 0, dz = 0) {
     if (n.mode === 'sky') return false;
-    if (n.hp === undefined) n.hp = 100;
     n.hp -= amount;
     const l = Math.hypot(dx, dz) || 1;
     n.chr.bump(dx / l, dz / l, 2);
@@ -91,8 +105,16 @@ export class Residents {
     // 아직 버틸 만하면 뒤로 밀리고 달아난다.
     n.pos.x += (dx / l) * 0.3; n.pos.z += (dz / l) * 0.3;
     // 불량배와 경찰관은 달아나지 않고 덤빈다.
-    if (n.mode !== 'fly' && n.mode !== 'down') { n.mode = n.kind === 'citizen' ? 'flee' : 'fight'; n.t = n.kind === 'citizen' ? 3.8 : 14; n.stagger = 0.75; }
+    if (n.mode !== 'fly' && n.mode !== 'down') { n.mode = n.kind === 'citizen' ? 'flee' : 'fight'; n.t = n.kind === 'citizen' ? 3.8 : n.kind === 'thug' ? 40 : 14; n.stagger = n.kind === 'thug' ? 0.4 : 0.75; }
+    if (n.kind === 'thug') this.rally(n);
     return false;
+  }
+  // 불량배가 맞으면 근처 패거리도 함께 덤빈다.
+  rally(n) {
+    for (const o of this.list) {
+      if (o === n || o.kind !== 'thug' || Math.hypot(o.pos.x - n.pos.x, o.pos.z - n.pos.z) > 32) continue;
+      if (o.mode === 'walk' || o.mode === 'stand' || o.mode === 'cross' || o.mode === 'return') { o.mode = 'fight'; o.t = 40; o.stagger = 0; }
+    }
   }
   launch(n, dx = 0, dz = 0) {
     if (n.mode === 'sky') return;
@@ -145,7 +167,9 @@ export class Residents {
             n.vel.set(cv.x * 0.75 + c.right.x * side * 2, 0, cv.z * 0.75 + c.right.z * side * 2);
             n.vy = 4 + sp * 0.22;
             // 차에 치이면 체력도 깎인다. 다 닳으면 그대로 날아가 버린다.
-            n.hp = (n.hp === undefined ? 100 : n.hp) - Math.min(85, 15 + sp * 4);
+            n.hp -= 35 + sp * 10;
+            n.grudge = n.kind === 'thug' && c === player.car; // 불량배는 일어나서 쫓아온다
+            if (n.grudge) this.rally(n);
             if (n.hp <= 0) { n.mode = n.back; this.launch(n, cv.x / sp, cv.z / sp); }
             n.spin = (n.r() - 0.5) * 14;
             chr.bump(cv.x, cv.z, 2);
@@ -169,7 +193,7 @@ export class Residents {
           n.vy -= 13 * dt; // 적당히 떠올랐다가 별이 된다
           p.y += n.vy * dt; p.x += n.vel.x * dt; p.z += n.vel.z * dt;
           n.lie += 8 * dt;
-          chr.root.scaling.setAll(Math.max(0.08, 1 - Math.max(0, n.t - 0.5) / 1.0));
+          chr.root.scaling.setAll(n.scale * Math.max(0.08, 1 - Math.max(0, n.t - 0.5) / 1.0));
         } else if (!n.gone) {
           n.gone = true;
           chr.setVisible(false);
@@ -177,8 +201,8 @@ export class Residents {
         } else if (n.t > 8) {
           const [x, z] = n.home ? n.home : ringPoint(RINGS[n.ring], n.s);
           p.set(x, this.groundY(x, z), z);
-          n.vel.set(0, 0, 0); n.lie = 0; n.hp = 100; n.gone = false; n.vy = 0;
-          chr.root.scaling.setAll(1); chr.setVisible(true); chr.sSquash.v += 4; // 뿅 하고 돌아온다
+          n.vel.set(0, 0, 0); n.lie = 0; n.hp = MAXHP[n.kind]; n.gone = false; n.vy = 0;
+          chr.root.scaling.setAll(n.scale); chr.setVisible(true); chr.sSquash.v += 4; // 뿅 하고 돌아온다
           n.mode = n.home ? 'stand' : 'walk';
         }
       } else if (n.mode === 'fight') {
@@ -186,13 +210,14 @@ export class Residents {
         n.t -= dt;
         if (n.stagger > 0) n.stagger -= dt;
         n.hitT = (n.hitT || 0) - dt;
-        const d = pd0 || 1, sp = n.stagger > 0 || d < 1.4 ? 0 : 5.6;
+        const thug = n.kind === 'thug', chase = player.active || (thug && !!player.car), reach = player.car ? 3.1 : 1.9;
+        const d = pd0 || 1, sp = n.stagger > 0 || d < reach - 0.5 ? 0 : thug ? 6.2 : 5.6;
         n.vel.set((pdx0 / d) * sp, 0, (pdz0 / d) * sp);
         const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
         if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; }
         wish = Math.atan2(pdx0, pdz0);
-        if (player.active && d < 1.9 && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2) { n.hitT = 0.95; chr.swing = 1; chr.swingTime = 0.3; if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
-        if (n.t <= 0 || d > 45 || !player.active || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
+        if (chase && d < reach && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2.5) { n.hitT = thug ? 1.05 : 0.95; chr.swing = 1; chr.swingTime = 0.3; if (player.car) { if (this.onPunchCar) this.onPunchCar(n, player.car); } else if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
+        if (n.t <= 0 || d > (thug ? 70 : 45) || !chase || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
       } else if (n.mode === 'flee') {
         // 놀라서 플레이어 반대쪽으로 달아난다.
         n.t -= dt;
@@ -220,7 +245,8 @@ export class Residents {
         if (n.t <= 0) {
           n.lie = 0;
           n.mode = n.back;
-          if (n.back === 'walk') { // 가장 가까운 인도로 돌아간다
+          if (n.grudge) { n.grudge = false; n.mode = 'fight'; n.t = 40; n.stagger = 0; }
+          else if (n.back === 'walk') { // 가장 가까운 인도로 돌아간다
             let best = 0, bd = 1e9;
             RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const d = Math.hypot(x - p.x, z - p.z); if (d < bd) { bd = d; best = i; } });
             n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); n.mode = 'return';
@@ -294,6 +320,7 @@ export class Residents {
       } else chr.wave = damp(chr.wave, 0, 8, dt);
       n.look = damp(n.look || 0, lookYaw, 6, dt);
 
+      if (n.mark) { n.mark.rotation.y += dt * 2.5; n.mark.position.y = 2.25 + Math.sin(n.mark.rotation.y * 1.3) * 0.07; }
       chr.update(dt, { pos: p, vel: n.vel, grounded, wishHeading: wish, landed, jumped: false, lie: n.lie, lookYaw: n.look });
     }
   }

@@ -180,7 +180,7 @@ async function boot() {
     if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
-    residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, wanted: police.level }, garage.cars);
+    residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
     jobs.update(dt);
     map.update(dt);
     weapons.update(dt, map.open || !!player.riding);
