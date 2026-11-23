@@ -1,0 +1,33 @@
+:root {
+  --bg: #0b1626; --panel: #121f33; --panel-border: #24364f;
+  --text: #e6edf6; --muted: #8fa3bd; --accent: #5b9bd5;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #0b1626; } /* 지도는 항상 어두운 바다 배경 */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif; }
+#map { position: fixed; inset: 0; }
+#panel { position: fixed; top: 12px; left: 12px; width: min(320px, calc(100vw - 24px));
+  background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(6px);
+  border: 1px solid var(--panel-border); border-radius: 12px; padding: 12px 14px; z-index: 5;
+  max-height: calc(100vh - 24px); overflow: auto; }
+#panel h1 { font-size: 15px; margin: 0 0 8px; letter-spacing: .04em; }
+#search { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--panel-border);
+  background: #0e1a2c; color: var(--text); font: inherit; }
+#search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chips button { border: 1px solid var(--panel-border); background: #0e1a2c; color: var(--text);
+  border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.chips button:hover { border-color: var(--accent); }
+.info { border-top: 1px solid var(--panel-border); padding-top: 8px; margin-top: 4px; }
+.info.empty { color: var(--muted); }
+.info .name { font-size: 16px; font-weight: 600; }
+.info .sub { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.info .kv { display: grid; grid-template-columns: 76px 1fr; gap: 2px 8px; margin-top: 6px; }
+.info .kv span:nth-child(odd) { color: var(--muted); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.status { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.status.err { color: #ff8a8a; }
+.maplibregl-ctrl-attrib { font-size: 11px; }

@@ -1,0 +1,112 @@
+{
+  "name": "default-worldview",
+  "description": "Natural Earth admin-1 기본 지도에 우리 정책을 덮어쓰는 표. 원본 데이터는 수정하지 않는다.",
+  "rules": [
+    {
+      "note": "크림 자치공화국 + 세바스토폴 -> 우크라이나",
+      "ids": [
+        "RUS-283",
+        "RUS-5482"
+      ],
+      "owner": "UKR"
+    },
+    {
+      "note": "시아첸 빙하(별도 단위) -> 현재 실효지배국 인도",
+      "ids": [
+        "KAS+00?"
+      ],
+      "owner": "IND"
+    }
+  ],
+  "expect": [
+    {
+      "id": "RUS-283",
+      "owner": "UKR",
+      "why": "크림: 우크라이나"
+    },
+    {
+      "id": "RUS-5482",
+      "owner": "UKR",
+      "why": "세바스토폴: 우크라이나"
+    },
+    {
+      "id": "PAK-1109",
+      "owner": "PAK",
+      "why": "아자드 카슈미르: 파키스탄"
+    },
+    {
+      "id": "PAK-1111",
+      "owner": "PAK",
+      "why": "길기트-발티스탄(Northern Areas): 파키스탄"
+    },
+    {
+      "id": "IND-2431",
+      "owner": "IND",
+      "why": "인도령 잠무·카슈미르: 인도"
+    },
+    {
+      "id": "IND-20012",
+      "owner": "IND",
+      "why": "라다크: 인도"
+    },
+    {
+      "id": "KAS+00?",
+      "owner": "IND",
+      "why": "시아첸: 인도"
+    },
+    {
+      "id": "CHN-1756",
+      "owner": "CHN",
+      "why": "신장(악사이친 포함): 중국"
+    },
+    {
+      "id": "TWN-1166",
+      "owner": "TWN",
+      "why": "타이베이: Taiwan(독립)"
+    },
+    {
+      "id": "TWN-3415",
+      "owner": "TWN",
+      "why": "진먼: Taiwan"
+    },
+    {
+      "id": "TWN-3414",
+      "owner": "TWN",
+      "why": "펑후: Taiwan"
+    }
+  ],
+  "expectCountryName": [
+    {
+      "owner": "TWN",
+      "nameEn": "Taiwan",
+      "nameKo": "대만"
+    }
+  ],
+  "knownLimitations": [
+    "마쭈(롄장)와 프라타스(둥사) 제도는 Natural Earth 10m 주 데이터에 폴리곤이 없다."
+  ],
+  "mustDiffer": [
+    [
+      "TWN",
+      "CHN"
+    ],
+    [
+      "UKR",
+      "RUS"
+    ],
+    [
+      "PAK",
+      "IND"
+    ],
+    [
+      "PRK",
+      "KOR"
+    ]
+  ],
+  "countryNames": {
+    "TWN": {
+      "name": "Taiwan",
+      "nameKo": "대만"
+    }
+  }
+}

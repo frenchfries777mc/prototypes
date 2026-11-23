@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Althist · 세계지도</title>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <aside id="panel" aria-live="polite">
+      <h1>Althist</h1>
+      <div class="row">
+        <input id="search" list="country-list" placeholder="국가 검색 (한글/영문)" autocomplete="off" />
+        <datalist id="country-list"></datalist>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div id="info" class="info empty">지도를 클릭하면 주 정보가 표시됩니다.</div>
+      <div id="status" class="status">데이터 불러오는 중…</div>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
