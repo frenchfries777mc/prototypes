@@ -123,6 +123,7 @@ func _read_config() -> void:
 			"tp": cfg.tp = (v == "1" or v == "2")
 			"tpd": cfg.tpd = float(v)
 			"perf": cfg.perf = v == "1"
+			"safe": WorldGfx.safe_gfx = v == "1"
 			"nomouse": cfg.nomouse = v == "1"
 			"q": cfg.q = clampi(int(v), 0, 3)
 			"scale": cfg.scale = float(v)
