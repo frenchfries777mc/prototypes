@@ -330,7 +330,7 @@ export function buildTown(scene, assets, mark = () => {}) {
   bucket('town', 66, 48);
 
   // ---------- 건물 내부와 살 수 있는 집 ----------
-  const interiors = buildInteriors({ scene, assets, box, addBox, bucket, groundY, jobSites, houses, mergeBuckets, lazyCollider });
+  const interiors = buildInteriors({ scene, assets, box, addBox, collideModel, bucket, groundY, jobSites, houses, mergeBuckets, lazyCollider });
   bucket('town', 66, 48);
 
   mark('town.jobsites');
