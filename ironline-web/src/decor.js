@@ -102,19 +102,24 @@ export class Batch {
   }
 }
 
-const TREES = ['vox/pine', 'vox/pine', 'vox/pine2', 'vox/oak', 'vox/oak2', 'vox/tall', 'vox/pine2', 'vox/oak'];
-const BUSHES = ['vox/bush', 'vox/bush2'];
-const ROCKS = ['vox/rock', 'vox/rock2'];
-const BIG_ROCKS = ['vox/rockbig'];
+const V = { trees: ['vox/pine', 'vox/pine', 'vox/pine2', 'vox/oak', 'vox/oak2', 'vox/tall', 'vox/pine2', 'vox/oak'], bushes: ['vox/bush', 'vox/bush2'], rocks: ['vox/rock', 'vox/rock2'], big: ['vox/rockbig'], leaf: [0xffffff, 0xf0f6e0, 0xe6f0d8, 0xfff8dc], rock: 0xffffff };
+const K = {
+  trees: ['kenney/tree_pineTallA', 'kenney/tree_pineTallB', 'kenney/tree_pineTallC', 'kenney/tree_pineTallD', 'kenney/tree_pineDefaultA', 'kenney/tree_pineRoundA', 'kenney/tree_default', 'kenney/tree_oak', 'kenney/tree_thin', 'kenney/tree_tall', 'kenney/tree_simple', 'kenney/tree_fat', 'kenney/tree_oak_fall', 'kenney/tree_default_dark', 'kenney/tree_thin_fall'],
+  bushes: ['kenney/plant_bush', 'kenney/plant_bushLarge', 'kenney/plant_bushSmall', 'kenney/plant_bushDetailed', 'kenney/plant_bushLargeTriangle'],
+  rocks: ['kenney/rock_smallA', 'kenney/rock_smallB', 'kenney/rock_smallC', 'kenney/rock_smallD', 'kenney/rock_smallFlatA', 'kenney/rock_smallFlatB', 'kenney/rock_largeA', 'kenney/rock_largeB', 'kenney/rock_largeC', 'kenney/rock_tallD', 'kenney/stone_largeA'],
+  big: ['kenney/rock_largeD', 'kenney/rock_largeE', 'kenney/rock_tallA', 'kenney/rock_tallC', 'kenney/stone_tallA'], leaf: [0x6f8a4a, 0x7a8f4c, 0x62804a, 0x8a8648], rock: 0xb4aca0,
+};
+let TREES = V.trees, BUSHES = V.bushes, ROCKS = V.rocks, BIG_ROCKS = V.big, LEAF = V.leaf, ROCKCOL = V.rock;
+// 블록 지형이면 복셀 나무·바위, 그 밖의 지형이면 Kenney 저폴리 모델을 쓴다
+export function setDecorStyle(blocky) { const S = blocky ? V : K; TREES = S.trees; BUSHES = S.bushes; ROCKS = S.rocks; BIG_ROCKS = S.big; LEAF = S.leaf; ROCKCOL = S.rock; }
 const LOGS = ['kenney/log', 'kenney/log_large', 'kenney/log_stack', 'kenney/stump_old', 'kenney/stump_round', 'kenney/stump_square', 'kenney/stump_oldTall'];
 const FENCES = ['kenney/fence_simple', 'kenney/fence_planks', 'kenney/fence_simple', 'kenney/fence_simpleLow'];
 const FLOWERS = ['kenney/flower_redA', 'kenney/flower_redB', 'kenney/flower_redC', 'kenney/flower_redA', 'kenney/flower_yellowA', 'kenney/flower_purpleA'];
 const PH = ['wooden_ladder_02', 'wooden_bucket_01', 'picke_dirty_01', 'wooden_axe_02', 'crowbar_01', 'cross_pein_hammer', 'oil_tin', 'can_rusted', 'russian_food_cans_01', 'medical_box', 'old_tyre',
   'stone_fire_pit', 'painted_wooden_chair_01', 'painted_wooden_shelves', 'painted_wooden_stool', 'jug_01', 'barrel_03', 'wooden_crate_02', 'old_military_crate', 'ammo_box', 'metal_jerrycan_green'];
-export const MODEL_NAMES = [...TREES, ...BUSHES, ...ROCKS, ...BIG_ROCKS, ...LOGS, ...FENCES, ...FLOWERS, 'kenney/mushroom_redGroup', 'kenney/mushroom_tanGroup', 'kenney/campfire_logs', ...PH];
+export const modelNames = () => [...TREES, ...BUSHES, ...ROCKS, ...BIG_ROCKS, ...LOGS, ...FENCES, ...FLOWERS, 'kenney/mushroom_redGroup', 'kenney/mushroom_tanGroup', 'kenney/campfire_logs', ...PH];
 
 // Kenney 의 파스텔을 전장의 어두운 올리브·갈색으로 끌어내리는 곱셈 색(잎·덤불·나무에 쓴다)
-const LEAF = [0xffffff, 0xf0f6e0, 0xe6f0d8, 0xfff8dc];
 const WOOD = 0x8a7a66;
 
 function freeSpot(w, x, z, nearR, trenchR, allowRoad = false) {
@@ -151,7 +156,7 @@ export function scatter(world, batch) {
     const big = rng.next() < 0.16, cnt = big ? 1 : rng.int(1, 3);
     for (let k = 0; k < cnt; k++) {
       const px = x + (k ? rng.range(-0.9, 0.9) : 0), pz = z + (k ? rng.range(-0.9, 0.9) : 0);
-      batch.add(rng.pick(big ? BIG_ROCKS : ROCKS), px, gy(px, pz) - 0.06, pz, rng.next() * 6.283, big ? rng.range(1.8, 3.4) : rng.range(0.55, 1.3), false, 0xffffff);
+      batch.add(rng.pick(big ? BIG_ROCKS : ROCKS), px, gy(px, pz) - 0.06, pz, rng.next() * 6.283, big ? rng.range(1.8, 3.4) : rng.range(0.55, 1.3), false, ROCKCOL);
     }
     n++;
   }

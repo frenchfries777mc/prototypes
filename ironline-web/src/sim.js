@@ -34,8 +34,8 @@ export class Unit {
 }
 
 export class Sim {
-  constructor(seed = 20260101, perTeam = 16) {
-    this.world = new World(seed);
+  constructor(seed = 20260101, perTeam = 16, smooth = false) {
+    this.world = new World(seed, smooth);
     this.rng = new RNG(seed * 7 + 1);
     this.reset(perTeam);
   }
