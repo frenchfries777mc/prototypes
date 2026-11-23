@@ -58,7 +58,7 @@ export class Lobby {
       <button data-act="wipe" class="danger">${this.wipeArmed ? '정말요? 한 번 더 누르면 전부 지워져요' : '저장 지우고 처음부터'}</button>
       <button data-act="back" class="back">닫기</button></div>`;
     else if (this.panel === 'credits') panel = `<div class="sheet"><h3>🎵 크레딧</h3><div class="text">
-      <b>음악</b>"Dentaneosuchus Hunt 1"<br>"Morning"<br>"Night in Venice"<br>"Zazie"<br>"Divertimento K131"<br>Kevin MacLeod (incompetech.com)<br>Licensed under Creative Commons: By Attribution 4.0 License<br>http://creativecommons.org/licenses/by/4.0/
+      <b>음악</b>"Dentaneosuchus Hunt"<br>"Morning"<br>"Night in Venice"<br>"Zazie"<br>"Divertimento K131"<br>Kevin MacLeod (incompetech.com)<br>Licensed under Creative Commons: By Attribution 4.0 License<br>http://creativecommons.org/licenses/by/4.0/
       <b>3D 모델</b>Kenney (kenney.nl) · CC0
       <b>엔진</b>Babylon.js · Havok Physics</div><button data-act="back" class="back">닫기</button></div>`;
     else if (this.panel === 'records') panel = `<div class="sheet"><h3>🏆 내 기록</h3><div class="text rec">
