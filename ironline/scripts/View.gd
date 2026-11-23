@@ -331,7 +331,7 @@ func update(alpha: float, local_id: int, look_yaw: float, look_pitch: float, dt:
 	var me: Sim.Unit = sim.units[local_id]
 	var cp: Vector3 = me.prev_pos.lerp(me.pos, alpha) + Vector3(0.0, Sim.EYE, 0.0)
 	var spectating := false
-	if not me.alive:
+	if not me.alive and me.deaths > 0:
 		cp.y = maxf(cp.y - minf(me.death_age * 2.0, 1.2), me.pos.y + 0.35)
 		if me.death_age > 0.9:
 			spectating = _pick_spectate(me)

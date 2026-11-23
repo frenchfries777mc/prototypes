@@ -186,8 +186,8 @@ func rod(p0: Vector3, p1: Vector3, r0: float, r1: float, col: Color, bone: int =
 
 ## 외부 모델(ModelLib.mesh_parts 결과)을 이 메시에 굽는다. pre 로 먼저 회전한 뒤 크기를 맞추고(by_height 이면 높이가, 아니면 가장 긴 변이 size(m)),
 ## 바닥 중심을 base 에 놓으며 yaw 만큼 돌린다. 바닥에서 cut 비율 아래의 삼각형(턱끈 등)은 버린다.
-## 색은 원본 재질의 알베도 텍스처를 정점 UV 로 읽어 정점 색으로 굽고, tint 를 tint_w 비율로 섞는다. a 는 정점 색 알파(소품 셰이더의 재질 종류).
-func add_model(parts: Array, base: Vector3, yaw: float, size: float, bone: int, tint: Color, tint_w: float, cut: float = 0.0, pre: Basis = Basis.IDENTITY, by_height: bool = true, a: float = 1.0) -> void:
+## 색은 원본 재질의 알베도 텍스처를 정점 UV 로 읽어 정점 색으로 굽고(텍스처가 없고 lin 이면 재질 색을 선형으로 바꿔 쓴다), tint 를 tint_w 비율로 섞는다. a 는 정점 색 알파(소품 셰이더의 재질 종류).
+func add_model(parts: Array, base: Vector3, yaw: float, size: float, bone: int, tint: Color, tint_w: float, cut: float = 0.0, pre: Basis = Basis.IDENTITY, by_height: bool = true, a: float = 1.0, lin: bool = false) -> void:
 	var lo := Vector3(1e9, 1e9, 1e9)
 	var hi := Vector3(-1e9, -1e9, -1e9)
 	var pxf := Transform3D(pre, Vector3.ZERO)
@@ -254,6 +254,8 @@ func add_model(parts: Array, base: Vector3, yaw: float, size: float, bone: int, 
 							var px := clampi(int(floorf(fposmod(uv.x, 1.0) * img.get_width())), 0, img.get_width() - 1)
 							var py := clampi(int(floorf(fposmod(uv.y, 1.0) * img.get_height())), 0, img.get_height() - 1)
 							col = src * img.get_pixel(px, py).srgb_to_linear()
+						elif lin:
+							col = src.srgb_to_linear()
 						col = col.lerp(tint, tint_w)
 						col.a = a
 						remap[vi] = _add(base + rot * ((wpos - ctr) * sc), rot * wn, col, bone)
