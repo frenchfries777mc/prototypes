@@ -23,6 +23,7 @@ export class Input {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (e.code === 'Space' && !e.repeat) this.jumpQueued = true;
       if (e.code === 'KeyE' && !e.repeat) this.useQueued = true;
+      if (e.code === 'F1') { e.preventDefault(); if (!e.repeat) this.viewNext = true; }
       if (/^Digit[1-9]$/.test(e.code)) this.weaponPick = +e.code.slice(5) - 1;
       this.keys.add(e.code);
     });
@@ -44,13 +45,15 @@ export class Input {
     const pad = document.getElementById('stick'), knob = document.getElementById('stickKnob');
     const jump = document.getElementById('btnJump'), run = document.getElementById('btnRun'), use = document.getElementById('btnUse');
     let moveId = null, lookId = null, ox = 0, oy = 0, lx = 0, ly = 0;
+    // 조이스틱은 평소 왼쪽 아래에 보이고, 누른 자리로 옮겨 왔다가 놓으면 제자리로 돌아간다.
+    const home = () => { pad.style.left = ''; pad.style.top = ''; pad.style.bottom = ''; pad.style.opacity = ''; knob.style.transform = 'translate(0px,0px)'; };
     const R = 56;
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       for (const t of e.changedTouches) {
         if (!this.driving && t.clientX < innerWidth * 0.45 && moveId === null) {
           moveId = t.identifier; ox = t.clientX; oy = t.clientY;
-          pad.style.display = 'block'; pad.style.left = ox - 70 + 'px'; pad.style.top = oy - 70 + 'px';
+          pad.style.left = ox - 70 + 'px'; pad.style.top = oy - 70 + 'px'; pad.style.bottom = 'auto'; pad.style.opacity = '1';
           knob.style.transform = 'translate(0px,0px)';
         } else if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; }
       }
@@ -72,7 +75,7 @@ export class Input {
     }, { passive: false });
     const end = (e) => {
       for (const t of e.changedTouches) {
-        if (t.identifier === moveId) { moveId = null; this.stick.x = this.stick.y = 0; pad.style.display = 'none'; }
+        if (t.identifier === moveId) { moveId = null; this.stick.x = this.stick.y = 0; home(); }
         if (t.identifier === lookId) lookId = null;
       }
     };
@@ -88,7 +91,7 @@ export class Input {
       use.addEventListener('touchcancel', () => { this.touchUse = false; });
     }
     if (run) run.addEventListener('touchstart', (e) => { e.preventDefault(); this.touchRun = !this.touchRun; run.classList.toggle('on', this.touchRun); }, { passive: false });
-    this.releaseStick = () => { moveId = null; this.stick.x = this.stick.y = 0; pad.style.display = 'none'; };
+    this.releaseStick = () => { moveId = null; this.stick.x = this.stick.y = 0; home(); };
 
     // ----- 운전용 터치 조작: 왼쪽 운전대, 오른쪽 엑셀과 브레이크 -----
     const wheel = document.getElementById('wheel'), rim = document.getElementById('wheelRim');
@@ -197,6 +200,9 @@ export class Player {
     this.cam.fov = 0.95; this.cam.minZ = 0.3; this.cam.maxZ = 4500;
     this.cam.inputs.clear();
     this.yaw = spawn.yaw || 0; this.pitch = 0.3; this.dist = 6.8; this.curDist = 6.8;
+    this.camYaw = this.yaw; this.camPitch = this.pitch; // 화면에 쓰는 부드러운 시점(입력은 yaw/pitch에 바로 쌓인다)
+    this.view = 0; // 0: 3인칭(뒤에서), 1: 1인칭, 2: 2인칭(앞에서 마주 봄)
+    try { this.view = +(localStorage.getItem('boxtown.view') || 0) % 3; } catch (e) { /* 무시 */ }
     this.target = new B.Vector3(spawn.x, spawn.y + 1.5, spawn.z);
     this.ray = new B.PhysicsRaycastResult();
     this.freeCam = null; // 디버그·촬영용 고정 시점
@@ -335,7 +341,13 @@ export class Player {
     this.cc.setVelocity(B.Vector3.Zero());
   }
   // 순간 이동. 카메라도 바로 옮겨서, 건너가는 모습이 보이지 않게 한다.
+  nextView() {
+    this.view = (this.view + 1) % 3;
+    try { localStorage.setItem('boxtown.view', String(this.view)); } catch (e) { /* 무시 */ }
+    if (this.onView) this.onView(this.view);
+  }
   teleport(x, y, z) {
+    this.snap = true;
     this.cc.setPosition(new B.Vector3(x, y + CAP_H / 2 + 0.1, z)); this.cc.setVelocity(B.Vector3.Zero());
     this.feet.set(x, y, z); this.target.set(x, y + 1.45, z); this.vel.set(0, 0, 0);
   }
@@ -343,26 +355,48 @@ export class Player {
   frame() {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
     const inp = this.input;
+    if (inp.viewNext) { inp.viewNext = false; this.nextView(); }
+    const first = this.view === 1;
     this.yaw += inp.lookX * 0.0028;
-    this.pitch = clamp(this.pitch + inp.lookY * 0.0024, -0.45, 1.3);
+    this.pitch = clamp(this.pitch + inp.lookY * 0.0024, first ? -1.2 : -0.45, 1.3);
     this.lookIdle = Math.abs(inp.lookX) + Math.abs(inp.lookY) > 0.5 ? 0 : this.lookIdle + dt;
-    if (this.vehicle && !this.freeCam) { this.driveCam(dt); inp.lookX = inp.lookY = 0; return; }
+    inp.lookX = inp.lookY = 0;
+    // 시점은 입력을 살짝 늦게 따라가서 덜 딱딱하게 돈다(순간 이동 직후에는 바로 맞춘다).
+    if (this.snap) { this.camYaw = this.yaw; this.camPitch = this.pitch; }
+    let dy = (this.yaw - this.camYaw) % (Math.PI * 2);
+    if (dy > Math.PI) dy -= Math.PI * 2; if (dy < -Math.PI) dy += Math.PI * 2;
+    this.camYaw += dy * (1 - Math.exp(-(first ? 30 : 18) * dt));
+    this.camPitch = damp(this.camPitch, this.pitch, first ? 30 : 18, dt);
+    // 1인칭에서는 내 몸을 그리지 않는다(차나 기차에 탔을 때는 그쪽에서 이미 숨긴다).
+    if (!this.vehicle && !this.riding) { const vis = !first || !!this.freeCam; if (this.chr.root.isEnabled() !== vis) this.chr.setVisible(vis); }
     if (this.freeCam) {
       this.cam.position.copyFrom(this.freeCam.pos);
       this.cam.setTarget(this.freeCam.target);
       return;
     }
+    if (this.vehicle) { this.driveCam(dt); this.snap = false; return; }
     let t = this.target;
-    t.x = damp(t.x, this.feet.x, 18, dt);
-    t.z = damp(t.z, this.feet.z, 18, dt);
-    t.y = damp(t.y, this.feet.y + 1.45, 9, dt); // 높이는 천천히 따라가서 점프가 덜 어지럽다
-    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    const dir = new B.Vector3(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
+    const k = this.snap ? 1e6 : 1;
+    t.x = damp(t.x, this.feet.x, 14 * k, dt);
+    t.z = damp(t.z, this.feet.z, 14 * k, dt);
+    t.y = damp(t.y, this.feet.y + 1.45, 8 * k, dt); // 높이는 천천히 따라가서 점프가 덜 어지럽다
+    this.snap = false;
+    const yaw = this.camYaw, cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 2.2);
+    const jitter = () => (Math.random() - 0.5) * this.shake;
+    if (first) {
+      // 1인칭: 눈높이에서 바라보는 쪽을 본다.
+      const eye = new B.Vector3(this.feet.x + Math.sin(yaw) * 0.15 + jitter(), t.y + 0.05 + jitter(), this.feet.z + Math.cos(yaw) * 0.15 + jitter());
+      this.cam.position.copyFrom(eye);
+      this.cam.setTarget(eye.add(new B.Vector3(Math.sin(yaw) * cp, -sp, Math.cos(yaw) * cp)));
+      return;
+    }
+    // 3인칭은 뒤에서, 2인칭은 앞에서 마주 본다.
+    const sgn = this.view === 2 ? -1 : 1;
+    const dir = new B.Vector3(-Math.sin(yaw) * cp * sgn, sp, -Math.cos(yaw) * cp * sgn);
     // 어깨 너머 시점: 조준점이 캐릭터에 가리지 않도록 카메라를 오른쪽 위로 옮긴다.
-    this.shoulderK = damp(this.shoulderK, this.shoulder, 8, dt);
-    const base = t;
-    t = base.add(new B.Vector3(Math.cos(this.yaw) * 0.95 * this.shoulderK, 0.3 * this.shoulderK, -Math.sin(this.yaw) * 0.95 * this.shoulderK));
-    if (this.shake > 0) { this.shake = Math.max(0, this.shake - dt * 2.2); t.addInPlaceFromFloats((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake); }
+    this.shoulderK = damp(this.shoulderK, this.view === 2 ? 0 : this.shoulder, 8, dt);
+    t = t.add(new B.Vector3(Math.cos(yaw) * 0.95 * this.shoulderK + jitter(), 0.3 * this.shoulderK + jitter(), -Math.sin(yaw) * 0.95 * this.shoulderK + jitter()));
     // 카메라와 캐릭터 사이에 벽이 있으면 벽 앞까지 당긴다.
     let want = this.dist;
     const phys = this.scene.getPhysicsEngine();
@@ -371,35 +405,44 @@ export class Player {
       // 너무 바짝 붙으면 얼굴만 보이므로 2.2m 안쪽으로는 당기지 않는다(가는 기둥은 그냥 통과).
       if (this.ray.hasHit) want = clamp(this.ray.hitDistance - 0.4, 2.2, this.dist);
     }
-    this.curDist = want < this.curDist ? want : damp(this.curDist, want, 4, dt);
+    this.curDist = damp(this.curDist, want, want < this.curDist ? 22 : 4, dt); // 벽에 막히면 빠르게, 풀리면 천천히
     this.cam.position.copyFrom(t).addInPlace(dir.scale(this.curDist));
     this.cam.setTarget(t);
-    inp.lookX = inp.lookY = 0;
   }
 
   // 운전 중 카메라: 차 뒤를 따라가고, 마우스를 놓고 달리면 진행 방향으로 돌아온다.
   driveCam(dt) {
     const car = this.vehicle, t = this.target;
     if (this.lookIdle > 1.0 && Math.abs(car.speed) > 2.5) {
-      const want = car.speed >= 0 ? car.yaw : car.yaw + Math.PI;
+      const want = car.speed >= 0 || this.view === 1 ? car.yaw : car.yaw + Math.PI;
       let d = (want - this.yaw) % (Math.PI * 2);
       if (d > Math.PI) d -= Math.PI * 2;
       if (d < -Math.PI) d += Math.PI * 2;
       this.yaw += d * (1 - Math.exp(-2.6 * dt));
-      this.pitch = damp(this.pitch, 0.3, 2, dt);
+      this.pitch = damp(this.pitch, this.view === 1 ? 0.08 : 0.3, 2, dt);
     }
-    t.x = damp(t.x, car.pos.x, 16, dt);
-    t.z = damp(t.z, car.pos.z, 16, dt);
-    t.y = damp(t.y, car.pos.y + 1.6, 8, dt);
-    const pitch = clamp(this.pitch, 0.05, 1.3);
+    const k = this.snap ? 1e6 : 1;
+    t.x = damp(t.x, car.pos.x, 12 * k, dt);
+    t.z = damp(t.z, car.pos.z, 12 * k, dt);
+    t.y = damp(t.y, car.pos.y + 1.6, 7 * k, dt);
+    const yaw = this.camYaw;
+    if (this.view === 1) {
+      // 1인칭: 지붕 앞쪽에 붙은 카메라
+      const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
+      const eye = new B.Vector3(car.pos.x + car.fwd.x * 0.3, car.pos.y + car.height + 0.25, car.pos.z + car.fwd.z * 0.3);
+      this.cam.position.copyFrom(eye);
+      this.cam.setTarget(eye.add(new B.Vector3(Math.sin(yaw) * cp, -sp, Math.cos(yaw) * cp)));
+      return;
+    }
+    const pitch = clamp(this.camPitch, 0.05, 1.3), sgn = this.view === 2 ? -1 : 1;
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const dir = new B.Vector3(-Math.sin(this.yaw) * cp, sp, -Math.cos(this.yaw) * cp);
+    const dir = new B.Vector3(-Math.sin(yaw) * cp * sgn, sp, -Math.cos(yaw) * cp * sgn);
     const full = 9.5 + Math.min(Math.abs(car.speed), 30) * 0.12 + car.length * 0.5;
     let want = full;
     const phys = this.scene.getPhysicsEngine();
     phys.raycastToRef(t, t.add(dir.scale(full + 0.4)), this.ray, { collideWith: ~CAR_MASK });
     if (this.ray.hasHit) want = clamp(this.ray.hitDistance - 0.4, 3.5, full);
-    this.curDist = want < this.curDist ? want : damp(this.curDist, want, 3, dt);
+    this.curDist = damp(this.curDist, want, want < this.curDist ? 18 : 3, dt);
     this.cam.position.copyFrom(t).addInPlace(dir.scale(this.curDist));
     this.cam.setTarget(t);
   }

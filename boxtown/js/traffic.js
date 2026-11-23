@@ -188,6 +188,8 @@ export class Traffic {
       limit = Math.min(limit, toEnd - 1);
       // 빨간불: 정지선 앞에 선다(이미 들어섰으면 지나간다).
       for (const cr of L.cross) { const ds = (cr.s - c.s) * c.dir - (cr.j.h + 3.5); if (ds > -1.5 && ds < 16 && !this.green(cr.ns)) limit = Math.min(limit, ds); }
+      // 건널목 차단기가 내려와 있으면 그 앞에 선다.
+      if (this.blocked) for (const x of this.blocked) { const dx = x.x - c.pos.x, dz = x.z - c.pos.z, fw = dx * c.fx + dz * c.fz; if (fw > 5 && fw < 26 && Math.abs(dx * c.fz - dz * c.fx) < 8) limit = Math.min(limit, fw - 8); }
       // 앞차
       for (const o of this.cars) if (o !== c && !o.dead && o.L === L && o.dir === c.dir && Math.abs(o.lane - c.lane) < 1) { const ds = (o.s - c.s) * c.dir; if (ds > 0 && ds < 14) limit = Math.min(limit, ds - 6.5); }
       // 앞을 막은 것

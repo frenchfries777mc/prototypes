@@ -70,8 +70,9 @@ export class Jobs {
 
   // ---------- 공용 도구 ----------
   renderMoney() { $('money').textContent = won(this.money); }
+  // 벌이는 전체적으로 낮춰 잡는다(옷과 집, 무기를 사려면 일을 꾸준히 해야 하게).
   pay(n, text) {
-    n = Math.round(n);
+    n = Math.max(10, Math.round((n * 0.6) / 10) * 10);
     this.money += n;
     try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
     this.renderMoney();
@@ -820,7 +821,7 @@ function nurseJob(J, site) {
     use() {
       const i = station();
       if (i < 0) return false;
-      if (i === now[1]) { streak++; count++; J.pay(170 + Math.min(streak, 6) * 25, '딱 맞는 처방이에요'); next(); }
+      if (i === now[1]) { streak++; count++; J.pay(60 + Math.min(streak, 6) * 10, '딱 맞는 처방이에요'); next(); }
       else { streak = 0; J.toast('그 약이 아니에요. 증상을 다시 보세요'); }
       return true;
     },
