@@ -39,3 +39,4 @@ export const stats = {
   },
   reset() { this.data = {}; save(KEY, {}); try { localStorage.removeItem(DAY); } catch (e) { /* 무시 */ } },
 };
+stats.daily(); // 켤 때 오늘의 기준을 잡아 둔다
