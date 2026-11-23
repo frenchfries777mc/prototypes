@@ -86,11 +86,8 @@ export class Jobs {
     this.renderMoney();
     return true;
   }
-  toast(text, good = false) {
-    const el = $('toast');
-    el.textContent = text; el.className = good ? 'show good' : 'show';
-    this.toastT = 2.8;
-  }
+  // 화면 위쪽에 뜨던 상황 알림은 없앴다(호출하는 쪽은 그대로 두고 아무것도 띄우지 않는다).
+  toast() {}
   setTarget(x, z, label, y) { this.target = { x, z, y: y === undefined ? this.groundY(x, z) : y, label }; }
   panel(title, text, sub = '') {
     $('job').hidden = false;
