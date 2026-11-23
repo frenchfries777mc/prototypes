@@ -1,4 +1,5 @@
 // 부팅: 엔진, 물리, 조명, 후처리, 월드 조립.
+import { SITES } from './world.js';
 import { Assets } from './assets.js';
 import { buildTerrain, buildWater, buildSky, height, initGrid } from './terrain.js';
 import { buildTown, groundY, ROAD_Y } from './town.js';
@@ -148,10 +149,14 @@ async function boot() {
   train0 = train;
   const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   weapons.traffic = traffic; traffic0 = traffic;
-  // 배경 음악: 수배 > 내 집 > 건물 안 > 다른 섬 > 시작 대륙
+  // 배경 음악: 수배 > 내 집 > 건물 안 > 배 위 > 시골 지역 > 다른 섬 > 시작 대륙
+  const RURAL = ['farm', 'wind', 'camp', 'lake', 'lookout', 'mill', 'cabinA', 'cabinB', 'cabinC', 'cabinD', 'woods'].map((k) => SITES[k]).filter(Boolean);
   const music = new Music(() => {
     if (police.level > 0) return 'wanted';
     if (interiors.inside) return interiors.inside.house ? 'home' : 'indoor';
+    if (player.vehicle && player.vehicle.isBoat) return 'folk';
+    const fx = player.feet.x, fz = player.feet.z;
+    if (RURAL.some((s) => Math.hypot(s.x - fx, s.z - fz) < s.r + 70)) return 'folk';
     const id = islandAt(player.feet.x, player.feet.z).id;
     return id === 'main' || id === 'mainland' ? 'land' : 'island';
   });
