@@ -1,6 +1,6 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
-import { ROADS, JUNCTIONS } from './world.js';
+import { ROADS, JUNCTIONS, STATIONS } from './world.js';
 import { baseHeight, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
@@ -136,6 +136,37 @@ for (const A of paths) {
   }
 }
 
+// 역 자리: 승강장 길이만큼 선로를 수평으로 만들고, 승강장이 놓일 땅도 그 높이로 다진다(비탈에서 승강장이 허공에 뜨지 않게).
+export const STATION_PADS = [];
+{
+  const rail = paths.find((p) => p.type === 'rail');
+  if (rail) {
+    const len = rail.pts[rail.pts.length - 1].s;
+    for (const [f, name] of STATIONS) {
+      const s0 = f * len;
+      let c = rail.pts[0]; for (const p of rail.pts) if (Math.abs(p.s - s0) < Math.abs(c.s - s0)) c = p;
+      let sum = 0, n = 0; for (const p of rail.pts) if (Math.abs(p.s - s0) < 20 && !p.water) { sum += p.y; n++; }
+      const y = n ? sum / n : c.y;
+      for (const p of rail.pts) if (!p.water) p.y = lerp(y, p.y, smoothstep(22, 70, Math.abs(p.s - s0)));
+      STATION_PADS.push({ name, s: s0, y, x: c.x - c.tz * 5, z: c.z + c.tx * 5, r: 23 });
+    }
+  }
+}
+// 건널목: 철길이 도로를 가로지르는 곳. 도로 쪽은 차선 표시를 빼고, 철길 쪽은 자갈과 침목 없이 레일만 아스팔트에 박는다.
+export const CROSSINGS = [];
+{
+  const rail = paths.find((p) => p.type === 'rail');
+  if (rail) for (const P of paths) {
+    if (P.type === 'rail') continue;
+    let best = null, bd = 3.2, bq = null;
+    for (const p of P.pts) for (const q of rail.pts) { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; best = p; bq = q; } }
+    if (!best) continue;
+    CROSSINGS.push({ x: best.x, z: best.z, y: best.y, tx: best.tx, tz: best.tz, half: P.half, s: bq.s, road: P.type === 'road' });
+    for (const p of P.pts) if (Math.hypot(p.x - best.x, p.z - best.z) < 9) p.jn = true;
+    for (const q of rail.pts) { const d = Math.hypot(q.x - best.x, q.z - best.z); if (d < P.half + 9) { q.xing = d < P.half + 2.5; q.y = best.y; } else if (d < P.half + 70 && !q.water) q.y = lerp(best.y, q.y, smoothstep(P.half + 9, P.half + 70, d)); }
+  }
+}
+
 // 흙길이 포장도로에서 갈라져 나오는지(같은 너비에서 시작해 좁아진다)
 const touches = (path, e) => path.type === 'dirt' && paths.some((o) => o !== path && o.type === 'road' && o.pts.some((q) => Math.hypot(q.x - e.x, q.z - e.z) < 9));
 for (const path of paths) { path.len = path.pts[path.pts.length - 1].s; path.joined = touches(path, path.pts[0]); path.joinedEnd = touches(path, path.pts[path.pts.length - 1]); }
@@ -190,7 +221,9 @@ setRoadMod((x, z, h) => {
   const n = nearest(x, z);
   if (!n.hit || n.water) return h;
   const flat = n.half + 6;
-  return lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 16, n.d));
+  h = lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 16, n.d));
+  for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 14) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 14, d)); }
+  return h;
 });
 
 // h: { scene, addBox, casters }
@@ -212,16 +245,33 @@ export function buildRoads(h) {
     idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
   };
   const boxes = [];
-  const BALLAST = [0.5, 0.46, 0.42], SLEEPER = [0.36, 0.25, 0.17], STEEL = [0.72, 0.74, 0.8];
+  const BALLAST = [0.52, 0.48, 0.44], BALLAST2 = [0.44, 0.4, 0.37], BALLAST3 = [0.4, 0.37, 0.34], SLEEPER = [0.4, 0.28, 0.19], SLEEPER2 = [0.27, 0.18, 0.12], STEEL = [0.78, 0.8, 0.86], STEEL2 = [0.45, 0.47, 0.54];
   for (const path of paths) {
     if (path.type === 'rail') {
       // 철길: 자갈 바닥, 침목, 레일 두 줄
       const at = (p, o, lift, along = 0) => [p.x - p.tz * o + p.tx * along, p.y + lift, p.z + p.tx * o + p.tz * along];
       for (let i = 0; i < path.pts.length - 1; i++) {
         const a = path.pts[i], b = path.pts[i + 1];
-        quad(at(a, -2.6, 0.1), at(b, -2.6, 0.1), at(a, 2.6, 0.1), at(b, 2.6, 0.1), BALLAST);
-        for (const k of [0.5, 2.5]) quad(at(a, -1.5, 0.16, k), at(a, -1.5, 0.16, k + 0.55), at(a, 1.5, 0.16, k), at(a, 1.5, 0.16, k + 0.55), SLEEPER);
-        for (const o of [-0.85, 0.85]) quad(at(a, o - 0.09, 0.26), at(b, o - 0.09, 0.26), at(a, o + 0.09, 0.26), at(b, o + 0.09, 0.26), STEEL);
+        // 입체 선로: 둑처럼 솟은 자갈 바닥, 그 위에 침목, 그 위에 레일. 건널목에서는 도로 높이로 내려가 레일만 남는다.
+        const ka = a.xing ? 0 : 1, kb = b.xing ? 0 : 1;
+        const A = (o, up, along = 0) => at(a, o, 0.1 + up * ka, along), Bq = (o, up) => at(b, o, 0.1 + up * kb);
+        if (ka || kb) {
+          quad(A(-1.9, 0.26), Bq(-1.9, 0.26), A(1.9, 0.26), Bq(1.9, 0.26), BALLAST);
+          quad(A(-2.8, -0.08), Bq(-2.8, -0.08), A(-1.9, 0.26), Bq(-1.9, 0.26), BALLAST2);
+          quad(A(1.9, 0.26), Bq(1.9, 0.26), A(2.8, -0.08), Bq(2.8, -0.08), BALLAST3);
+        }
+        if (ka) for (const k of [0.5, 2.5]) {
+          quad(A(-1.45, 0.36, k), A(-1.45, 0.36, k + 0.5), A(1.45, 0.36, k), A(1.45, 0.36, k + 0.5), SLEEPER);
+          quad(A(-1.45, 0.26, k), A(-1.45, 0.36, k), A(1.45, 0.26, k), A(1.45, 0.36, k), SLEEPER2);
+          quad(A(-1.45, 0.36, k + 0.5), A(-1.45, 0.26, k + 0.5), A(1.45, 0.36, k + 0.5), A(1.45, 0.26, k + 0.5), SLEEPER2);
+        }
+        if (!ka && !kb) for (const o of [-0.85, 0.85]) quad(at(a, o - 0.22, 0.2), at(b, o - 0.22, 0.2), at(a, o + 0.22, 0.2), at(b, o + 0.22, 0.2), [0.24, 0.25, 0.3]);
+        for (const o of [-0.85, 0.85]) {
+          const ta = 0.16 + 0.36 * ka, tb = 0.16 + 0.36 * kb, ba = 0.36 * ka, bb = 0.36 * kb; // 레일 윗면과 아랫면 높이
+          quad(at(a, o - 0.08, 0.1 + ta), at(b, o - 0.08, 0.1 + tb), at(a, o + 0.08, 0.1 + ta), at(b, o + 0.08, 0.1 + tb), STEEL);
+          quad(at(a, o - 0.08, 0.1 + ba), at(b, o - 0.08, 0.1 + bb), at(a, o - 0.08, 0.1 + ta), at(b, o - 0.08, 0.1 + tb), STEEL2);
+          quad(at(a, o + 0.08, 0.1 + ta), at(b, o + 0.08, 0.1 + tb), at(a, o + 0.08, 0.1 + ba), at(b, o + 0.08, 0.1 + bb), STEEL2);
+        }
         if ((a.water || b.water) || (path.pts[i + 2] && path.pts[i + 2].water) || (i > 0 && path.pts[i - 1].water)) {
           const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
           boxes.push({ w: 6.4, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, mat: deckMat, collide: true });

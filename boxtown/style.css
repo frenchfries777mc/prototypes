@@ -124,3 +124,52 @@ body.touch.driving #btnAttack, body.touch.driving #btnWeapon { display: none; }
 #music.show { opacity: 1; }
 #loading .credit { margin-top: 18px; font-size: 12px; opacity: .85; }
 body.touch #music { left: 50%; transform: translateX(-50%); bottom: auto; top: calc(max(12px, env(safe-area-inset-top)) + 40px); max-width: 60vw; }
+
+/* 옷장과 옷가게 */
+#btnCloset { position: absolute; right: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 150px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; pointer-events: auto; cursor: pointer; }
+#wardrobe { position: absolute; right: max(14px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%); width: min(430px, 56vw); max-height: 86vh; display: flex; flex-direction: column; border-radius: 16px; background: rgba(22, 34, 58, .93); pointer-events: auto; overflow: hidden; }
+#wardrobe[hidden] { display: none; }
+#wardrobe header { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+#wardrobe header b { font-size: 18px; font-weight: 900; color: #ffd84a; }
+#wardrobe header span { flex: 1; font-size: 12px; font-weight: 600; opacity: .85; }
+#wardrobe button { font: inherit; color: #fff; border: 0; cursor: pointer; }
+#wardrobe header button { width: 32px; height: 32px; border-radius: 9px; background: rgba(255, 255, 255, .14); font-weight: 900; }
+#wardrobe nav { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 12px 10px; }
+#wardrobe nav button { padding: 6px 10px; border-radius: 9px; background: rgba(255, 255, 255, .1); font-size: 13px; font-weight: 800; }
+#wardrobe nav button.on { background: #f2644b; }
+#wardrobe .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 7px; padding: 0 12px 14px; overflow-y: auto; }
+#wardrobe .grid button { display: grid; gap: 3px; justify-items: center; padding: 9px 4px; border-radius: 11px; background: rgba(255, 255, 255, .1); border: 2px solid transparent; }
+#wardrobe .grid button b { font-size: 13px; font-weight: 800; }
+#wardrobe .grid button small { font-size: 11px; font-weight: 700; opacity: .8; min-height: 13px; }
+#wardrobe .grid button.on { border-color: #ffd84a; background: rgba(255, 216, 74, .18); }
+#wardrobe .grid button.buy small { color: #ffd84a; opacity: 1; }
+#wardrobe .grid button.lock { opacity: .45; cursor: default; }
+#wardrobe .grid button.color i { width: 38px; height: 38px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, .5); }
+body.touch #wardrobe { width: min(430px, 70vw); max-height: 92vh; }
+
+/* 차 내구도: 체력 막대 바로 아래 */
+#carHp { position: absolute; left: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 64px); display: flex; align-items: center; gap: 5px; font-size: 12px; }
+#carHp[hidden] { display: none; }
+#carHp span { display: block; width: 128px; height: 10px; border-radius: 5px; background: rgba(22, 34, 58, .68); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .7); overflow: hidden; }
+#carHpFill { display: block; height: 100%; width: 100%; background: #4f9bea; transition: width .2s ease; }
+#carHpFill.low { background: #e5553f; }
+body.driving #job { top: calc(max(12px, env(safe-area-inset-top)) + 88px); }
+#btnView { position: absolute; right: 14px; top: calc(max(12px, env(safe-area-inset-top)) + 198px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; pointer-events: auto; cursor: pointer; }
+body.touch #btnCloset { top: calc(max(12px, env(safe-area-inset-top)) + 118px); }
+body.touch #btnView { top: calc(max(12px, env(safe-area-inset-top)) + 166px); }
+/* 불러오는 화면의 저작권 표기 */
+#loading .credit { display: grid; gap: 2px; margin-top: 14px; font-size: 11px; line-height: 1.35; opacity: .85; }
+#loading .credit b { margin-top: 6px; font-size: 12px; }
+/* 모바일 조작: 왼쪽 조이스틱, 오른쪽 공격·상호작용·달리기(+작은 점프) */
+body.touch #stick { display: block; left: max(26px, env(safe-area-inset-left)); bottom: max(30px, env(safe-area-inset-bottom)); top: auto; opacity: .75; }
+body.touch.driving #stick { display: none; }
+body.touch #music { display: none; }
+body.touch #btnQuit:not([hidden]) { display: none; }
+#btnWeapon { display: none !important; }
+body.touch #btnAttack { right: max(22px, env(safe-area-inset-right)); bottom: max(30px, env(safe-area-inset-bottom)); width: 96px; height: 96px; border-radius: 50%; font-size: 17px; }
+body.touch #btnUse { right: calc(max(22px, env(safe-area-inset-right)) + 108px); bottom: max(30px, env(safe-area-inset-bottom)); width: 78px; height: 78px; border-radius: 50%; font-size: 13px; background: rgba(79, 155, 234, .85); }
+body.touch #btnUse.idle { opacity: .45; }
+body.touch #btnRun { right: calc(max(22px, env(safe-area-inset-right)) + 64px); bottom: calc(max(30px, env(safe-area-inset-bottom)) + 96px); width: 72px; height: 72px; border-radius: 50%; font-size: 13px; }
+body.touch #btnJump { right: max(26px, env(safe-area-inset-right)); bottom: calc(max(30px, env(safe-area-inset-bottom)) + 108px); width: 56px; height: 56px; border-radius: 50%; font-size: 12px; }
+body.touch.driving #btnUse { bottom: calc(max(26px, env(safe-area-inset-bottom)) + min(132px, 34vh) + 14px); width: 84px; height: 48px; border-radius: 14px; right: max(22px, env(safe-area-inset-right)); }
+body.touch #speed { top: calc(max(12px, env(safe-area-inset-top)) + 84px); left: 14px; }

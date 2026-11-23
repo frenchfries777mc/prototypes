@@ -43,11 +43,11 @@ function ringS(r, x, z) {
 }
 
 // 불량배와 경찰관은 옷차림으로 구분된다.
-const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c' };
+const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c', face: 'sunglasses', neck: 'none', back: 'none' };
 // 체력: 불량배와 경찰관은 더 튼튼하다.
 const MAXHP = { citizen: 160, thug: 280, cop: 230 };
 const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
-const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' };
+const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' };
 function lookFor(kind, seed) {
   const base = randomLook(seed);
   return kind === 'thug' ? { ...base, ...THUG } : kind === 'cop' ? { ...base, ...COP } : base;
@@ -70,10 +70,11 @@ export class Residents {
     this.meshes = [];
     const r = rng(31337);
     for (let i = 0; i < walkers; i++) {
-      const kind = i === 2 || i === 6 || i === 9 || i === 13 ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
+      const kind = [2, 6, 9, 13, 17, 20, 22].includes(i) ? 'thug' : i === 5 || i === 12 || i === 14 ? 'cop' : 'citizen';
       const chr = new Character(scene, lookFor(kind, 1000 + i * 7));
-      const ring = i % RINGS.length;
-      const n = { chr, kind, mode: 'walk', ring, s: r() * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
+      // 불량배는 켤 때마다 다른 곳에서 어슬렁거린다.
+      const ring = kind === 'thug' ? Math.floor(Math.random() * RINGS.length) : i % RINGS.length;
+      const n = { chr, kind, mode: 'walk', ring, s: (kind === 'thug' ? Math.random() : r()) * perim(RINGS[ring]), dir: r() < 0.5 ? 1 : -1, speed: r.range(1.5, 2.4), pause: 0, cool: r.range(2, 8),
         pos: new B.Vector3(), vel: new B.Vector3(), vy: 0, lie: 0, t: 0, r: rng(500 + i) };
       const [x, z] = ringPoint(RINGS[ring], n.s);
       n.pos.set(x, groundY(x, z), z);
@@ -83,7 +84,8 @@ export class Residents {
       this.meshes.push(...chr.meshes);
     }
     SPOTS.forEach(([x, z, yaw], i) => {
-      const kind = i === 5 || i === 6 || i === 7 ? 'thug' : 'citizen'; // 부두 구석에 모여 선 불량배
+      if (i >= 5) return; // 부두 구석 자리는 소품과 겹쳐서 쓰지 않는다
+      const kind = 'citizen';
       const chr = new Character(scene, lookFor(kind, 4000 + i * 13));
       chr.heading = yaw;
       const n = { chr, kind, mode: 'stand', home: [x, z, yaw], pos: new B.Vector3(x, groundY(x, z), z), vel: new B.Vector3(), vy: 0, lie: 0, t: r() * 5, look: 0, r: rng(900 + i) };
@@ -199,6 +201,7 @@ export class Residents {
           chr.setVisible(false);
           if (this.onStar) this.onStar(p.x, p.y, p.z);
         } else if (n.t > 8) {
+          if (n.kind === 'thug') { n.ring = Math.floor(Math.random() * RINGS.length); n.s = Math.random() * perim(RINGS[n.ring]); } // 불량배는 다른 곳에 다시 나타난다
           const [x, z] = n.home ? n.home : ringPoint(RINGS[n.ring], n.s);
           p.set(x, this.groundY(x, z), z);
           n.vel.set(0, 0, 0); n.lie = 0; n.hp = MAXHP[n.kind]; n.gone = false; n.vy = 0;
@@ -316,8 +319,9 @@ export class Residents {
       if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
       if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
-        chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
-      } else chr.wave = damp(chr.wave, 0, 8, dt);
+        // 주민은 손을 흔들고, 불량배는 인사 대신 주먹을 쥐어 보인다.
+        if (n.kind === 'thug') { chr.wave = 0; chr.fist = pd < 4.5 ? 1 : 0; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
+      } else { chr.wave = damp(chr.wave, 0, 8, dt); chr.fist = 0; }
       n.look = damp(n.look || 0, lookYaw, 6, dt);
 
       if (n.mark) { n.mark.rotation.y += dt * 2.5; n.mark.position.y = 2.25 + Math.sin(n.mark.rotation.y * 1.3) * 0.07; }
