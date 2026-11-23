@@ -178,13 +178,13 @@ npx serve .        # 또는 python3 -m http.server
 
 | 상황 | 곡 |
 | --- | --- |
-| 수배 중 | Dentaneosuchus Hunt 1 |
+| 수배 중 | Dentaneosuchus Hunt |
 | 시작 대륙 | Morning |
 | 건물 안 | Night in Venice |
 | 다른 섬 | Zazie |
 | 내 집 | Divertimento K131 |
 
-"Dentaneosuchus Hunt 1", "Morning", "Night in Venice", "Zazie", "Divertimento K131" Kevin MacLeod (incompetech.com)
+"Dentaneosuchus Hunt", "Morning", "Night in Venice", "Zazie", "Divertimento K131" Kevin MacLeod (incompetech.com)
 Licensed under Creative Commons: By Attribution 4.0 License
 http://creativecommons.org/licenses/by/4.0/
 

@@ -1,7 +1,7 @@
 // 배경 음악: 상황에 따라 한 곡만 튼다(겹치지 않게 서서히 바꾼다).
 // 곡은 모두 Kevin MacLeod (incompetech.com), CC BY 4.0. 전체 표기는 assets/music/CREDITS.txt.
 const TRACKS = {
-  wanted: { file: 'dentaneosuchus-hunt-1.mp3', title: 'Dentaneosuchus Hunt 1' }, // 수배 중
+  wanted: { file: 'dentaneosuchus-hunt.mp3', title: 'Dentaneosuchus Hunt' }, // 수배 중
   land: { file: 'morning.mp3', title: 'Morning' }, // 시작 대륙
   indoor: { file: 'night-in-venice.mp3', title: 'Night in Venice' }, // 건물 안
   island: { file: 'zazie.mp3', title: 'Zazie' }, // 다른 섬
