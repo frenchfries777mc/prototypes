@@ -14,6 +14,8 @@ import { Train } from './train.js';
 import { Traffic } from './traffic.js';
 import { Music } from './music.js';
 import { Wardrobe } from './cosmetics.js';
+import { Lobby } from './lobby.js';
+import { stats } from './stats.js';
 import { islandAt } from './terrain.js';
 import { Character } from './character.js';
 import { Input, Player } from './player.js';
@@ -30,7 +32,8 @@ async function boot() {
   const canvas = $('game');
   const isTouch = matchMedia('(pointer: coarse)').matches;
   const params = new URLSearchParams(location.search);
-  const quality = params.get('q') || (isTouch ? 'low' : 'high');
+  let savedQ = null; try { savedQ = localStorage.getItem('boxtown.quality'); } catch (e) { /* 무시 */ }
+  const quality = params.get('q') || savedQ || (isTouch ? 'low' : 'high');
   const engine = new B.Engine(canvas, false, { stencil: false, powerPreference: 'high-performance' });
   engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio || 1, quality === 'low' ? 1.25 : 1.5));
   B.Scene.MaxDeltaTime = 50; // 프레임이 심하게 끊겨도 물리 한 스텝은 0.05초를 넘지 않는다
@@ -183,6 +186,8 @@ async function boot() {
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
   let promptText = '';
+  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality });
+  stats.onReward = (n) => { jobs.money += n; try { localStorage.setItem('boxtown.money', String(jobs.money)); } catch (e) { /* 무시 */ } jobs.renderMoney(); };
   let useLabel = '', quitT = 0, carShown = -1;
   const carHp = $('carHp');
   $('btnView').addEventListener('click', () => player.nextView());
@@ -203,6 +208,7 @@ async function boot() {
     traffic.update(dt);
     music.update(dt);
     interiors.update(dt);
+    lobby.update(dt);
     const text = train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
@@ -266,7 +272,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats };
   mark('map+fx');
   await scene.whenReadyAsync();
   mark('shaders');
@@ -275,6 +281,7 @@ async function boot() {
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');
   $('hud').hidden = false;
+  if (params.get('lobby') !== '0') lobby.show();
   if (isTouch) document.body.classList.add('touch');
   window.__ready = true;
 }

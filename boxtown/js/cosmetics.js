@@ -1,5 +1,6 @@
 // 치장품: 옷가게에서 사고, 옷장(C)에서 갈아입는다. 산 것과 입은 것은 브라우저에 저장된다.
 import { LOOKS } from './character.js';
+import { stats } from './stats.js';
 
 // [이름표, 값] — 값 0은 처음부터 가진 것
 const ITEMS = {
@@ -68,7 +69,7 @@ export class Wardrobe {
     if (!this.has(slot, id)) {
       if (!this.shop) return;
       if (!this.jobs.spend(this.price(slot, id))) { this.note = '돈이 모자라요'; this.render(); return; }
-      this.owned.add(slot + ':' + id);
+      this.owned.add(slot + ':' + id); stats.bump('bought');
     }
     this.note = '';
     this.look[slot] = id;
