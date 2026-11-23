@@ -43,11 +43,11 @@ function ringS(r, x, z) {
 }
 
 // 불량배와 경찰관은 옷차림으로 구분된다.
-const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c' };
+const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c', face: 'sunglasses', neck: 'none', back: 'none' };
 // 체력: 불량배와 경찰관은 더 튼튼하다.
 const MAXHP = { citizen: 160, thug: 280, cop: 230 };
 const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
-const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'cap', hat: '#1f2a4a', brim: '#ffd84a' };
+const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' };
 function lookFor(kind, seed) {
   const base = randomLook(seed);
   return kind === 'thug' ? { ...base, ...THUG } : kind === 'cop' ? { ...base, ...COP } : base;
