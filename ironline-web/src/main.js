@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 import { Sim, TICK, WEAPONS, EYE } from './sim.js';
 import { TRENCH_X } from './world.js';
-import { makeSky, makeTerrain, makeBoxProps, makeHouses, textureLoader, sandbagTexture, HAZE } from './gfx.js';
-import { Models, Batch, scatter, MODEL_NAMES } from './decor.js';
+import { makeSky, buildTerrain, makeBoxProps, makeHouses, textureLoader, sandbagTexture, HAZE } from './gfx.js';
+import { Models, Batch, scatter, modelNames, setDecorStyle } from './decor.js';
 import { UnitViews, PointViews, makeViewmodel } from './units.js';
 import { Fx } from './fx.js';
 import { Audio } from './audio.js';
@@ -12,6 +12,8 @@ import { Hud } from './hud.js';
 const $ = (id) => document.getElementById(id);
 const q = new URLSearchParams(location.search);
 const SEED = 20260101;
+const TS = q.get('terrain') || 'block';   // block · lowpoly · toon · paint · real · ps1
+setDecorStyle(TS === 'block');
 const QUAL = [
   { pr: 1, shadow: 0, size: 1024, far: 700 },
   { pr: 1.25, shadow: 1, size: 2048, far: 1000 },
@@ -24,7 +26,7 @@ renderer.autoClear = false;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(HAZE, 0.0034);
+scene.fog = new THREE.FogExp2(HAZE, TS === 'ps1' ? 0.0075 : 0.0034);
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 1500); camera.rotation.order = 'YXZ';
 const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, 1, 0.01, 10);
 const vmSun = new THREE.DirectionalLight(0xffd8a8, 2.2); vmSun.position.set(-1, 1.5, 1);
@@ -44,13 +46,13 @@ const load = textureLoader();
 const names = ['forrest_ground_01', 'forest_ground_04', 'brown_mud_03', 'mossy_rock', 'red_brick_03', 'plaster_grey_04', 'ceramic_roof_01', 'weathered_planks'];
 const [grass, dirt, mud, rock, brick, plaster, roof, plank] = await Promise.all(names.map((n) => load(`assets/textures/${n}_diff.jpg`)));
 const tex = { grass, dirt, mud, rock, brick, plaster, roof, plank, sand: sandbagTexture() };
-const sim = new Sim(SEED, 16);
+const sim = new Sim(SEED, 16, TS !== 'block');
 const world = sim.world;
 const sky = makeSky(); scene.add(sky);
-scene.add(makeTerrain(world), makeBoxProps(world, tex), makeHouses(world, tex));
+scene.add(buildTerrain(world, tex, TS), makeBoxProps(world, tex), makeHouses(world, tex));
 const fx = new Fx(scene, camera);
 const models = new Models();
-await models.load(MODEL_NAMES);
+await models.load(modelNames());
 const batch = new Batch(models); scatter(world, batch);
 scene.add(batch.build());
 console.log('decor instances', batch.count);
@@ -68,7 +70,8 @@ let lockWanted = false, me = null;
 
 function setQuality(qn) {
   S.quality = qn; const Q = QUAL[qn];
-  renderer.setPixelRatio(Math.min(devicePixelRatio, Q.pr));
+  renderer.setPixelRatio(TS === 'ps1' ? 0.4 : Math.min(devicePixelRatio, Q.pr));
+  canvas.style.imageRendering = TS === 'ps1' ? 'pixelated' : 'auto';
   renderer.shadowMap.enabled = !!Q.shadow;
   sun.castShadow = !!Q.shadow; sun.shadow.mapSize.set(Q.size, Q.size);
   if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
@@ -84,6 +87,7 @@ function resize() {
 addEventListener('resize', resize);
 
 // ---- 메뉴 ----
+$('tstyle').value = TS; $('tstyle').onchange = () => { location.search = '?terrain=' + $('tstyle').value; };
 const wps = $('wps');
 WEAPONS.forEach((w, i) => {
   const b = document.createElement('button'); b.className = 'wp' + (i === 0 ? ' on' : ''); b.type = 'button';

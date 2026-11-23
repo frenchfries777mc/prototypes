@@ -47,8 +47,8 @@ function makeNoise(seed) {
 }
 
 export class World {
-  constructor(seed = 1) {
-    this.seed = seed;
+  constructor(seed = 1, smooth = false) {
+    this.seed = seed; this.smooth = smooth;
     this.noise = makeNoise(seed);
     this.detail = makeNoise(seed + 7);
     const rng = new RNG(seed * 31 + 7);
@@ -62,6 +62,10 @@ export class World {
     this.gz0 = -(HALF_Z + MARGIN);
     this.gw = Math.floor((HALF_X + MARGIN) * 2 / GRID) + 1;
     this.gh = Math.floor((HALF_Z + MARGIN) * 2 / GRID) + 1;
+    if (smooth) {
+      this.hmap = new Float32Array(this.gw * this.gh);
+      for (let j = 0; j < this.gh; j++) for (let i = 0; i < this.gw; i++) this.hmap[j * this.gw + i] = this.rawHeight(this.gx0 + i * GRID, this.gz0 + j * GRID);
+    }
     // 블록 지형: 한 칸(GRID)마다 높이를 STEP 단위로 깎아 한 덩어리로 만든다. 이웃과의 차이는 한 계단(STEP)까지만 허용해
     // 걸어서 오를 수 있게 한다(낮은 칸을 이웃보다 한 계단 아래까지만 남기고 메운다).
     this.bw = this.gw - 1; this.bh = this.gh - 1;
@@ -125,6 +129,12 @@ export class World {
     return h;
   }
   heightAt(x, z) {
+    if (this.smooth) {
+      const fx = (x - this.gx0) / GRID, fz = (z - this.gz0) / GRID;
+      const i = clamp(Math.floor(fx), 0, this.gw - 2), j = clamp(Math.floor(fz), 0, this.gh - 2);
+      const tx = clamp(fx - i, 0, 1), tz = clamp(fz - j, 0, 1), W = this.gw, m = this.hmap;
+      return lerp(lerp(m[j * W + i], m[j * W + i + 1], tx), lerp(m[(j + 1) * W + i], m[(j + 1) * W + i + 1], tx), tz);
+    }
     const i = clamp(Math.floor((x - this.gx0) / GRID), 0, this.bw - 1), j = clamp(Math.floor((z - this.gz0) / GRID), 0, this.bh - 1);
     return this.bmap[j * this.bw + i];
   }

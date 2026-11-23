@@ -59,7 +59,7 @@ export function pixelTexture(n = 8, base = 0.86, amp = 0.14) {
   const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
   return t;
 }
-export function makeTerrain(world) {
+export function makeBlockTerrain(world) {
   const { bw, bh, gx0, gz0, bmap } = world, GR = GRID;
   const H = (i, j) => (i < 0 || j < 0 || i >= bw || j >= bh) ? -99 : bmap[j * bw + i];
   const pos = [], nrm = [], col = [], uv = [], idx = [];
@@ -106,6 +106,149 @@ export function makeTerrain(world) {
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, map: pixelTexture(8), roughness: 1, metalness: 0, flatShading: false }));
   mesh.receiveShadow = true; mesh.name = 'terrain';
   return mesh;
+}
+
+// 지형: 높이 격자 → 메시. 꼭짓점마다 풀·흙·진흙·바위 가중치(wts)를 싣고, 셰이더에서 네 텍스처를 섞는다.
+export function makeRealTerrain(world, tex) {
+  const { gw, gh, gx0, gz0, hmap } = world;
+  const GR = GRID;
+  const pos = new Float32Array(gw * gh * 3), nrm = new Float32Array(gw * gh * 3), wts = new Float32Array(gw * gh * 4);
+  const H = (i, j) => hmap[Math.min(gh - 1, Math.max(0, j)) * gw + Math.min(gw - 1, Math.max(0, i))];
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const k = j * gw + i, x = gx0 + i * GR, z = gz0 + j * GR, h = H(i, j);
+    pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+    const nx = H(i - 1, j) - H(i + 1, j), nz = H(i, j - 1) - H(i, j + 1), ny = 2 * GR;
+    const nl = Math.hypot(nx, ny, nz);
+    nrm[k * 3] = nx / nl; nrm[k * 3 + 1] = ny / nl; nrm[k * 3 + 2] = nz / nl;
+    const cav = Math.min(1, Math.max(0, ((H(i - 1, j) + H(i + 1, j) + H(i, j - 1) + H(i, j + 1)) * 0.25 - h) * 0.9));
+    const slope = 1 - ny / nl;
+    const patch = world.detail(x * 0.04, z * 0.04) * 0.5 + 0.5;
+    const road = world.roadMask(x, z) * (cav > 0.25 ? 0.3 : 1);
+    let g = 1.0 - road * 0.95 - Math.max(0, patch - 0.62) * 1.4;
+    let d = road * 0.9 + Math.max(0, patch - 0.58) * 1.1;
+    let m = cav * 1.6;
+    let r = Math.max(0, (slope - 0.16) * 5.0);
+    g = Math.max(0, g - m * 0.6 - r * 0.5);
+    const s = g + d + m + r + 1e-6;
+    wts[k * 4] = g / s; wts[k * 4 + 1] = d / s; wts[k * 4 + 2] = m / s; wts[k * 4 + 3] = r / s;
+  }
+  const idx = new Uint32Array((gw - 1) * (gh - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < gh - 1; j++) for (let i = 0; i < gw - 1; i++) {
+    const a = j * gw + i, b = a + 1, c = a + gw, d2 = c + 1;
+    idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  geo.setAttribute('wts', new THREE.BufferAttribute(wts, 4));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeBoundingSphere();
+  const mat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.tG = { value: tex.grass }; sh.uniforms.tD = { value: tex.dirt }; sh.uniforms.tM = { value: tex.mud }; sh.uniforms.tR = { value: tex.rock };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec4 wts; varying vec4 vW; varying vec3 vWp;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvW = wts; vWp = (modelMatrix * vec4(position, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec4 vW; varying vec3 vWp; uniform sampler2D tG; uniform sampler2D tD; uniform sampler2D tM; uniform sampler2D tR;')
+      .replace('#include <map_fragment>', `
+        vec2 uv = vWp.xz;
+        vec3 cg = mix(texture2D(tG, uv * 0.20).rgb, texture2D(tG, uv * 0.037 + 0.3).rgb, 0.4) * vec3(0.78, 0.76, 0.55);
+        vec3 cd = mix(texture2D(tD, uv * 0.22).rgb, texture2D(tD, uv * 0.041).rgb, 0.4) * vec3(0.95, 0.86, 0.72);
+        vec3 cm = mix(texture2D(tM, uv * 0.24).rgb, texture2D(tM, uv * 0.045).rgb, 0.4) * vec3(0.78, 0.7, 0.62);
+        vec3 cr = mix(texture2D(tR, uv * 0.18).rgb, texture2D(tR, uv * 0.034).rgb, 0.4) * vec3(0.9, 0.88, 0.84);
+        diffuseColor.rgb *= cg * vW.x + cd * vW.y + cm * vW.z + cr * vW.w;`);
+  };
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.receiveShadow = true; mesh.name = 'terrain';
+  return mesh;
+}
+
+
+// ---- 부드러운 지형 시안들: 로우폴리 / 카툰 / 수채화 / PS1 ----
+const PAL = {
+  lowpoly: { g: [0.34, 0.52, 0.2], d: [0.68, 0.54, 0.34], m: [0.4, 0.3, 0.22], r: [0.54, 0.52, 0.5] },
+  toon: { g: [0.32, 0.7, 0.22], d: [0.88, 0.66, 0.38], m: [0.52, 0.36, 0.24], r: [0.66, 0.64, 0.72] },
+  paint: { g: [0.46, 0.62, 0.24], d: [0.84, 0.64, 0.38], m: [0.5, 0.36, 0.28], r: [0.66, 0.6, 0.56] },
+  ps1: { g: [0.3, 0.5, 0.18], d: [0.56, 0.43, 0.29], m: [0.32, 0.24, 0.18], r: [0.46, 0.46, 0.44] },
+};
+export function makeSmoothTerrain(world, style) {
+  const { gw, gh, gx0, gz0, hmap } = world, GR = GRID, pal = PAL[style];
+  const st = style === 'lowpoly' || style === 'ps1' ? 2 : 1, flat = style === 'lowpoly';
+  const nx = Math.floor((gw - 1) / st) + 1, nz = Math.floor((gh - 1) / st) + 1;
+  const H = (i, j) => hmap[Math.min(gh - 1, Math.max(0, j)) * gw + Math.min(gw - 1, Math.max(0, i))];
+  const P = new Float32Array(nx * nz * 3), N = new Float32Array(nx * nz * 3), C = new Float32Array(nx * nz * 3), UV = new Float32Array(nx * nz * 2);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const gi = i * st, gj = j * st, k = j * nx + i, x = gx0 + gi * GR, z = gz0 + gj * GR, h = H(gi, gj);
+    P[k * 3] = x; P[k * 3 + 1] = h; P[k * 3 + 2] = z;
+    const dx = H(gi - st, gj) - H(gi + st, gj), dz = H(gi, gj - st) - H(gi, gj + st), dy = 2 * GR * st, nl = Math.hypot(dx, dy, dz);
+    N[k * 3] = dx / nl; N[k * 3 + 1] = dy / nl; N[k * 3 + 2] = dz / nl;
+    const cav = Math.min(1, Math.max(0, ((H(gi - st, gj) + H(gi + st, gj) + H(gi, gj - st) + H(gi, gj + st)) * 0.25 - h) * 0.9));
+    const slope = 1 - dy / nl, patch = world.detail(x * 0.04, z * 0.04) * 0.5 + 0.5;
+    const road = world.roadMask(x, z) * (cav > 0.25 ? 0.3 : 1);
+    let g = 1.0 - road * 0.95 - Math.max(0, patch - 0.62) * 1.4, d = road * 0.9 + Math.max(0, patch - 0.58) * 1.1, m = cav * 1.6, r = Math.max(0, (slope - 0.14) * 5.0);
+    g = Math.max(0, g - m * 0.6 - r * 0.5);
+    const sum = g + d + m + r + 1e-6, hl = 0.85 + Math.min(0.3, Math.max(-0.1, h * 0.05));
+    for (let c = 0; c < 3; c++) C[k * 3 + c] = (pal.g[c] * g + pal.d[c] * d + pal.m[c] * m + pal.r[c] * r) / sum * hl;
+    UV[k * 2] = x * 0.3; UV[k * 2 + 1] = z * 0.3;
+  }
+  const geo = new THREE.BufferGeometry();
+  if (flat) {
+    // 삼각형마다 따로 칠하는 로우폴리: 정점을 풀어 면마다 평균색 + 약간의 변주
+    const pos = [];
+    let seed = 777; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const colF = [];
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1, flip = (i + j) & 1;
+      const t = flip ? [[a, c, d], [a, d, b]] : [[a, c, b], [b, c, d]];
+      for (const [u, v, w] of t) {
+        const jj = 0.93 + rnd() * 0.14;
+        for (const q of [u, v, w]) { pos.push(P[q * 3], P[q * 3 + 1], P[q * 3 + 2]); }
+        for (let q = 0; q < 3; q++) { const r0 = (C[u * 3] + C[v * 3] + C[w * 3]) / 3 * jj, r1 = (C[u * 3 + 1] + C[v * 3 + 1] + C[w * 3 + 1]) / 3 * jj, r2 = (C[u * 3 + 2] + C[v * 3 + 2] + C[w * 3 + 2]) / 3 * jj; colF.push(r0, r1, r2); }
+      }
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colF, 3));
+    geo.computeVertexNormals();
+  } else {
+    const idx = new Uint32Array((nx - 1) * (nz - 1) * 6); let q = 0;
+    for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx[q++] = a; idx[q++] = c; idx[q++] = b; idx[q++] = b; idx[q++] = c; idx[q++] = d; }
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(C, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(UV, 2)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  }
+  geo.computeBoundingSphere();
+  let mat;
+  if (style === 'lowpoly') mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 });
+  else if (style === 'toon') {
+    const gm = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 150, 150, 150, 255, 215, 215, 215, 255, 255, 255, 255, 255]), 4, 1, THREE.RGBAFormat);
+    gm.magFilter = gm.minFilter = THREE.NearestFilter; gm.needsUpdate = true;
+    mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gm });
+  } else if (style === 'ps1') mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: pixelTexture(16, 0.8, 0.2), roughness: 1 });
+  else {
+    mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWp;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvWp = (modelMatrix * vec4(position, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+        varying vec3 vWp;
+        float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+        float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(hh(i),hh(i+vec2(1,0)),f.x), mix(hh(i+vec2(0,1)),hh(i+vec2(1,1)),f.x), f.y); }
+        float fb(vec2 p){ float a=.5,s=0.; for(int i=0;i<4;i++){ s+=a*vn(p); p=p*2.03+7.1; a*=.5; } return s; }`)
+        .replace('#include <map_fragment>', `
+        float n1 = fb(vWp.xz * 0.045), dab = fb(vWp.xz * 0.8);
+        float streak = fb(vec2(vWp.x * 0.7 + vWp.z * 0.25, vWp.z * 0.09 - vWp.x * 0.03));
+        vec3 base = diffuseColor.rgb * (0.62 + 0.75 * n1 + 0.75 * (streak - 0.5) + 0.5 * (dab - 0.5));
+        base = mix(vec3(dot(base, vec3(0.33))), base, 1.25);
+        diffuseColor.rgb = mix(base, floor(base * 5.0 + 0.5) / 5.0, 0.45);`);
+    };
+  }
+  const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true; mesh.name = 'terrain';
+  return mesh;
+}
+export function buildTerrain(world, tex, style) {
+  if (style === 'real') return makeRealTerrain(world, tex);
+  if (style === 'block') return makeBlockTerrain(world);
+  return makeSmoothTerrain(world, style);
 }
 
 // 월드 좌표를 기준으로 UV 를 잡은 직육면체(텍스처가 면 크기에 따라 늘어나지 않게). 같은 재질끼리 하나로 합친다.
