@@ -6,6 +6,7 @@ const TRACKS = {
   indoor: { file: 'night-in-venice.mp3', title: 'Night in Venice' }, // 건물 안
   island: { file: 'zazie.mp3', title: 'Zazie' }, // 다른 섬
   home: { file: 'divertimento-k131.mp3', title: 'Divertimento K131' }, // 내 집
+  folk: { file: 'galway.mp3', title: 'Galway' }, // 배를 탈 때, 시골 지역
 };
 const VOL = 0.4;
 
