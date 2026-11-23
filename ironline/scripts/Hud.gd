@@ -181,8 +181,10 @@ func _draw() -> void:
 		_draw_crosshair(W, H, me)
 		_draw_status(W, H, me)
 		_draw_capture_hint(W, H, me)
-	else:
+	elif me.deaths > 0:
 		_draw_death(W, H, me)
+	else:
+		_draw_deploy(W, H)
 	if msg_t > 0.0:
 		var a := clampf(msg_t / 0.6, 0.0, 1.0)
 		_t(Vector2(0, H * 0.23), msg, 24, Color(1, 1, 1, a), true, HORIZONTAL_ALIGNMENT_CENTER, W)
@@ -365,6 +367,12 @@ func _draw_capture_hint(W: float, H: float, me: Sim.Unit) -> void:
 			if not sim._eligible(me.team, i) and p.owner != me.team:
 				_t(Vector2(0, r.position.y - 8 * u), "앞쪽 거점을 먼저 점령해야 합니다", 13, Color(1, 0.8, 0.5), true, HORIZONTAL_ALIGNMENT_CENTER, W)
 			return
+
+
+## 경기 시작 직후 투입을 기다리는 짧은 순간. 죽은 것이 아니므로 사망 화면(처치당함) 대신 조용한 안내만 보여 준다.
+func _draw_deploy(W: float, H: float) -> void:
+	draw_rect(Rect2(0, 0, W, H), Color(0, 0, 0, 0.3))
+	_ts(Vector2(0, H * 0.5), "투입 중…", 28, Color(1, 1, 1, 0.85), HORIZONTAL_ALIGNMENT_CENTER, W)
 
 
 func _draw_death(W: float, H: float, me: Sim.Unit) -> void:

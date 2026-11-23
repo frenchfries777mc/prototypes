@@ -14,7 +14,10 @@ static func available() -> bool:
 static func scene(name: String) -> PackedScene:
 	if not _scenes.has(name):
 		var path := "res://assets/models/%s/%s.gltf" % [name, name]
-		if not ResourceLoader.exists(path):
+		if name.contains("/"):
+			# 한 폴더에 .glb 여러 개를 모아 둔 팩(예: "kenney/tree_oak")
+			path = "res://assets/models/%s.glb" % name
+		elif not ResourceLoader.exists(path):
 			path = "res://assets/models/%s/%s.glb" % [name, name]
 		_scenes[name] = load(path) if ResourceLoader.exists(path) else null
 	return _scenes[name]
