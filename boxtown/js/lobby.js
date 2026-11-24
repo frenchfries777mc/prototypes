@@ -8,9 +8,12 @@ const NEWS = ['불량배, 오늘도 주먹 쥐어 보여', '기차는 멈추지 
   '옷가게 사장 "변기 뚜껑은 등에 메는 것"', '오늘의 날씨: 네모나게 맑음', '택시 손님 "기사님 여기 바다인데요"', '교도소 탈옥범 "간수 눈만 피하면 돼요"'];
 
 export class Lobby {
-  constructor({ player, jobs, wardrobe, music, interiors, input, quality, net, dealer }) {
-    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality, net, dealer });
-    net.onChange = () => { if (this.open && this.panel === 'multi') this.render(); };
+  constructor({ player, jobs, wardrobe, music, interiors, input, quality, net, dealer, loop, engine }) {
+    Object.assign(this, { player, jobs, wardrobe, music, interiors, input, quality, net, dealer, loop, engine });
+    this.frozen = false;
+    wardrobe.onShow = () => this.thaw(); // 옷 미리보기는 살아 있는 화면이 필요하다
+    wardrobe.onClose = () => { if (this.open) this.arm(); };
+    net.onChange = () => { if (this.net.on) this.thaw(); if (this.open && this.panel === 'multi') this.render(); };
     this.open = false; this.t = 0; this.panel = null;
     this.el = $('lobby');
     this.el.addEventListener('click', (e) => {
@@ -33,8 +36,47 @@ export class Lobby {
     this.input.blocked = true;
     this.render();
     this.el.hidden = false;
+    this.arm();
+  }
+  // ----- 화면 얼리기: 로비에서는 마을을 사진 한 장으로 바꾸고 그리기를 멈춘다. 그러면 약한 기기에서도 로비가 끊기지 않는다. -----
+  // 방에 들어가 있거나(다른 사람이 나를 계속 봐야 한다) 옷장을 열었을 때(미리보기)는 살아 있는 화면을 쓴다.
+  arm() {
+    clearTimeout(this.armT);
+    let tries = 0;
+    const wait = () => {
+      if (!this.open) return;
+      const g = window.__game;
+      if ((g && g.settled) || tries > 40) this.freeze(); else { tries++; this.armT = setTimeout(wait, 250); }
+    };
+    this.armT = setTimeout(wait, 700);
+  }
+  freeze() {
+    if (!this.open || this.frozen || this.net.on || this.wardrobe.open) return;
+    const canvas = document.getElementById('game');
+    this.engine.onEndFrameObservable.addOnce(() => { // 그린 직후여야 화면을 읽을 수 있다
+      let url = null;
+      try {
+        const t = document.createElement('canvas'); t.width = 24; t.height = 14; const c = t.getContext('2d'); c.drawImage(canvas, 0, 0, 24, 14);
+        const d = c.getImageData(0, 0, 24, 14).data; let lo = 255, hi = 0;
+        for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); }
+        if (hi - lo > 30) url = canvas.toDataURL('image/jpeg', 0.86); // 텅 빈 화면이면 얼리지 않는다
+      } catch (e) { url = null; }
+      if (!url || !this.open || this.net.on || this.wardrobe.open) return;
+      this.el.style.backgroundImage = `url(${url})`; this.el.classList.add('still');
+      this.frozen = true;
+      setTimeout(() => { if (this.frozen) this.loop.stop(); }, 0);
+      this.musicT = setInterval(() => { const g = window.__game; if (g) g.music.update(0.1); }, 100); // 음악은 계속 돌본다
+    });
+  }
+  thaw() {
+    clearTimeout(this.armT);
+    if (!this.frozen) return;
+    this.frozen = false; clearInterval(this.musicT);
+    this.el.classList.remove('still'); this.el.style.backgroundImage = '';
+    this.loop.run();
   }
   hide() {
+    this.thaw();
     Panel.close(); // 차고 창이 열린 채 게임으로 나가지 않게
     this.open = false; this.el.hidden = true; this.wardrobe.close();
     document.body.classList.remove('lobby');
@@ -45,7 +87,8 @@ export class Lobby {
   act(a) {
     if (a === 'start') return this.hide();
     if (a === 'garage') { this.panel = null; this.wardrobe.close(); this.render(); return this.dealer.open(false); }
-    if (a === 'closet') { this.panel = null; this.render(); return this.wardrobe.toggle(false); }
+    if (a === 'closet') { this.thaw(); this.panel = null; this.render(); return this.wardrobe.toggle(false); }
+    if (a === 'mhost' || a === 'mjoin') this.thaw();
     // 같이 하기: 이름과 코드는 다시 그리기 전에 입력칸에서 읽어 둔다.
     const nameEl = document.getElementById('mpName'), codeEl = document.getElementById('mpCode');
     if (nameEl) this.net.setName(nameEl.value);
