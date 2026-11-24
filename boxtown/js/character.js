@@ -354,13 +354,18 @@ export class Character {
     this.neck.rotation.z = this.sHeadR.step(-roll * 0.9, dt) + s * 0.04 * this.amp;
     this.neck.rotation.y = clamp(turn * 0.03, -0.5, 0.5) + (st.lookYaw || 0);
 
-    // 주먹 쥐어 보이기: 오른 주먹을 얼굴 앞으로 들어 올려 흔든다.
+    // 주먹 쥐어 보이기: 오른 주먹을 머리 위로 치켜들어 크게 흔들고, 왼 주먹은 턱 앞에 든 채 몸을 들썩인다.
     this.fistK = damp(this.fistK || 0, this.fist || 0, 10, dt);
     if (this.fistK > 0.01) {
-      this.armR.rotation.x = lerp(this.armR.rotation.x, -2.3 + Math.sin(this.idleT * 10) * 0.16, this.fistK);
-      this.armR.rotation.z = lerp(this.armR.rotation.z, -0.35, this.fistK);
-      this.armL.rotation.z = lerp(this.armL.rotation.z, -0.45, this.fistK);
-    }
+      const k = this.fistK, sh = Math.sin(this.idleT * 9);
+      this.armR.rotation.x = lerp(this.armR.rotation.x, -2.75 + sh * 0.45, k);
+      this.armR.rotation.z = lerp(this.armR.rotation.z, 0.55, k);
+      this.armL.rotation.x = lerp(this.armL.rotation.x, -1.5 - sh * 0.15, k);
+      this.armL.rotation.z = lerp(this.armL.rotation.z, 0.35, k);
+      this.torso.rotation.x = 0.16 * k; // 앞으로 숙인 싸움 자세
+      this.hips.position.y += Math.abs(Math.sin(this.idleT * 6)) * 0.06 * k;
+      this.neck.rotation.x += 0.1 * k;
+    } else if (this.torso.rotation.x) this.torso.rotation.x = 0;
     // 무기: 겨누기(오른팔을 앞으로)와 휘두르기
     this.aimK = damp(this.aimK || 0, this.aim || 0, 16, dt);
     if (this.aimK > 0.01) {
