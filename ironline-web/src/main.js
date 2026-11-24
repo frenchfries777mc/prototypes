@@ -242,12 +242,19 @@ function placeCamera(alpha, dt) {
 }
 
 // ---- 루프 ----
-let lastT = performance.now(), stepSnd = 0, fps = 60;
+let lastT = performance.now(), stepSnd = 0, fps = 60, demoAcc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05;
-  if (!S.running) { demoView(now / 1000); renderer.clear(); renderer.render(scene, camera); return; }
+  if (!S.running) {
+    demoAcc += dt; let k = 0;
+    while (demoAcc >= TICK && k++ < 3) { sim.step(TICK); demoAcc -= TICK; if (sim.winner >= 0) sim.reset(16); }
+    sim.events.length = 0;
+    demoView(now / 1000);
+    unitViews.update(dt, -1, false); pointViews.update(now / 1000); fx.update(dt);
+    renderer.clear(); renderer.render(scene, camera); return;
+  }
   if (S.paused) { renderer.clear(); renderer.render(scene, camera); return; }
   if (vmW !== me.weapon) setViewmodel(me.weapon);
   S.accum += dt;
@@ -275,9 +282,16 @@ function frame(now) {
 }
 
 // 메뉴 뒤 배경: 전장 위를 천천히 도는 카메라
+const demoC = { x: 0, z: 8 };
 function demoView(t) {
-  const a = t * 0.05, x = Math.sin(a) * 70, z = Math.cos(a * 0.8) * 25;
-  camera.position.set(x, world.heightAt(x, z) + 14, z + 30); camera.lookAt(x + Math.cos(a) * 40, 2, z - 20);
+  // 교전이 가장 많은 쪽(살아 있는 병사들의 중심)을 천천히 돌며 보여 준다
+  let sx = 0, sz = 0, n = 0;
+  for (const u of sim.units) if (u.alive) { sx += u.x; sz += u.z; n++; }
+  if (n) { demoC.x += (sx / n - demoC.x) * 0.02; demoC.z += (sz / n - demoC.z) * 0.02; }
+  const a = t * 0.07, r = 24;
+  const x = demoC.x + Math.sin(a) * r, z = demoC.z + Math.cos(a) * r * 0.7;
+  camera.position.set(x, world.heightAt(x, z) + 6, z);
+  camera.lookAt(demoC.x, world.heightAt(demoC.x, demoC.z) + 1.2, demoC.z);
   sky.position.copy(camera.position); sun.target.position.set(x, 0, z); sun.position.copy(sun.target.position).addScaledVector(SUN, 120);
 }
 
@@ -286,4 +300,5 @@ $('go').disabled = false; loadBar('출격');
 window.__game = { sim, scene, camera, renderer, S, hud, fx, keys, get me() { return me; }, start, setView(x, z, yaw = 0, pitch = 0) { me.x = x; me.z = z; me.y = world.heightAt(x, z); me.yaw = yaw; me.pitch = pitch; S.prev = null; } };
 window.__ready = true;
 requestAnimationFrame(frame);
+show('menu');
 if (q.get('auto')) { if (q.get('qual')) $('qual').value = q.get('qual'); if (q.get('weapon')) S.loadout = +q.get('weapon'); if (q.get('bots')) $('per').value = q.get('bots'); start(); }

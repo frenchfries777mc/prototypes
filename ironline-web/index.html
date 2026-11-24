@@ -103,6 +103,26 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:14px 0}
 .stats div{padding:10px;background:rgba(255,255,255,.06);border-radius:6px}.stats b{display:block;font-size:26px}.stats small{color:var(--dim)}
 @media (max-width:760px){#mini{width:150px;height:84px}.tix i{width:90px}.tix{font-size:22px}.hx{width:40px;height:44px}.hx span{font-size:18px}#hp,#ammo{min-width:0;padding:8px 12px}#hp .num,#ammo .num{font-size:34px}#hp i{width:100px}#capbox{width:90vw}}
+
+/* ---- 로비·일시정지·결과 화면: 카툰풍(두꺼운 윤곽선 + 어긋난 그림자) ---- */
+:root{--ink:#16110c;--cream:#f5e8c8;--sun:#ffc83c;--orange:#ea6a2a}
+#overlay{background:linear-gradient(100deg,rgba(255,236,190,.0) 0%,rgba(22,17,12,.0) 40%,rgba(22,17,12,.35) 100%);place-items:center start;padding-left:clamp(0px,6vw,90px)}
+.box.panel{background:var(--cream);color:var(--ink);border:4px solid var(--ink);border-radius:18px;box-shadow:9px 9px 0 var(--ink);backdrop-filter:none}
+.box p,.opt,.keys,.wp small,.stats small{color:#5a4a36}
+.box h1{color:var(--ink);text-shadow:4px 4px 0 var(--sun);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;letter-spacing:.04em}
+.box h1 span{color:var(--orange);text-shadow:4px 4px 0 var(--ink)}
+.opt select,.opt input{background:#fff8e6;color:var(--ink);border:2px solid var(--ink);border-radius:8px}
+.wp{background:#fff8e6;color:var(--ink);border:3px solid var(--ink);border-radius:12px;box-shadow:4px 4px 0 var(--ink);transition:transform .08s,box-shadow .08s}
+.wp:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--ink)}
+.wp.on{background:var(--sun);border-color:var(--ink)}.wp.on small{color:#3a2c10}
+.btn{background:var(--orange);color:#fff;border:3px solid var(--ink);border-radius:12px;box-shadow:5px 5px 0 var(--ink);text-shadow:2px 2px 0 var(--ink);transition:transform .08s,box-shadow .08s}
+.btn:hover{filter:none;transform:translate(-1px,-1px);box-shadow:7px 7px 0 var(--ink)}
+.btn:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--ink)}
+.btn.sec{background:#fff8e6;color:var(--ink);text-shadow:none}
+.keys b{background:var(--ink);color:#fff8e6;border-radius:6px}
+.stats div{background:#fff8e6;border:2px solid var(--ink);border-radius:10px}
+#res h2{text-shadow:3px 3px 0 var(--ink)}
+@media (max-width:760px){#overlay{padding-left:0;place-items:center}}
 </style>
 </head>
 <body>
