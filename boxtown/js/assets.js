@@ -34,6 +34,7 @@ function tune(kit, name, c) {
 
 export class Assets {
   constructor(scene, base = 'assets/') {
+    this.missing = new Set(); // 끝내 못 받은 모델
     this.scene = scene;
     this.base = base;
     this.templates = new Map(); // "kit/name" -> 틀 메시
@@ -58,6 +59,25 @@ export class Assets {
     return (this.mats[kit] = m);
   }
 
+  // 모델 묶음 받기(배포본에만 있다). 요청 수백 번이 두 번으로 줄고, 압축돼 있어 받는 양도 준다.
+  async loadPack(onProgress) {
+    try {
+      if (typeof DecompressionStream === 'undefined') return false;
+      const v = new URL(import.meta.url).search; // 배포 때 붙는 버전 번호를 그대로 써서, 새 버전이면 새로 받는다
+      const ir = await fetch(`${this.base}pack.json${v}`);
+      if (!ir.ok) return false;
+      const index = await ir.json();
+      const res = await fetch(`${this.base}pack.bin.gz${v}`);
+      if (!res.ok || !res.body) return false;
+      const total = +res.headers.get('content-length') || 0;
+      let got = 0;
+      const counted = res.body.pipeThrough(new TransformStream({ transform(chunk, ctl) { got += chunk.byteLength; if (onProgress && total) onProgress(Math.min(1, got / total)); ctl.enqueue(chunk); } }));
+      const buf = await new Response(counted.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+      this.pack = { index, buf };
+      return true;
+    } catch (e) { console.warn('모델 묶음을 쓰지 못해 파일을 하나씩 받습니다:', e.message || e); return false; }
+  }
+
   async load(keys, onProgress) {
     const uniq = [...new Set(keys)].filter((k) => !this.templates.has(k));
     let done = 0;
@@ -65,10 +85,18 @@ export class Assets {
     const worker = async () => {
       while (queue.length) {
         const key = queue.shift();
-        try {
-          await this._loadOne(key);
-        } catch (e) {
-          console.error('에셋을 불러오지 못했습니다:', key, e.message || e);
+        {
+          // 느린 연결에서 파일 하나가 끝없이 안 오면 로딩 전체가 멈춘다: 20초 기다리고 두 번 더 시도한 뒤, 그래도 안 되면 그 모델 없이 시작한다.
+          let ok = false;
+          for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+            try {
+              await Promise.race([this._loadOne(key), new Promise((_, bad) => setTimeout(() => bad(new Error('시간 초과')), 20000 + attempt * 10000))]);
+              ok = true;
+            } catch (e) {
+              if (this.templates.has(key)) ok = true; // 늦게라도 도착했다
+              else if (attempt === 2) { console.error('에셋을 불러오지 못했습니다:', key, e.message || e); this.missing.add(key); }
+            }
+          }
         }
         done++;
         if (onProgress) onProgress(done / uniq.length);
@@ -81,7 +109,12 @@ export class Assets {
   async _extract(key) {
     const [kit, name] = key.split('/');
     const cfg = KITS[kit];
-    const c = await B.SceneLoader.LoadAssetContainerAsync(`${this.base}${kit}/`, `${name}.glb`, this.scene);
+    // 묶음에 들어 있으면 거기서 꺼내고, 없으면 파일을 따로 받는다.
+    // 공용 팔레트를 쓰는 팩은 모델에 딸린 재질과 그림이 필요 없으니 아예 만들지 않는다(그림 요청과 준비 시간이 준다).
+    const opt = { pluginExtension: '.glb', pluginOptions: { gltf: { skipMaterials: !!cfg.tex } } };
+    const slot = this.pack && this.pack.index[key];
+    const src = slot ? new File([this.pack.buf.slice(slot[0], slot[0] + slot[1])], `${name}.glb`) : `${this.base}${kit}/${name}.glb`;
+    const c = await B.LoadAssetContainerAsync(src, this.scene, opt);
     const raw = c.meshes.filter((m) => m.getTotalVertices && m.getTotalVertices() > 0);
     const S = B.Matrix.Scaling(cfg.scale, cfg.scale, cfg.scale);
     // 1단계: 변환을 먼저 전부 구해 둔다. 같은 부품을 여러 번 쓰는 모델(인스턴스)은
@@ -183,6 +216,7 @@ export class Assets {
 
   // 모델의 크기(배율 적용 후). 충돌 상자를 만들 때 쓴다.
   bounds(key) {
+    if (this.missing.has(key)) return { min: new B.Vector3(-1, 0, -1), max: new B.Vector3(1, 2, 1) };
     const bb = this.tpl(key).getBoundingInfo().boundingBox;
     return { min: bb.minimum.clone(), max: bb.maximum.clone() };
   }
@@ -190,6 +224,7 @@ export class Assets {
   // 고정 배치. 실제 그리기는 flush()에서 "모델 × 구역"별로 한꺼번에 등록된다.
   // 구역(192m)으로 나눠 두면 화면 밖이거나 먼 구역은 통째로 건너뛸 수 있다.
   place(key, x, y, z, rotY = 0, scale = 1, tag = '') {
+    if (this.missing.has(key)) return; // 못 받은 모델은 건너뛴다
     this.tpl(key);
     const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
     const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));

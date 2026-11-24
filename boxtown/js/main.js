@@ -48,9 +48,14 @@ async function boot() {
   const isTouch = matchMedia('(pointer: coarse)').matches;
   const params = new URLSearchParams(location.search);
   let savedQ = null; try { savedQ = localStorage.getItem('boxtown.quality'); } catch (e) { /* 무시 */ }
-  const quality = params.get('q') || savedQ || (isTouch ? 'low' : 'high');
+  // 품질 세 단계: high(좋게) / low(가볍게) / lite(아주 가볍게: 후처리와 넓은 그림자를 끄고 주민과 차를 줄인다).
+  // 저장된 선택이 없으면 기기를 보고 고른다. 메모리나 코어가 적은 기기는 lite로 시작한다.
+  const weak = (navigator.deviceMemory && navigator.deviceMemory <= 4) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+  const quality0 = params.get('q') || savedQ || (isTouch ? (weak ? 'lite' : 'low') : weak ? 'low' : 'high');
+  const lite = quality0 === 'lite', quality = lite ? 'low' : quality0; // lite는 low의 설정에 더해 몇 가지를 더 끈다
+  const pause = () => new Promise((r) => setTimeout(r, 0)); // 무거운 단계 사이에 화면을 한 번 그리게 한다(막대가 멈춰 보이지 않게)
   const engine = new B.Engine(canvas, false, { stencil: false, powerPreference: 'high-performance' });
-  engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio || 1, quality === 'low' ? 1.25 : 1.5));
+  engine.setHardwareScalingLevel(lite ? 1.35 : 1 / Math.min(devicePixelRatio || 1, quality === 'low' ? 1.25 : 1.5));
   B.Scene.MaxDeltaTime = 50; // 프레임이 심하게 끊겨도 물리 한 스텝은 0.05초를 넘지 않는다
   const scene = new B.Scene(engine);
   scene.skipPointerMovePicking = true;
@@ -87,25 +92,38 @@ async function boot() {
   mark('engine');
   setProgress(0.06, '에셋 불러오는 중');
   const assets = new Assets(scene);
-  await assets.load(modelKeys(), (p) => setProgress(0.06 + p * 0.55));
-  await Promise.all(carKeys().map((k) => assets.loadCar(k)));
-  setProgress(0.66);
-
-  mark('assets');
-  setProgress(0.68, '섬과 바다 만드는 중');
-  await new Promise((r) => setTimeout(r, 0));
+  // 모델을 받는 동안(인터넷을 기다리는 시간) 땅을 먼저 만든다. 둘은 서로 기다릴 필요가 없다.
+  const loading = (async () => {
+    const packed = await assets.loadPack((p) => setProgress(0.06 + p * 0.3, `에셋 받는 중 ${Math.round(p * 100)}%`));
+    const from = packed ? 0.36 : 0.06, span = packed ? 0.26 : 0.56;
+    await assets.load(modelKeys(), (p) => setProgress(from + p * span, `에셋 ${packed ? '펼치는' : '불러오는'} 중 ${Math.round(p * 100)}%`));
+    await Promise.all(carKeys().map((k) => assets.loadCar(k)));
+  })();
+  await pause();
   initGrid();
   mark('heightGrid');
+  await pause();
   const chunks = buildTerrain(scene);
   mark('terrainMesh');
-  for (const chunk of chunks) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  await pause();
+  // 땅의 충돌 처리: 시작 지점 둘레만 먼저 하고, 먼 곳은 게임이 뜬 뒤에 조금씩 한다(전부 하면 1초 넘게 걸린다).
+  const solid = (chunk) => new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  const chunkDist = (c) => { const bb = c.getBoundingInfo().boundingBox.centerWorld; return Math.hypot(bb.x - SPAWN.x, bb.z - SPAWN.z); };
+  const farChunks = chunks.filter((c) => chunkDist(c) > 420).sort((p, q) => chunkDist(p) - chunkDist(q));
+  for (const chunk of chunks) if (!farChunks.includes(chunk)) solid(chunk);
   mark('terrainPhysics');
+  await loading;
+  setProgress(0.66);
+  mark('assets');
+  setProgress(0.7, '섬과 바다 만드는 중'); await pause();
   buildSky(scene, env);
   buildWater(scene, env);
 
   setProgress(0.82, '마을 세우는 중');
   await new Promise((r) => setTimeout(r, 0));
+  setProgress(0.82, '마을 짓는 중'); await pause();
   const town = buildTown(scene, assets, mark);
+  setProgress(0.9, '주민과 차 부르는 중'); await pause();
   mark('town.rest');
 
   const character = new Character(scene);
@@ -113,16 +131,16 @@ async function boot() {
   const spawn = { ...SPAWN, y: groundY(SPAWN.x, SPAWN.z) };
   const garage = new Garage(scene, assets, PARKED, CELL, ROAD_Y, height);
   garage.addBoats(scene, assets, town.boatSpots);
-  const residents = new Residents(scene, groundY, 48);
+  const residents = new Residents(scene, groundY, lite ? 22 : 48);
   const player = new Player(scene, input, character, spawn, garage);
   const police = new Police({ scene, assets, garage, player, jobs: null, height, groundY });
   const interiors = town.interiors;
   scene.activeCamera = player.cam;
 
   // 그림자: 가까운 곳은 선명하게, 먼 곳은 넓게 덮는 단계별 그림자.
-  const csm = new B.CascadedShadowGenerator(quality === 'low' ? 1024 : 2048, sun);
-  csm.numCascades = quality === 'low' ? 3 : 4;
-  csm.shadowMaxZ = quality === 'low' ? 150 : 240;
+  const csm = new B.CascadedShadowGenerator(lite ? 512 : quality === 'low' ? 1024 : 2048, sun);
+  csm.numCascades = lite ? 2 : quality === 'low' ? 3 : 4;
+  csm.shadowMaxZ = lite ? 70 : quality === 'low' ? 150 : 240;
   csm.lambda = 0.82;
   csm.stabilizeCascades = true;
   csm.cascadeBlendPercentage = 0.05;
@@ -133,7 +151,7 @@ async function boot() {
   csm.setDarkness(0.32);
   const rl = csm.getShadowMap().renderList;
   // 그림자를 드리우는 것: 늘 있는 것(캐릭터, 차, 움직이는 소품) + 카메라 근처 구역의 건물과 나무
-  assets.shadowRange = quality === 'low' ? 110 : 185;
+  assets.shadowRange = lite ? 55 : quality === 'low' ? 110 : 185;
   const fixedCasters = [...assets.shadowCasters, ...town.casters, ...character.meshes, ...residents.meshes];
   assets.cull(player.cam.position, rl, fixedCasters);
   let cullT = 0, lastInterior = null;
@@ -162,7 +180,7 @@ async function boot() {
   health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
   const train = new Train({ scene, player, jobs, assets, garage, sfx: weapons.sfx, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   train0 = train;
-  const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, count: lite ? 14 : 34, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   weapons.traffic = traffic; traffic0 = traffic;
   // 배경 음악: 수배 > 내 집 > 건물 안 > 배 위 > 시골 지역 > 다른 섬 > 시작 대륙
   const RURAL = ['farm', 'wind', 'camp', 'lake', 'lookout', 'mill', 'cabinA', 'cabinB', 'cabinC', 'cabinD', 'woods'].map((k) => SITES[k]).filter(Boolean);
@@ -197,14 +215,21 @@ async function boot() {
     ssao.radius = 1.6; ssao.totalStrength = 1.15; ssao.base = 0.1; ssao.samples = 16; ssao.maxZ = 220; ssao.minZAspect = 0.4;
     ssao.expensiveBlur = true;
   }
-  const pipe = new B.DefaultRenderingPipeline('pipe', true, scene, [player.cam]);
-  pipe.fxaaEnabled = true;
-  pipe.bloomEnabled = quality !== 'low';
-  pipe.bloomThreshold = 0.86; pipe.bloomWeight = 0.28; pipe.bloomKernel = 48; pipe.bloomScale = 0.5;
-  pipe.imageProcessingEnabled = true;
-  const ip = pipe.imageProcessing;
-  ip.contrast = 1.22; ip.exposure = 1.04;
-  ip.vignetteEnabled = true; ip.vignetteWeight = 1.1; ip.vignetteStretch = 0.3; ip.vignetteColor = new B.Color4(0.05, 0.1, 0.2, 0);
+  // 화면 효과(번짐, 색 보정)는 준비가 오래 걸려서, 게임이 뜬 뒤에 붙인다. 아주 가볍게(lite)에서는 쓰지 않는다.
+  const pipe = { bloomEnabled: false };
+  const addFx = () => {
+    if (lite) return;
+    const p = new B.DefaultRenderingPipeline('pipe', true, scene, [player.cam]);
+    p.fxaaEnabled = true;
+    p.bloomEnabled = quality !== 'low' && !fxOff;
+    p.bloomThreshold = 0.86; p.bloomWeight = 0.28; p.bloomKernel = 48; p.bloomScale = 0.5;
+    p.imageProcessingEnabled = true;
+    const ip = p.imageProcessing;
+    ip.contrast = 1.22; ip.exposure = 1.04;
+    ip.vignetteEnabled = true; ip.vignetteWeight = 1.1; ip.vignetteStretch = 0.3; ip.vignetteColor = new B.Color4(0.05, 0.1, 0.2, 0);
+    pipeReal = p;
+  };
+  let pipeReal = null, fxOff = false;
 
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
@@ -224,7 +249,7 @@ async function boot() {
     dropShadow: (ms) => { for (const o of ms) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } } });
   weapons.net = net; netRef = net;
   wardrobe.onChange = () => net.sendLook();
-  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality, net, dealer });
+  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality: quality0, net, dealer });
   setupChat(net, input, lobby);
   stats.onReward = (n) => { jobs.money += n; try { localStorage.setItem('boxtown.money', String(jobs.money)); } catch (e) { /* 무시 */ } jobs.renderMoney(); };
   let useLabel = '', quitT = 0, carShown = -1;
@@ -283,7 +308,8 @@ async function boot() {
     if (slow >= 3) {
       slow = 0;
       if (ssao) { ssao.dispose(); ssao = null; }
-      else if (pipe.bloomEnabled) pipe.bloomEnabled = false;
+      else if (pipeReal && pipeReal.bloomEnabled) pipeReal.bloomEnabled = false;
+      else if (!fxOff) fxOff = true;
       else if (engine.getHardwareScalingLevel() < 1.4) engine.setHardwareScalingLevel(engine.getHardwareScalingLevel() * 1.25);
       else clearInterval(perf);
     }
@@ -316,10 +342,27 @@ async function boot() {
   };
   window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag };
   mark('map+fx');
-  await scene.whenReadyAsync();
+  setProgress(0.97, '마무리하는 중'); await pause();
+  // 셰이더나 그림 하나가 준비되지 않아도 끝없이 기다리지 않는다.
+  await Promise.race([scene.whenReadyAsync(), new Promise((r) => setTimeout(r, 15000))]);
   mark('shaders');
   timing.total = Math.round(performance.now() - t0);
   engine.runRenderLoop(() => scene.render());
+  // 게임이 뜬 뒤에 마저 하는 일: 먼 땅의 충돌 처리를 프레임마다 몇 개씩, 그다음 화면 효과.
+  // 그 사이에 먼 곳의 차가 땅 밑으로 떨어지지 않도록, 충돌이 준비될 때까지 붙들어 둔다.
+  { const f = player.feet; for (let k = farChunks.length - 1; k >= 0; k--) { const bb = farChunks[k].getBoundingInfo().boundingBox.centerWorld; if (Math.hypot(bb.x - f.x, bb.z - f.z) < 300) solid(farChunks.splice(k, 1)[0]); } } // 내 집 앞에서 시작하는 경우
+  const heldProps = town.dynamics.filter((d) => Math.hypot(d.mesh.position.x - SPAWN.x, d.mesh.position.z - SPAWN.z) > 330);
+  for (const d of heldProps) d.agg.body.setMotionType(B.PhysicsMotionType.STATIC);
+  const heldCars = garage.cars.filter((c) => !c.isBoat && Math.hypot(c.pos.x - SPAWN.x, c.pos.z - SPAWN.z) > 330);
+  for (const c of heldCars) c.body.setMotionType(B.PhysicsMotionType.STATIC);
+  const later = setInterval(() => { // 화면 속도와 상관없이 1~2초 안에 끝난다
+    for (let k = 0; k < 3 && farChunks.length; k++) solid(farChunks.shift());
+    if (farChunks.length) return;
+    clearInterval(later);
+    for (const c of heldCars) if (!c.netHeld) c.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
+    for (const d of heldProps) d.agg.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
+    setTimeout(addFx, 1500);
+  }, 30);
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');
   $('hud').hidden = false;
