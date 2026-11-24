@@ -2,7 +2,7 @@
 // 건물과 소품은 에셋 팩 모델을 놓고, 팩에 없는 것(등대, 잔교, 전망대, 밭)은 상자로 짓는다.
 import { SITES } from './world.js';
 import { height, SEA } from './terrain.js';
-import { roadDist } from './roads.js';
+import { roadDist, clearOfRoads, footprintHeights } from './roads.js';
 import { rng, flatMat } from './util.js';
 
 const DEG = Math.PI / 180;
@@ -20,10 +20,31 @@ export function buildDistricts(h) {
   // 터 하나를 기준으로 한 배치 도구
   const at = (site, id) => {
     h.bucket(id, site.x, site.z);
-    const P = (key, dx, dz, yaw = 0, scale = 1, shrink = 0.92) => {
-      const x = site.x + dx, z = site.z + dz, y = height(x, z);
+    const SHIFT = [[0, 0], [9, 0], [-9, 0], [0, 9], [0, -9], [14, 14], [-14, 14], [14, -14], [-14, -14], [22, 0], [-22, 0], [0, 22], [0, -22]];
+    const P = (key, dx0, dz0, yaw = 0, scale = 1, shrink = 0.92) => {
+      // 길에 걸치면 가까운 빈자리로 옮긴다(작은 소품은 그대로 두고 길 한가운데만 피한다).
+      const bk = assets.bounds(key), area = (bk.max.x - bk.min.x) * (bk.max.z - bk.min.z) * scale * scale;
+      const big = /building|windmill|chimney|water-tower|detail-tank|tower|structure|container|ship/.test(key) || area > 7; // 컨테이너 같은 큰 소품도 길을 가리면 안 된다
+      let dx = dx0, dz = dz0, found = !big;
+      if (big) {
+        const bb = assets.bounds(key);
+        for (const [ox, oz] of SHIFT) {
+          const x = site.x + dx0 + ox, z = site.z + dz0 + oz;
+          if (height(x, z) < SEA + 0.4 || !clearOfRoads(bb, x, z, yaw * DEG, scale, 1.2)) continue;
+          dx = dx0 + ox; dz = dz0 + oz; found = true; break;
+        }
+        if (!found) return false;
+      }
+      const x = site.x + dx, z = site.z + dz;
+      let y = height(x, z);
       if (y < SEA + 0.4) return false; // 물속이면 놓지 않는다
-      if (roadDist(x, z) < 5.5) return false; // 길 위에도 놓지 않는다
+      if (!big && roadDist(x, z) < 5.5) return false; // 길 위에도 놓지 않는다
+      if (big) { // 높은 쪽 땅에 맞추고, 낮은 쪽은 기초로 받친다
+        const fh = footprintHeights(assets.bounds(key), x, z, yaw * DEG, scale);
+        if (fh.hi - fh.lo > 2.2) return false;
+        y = fh.hi;
+        if (fh.hi - fh.lo > 0.1) h.box(id + '_found', fh.w * 0.97, fh.hi - fh.lo + 0.7, fh.d * 0.97, fh.ox, (fh.lo - 0.4 + fh.hi + 0.06) / 2, fh.oz, M('#a9aec0'), { yaw: yaw * DEG, noShadow: true });
+      }
       assets.place(key, x, y - 0.06, z, yaw * DEG, scale);
       if (key.startsWith('suburban/building-type') && scale === 1) h.houses.push({ key, x, z, yaw: yaw * DEG, area: id });
       if (shrink) h.collideModel(key, x, y, z, yaw * DEG, scale, shrink);
@@ -109,7 +130,6 @@ export function buildDistricts(h) {
       P(cont[i % 3], 20 + i * 5.2, -66, 0);
       if (i % 2) assets.place(cont[(i + 1) % 3], S.x + 20 + i * 5.2, S.y + 4.15, S.z - 66, 0); // 위에 한 층 더
     }
-    for (let i = 0; i < 6; i++) P('industrial/solar-panel-landscape-group', -70 + (i % 3) * 20, 62 + Math.floor(i / 3) * 12, 0);
     Bx('yard', 150, 0.1, 150, 0, -0.02, 0, M('#aeb3c2'), { noShadow: true, base: S.y });
   }
 

@@ -290,6 +290,7 @@ async function boot() {
     {
     residents.update(hd, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
     train.update(hd);
+    player.syncRide(); // 열차가 움직인 직후에 카메라를 맞춘다(한 프레임 늦으면 흔들려 보인다)
     traffic.blocked = train.closed;
     traffic.update(hd);
     }

@@ -1,7 +1,7 @@
 // 시가지 채우기: world.js의 CITY마다 길가에 건물을 정면이 길을 보게 세우고, 보도·가로등·가로수를 놓는다.
 import { CITY, CITY_STEP, CITY_HALF } from './world.js';
 import { height } from './terrain.js';
-import { roadDist } from './roads.js';
+import { roadDist, clearOfRoads, footprintHeights } from './roads.js';
 import { rng, flatMat } from './util.js';
 
 const C = (list) => list.split('').map((c) => 'commercial/building-' + c);
@@ -17,7 +17,7 @@ const HW = CITY_HALF;
 
 // h: { scene, assets, box, addBox, collideModel, bucket, houses }
 export function buildCity(h) {
-  const { assets, scene } = h, pave = flatMat('cityPave', '#c9cede', scene);
+  const { assets, scene } = h, pave = flatMat('cityPave', '#c9cede', scene), found = flatMat('cityFound', '#a9aec0', scene);
   const trees = ['nature/tree_blocks', 'nature/tree_fat', 'nature/tree_oak', 'nature/tree_blocks_fall'];
   for (const c of CITY) {
     h.bucket('city_' + c.id, c.x, c.z);
@@ -35,7 +35,9 @@ export function buildCity(h) {
           const n = Math.max(1, Math.ceil((b - a) / 6)), len = (b - a) / n;
           if (b - a > 4) for (let k = 0; k < n; k++) {
             const [px, pz] = at(a + (k + 0.5) * len, side, HW + 1.3);
-            h.box('pave', ns ? 2.6 : len + 0.1, 0.5, ns ? len + 0.1 : 2.6, px, height(px, pz) - 0.22, pz, pave, { noShadow: true }); // 윗면이 땅 위 3cm
+            const [ax, az] = at(a + k * len, side, HW + 1.3), [bx, bz] = at(a + (k + 1) * len, side, HW + 1.3);
+            const low = Math.min(height(px, pz), height(ax, az), height(bx, bz)); // 비탈에서도 윗면이 땅 위로 솟지 않게 구간에서 가장 낮은 땅에 맞춘다
+            h.box('pave', ns ? 2.6 : len + 0.1, 0.5, ns ? len + 0.1 : 2.6, px, low - 0.23, pz, pave, { noShadow: true });
           }
         }
         // 가로등과 가로수
@@ -50,10 +52,13 @@ export function buildCity(h) {
         while (t < half - 8) {
           const key = r.pick(pool), bb = assets.bounds(key), w = bb.max.x - bb.min.x, d = bb.max.z - bb.min.z;
           const setback = HW + 3.4 + d / 2, [x, z] = at(t + w / 2, side, setback), rad = Math.max(w, d) / 2;
-          const ok = Math.hypot(x - c.x, z - c.z) < c.r - rad * 0.6 && roadDist(x, z) > setback - 0.8 && !placed.some((q) => Math.hypot(q[0] - x, q[1] - z) < (q[2] + rad) * 0.86);
-          if (!ok) { t += 4; continue; }
-          // 정면(-Z)이 길을 보게 돌린다.
-          const fx = ns ? -side : 0, fz = ns ? 0 : -side, yaw = Math.atan2(-fx, -fz), y = height(x, z) - 0.05;
+          const fx0 = ns ? -side : 0, fz0 = ns ? 0 : -side, yaw0 = Math.atan2(-fx0, -fz0);
+          const ok = Math.hypot(x - c.x, z - c.z) < c.r - rad * 0.6 && roadDist(x, z) > setback - 0.8 && clearOfRoads(bb, x, z, yaw0, 1, 1.4) && !placed.some((q) => Math.hypot(q[0] - x, q[1] - z) < (q[2] + rad) * 0.86);
+          const fh = ok ? footprintHeights(bb, x, z, yaw0, 1) : null;
+          if (!ok || fh.hi - fh.lo > 1.6) { t += 4; continue; } // 너무 가파른 자리는 건너뛴다
+          // 정면(-Z)이 길을 보게 돌린다. 높은 쪽 땅에 맞추고, 낮은 쪽은 기초로 받친다.
+          const fx = ns ? -side : 0, fz = ns ? 0 : -side, yaw = Math.atan2(-fx, -fz), y = fh.hi - 0.05;
+          if (fh.hi - fh.lo > 0.1) h.box('found', fh.w * 0.97, fh.hi - fh.lo + 0.7, fh.d * 0.97, fh.ox, (fh.lo - 0.4 + fh.hi + 0.05) / 2, fh.oz, found, { yaw, noShadow: true });
           assets.place(key, x, y, z, yaw);
           h.collideModel(key, x, y, z, yaw, 1, 0.95);
           placed.push([x, z, rad]);

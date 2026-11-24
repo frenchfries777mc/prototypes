@@ -58,9 +58,10 @@ export class Train {
     // ----- 기차: 기관차 하나와 객차 둘 -----
     // ----- 기차: 전동차 모델 네 량(앞머리, 객차 둘, 뒷머리) -----
     this.gap = 8.0;
-    this.cars = ['a', 'b', 'b', 'b', 'b', 'c'].map((k) => { const m = assets.spawn('train/train-electric-subway-' + k, 'trainCar_' + k); m.rotationQuaternion = null; return m; });
+    this.cars = ['a', 'b', 'b', 'b', 'b', 'a'].map((k) => { const m = assets.spawn('train/train-electric-subway-' + k, 'trainCar_' + k); m.rotationQuaternion = null; return m; });
     assets.flush();
-    this.s = this.stations[0].s; this.dir = 1; this.v = 0; this.wait = 6; this.stop = 0; this.seat = new B.Vector3(); this.hitCd = 0;
+    this.flipK = this.cars.map((_, k) => (k === this.cars.length - 1 ? Math.PI : 0)); // 뒤쪽 끝 객차도 앞머리 모델을 뒤로 돌려 쓴다(방향을 바꿔도 순간이동하지 않는다)
+    this.s = this.goalS(0, 1); this.dir = 1; this.v = 0; this.wait = 6; this.stop = 0; this.seat = new B.Vector3(); this.hitCd = 0;
     // 앞머리 전조등
     this.lamp = B.MeshBuilder.CreateBox('trainLamp', { width: 1.5, height: 0.28, depth: 0.12 }, scene);
     this.lamp.material = M('#fff6c8', { emissive: '#fff2b0' }); this.lamp.isPickable = false;
@@ -91,6 +92,13 @@ export class Train {
     });
   }
 
+  // 역에 설 때 앞머리가 놓일 자리: 열차 가운데가 승강장 가운데에 오게 한다(선로 끝 쪽은 열차가 선로 밖으로 나가지 않게 모은다).
+  goalS(i, dir) {
+    const span = this.gap * (this.cars.length - 1), c = this.stations[i].s + dir * span / 2;
+    return dir > 0 ? clamp(c, span, this.len - 0.05) : clamp(c, 0.05, this.len - span);
+  }
+  // 끝 역에서 방향을 바꾼다: 맨 뒤 객차 자리가 새 앞머리가 되므로 객차들은 그대로 있고 이름만 바뀐다.
+  reverse() { this.s -= this.dir * this.gap * (this.cars.length - 1); this.dir = -this.dir; this.place(); }
   // 선로 위 거리 s의 위치와 방향
   at(s) {
     const P = this.pts;
@@ -105,11 +113,12 @@ export class Train {
     this.cars.forEach((c, k) => {
       const q = this.at(this.s - this.dir * k * this.gap);
       c.position.set(q.x, q.y, q.z);
-      c.rotation.set(-Math.atan(q.dy) * this.dir, Math.atan2(q.tx, q.tz) + (this.dir < 0 ? Math.PI : 0), 0);
+      c.rotation.set(-Math.atan(q.dy) * this.dir * (this.flipK[k] ? -1 : 1), Math.atan2(q.tx, q.tz) + (this.dir < 0 ? Math.PI : 0) + this.flipK[k], 0);
     });
     { const q = this.at(this.s + this.dir * 4.05); this.lamp.position.set(q.x, q.y + 1.15, q.z); this.lamp.rotation.y = Math.atan2(q.tx, q.tz); }
-    const q = this.at(this.s - this.dir * this.gap * 1.5);
+    const q = this.at(this.s - this.dir * this.gap * (this.cars.length - 1) / 2);
     this.seat.set(q.x, q.y + 1.2, q.z); // 가운데 객차
+    this.seatYaw = Math.atan2(q.tx * this.dir, q.tz * this.dir); this.seatPitch = Math.atan(q.dy) * this.dir; // 탄 사람의 시점이 열차에 딱 붙어 따라간다
   }
   atStation() { return this.wait > 0 ? this.stations[this.stop] : null; }
   nearPlatform() {
@@ -127,12 +136,14 @@ export class Train {
     if (P.riding) {
       const st = this.atStation();
       if (!st) return true;
+      P.yaw += this.seatYaw; // 내릴 때 보던 방향 그대로
       P.riding = null; P.inside = false; P.chr.setVisible(true);
       P.teleport(st.x, st.y, st.z);
       return true;
     }
     if (!this.nearPlatform()) return false;
     stats.bump('rides');
+    P.yaw = 0; P.pitch = 0.3; // 탄 동안 시점은 열차 기준(0이 열차 뒤쪽)
     P.riding = this; P.inside = true; P.chr.setVisible(false); // 타는 동안은 다치지 않고 경찰도 못 찾는다
     P.cc.setPosition(new B.Vector3(this.seat.x, this.seat.y + 400, this.seat.z));
     this.jobs.toast('기차에 탔어요. 다른 역에 서면 E로 내려요');
@@ -172,12 +183,12 @@ export class Train {
     if (this.wait > 0) {
       this.wait -= dt;
       if (this.wait <= 0) { // 출발: 끝 역이면 방향을 바꾼다
-        if (this.stop === this.stations.length - 1) this.dir = -1; else if (this.stop === 0) this.dir = 1;
+        if ((this.stop === this.stations.length - 1 && this.dir > 0) || (this.stop === 0 && this.dir < 0)) this.reverse();
         this.next = this.stop + this.dir; this.departed = true;
       }
       return;
     }
-    const goal = this.stations[this.next].s, left = Math.abs(goal - this.s);
+    const goal = this.goalS(this.next, this.dir), left = Math.abs(goal - this.s);
     const want = Math.min(24, Math.sqrt(2 * 3.2 * left) + 0.6); // 역 앞에서 서서히 줄인다
     this.v = this.v < want ? Math.min(want, this.v + 3.5 * dt) : want;
     this.s += this.dir * Math.min(this.v * dt, left);
