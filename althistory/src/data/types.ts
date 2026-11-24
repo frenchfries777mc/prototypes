@@ -11,10 +11,26 @@ export interface CountryMeta {
   neutral?: boolean; stats?: Stats; pop?: number; gdp?: number; continent?: string;
 }
 export interface ProvinceMeta { id: ProvinceId; name: string; nameKo: string | null; adm0: string; owner: CountryId }
+export interface PolityDef {
+  id: CountryId; name: string; nameKo: string | null; color: string; stats: Stats | null;
+  aliases?: string[]; provinces?: number; neutral?: boolean; npc?: boolean;
+}
+export interface ArmyDef {
+  c: CountryId; n: string; g: string; skill?: number; trait?: string; troops: number; at: ProvinceId; navy?: boolean;
+}
+export interface Bonus { country: CountryId; words: string[]; bonus: number; note?: string }
 export interface Scenario {
   id: string; name: string; startDate: string; tagline?: string; description?: string;
+  year?: string; era?: string; briefing?: string; gmNotes?: string; turnMonths?: number; focus?: [number, number, number, number] | null;
   alliances: { name: string; members: CountryId[] }[];
   relations: [CountryId, CountryId, number][];
+  /** 역사/사용자 템플릿: 시나리오 전용 국가 목록과 주별 소유 국가(주 순서와 같은 인덱스 -> polities 인덱스) */
+  polities?: PolityDef[]; owners?: number[];
+  wars?: [CountryId, CountryId][]; milMod?: Record<CountryId, number>; bonuses?: Bonus[];
+  armies?: ArmyDef[];
+  /** 군대가 자동 생성되는 나라에 순서대로 배정할 장군 이름 풀 */
+  generals?: Record<CountryId, { n: string; skill?: number; trait?: string }[]>;
+  author?: string; custom?: boolean;
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface WorldData { topo: any; countries: CountryMeta[]; reach: number[][]; scenarios: Scenario[] }

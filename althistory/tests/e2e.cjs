@@ -29,14 +29,12 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   const bg = await page.evaluate(() => getComputedStyle(document.getElementById('intro')).backgroundColor);
   ok(await page.isVisible('#intro') && /^rgb\((24[0-9]|25[0-5]), (24[0-9]|25[0-5]), (24[0-9]|25[0-5])\)$/.test(bg), `첫 화면이 밝은 배경: ${bg}`);
   ok(!(await page.isVisible('#panel')) && !(await page.isVisible('#game')), '첫 화면에는 지도 패널/게임 패널이 없다');
-  const tplCount = await page.locator('.tpl:not(.off)').count(), offCount = await page.locator('.tpl.off').count();
-  ok(tplCount === 3 && offCount === 3, `템플릿 카드: 선택 가능 ${tplCount}개, 준비 중 ${offCount}개`);
+  const tplCount = await page.locator('.tpl').count(), offCount = 0;
+  ok(tplCount === 22, `템플릿 카드 ${tplCount}개 (현대 3 + 역사 19)`);
   ok(!(await page.textContent('#intro')).match(ENGLISH), '시작 화면에 영어 국가명이 없다');
   await page.screenshot({ path: `${OUT}/s1_intro.png` });
   await page.click('.tpl[data-id="bipolar-world"]');
   ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '템플릿 선택(양극 냉전 세계)');
-  await page.click('.tpl.off >> nth=0');  // 준비 중 카드는 선택되지 않는다
-  ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '준비 중 카드를 눌러도 선택이 바뀌지 않는다');
   ok(!(await page.isVisible('#in-gemini')), '규칙 모드일 때 Gemini 입력칸 숨김');
   await page.click('#btn-next');
 

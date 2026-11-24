@@ -3,7 +3,7 @@
 // 사용: npm run build:map
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { feature, neighbors } from 'topojson-client';
 
@@ -215,6 +215,120 @@ const reach = geoms.map((_, i) => {
 });
 const reachTotal = reach.reduce((s, r) => s + r.length, 0);
 
+// ---- 5b. 역사 시나리오 컴파일 -------------------------------------------------
+// data/history/*.mjs: 시나리오별 국가(polities)와 "현대 주 -> 당시 소유국" 칠하기 규칙을 받아 owners 배열을 만든다.
+const fmtStart = ([y, m]) => `${y < 0 ? '-' : ''}${String(Math.abs(y)).padStart(4, '0')}-${String(m).padStart(2, '0')}-01`;
+const centers = topoFc.features.map((f) => {
+  let best = null, bestA = -1;
+  const visit = (poly) => {
+    const bb = bboxOf(poly[0]); const a = (bb[2] - bb[0]) * (bb[3] - bb[1]);
+    if (a > bestA) { bestA = a; best = bb; }
+  };
+  if (f.geometry) { if (f.geometry.type === 'Polygon') visit(f.geometry.coordinates); else for (const p of f.geometry.coordinates) visit(p); }
+  return best ? [(best[0] + best[2]) / 2, (best[1] + best[3]) / 2] : [0, 0];
+});
+const histWarnings = [];
+const adm0Set = new Set(geoms.map((g) => g.properties.adm0));
+const ownerSet = new Set(geoms.map((g) => g.properties.owner));
+// 어느 시대에도 "국가"로 만들지 않을 단위(분쟁 암초, 완충지대, 당시 없던 초소국/신생국). 남으면 기타 세력.
+const REST_NEVER = new Set(['BRI', 'CNM', 'SPI', 'BRT', 'BJN', 'SCR', 'PGA', 'CYN', 'VAT', 'KIR', 'MHL', 'TUV', 'NRU', 'PLW', 'FSM', 'WSM', 'SLB', 'VUT', 'COM', 'MDV', 'GRD', 'VCT', 'LCA', 'DMA', 'ATG', 'KNA', 'TLS', 'CPV', 'STP', 'SYC', 'MUS', 'BRN', 'BHR', 'QAT', 'KWT', 'ARE']);
+// 문자열/배열 단축 표기는 "행정 소속 또는 주권국"이 그 코드인 주 전부(해외 영토 포함). 객체의 adm0 키는 행정 소속만 엄격히 본다.
+const normSel = (sel) => (typeof sel === 'string' ? { any: [sel] } : Array.isArray(sel) ? { any: sel } : { ...sel, adm0: sel.adm0 === undefined ? undefined : [].concat(sel.adm0) });
+const matchSel = (i, sel) => {
+  const g = geoms[i].properties;
+  if (sel.any && !(sel.any.includes(g.adm0) || sel.any.includes(g.owner))) return false;
+  if (sel.adm0 && !sel.adm0.includes(g.adm0)) return false;
+  if (sel.box) { const [x, y] = centers[i]; if (x < sel.box[0] || x > sel.box[2] || y < sel.box[1] || y > sel.box[3]) return false; }
+  if (sel.names && !sel.names.some((n) => (g.name || '').toLowerCase().includes(n.toLowerCase()))) return false;
+  if (sel.ids && !sel.ids.includes(g.id)) return false;
+  return true;
+};
+const scaleStats = (st, k) => ({ stability: st.stability, economy: Math.round(st.economy * k), military: Math.round(st.military * k), influence: Math.round(st.influence * k) });
+const toStats = (a) => ({ stability: a[0], economy: a[1], military: a[2], influence: a[3] });
+
+function compileHistory(def) {
+  const tag = def.id;
+  const pol = Object.entries(def.polities).map(([id, d]) => ({
+    id, name: d.e ?? d.n, nameKo: d.n, color: d.c, stats: toStats(d.s), aliases: d.a ?? [], provinces: 0, ...(d.p === false ? { npc: true } : {}),
+  }));
+  const idxOf = new Map(pol.map((p, i) => [p.id, i]));
+  for (const c of def.self ?? []) if (!ownerSet.has(c)) histWarnings.push(`[${tag}] self: 알 수 없는 국가 코드 ${c}`);
+  const owner = new Array(geoms.length).fill(-1);
+  for (const [pid, ...sels] of def.paint ?? []) {
+    if (!idxOf.has(pid)) throw new Error(`[${tag}] paint: 알 수 없는 국가 ${pid}`);
+    for (const raw of sels) {
+      const sel = normSel(raw); let n = 0;
+      for (const c of [...(sel.adm0 ?? []), ...(sel.any ?? [])]) if (!adm0Set.has(c) && !ownerSet.has(c)) histWarnings.push(`[${tag}] ${pid}: 알 수 없는 국가 코드 ${c}`);
+      for (let i = 0; i < geoms.length; i++) if (matchSel(i, sel)) { owner[i] = idxOf.get(pid); n++; }
+      if (n === 0) histWarnings.push(`[${tag}] ${pid}: 규칙이 아무 주도 잡지 못함 ${JSON.stringify(raw)}`);
+    }
+  }
+  // 남은 땅: modern 이면 현대 국가를 그대로(축소 능력치) 쓰고, 아니면 "기타 세력"
+  const exclude = new Set([...REST_NEVER, ...(def.restExclude ?? [])]);
+  const selfSet = new Set(def.self ?? []);
+  let uncIdx = -1;
+  const unc = () => { if (uncIdx < 0) { pol.push({ id: 'UNC', name: 'Unclaimed lands', nameKo: '기타 세력', color: '#5b6577', stats: null, aliases: [], provinces: 0, neutral: true }); uncIdx = pol.length - 1; idxOf.set('UNC', uncIdx); } return uncIdx; };
+  for (let i = 0; i < geoms.length; i++) {
+    if (owner[i] >= 0) continue;
+    const m = geoms[i].properties.owner;
+    if (((def.rest ?? 'unc') === 'modern' || selfSet.has(m)) && !NEUTRAL.has(m) && !exclude.has(m) && countries.has(m)) {
+      if (!idxOf.has(m)) {
+        const c = countries.get(m); const base = statsFor({ id: m, pop: c.pop, gdp: c.gdp, income: c.income });
+        pol.push({ id: m, name: c.name, nameKo: c.nameKo ?? c.name, color: colorOf[m] ?? '#8a93a3', stats: scaleStats(base, def.restScale ?? 0.7), aliases: [], provinces: 0 });
+        idxOf.set(m, pol.length - 1);
+      }
+      owner[i] = idxOf.get(m);
+    } else owner[i] = unc();
+  }
+  owner.forEach((o) => { pol[o].provinces++; });
+  const check = (id, where) => { if (!idxOf.has(id)) throw new Error(`[${tag}] ${where}: 알 수 없는 국가 ${id}`); };
+  for (const [a, b] of def.wars ?? []) { check(a, 'wars'); check(b, 'wars'); }
+  for (const [a, b] of def.rel ?? []) { check(a, 'rel'); check(b, 'rel'); }
+  for (const al of def.alliances ?? []) al.members.forEach((m) => check(m, 'alliances'));
+  for (const id of Object.keys(def.milMod ?? {})) check(id, 'milMod');
+  // 군대/장군: [국가, 이름, 장군, 능력(1~10), 특성, 병력(천 명), 위치 선택자, 함대 여부]
+  const armies = [];
+  for (const a of def.armies ?? []) {
+    const [c, n, g, skill, trait, troops, sel, navy] = a;
+    check(c, 'armies');
+    let at = null;
+    const ns = normSel(sel);
+    for (let i = 0; i < geoms.length && !at; i++) if (matchSel(i, ns) && owner[i] >= 0 && pol[owner[i]].id === c) at = geoms[i].properties.id;
+    // 위치가 그 나라 영토가 아니면(전선 너머 등) 나라와 무관하게 첫 일치를 쓴다
+    for (let i = 0; i < geoms.length && !at; i++) if (matchSel(i, ns)) at = geoms[i].properties.id;
+    // 상자 안에 주 중심이 없으면(큰 주) 상자 중심에서 가장 가까운 주: 그 나라 영토 우선
+    if (!at && ns.box) {
+      const cx = (ns.box[0] + ns.box[2]) / 2, cy = (ns.box[1] + ns.box[3]) / 2;
+      for (const ownOnly of [true, false]) {
+        let bd = 1e9;
+        for (let i = 0; i < geoms.length; i++) {
+          if (ownOnly && pol[owner[i]].id !== c) continue;
+          const d = (centers[i][0] - cx) ** 2 + (centers[i][1] - cy) ** 2;
+          if (d < bd) { bd = d; at = geoms[i].properties.id; }
+        }
+        if (at && bd < 40) break; // 약 6도 이내면 채택
+        at = null;
+      }
+    }
+    if (!at) { histWarnings.push(`[${tag}] 군대 "${n}" 위치를 찾지 못함 ${JSON.stringify(sel)}`); continue; }
+    armies.push({ c, n, g, skill, trait, troops, at, ...(navy ? { navy: true } : {}) });
+  }
+  const generals = {};
+  for (const [c, list] of Object.entries(def.generals ?? {})) {
+    check(c, 'generals');
+    generals[c] = list.map((x) => (typeof x === 'string' ? { n: x } : { n: x[0], skill: x[1], trait: x[2] }));
+  }
+  const empty = pol.filter((p) => !p.neutral && !p.npc && p.provinces === 0).map((p) => p.id);
+  if (empty.length) throw new Error(`[${tag}] 영토가 0인 국가(규칙 확인): ${empty.join(', ')}`);
+  const ownerStr = owner;
+  return {
+    id: def.id, name: def.name, year: def.year, era: def.era, tagline: def.tagline, description: def.description,
+    briefing: def.briefing, gmNotes: def.gmNotes ?? '', startDate: fmtStart(def.start), turnMonths: def.turn ?? 1, focus: def.focus ?? null,
+    alliances: def.alliances ?? [], relations: def.rel ?? [], wars: def.wars ?? [], milMod: def.milMod ?? {}, bonuses: (def.bonuses ?? []).map((b) => ({ country: b.country, words: b.words, bonus: b.bonus, note: b.note })),
+    armies, generals, polities: pol, owners: ownerStr, _unc: owner.filter((o) => pol[o].neutral).length,
+  };
+}
+
 // ---- 6. 국가 색 --------------------------------------------------------------
 const ownerOfId = Object.fromEntries(geoms.map((g) => [g.properties.id, g.properties.owner]));
 const cAdj = new Map();
@@ -261,6 +375,16 @@ if (colorProblems.length) { console.error('\n[실패] 색 배정 검증:\n - ' +
 let nearConflicts = 0;
 for (const [a, set] of near) for (const b of set) if (a < b && colorOf[a] === colorOf[b]) nearConflicts++;
 
+const historical = [];
+const histDir = path.join(ROOT, 'data/history');
+if (fs.existsSync(histDir)) {
+  for (const f of fs.readdirSync(histDir).filter((x) => x.endsWith('.mjs') && !x.startsWith('_')).sort()) {
+    const mod = await import(pathToFileURL(path.join(histDir, f)).href);
+    historical.push(compileHistory(mod.default));
+  }
+}
+const allScenarios = [...scenarios, ...historical.map(({ _unc, ...h }) => h)];
+
 const countryList = Object.keys(provCount).map((id) => {
   const base = countries.get(id) ?? { id, name: id, nameKo: null };
   const neutral = NEUTRAL.has(id);
@@ -274,7 +398,7 @@ const countryList = Object.keys(provCount).map((id) => {
 fs.writeFileSync(path.join(OUT, 'countries.json'), JSON.stringify(countryList));
 fs.writeFileSync(path.join(OUT, 'adjacency.json'), JSON.stringify(adjacency));
 fs.writeFileSync(path.join(OUT, 'reach.json'), JSON.stringify(reach));
-fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(scenarios));
+fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(allScenarios));
 fs.rmSync(path.join(OUT, 'scenario.json'), { force: true });
 fs.rmSync(TMP, { recursive: true, force: true });
 
@@ -285,7 +409,9 @@ console.log(`주(province): ${geoms.length}  (admin-0 단일 주: ${singleProvin
 console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c.neutral).length})`);
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
-console.log(`시나리오 템플릿: ${scenarios.map((x) => x.id).join(', ')}`);
+console.log(`시나리오 템플릿: 현대 ${scenarios.length}개 + 역사 ${historical.length}개`);
+for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length}, 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
+if (histWarnings.length) console.log('\n[역사 규칙 경고]\n' + histWarnings.join('\n'));
 console.log(`reach 평균 ${(reachTotal / geoms.length).toFixed(1)}개/주`);
 console.log(`world.topo.json ${kb(outTopo)} · reach.json ${kb(path.join(OUT, 'reach.json'))} · countries.json ${kb(path.join(OUT, 'countries.json'))}`);
 console.log('알려진 한계:', worldview.knownLimitations.join(' / '));

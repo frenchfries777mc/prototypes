@@ -1,13 +1,20 @@
-import type { CountryId, ProvinceId, StatKey, Stats, WorldData } from '../data/types';
+import type { CountryId, ProvinceId, Scenario, StatKey, Stats, WorldData } from '../data/types';
 import { STAT_KEYS, STAT_LABEL } from '../data/types';
 import { World } from '../data/world';
 import { resolveTurn } from '../engine/turn';
 import type { GameState } from '../engine/state';
-import { cloneState, controlledBy, getRel, isAlive, isAtWar, newGame, ownedBy, warsOf } from '../engine/state';
+import type { Army } from '../engine/state';
+import { armiesOf, cloneState, controlledBy, fmtDate, getRel, isAlive, isAtWar, newGame, ownedBy, totalTroops, warsOf } from '../engine/state';
+import { buildArmies, reachWithin } from '../engine/armies';
 import { LlmError, adjudicate, testGemini } from '../llm/providers';
 import type { LlmConfig, ProviderId } from '../llm/providers';
 import { MapView } from '../map/MapView';
+import type { ArmyMarker } from '../map/MapView';
 import { P } from '../util/josa';
+import { sanitizeScenario, templateToJson } from '../data/template';
+import { Studio } from '../studio/Studio';
+import { DEFAULT_SHARE, ShareError, fetchIndex, fetchTemplateFile } from '../studio/share';
+import type { ShareConfig } from '../studio/share';
 
 const CFG_KEY = 'althist-config-v1';
 const SAVE_KEY = 'althist-save-v1';
@@ -24,19 +31,25 @@ function saveJson(key: string, v: unknown): boolean {
 }
 const fmtPop = (n: number): string => (n >= 1e8 ? `${(n / 1e8).toFixed(1)}억` : n >= 1e4 ? `${Math.round(n / 1e4).toLocaleString()}만` : `${n.toLocaleString()}`);
 
-/** 역사 시대 템플릿은 해당 시대 국경 데이터가 있어야 해서 아직 준비 중이다. */
-const COMING_SOON = [
-  { name: '제1차 세계대전 직전 (1914)', desc: '제국주의 열강의 세계. 시대별 국경 데이터가 필요합니다.' },
-  { name: '제2차 세계대전 전야 (1936)', desc: '파시즘의 부상과 전쟁 직전의 유럽. 시대별 국경 데이터가 필요합니다.' },
-  { name: '대항해시대 (1444)', desc: '제국과 왕국의 세계. 시대별 국경 데이터가 필요합니다.' },
-];
+const ERA_ORDER = ['사용자', '고대', '중세', '근세', '근대', '현대'];
 
 export interface GameOptions { workerUrl: string; data: WorldData; onStatus: (msg: string, isError?: boolean) => void }
 
-type Phase = 'intro' | 'pick' | 'play';
+type Phase = 'intro' | 'pick' | 'play' | 'studio';
 
 export async function startApp(opts: GameOptions) {
   const world = new World(opts.data);
+  const builtinIds = new Set(world.scenarios.map((x) => x.id));
+  {
+    // 내 템플릿(localStorage): 저장된 값도 외부 입력처럼 다시 검증한다
+    const stored = loadJson<unknown[]>('althist-templates-v1') ?? [];
+    const ok: Scenario[] = [];
+    for (const raw of Array.isArray(stored) ? stored : []) {
+      const r = sanitizeScenario(raw, world, new Set([...builtinIds, ...ok.map((x) => x.id)]));
+      if (r.ok && !builtinIds.has(r.value.id)) ok.push(r.value);
+    }
+    world.scenarios = [...world.scenarios, ...ok];
+  }
   const view = await MapView.create({ container: 'map', workerUrl: opts.workerUrl, data: opts.data });
 
   let cfg: LlmConfig = { provider: 'local', geminiKey: '', geminiModel: 'gemini-flash-latest', webllmModel: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
@@ -49,11 +62,14 @@ export async function startApp(opts: GameOptions) {
   let templateId = world.scenarios[0].id;
   let selCountry: CountryId | null = null;
   let selProv: ProvinceId | null = null;
+  let fromStudio = false;
+  let tab: 'log' | 'army' = 'log';
+  let focusArmy: string | null = null;
 
   const applyPadding = () => {
     const wide = window.innerWidth > 900;
     view.padding = wide
-      ? { top: 40, bottom: 40, left: 340, right: phase === 'play' ? 430 : 40 }
+      ? { top: 40, bottom: 40, left: phase === 'studio' ? 420 : 340, right: phase === 'play' ? 430 : 40 }
       : { top: 20, bottom: phase === 'play' ? Math.round(window.innerHeight * 0.6) : 20, left: 20, right: 20 };
   };
 
@@ -104,10 +120,11 @@ export async function startApp(opts: GameOptions) {
   // ---------- 화면 단계 ----------
   function setPhase(p: Phase) {
     phase = p;
-    document.body.classList.remove('phase-intro', 'phase-pick', 'phase-play');
+    document.body.classList.remove('phase-intro', 'phase-pick', 'phase-play', 'phase-studio');
     document.body.classList.add(`phase-${p}`);
     $('intro').hidden = p !== 'intro';
-    $('panel').hidden = p === 'intro';
+    $('panel').hidden = p === 'intro' || p === 'studio';
+    $('studio').hidden = p !== 'studio';
     $('game').hidden = p !== 'play';
     $('p-hint').hidden = p !== 'pick';
     $('btn-back').hidden = p !== 'pick';
@@ -118,9 +135,14 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- 1단계: 템플릿 ----------
   const renderTemplates = () => {
-    $('tpl-grid').innerHTML = world.scenarios.map((sc) => `<button type="button" class="tpl ${sc.id === templateId ? 'sel' : ''}" data-id="${esc(sc.id)}">
-        <div class="t-name">${esc(sc.name)}</div><div class="t-tag">${esc(sc.tagline ?? '')}</div><div class="t-desc">${esc(sc.description ?? '')}</div></button>`).join('')
-      + COMING_SOON.map((c) => `<div class="tpl off" aria-disabled="true"><div class="t-name">${esc(c.name)}</div><div class="t-tag">준비 중</div><div class="t-desc">${esc(c.desc)}</div></div>`).join('');
+    const card = (sc: Scenario) => `<button type="button" class="tpl ${sc.id === templateId ? 'sel' : ''}" data-id="${esc(sc.id)}">
+        <div class="t-name">${esc(sc.name)}${sc.custom ? ' <span class="t-badge">내 템플릿</span>' : ''}</div><div class="t-year">${esc(sc.year ?? '')}</div><div class="t-tag">${esc(sc.tagline ?? '')}</div><div class="t-desc">${esc(sc.description ?? '')}</div></button>`;
+    const keepScroll = $('tpl-grid').scrollTop;
+    const list = world.scenarios.filter((x) => x.id !== '__draft__');
+    const eras = [...new Set([...ERA_ORDER, ...list.map((x) => x.era ?? '기타')])].filter((e) => list.some((x) => (x.era ?? '기타') === e));
+    $('tpl-grid').innerHTML = eras.map((e) => `<div class="tpl-era">${esc(e)}</div>` + list.filter((x) => (x.era ?? '기타') === e).map(card).join('')).join('');
+    $('tpl-grid').scrollTop = keepScroll;
+    renderTplActions();
   };
   $('tpl-grid').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button.tpl') as HTMLElement | null;
@@ -130,9 +152,12 @@ export async function startApp(opts: GameOptions) {
   const refreshContinue = () => {
     const sv = loadJson<GameState>(SAVE_KEY);
     const b = $<HTMLButtonElement>('btn-continue');
-    if (!sv || sv.v !== 1 || !world.country(sv.playerId)) { b.hidden = true; return; }
+    const svSc = sv ? world.scenarios.find((x) => x.id === sv.scenarioId) : undefined;
+    if (!sv || sv.v !== 1 || !svSc) { b.hidden = true; return; }
     b.hidden = false;
-    b.textContent = `이어하기 — ${world.label(sv.playerId)} · ${sv.date.slice(0, 7)} (턴 ${sv.turn})`;
+    const pl = svSc.polities?.find((x) => x.id === sv.playerId);
+    const who = pl ? (pl.nameKo || pl.name) : (world.modernCountry(sv.playerId)?.nameKo ?? sv.playerId);
+    b.textContent = `이어하기 — ${svSc.name} · ${who} · ${fmtDate(sv.date)} (턴 ${sv.turn})`;
   };
   const introMsg = (t: string, err = false) => { const m = $('intro-msg'); m.textContent = t; m.classList.toggle('err', err); };
   $('btn-next').addEventListener('click', () => {
@@ -140,9 +165,8 @@ export async function startApp(opts: GameOptions) {
     if (cfg.provider === 'gemini' && !cfg.geminiKey) { introMsg('Gemini 모드는 API 키가 필요합니다. 키를 입력하거나 규칙 모드를 선택하세요.', true); return; }
     introMsg('');
     state = null; selCountry = null; selProv = null;
-    const same = Object.fromEntries(world.provinces.map((p) => [p.id, p.owner]));
-    view.setControl(same, same); view.setPlayer(null); view.setHighlightCountry(null); view.setSelectedProvince(null);
-    setPhase('pick'); renderCard(); view.fitBox([-170, -50, 190, 75], false);
+    showScenario(world.scenarios.find((x) => x.id === templateId) ?? world.scenarios[0]);
+    setPhase('pick'); renderCard();
   });
   $('btn-back').addEventListener('click', () => { view.setHighlightCountry(null); view.setSelectedProvince(null); refreshContinue(); setPhase('intro'); });
   $('btn-continue').addEventListener('click', () => {
@@ -152,20 +176,37 @@ export async function startApp(opts: GameOptions) {
   });
 
   // ---------- 새 게임 / 불러오기 ----------
+  /** 시나리오를 지도에 반영한다(국가 색, 시작 소유 상태, 초기 시점). */
+  function showScenario(sc: Scenario, fit = true) {
+    world.useScenario(sc);
+    view.setColors(world.countryList);
+    view.setMicro(!world.isHistorical);
+    const owners = world.initialOwners();
+    view.setControl(owners, owners);
+    view.setPlayer(null); view.setHighlightCountry(null); view.setSelectedProvince(null);
+    if (fit) view.fitBox(sc.focus ?? [-170, -50, 190, 75], false);
+  }
   function adoptState(s: GameState) {
-    state = s; undoSnap = null; lastDelta = {};
-    templateId = world.scenarios.some((x) => x.id === s.scenarioId) ? s.scenarioId : templateId;
+    const sc = world.scenarios.find((x) => x.id === s.scenarioId);
+    if (!sc) { introMsg(`이 저장 파일의 템플릿(${s.scenarioId})을 찾을 수 없습니다. 템플릿 파일을 먼저 불러오세요.`, true); return; }
+    if (!s.armies) { world.useScenario(sc); buildArmies(world, s, sc); }
+    state = s; undoSnap = null; lastDelta = {}; tab = 'log'; focusArmy = null;
+    templateId = sc.id;
+    world.useScenario(sc); view.setColors(world.countryList); view.setMicro(!world.isHistorical);
     view.setControl(s.owner, s.controller);
     view.setPlayer(s.playerId); view.setHighlightCountry(null); view.setSelectedProvince(null);
-    selCountry = s.playerId; selProv = null;
+    selCountry = s.playerId; selProv = null; setTab('log');
     setPhase('play');
     view.fitCountry(s.playerId);
     renderCard(); renderGame();
   }
   function startNew() {
-    if (!selCountry || world.country(selCountry)?.neutral) return;
     const scenario = world.scenarios.find((x) => x.id === templateId) ?? world.scenarios[0];
-    adoptState(newGame(world, selCountry, (Date.now() ^ (Math.random() * 4294967296)) >>> 0, scenario));
+    world.useScenario(scenario);
+    if (!selCountry || !world.country(selCountry) || world.country(selCountry)?.neutral) return;
+    const fresh = newGame(world, selCountry, (Date.now() ^ (Math.random() * 4294967296)) >>> 0, scenario);
+    buildArmies(world, fresh, scenario);
+    adoptState(fresh);
     persist();
   }
   const persist = () => {
@@ -175,7 +216,7 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- 메뉴(게임 중) ----------
   const ovMsg = (t: string, kind: '' | 'err' | 'ok' = '') => { const m = $('ov-msg'); m.textContent = t; m.className = `g-msg ${kind}`; };
-  $('btn-menu').addEventListener('click', () => { aiMenu.write(); ovMsg(''); $('overlay').hidden = false; });
+  $('btn-menu').addEventListener('click', () => { aiMenu.write(); ovMsg(''); $('ov-studio').hidden = !fromStudio; $('overlay').hidden = false; });
   $('ov-close').addEventListener('click', () => { $('overlay').hidden = true; });
   $('ov-apply').addEventListener('click', () => {
     aiMenu.read();
@@ -183,15 +224,14 @@ export async function startApp(opts: GameOptions) {
     $('overlay').hidden = true; renderGame();
   });
   $('ov-newgame').addEventListener('click', () => {
-    $('overlay').hidden = true; state = null; aiIntro.write(); refreshContinue(); renderTemplates();
-    const same = Object.fromEntries(world.provinces.map((p) => [p.id, p.owner]));
-    view.setControl(same, same); view.setPlayer(null); view.setHighlightCountry(null); view.setSelectedProvince(null);
+    $('overlay').hidden = true; state = null; fromStudio = false; aiIntro.write(); refreshContinue(); renderTemplates();
+    view.setPlayer(null); view.setHighlightCountry(null); view.setSelectedProvince(null);
     setPhase('intro');
   });
   $('ov-export').addEventListener('click', () => {
     if (!state) return;
     const url = URL.createObjectURL(new Blob([JSON.stringify(state)], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = `althist-${state.playerId}-${state.date.slice(0, 7)}.json`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `althist-${state.playerId}-${state.date.slice(0, -3)}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   });
   $('ov-import').addEventListener('click', () => $('ov-file').click());
@@ -231,8 +271,10 @@ export async function startApp(opts: GameOptions) {
     }
     if (selProv) {
       const own = state?.owner[selProv] ?? world.province(selProv)?.owner ?? '', ctl = state?.controller[selProv] ?? own;
+      const here = (state?.armies ?? []).filter((a) => a.at === selProv && a.troops > 0);
+      const hereHtml = here.length ? `<div class="here">${here.map((a) => `<div>${a.navy ? '⚓' : '⚔'} <b>${esc(a.name)}</b> · ${esc(a.general.name)} (${a.general.skill}/10) · ${a.troops}천 <span class="hint">${esc(world.label(a.owner))}</span></div>`).join('')}</div>` : '';
       lines.push(`<div class="prov">📍 <b>${esc(world.provLabel(selProv))}</b>${own !== ctl ? ` <span class="hint">(소유 ${esc(world.label(own))} · 점령 ${esc(world.label(ctl))})</span>` : ''}
-        ${state ? '<div class="row" style="margin-top:6px"><button type="button" class="ghost small" id="btn-insert">명령에 넣기</button></div>' : ''}</div>`);
+        ${hereHtml}${state ? '<div class="row" style="margin-top:6px"><button type="button" class="ghost small" id="btn-insert">명령에 넣기</button></div>' : ''}</div>`);
     }
     if (phase === 'pick' && !c.neutral) lines.push(`<button type="button" class="primary startbtn" id="btn-startgame">${esc(P(world.label(cid), '으로/로'))} 시작</button>`);
     info.innerHTML = lines.join('');
@@ -249,6 +291,7 @@ export async function startApp(opts: GameOptions) {
   // ---------- 지도 클릭 ----------
   view.onProvinceClick = (id) => {
     if (phase === 'intro') return;
+    if (phase === 'studio') { studio.onProvinceClick(id); return; }
     const p = world.province(id);
     if (!p) return;
     selProv = id;
@@ -256,6 +299,65 @@ export async function startApp(opts: GameOptions) {
     view.setSelectedProvince(id);
     view.setHighlightCountry(phase === 'pick' || selCountry !== state?.playerId ? selCountry : null);
     renderCard();
+  };
+
+  // ---------- 군대·장군 ----------
+  const armyCard = (a: Army, mine: boolean) => {
+    const sk = a.general.skill;
+    return `<div class="ac ${focusArmy === a.id ? 'focus' : ''}" data-id="${esc(a.id)}">
+      <div class="ac-h"><span>${a.navy ? '⚓' : '⚔'} <b>${esc(a.name)}</b></span><span class="ac-t">${a.troops}천 명</span></div>
+      <div class="ac-g">${esc(a.general.name)} <span class="sk sk${sk >= 8 ? 'h' : sk >= 5 ? 'm' : 'l'}">능력 ${sk}/10</span>${a.general.status === 'wounded' ? ' <span class="hurt">🩹 부상</span>' : ''}${a.general.trait ? ` <span class="hint">· ${esc(a.general.trait)}</span>` : ''}</div>
+      <div class="ac-m"><div class="bar"><i style="width:${a.morale}%"></i></div><span class="hint">사기 ${a.morale} · 📍 ${esc(world.provLabel(a.at))}${mine ? '' : ` · ${esc(world.label(a.owner))}`}</span></div>
+      <div class="ac-b"><button type="button" class="ghost small" data-act="cmd">${mine ? '명령에 넣기' : '대상으로'}</button><button type="button" class="ghost small" data-act="view">지도에서 보기</button></div></div>`;
+  };
+  function renderArmies() {
+    const box = $('g-army');
+    if (!state) { box.innerHTML = ''; return; }
+    const s = state, pid = s.playerId;
+    const mine = armiesOf(s, pid).sort((a, b) => b.troops - a.troops);
+    const atWar = new Set(warsOf(s, pid));
+    const foes = s.armies.filter((a) => a.troops > 0 && atWar.has(a.owner)).sort((a, b) => b.troops - a.troops).slice(0, 12);
+    box.innerHTML = `<div class="ac-sum"><b>내 군대 ${mine.length}개</b> · 총 병력 ${Math.round(totalTroops(s, pid) * 10) / 10}천 명 <span class="hint">· 점령은 군대가 합니다. 군대를 전선 가까이 보낸 뒤 공격하세요.</span></div>`
+      + (mine.length ? mine.map((a) => armyCard(a, true)).join('') : '<div class="hint">군대가 없습니다. "군대를 신편한다"로 병력을 모으세요.</div>')
+      + (foes.length ? `<div class="ac-sum foe"><b>교전국 군대</b></div>${foes.map((a) => armyCard(a, false)).join('')}` : '');
+  }
+  function refreshArmyMarkers() {
+    if (!state) { view.setArmies([]); return; }
+    const s = state, pid = s.playerId;
+    const atWar = new Set(warsOf(s, pid));
+    const near = new Set<number>();
+    for (const a of armiesOf(s, pid)) { const i = world.index.get(a.at); if (i !== undefined) reachWithin(world, i, 2).forEach((j) => near.add(j)); }
+    const list: ArmyMarker[] = s.armies.filter((a) => a.troops > 0 && (a.owner === pid || atWar.has(a.owner) || near.has(world.index.get(a.at) ?? -1))).slice(0, 140).map((a) => ({
+      id: a.id, at: a.at, navy: !!a.navy, troops: a.troops, color: world.country(a.owner)?.color ?? '#888',
+      kind: a.owner === pid ? 'mine' : atWar.has(a.owner) ? 'enemy' : 'other',
+      title: `${a.name} · ${a.general.name} (능력 ${a.general.skill}/10) · ${a.troops}천 명 · 사기 ${a.morale} · ${world.label(a.owner)}`,
+    }));
+    view.setArmies(list);
+  }
+  const setTab = (t: 'log' | 'army') => {
+    tab = t;
+    document.querySelectorAll('.g-tabs button').forEach((b) => b.classList.toggle('on', (b as HTMLElement).dataset.tab === t));
+    $('g-log').hidden = t !== 'log'; $('g-army').hidden = t !== 'army';
+  };
+  document.querySelector('.g-tabs')!.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b) setTab(b.dataset.tab as 'log' | 'army'); });
+  $('g-army').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button'); const card = (e.target as HTMLElement).closest('.ac') as HTMLElement | null;
+    if (!btn || !card || !state) return;
+    const a = state.armies.find((x) => x.id === card.dataset.id);
+    if (!a) return;
+    if (btn.dataset.act === 'view') { view.fitProvince(a.at); selProv = a.at; selCountry = state.controller[a.at]; view.setSelectedProvince(a.at); renderCard(); }
+    if (btn.dataset.act === 'cmd') {
+      const ta = $<HTMLTextAreaElement>('g-cmd'); const name = a.owner === state.playerId ? a.general.name : world.label(a.owner);
+      ta.value = `${ta.value}${ta.value && !/\s$/.test(ta.value) ? ' ' : ''}${name}`; ta.focus();
+    }
+  });
+  view.onArmyClick = (id) => {
+    if (!state) return;
+    const a = state.armies.find((x) => x.id === id);
+    if (!a) return;
+    focusArmy = id; selProv = a.at; selCountry = state.controller[a.at];
+    view.setSelectedProvince(a.at); renderCard(); setTab('army'); renderArmies();
+    $('g-army').querySelector(`.ac[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' });
   };
 
   // ---------- 플레이 화면 ----------
@@ -267,7 +369,7 @@ export async function startApp(opts: GameOptions) {
     const mine = controlledBy(s, pid).length, owned = ownedBy(s, pid).length;
     const dead = !isAlive(s, pid);
     const tpl = world.scenarios.find((x) => x.id === s.scenarioId)?.name ?? '';
-    $('g-date').textContent = `${s.date.slice(0, 4)}년 ${Number(s.date.slice(5, 7))}월 · 턴 ${s.turn} · 영토 ${mine}주${owned !== mine ? ` (소유 ${owned})` : ''} · ${tpl} · ${cfg.provider === 'local' ? '규칙 모드' : cfg.provider === 'gemini' ? 'Gemini' : 'Qwen'}`;
+    $('g-date').textContent = `${fmtDate(s.date)} · 턴 ${s.turn} · 영토 ${mine}주${owned !== mine ? ` (소유 ${owned})` : ''} · ${tpl} · ${cfg.provider === 'local' ? '규칙 모드' : cfg.provider === 'gemini' ? 'Gemini' : 'Qwen'}`;
     $('g-stats').innerHTML = STAT_KEYS.map((k) => {
       const v = s.stats[pid]?.[k] ?? 0, d = lastDelta[k] ?? 0;
       return `<div class="stat"><div class="lab"><span>${STAT_LABEL[k]}</span><span><b>${v}</b>${d ? `<span class="${d > 0 ? 'd-up' : 'd-down'}">${sign(d)}</span>` : ''}</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
@@ -283,7 +385,7 @@ export async function startApp(opts: GameOptions) {
     ].join('');
     $('g-log').innerHTML = s.log.length ? [...s.log].reverse().map((r) => {
       const badge = r.outcome === 'pass' ? '<span class="badge pass">넘김</span>' : `<span class="badge ${r.outcome === 'success' ? 'ok' : 'bad'}">${r.outcome === 'success' ? '성공' : '실패'} · 확률 ${r.feasibility}% · 굴림 ${r.roll}</span>`;
-      return `<div class="turn"><div class="th"><span><b>${esc(r.date.slice(0, 7))}</b> · 턴 ${r.turn}</span>${badge}</div>
+      return `<div class="turn"><div class="th"><span><b>${esc(fmtDate(r.date))}</b> · 턴 ${r.turn}</span>${badge}</div>
         ${r.command ? `<div class="cmd">▶ ${esc(r.command)}</div>` : ''}${r.interpretation ? `<div class="interp">해석: ${esc(r.interpretation)}</div>` : ''}
         ${r.narrative ? `<p>${esc(r.narrative)}</p>` : ''}
         ${r.headlines.length ? `<ul class="hl">${r.headlines.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
@@ -295,6 +397,7 @@ export async function startApp(opts: GameOptions) {
     $<HTMLButtonElement>('btn-go').disabled = busy || dead;
     $<HTMLButtonElement>('btn-pass').disabled = busy || dead;
     $<HTMLTextAreaElement>('g-cmd').disabled = busy || dead;
+    renderArmies(); refreshArmyMarkers();
   }
   const gmsg = (t: string, kind: '' | 'err' | 'ok' = '') => { const m = $('g-msg'); m.textContent = t; m.className = `g-msg ${kind}`; };
 
@@ -331,6 +434,93 @@ export async function startApp(opts: GameOptions) {
     view.setControl(state.owner, state.controller); persist(); gmsg('직전 턴을 취소했습니다.', 'ok'); renderCard(); renderGame();
   });
 
+  // ---------- 사용자 템플릿 / 스튜디오 / 공유 ----------
+  const TPL_KEY = 'althist-templates-v1', SHARE_KEY = 'althist-share-v1';
+  const persistCustom = () => { if (!saveJson(TPL_KEY, world.scenarios.filter((x) => x.custom && x.id !== '__draft__'))) opts.onStatus('템플릿 저장 공간이 부족합니다. 파일로 내보내 두세요.', true); };
+  const addCustom = (sc: Scenario) => { world.scenarios = [...world.scenarios.filter((x) => x.id !== sc.id), sc]; persistCustom(); renderTemplates(); };
+  const shareCfg = (): ShareConfig => ({ ...DEFAULT_SHARE, ...(loadJson<Partial<ShareConfig>>(SHARE_KEY) ?? {}) });
+  const importRaw = (raw: unknown): Scenario | null => {
+    const r = sanitizeScenario(raw, world, new Set(world.scenarios.map((x) => x.id)));
+    if (!r.ok) { introMsg(`템플릿을 불러올 수 없습니다: ${r.errors.join(' / ')}`, true); return null; }
+    addCustom(r.value); templateId = r.value.id; renderTemplates();
+    introMsg(`"${r.value.name}" 템플릿을 불러왔습니다.${r.warnings.length ? ` (${r.warnings.join(', ')})` : ''} 다른 사람이 만든 템플릿은 AI에게 전달되는 지침 글이 들어 있을 수 있습니다.`);
+    return r.value;
+  };
+  const download = (name: string, text: string) => {
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+  const studio = new Studio({
+    world, view, esc,
+    sanitize: (raw) => sanitizeScenario(raw, world, new Set(builtinIds)),
+    onSave: (sc) => { const r = sanitizeScenario(sc, world, new Set(builtinIds)); if (r.ok) addCustom(r.value); },
+    onTestPlay: (sc, pid) => {
+      const r = sanitizeScenario(sc, world, new Set(builtinIds));
+      if (!r.ok) return;
+      world.scenarios = [...world.scenarios.filter((x) => x.id !== '__draft__'), { ...r.value, id: '__draft__' }];
+      templateId = '__draft__'; selCountry = pid; fromStudio = true; phase = 'pick'; startNew();
+    },
+    onExit: () => { view.setArmies([]); fromStudio = false; refreshContinue(); renderTemplates(); setPhase('intro'); },
+    shareConfig: shareCfg, setShareConfig: (c) => saveJson(SHARE_KEY, c),
+  }, $('studio'));
+  const openStudio = (base: string, openShare = false) => {
+    view.setMicro(false); view.setHighlightCountry(null); view.setSelectedProvince(null); view.setPlayer(null);
+    setPhase('studio'); studio.begin(base, openShare);
+  };
+  $('btn-studio').addEventListener('click', () => openStudio('blank'));
+  $('ov-studio').addEventListener('click', () => {
+    $('overlay').hidden = true; state = null; view.setPlayer(null); view.setHighlightCountry(null); view.setSelectedProvince(null); view.setMicro(false);
+    setPhase('studio'); studio.resume();
+  });
+  $('btn-tpl-import').addEventListener('click', () => $('tpl-file').click());
+  $('tpl-file').addEventListener('change', async () => {
+    const f = $<HTMLInputElement>('tpl-file').files?.[0]; if (!f) return;
+    try { if (f.size > 700_000) throw new Error('파일이 너무 큽니다'); importRaw(JSON.parse(await f.text())); } catch (e) { introMsg(`템플릿 파일을 읽을 수 없습니다: ${(e as Error).message}`, true); }
+    $<HTMLInputElement>('tpl-file').value = '';
+  });
+  function renderTplActions() {
+    const box = $('tpl-actions'); const sc = world.scenarios.find((x) => x.id === templateId);
+    if (!sc || sc.id === '__draft__') { box.hidden = true; return; }
+    box.hidden = false;
+    if (!sc.custom) { box.innerHTML = `<span class="lhint">선택한 템플릿: <b>${esc(sc.name)}</b>${sc.year ? ` (${esc(sc.year)})` : ''}</span>`; return; }
+    box.innerHTML = `<span class="lhint">선택한 템플릿: <b>${esc(sc.name)}</b> · 내 템플릿${sc.author ? ` · 제작 ${esc(sc.author)}` : ''}</span><button type="button" class="lbtn" data-act="edit">✎ 편집</button><button type="button" class="lbtn" data-act="export">⬇ 내보내기</button><button type="button" class="lbtn" data-act="share">🌐 공유</button><button type="button" class="lbtn" data-act="del">🗑 삭제</button>`;
+  }
+  $('tpl-actions').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('button'); const sc = world.scenarios.find((x) => x.id === templateId);
+    if (!b || !sc) return;
+    if (b.dataset.act === 'edit') openStudio(`edit:${sc.id}`);
+    if (b.dataset.act === 'share') openStudio(`edit:${sc.id}`, true);
+    if (b.dataset.act === 'export') download(`${sc.id}.althist-template.json`, templateToJson(sc));
+    if (b.dataset.act === 'del' && window.confirm(`"${sc.name}" 템플릿을 삭제할까요? (이 기기에서만 삭제됩니다)`)) {
+      world.scenarios = world.scenarios.filter((x) => x.id !== sc.id); persistCustom(); templateId = world.scenarios[0].id; renderTemplates();
+    }
+  });
+  // 공유 갤러리
+  $('btn-gallery').addEventListener('click', async () => {
+    const box = $('gallery');
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+    const c = shareCfg();
+    box.innerHTML = `<div class="hint" style="color:#6b7686;font-size:12px">공유 저장소의 폴더에 올라온 템플릿 목록입니다. 다른 사람이 만든 템플릿이니 내용을 확인하고 쓰세요.</div>
+      <div class="g-cfg"><input id="gc-o" value="${esc(c.owner)}" title="소유자" /><input id="gc-r" value="${esc(c.repo)}" title="저장소" /><input id="gc-b" value="${esc(c.branch)}" title="브랜치" /><input id="gc-d" value="${esc(c.dir)}" title="폴더" /></div>
+      <div class="row"><button type="button" class="lbtn" id="gc-go">목록 불러오기</button></div><div id="g-list" class="lhint" style="margin-top:8px"></div>`;
+    const load = async () => {
+      const cfg: ShareConfig = { owner: $<HTMLInputElement>('gc-o').value.trim(), repo: $<HTMLInputElement>('gc-r').value.trim(), branch: $<HTMLInputElement>('gc-b').value.trim(), dir: $<HTMLInputElement>('gc-d').value.trim() };
+      saveJson(SHARE_KEY, cfg);
+      const list = $('g-list'); list.textContent = '불러오는 중…';
+      try {
+        const items = await fetchIndex(cfg);
+        list.innerHTML = items.length ? items.map((it) => `<div class="g-item"><div><b>${esc(it.name ?? it.id)}</b> <span class="lhint">${esc([it.era, it.year, it.author && `제작 ${it.author}`].filter(Boolean).join(' · '))}</span><div class="lhint">${esc(it.description ?? '')}</div></div><button type="button" class="lbtn" data-file="${esc(it.file)}">불러오기</button></div>`).join('') : '아직 공유된 템플릿이 없습니다. 스튜디오에서 만든 템플릿을 첫 번째로 올려 보세요.';
+        list.onclick = async (ev) => {
+          const btn = (ev.target as HTMLElement).closest('button'); if (!btn?.dataset.file) return;
+          try { importRaw(await fetchTemplateFile(cfg, btn.dataset.file)); } catch (er) { introMsg(er instanceof ShareError ? er.message : `불러오기 실패: ${(er as Error).message}`, true); }
+        };
+      } catch (er) { list.textContent = er instanceof ShareError ? er.message : `불러오기 실패: ${(er as Error).message}`; }
+    };
+    $('gc-go').addEventListener('click', () => void load());
+    void load();
+  });
+
   // ---------- 시작 ----------
   renderTemplates(); refreshContinue();
   $<HTMLButtonElement>('btn-next').disabled = false;
@@ -340,8 +530,9 @@ export async function startApp(opts: GameOptions) {
 
   // 테스트/디버그용 훅
   (window as unknown as Record<string, unknown>).__game = {
-    world, view, get state() { return state; }, get phase() { return phase; }, get cfg() { return cfg; }, setCfg(c: Partial<LlmConfig>) { cfg = { ...cfg, ...c }; },
+    world, view, get state() { return state; }, get phase() { return phase; }, get tab() { return tab; }, get cfg() { return cfg; }, setCfg(c: Partial<LlmConfig>) { cfg = { ...cfg, ...c }; },
     start(cid: string, tpl?: string) { if (tpl) templateId = tpl; selCountry = cid; phase = 'pick'; startNew(); },
+    studio, openStudio, importRaw,
     submit: (cmd: string) => { $<HTMLTextAreaElement>('g-cmd').value = cmd; return submit(false); },
   };
   (window as unknown as Record<string, unknown>).__map = view.map;

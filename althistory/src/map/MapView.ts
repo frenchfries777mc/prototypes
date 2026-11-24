@@ -1,4 +1,4 @@
-import { Map as MapLibreMap, NavigationControl, AttributionControl, setWorkerUrl } from 'maplibre-gl';
+import { Map as MapLibreMap, Marker, NavigationControl, AttributionControl, setWorkerUrl } from 'maplibre-gl';
 import type { MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { feature, mesh } from 'topojson-client';
@@ -12,12 +12,15 @@ interface Props {
 type BBox = [number, number, number, number];
 const OCEAN = '#0b1626';
 
+export interface ArmyMarker { id: string; at: ProvinceId; title: string; color: string; kind: 'mine' | 'enemy' | 'other'; navy: boolean; troops: number }
 export interface MapViewOptions { container: string; workerUrl: string; data: WorldData }
 
 /** 지도 표시 전담. 게임 규칙은 모르고, "누가 어느 주를 소유/지배하는가"만 받아서 칠한다. */
 export class MapView {
   readonly map: MapLibreMap;
   onProvinceClick: (id: ProvinceId) => void = () => {};
+  onArmyClick: (id: string) => void = () => {};
+  private markers = new Map<string, { m: Marker; el: HTMLButtonElement }>();
   padding = { top: 40, bottom: 40, left: 360, right: 40 };
 
   private fc: FeatureCollection<Geometry, Props>;
@@ -27,11 +30,14 @@ export class MapView {
   private bbox = new Map<ProvinceId, BBox>();
   private micro: { id: ProvinceId; pt: [number, number] }[] = [];
   private ready = false;
+  private microOn = true;
 
   private constructor(map: MapLibreMap, data: WorldData, countries: CountryMeta[]) {
     this.map = map; this.topo = data.topo;
     for (const c of countries) this.colors.set(c.id, c.color);
     this.fc = feature(data.topo, data.topo.objects.provinces) as unknown as FeatureCollection<Geometry, Props>;
+    // topojson 은 properties 객체를 원본과 공유한다. 칠할 때 owner/color 를 덮어쓰므로 반드시 복사해서 쓴다(World 의 "현대 기준 소유국"이 오염되지 않게).
+    for (const f of this.fc.features) f.properties = { ...f.properties };
   }
 
   static async create(opts: MapViewOptions): Promise<MapView> {
@@ -133,7 +139,7 @@ export class MapView {
     set('coast', mesh(this.topo, this.topo.objects.provinces, (a: unknown, b: unknown) => a === b));
     set('micro', {
       type: 'FeatureCollection',
-      features: this.micro.map((m) => ({
+      features: (this.microOn ? this.micro : []).map((m) => ({
         type: 'Feature', geometry: { type: 'Point', coordinates: m.pt },
         properties: { id: m.id, color: this.colors.get(ctrl[m.id]) ?? '#555' },
       })) as Feature[],
@@ -141,14 +147,50 @@ export class MapView {
   }
 
   /** 소유/지배 상태를 통째로 반영한다 (영토가 바뀐 턴, 새 게임, 불러오기). */
-  setControl(owner: Record<string, string>, controller: Record<string, string>): void {
+  setControl(owner: Record<string, string>, controller: Record<string, string>, opts: { borders?: boolean } = {}): void {
     for (const f of this.fc.features) { f.properties.owner = owner[f.properties.id] ?? f.properties.owner; }
     this.ctrl = { ...controller };
     this.paint();
     if (!this.ready) return;
     (this.map.getSource('provinces') as unknown as { setData(d: unknown): void }).setData(this.fc);
-    this.refreshGeometryLayers();
+    if (opts.borders !== false) this.refreshGeometryLayers();
   }
+
+  /** 편집기처럼 칠하기만 빠르게 하고 국경선은 나중에 한 번에 다시 계산할 때 쓴다. */
+  refreshBorders(): void { if (this.ready) this.refreshGeometryLayers(); }
+  /** 시나리오가 바뀌면 국가 색을 그 시나리오 것으로 교체한다. */
+  setColors(list: CountryMeta[]): void { this.colors = new Map(list.map((c) => [c.id, c.color])); }
+  /** 초소국 점마커는 현대 시나리오에서만 쓴다. */
+  setMicro(on: boolean): void { this.microOn = on; this.refreshBorders(); }
+  /** 군대 마커를 그린다(HTML 마커라서 글자·클릭이 된다). 같은 주의 군대는 조금씩 어긋나게 쌓는다. */
+  setArmies(list: ArmyMarker[]): void {
+    const stack = new Map<string, number>();
+    const alive = new Set<string>();
+    for (const a of list) {
+      const c = this.centerOf(a.at);
+      if (!c) continue;
+      const k = stack.get(a.at) ?? 0; stack.set(a.at, k + 1);
+      const off: [number, number] = [((k % 3) - 1) * 17, Math.floor(k / 3) * 19 - 6];
+      alive.add(a.id);
+      let e = this.markers.get(a.id);
+      if (!e) {
+        const el = document.createElement('button'); el.type = 'button';
+        el.addEventListener('click', (ev) => { ev.stopPropagation(); this.onArmyClick(a.id); });
+        const m = new Marker({ element: el, offset: off }).setLngLat(c).addTo(this.map);
+        e = { m, el }; this.markers.set(a.id, e);
+      } else { e.m.setLngLat(c); e.m.setOffset(off); }
+      e.el.className = `army-mk ${a.kind}${a.navy ? ' navy' : ''}`;
+      e.el.style.setProperty('--c', a.color);
+      e.el.textContent = String(Math.max(1, Math.round(a.troops)));
+      e.el.title = a.title;
+    }
+    for (const [id, e] of this.markers) if (!alive.has(id)) { e.m.remove(); this.markers.delete(id); }
+  }
+
+  /** 주 ID -> 경계 상자(경도 최소, 위도 최소, 경도 최대, 위도 최대). */
+  boxOf(id: ProvinceId): BBox | undefined { return this.bbox.get(id); }
+  /** 주의 중심(마커 배치용). */
+  centerOf(id: ProvinceId): [number, number] | undefined { const b = this.bbox.get(id); return b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : undefined; }
 
   setPlayer(cid: CountryId | null): void { this.map.setFilter('player-fill', ['==', ['get', 'controller'], cid ?? '']); }
   setHighlightCountry(cid: CountryId | null): void { this.map.setFilter('owner-highlight', ['==', ['get', 'controller'], cid ?? '']); }

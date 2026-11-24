@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "build:single": "vite build --config vite.standalone.config.ts && node -e \"require('fs').copyFileSync('dist-single/standalone.html','althist.html')\"",
-    "test:e2e": "node tests/e2e.cjs"
+    "test:e2e": "node tests/e2e.cjs && node tests/e2e-armies.cjs && node tests/e2e-studio.cjs"
   },
   "dependencies": {
     "maplibre-gl": "^6.19.0",

@@ -7,8 +7,12 @@ export interface TurnRecord {
   narrative: string; headlines: string[]; notes: string[]; rejected: string[]; mode: string;
 }
 
+export interface General { name: string; skill: number; trait: string; status: 'active' | 'wounded'; hurtUntil?: number }
+/** 병력 단위는 천 명. navy 는 함대(해상 이동 범위가 넓다). */
+export interface Army { id: string; name: string; owner: CountryId; general: General; troops: number; morale: number; at: ProvinceId; navy?: boolean }
+
 export interface GameState {
-  v: 1; scenarioId: string; seed: number; rng: number; turn: number; date: string; playerId: CountryId;
+  v: 1; scenarioId: string; turnMonths: number; seed: number; rng: number; turn: number; date: string; playerId: CountryId;
   owner: Record<ProvinceId, CountryId>;
   controller: Record<ProvinceId, CountryId>;
   stats: Record<CountryId, Stats>;
@@ -17,15 +21,17 @@ export interface GameState {
   eliminated: CountryId[];
   log: TurnRecord[];
   memory: string;
+  armies: Army[];
+  armySeq: number;
 }
 
 export const pairKey = (a: CountryId, b: CountryId): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
 export const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
 export function newGame(world: World, playerId: CountryId, seed: number, scenario: Scenario): GameState {
-  const owner: Record<string, string> = {};
-  const controller: Record<string, string> = {};
-  for (const p of world.provinces) { owner[p.id] = p.owner; controller[p.id] = p.owner; }
+  world.useScenario(scenario);
+  const owner = world.initialOwners();
+  const controller = { ...owner };
   const stats: Record<string, Stats> = {};
   for (const c of world.countries.values()) {
     if (c.neutral) continue;
@@ -36,11 +42,15 @@ export function newGame(world: World, playerId: CountryId, seed: number, scenari
     for (let i = 0; i < al.members.length; i++) for (let j = i + 1; j < al.members.length; j++) relations[pairKey(al.members[i], al.members[j])] = 40;
   }
   for (const [a, b, v] of scenario.relations) relations[pairKey(a, b)] = v;
+  const wars = (scenario.wars ?? []).filter(([a, b]) => a in stats && b in stats).map(([a, b]) => pairKey(a, b));
   return {
-    v: 1, scenarioId: scenario.id, seed, rng: seed >>> 0, turn: 1, date: scenario.startDate, playerId,
-    owner, controller, stats, relations, wars: [], eliminated: [], log: [], memory: '',
+    v: 1, scenarioId: scenario.id, turnMonths: scenario.turnMonths ?? 1, seed, rng: seed >>> 0, turn: 1, date: scenario.startDate, playerId,
+    owner, controller, stats, relations, wars, eliminated: [], log: [], memory: '', armies: [], armySeq: 1,
   };
 }
+
+export const armiesOf = (s: GameState, c: CountryId): Army[] => s.armies.filter((a) => a.owner === c && a.troops > 0);
+export const totalTroops = (s: GameState, c: CountryId): number => armiesOf(s, c).reduce((t, a) => t + a.troops, 0);
 
 export const getRel = (s: GameState, a: CountryId, b: CountryId): number => s.relations[pairKey(a, b)] ?? 0;
 export const setRel = (s: GameState, a: CountryId, b: CountryId, v: number): void => { s.relations[pairKey(a, b)] = clamp(Math.round(v), -100, 100); };
@@ -74,10 +84,21 @@ export function neighborsOf(s: GameState, w: World, c: CountryId): Map<CountryId
   return out;
 }
 
-export function advanceMonth(date: string): string {
-  const [y, m] = date.split('-').map(Number);
-  const nm = m === 12 ? 1 : m + 1, ny = m === 12 ? y + 1 : y;
-  return `${ny}-${String(nm).padStart(2, '0')}-01`;
+/** "2026-01-01" 또는 기원전 "-0264-03-01" 형식의 날짜. */
+export function parseDate(d: string): { y: number; m: number } {
+  const m = /^(-?)(\d+)-(\d{2})/.exec(d);
+  if (!m) return { y: 2000, m: 1 };
+  return { y: (m[1] ? -1 : 1) * Number(m[2]), m: Number(m[3]) };
+}
+export function fmtDate(d: string): string {
+  const { y, m } = parseDate(d);
+  return y < 0 ? `기원전 ${-y}년 ${m}월` : `${y}년 ${m}월`;
+}
+export function addMonths(d: string, n: number): string {
+  const { y, m } = parseDate(d);
+  const total = y * 12 + (m - 1) + n;
+  const y2 = Math.floor(total / 12), m2 = total - y2 * 12 + 1;
+  return `${y2 < 0 ? '-' : ''}${String(Math.abs(y2)).padStart(4, '0')}-${String(m2).padStart(2, '0')}-01`;
 }
 
 export function cloneState(s: GameState): GameState { return JSON.parse(JSON.stringify(s)) as GameState; }

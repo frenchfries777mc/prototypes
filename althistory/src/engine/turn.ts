@@ -2,8 +2,9 @@ import type { World } from '../data/world';
 import type { Adjudication, ApplyResult, Diff } from './diff';
 import { applyDiff } from './diff';
 import type { GameState, TurnRecord } from './state';
-import { advanceMonth } from './state';
+import { addMonths, fmtDate } from './state';
 import { makeRng } from './rng';
+import { healGenerals } from './armies';
 
 export interface TurnResult { record: TurnRecord; mapChanged: boolean }
 
@@ -35,10 +36,11 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
 
   s.rng = rng.state();
   s.turn += 1;
-  s.date = advanceMonth(s.date);
+  healGenerals(s);
+  s.date = addMonths(s.date, s.turnMonths ?? 1);
   s.log.push(record);
   if (s.log.length > 240) s.log.splice(0, s.log.length - 240);
-  const mem = adj.memory || (command ? `${record.date.slice(0, 7)} ${adj.interpretation || command}: ${success ? '성공' : '실패'}` : '');
+  const mem = adj.memory || (command ? `${fmtDate(record.date)} ${adj.interpretation || command}: ${success ? '성공' : '실패'}` : '');
   if (mem) s.memory = `${s.memory}\n${mem}`.trim().split('\n').slice(-18).join('\n').slice(-MEMORY_MAX);
   return { record, mapChanged: merged.mapChanged };
 }
