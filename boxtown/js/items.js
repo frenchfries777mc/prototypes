@@ -92,7 +92,9 @@ export class Bag {
     } else if (kind === 'bribe') {
       if (this.police.level === 0) { this.note = '지금은 쫓기고 있지 않아요'; return; }
       this.police.heat = Math.max(0, this.police.heat - 85); this.police.level = this.police.heat >= 170 ? 3 : this.police.heat >= 90 ? 2 : this.police.heat >= 28 ? 1 : 0;
-      if (this.police.heat <= 0) this.police.heat = 0.01; // 다음 프레임에 '따돌림'으로 풀린다
+      // 별이 줄어든 만큼 경찰차도 돌려보낸다. 별이 0이 되면 추격 자체를 끝낸다(별 없이 쫓기는 일이 없게).
+      if (this.police.level === 0) this.police.clear();
+      else for (const u of this.police.units) if (u.active && !u.quarry && u.i >= this.police.level) this.police.recall(u);
       this.note = '경찰이 도넛에 한눈을 팔아요';
     }
     if (--this.items[k] <= 0) delete this.items[k];
