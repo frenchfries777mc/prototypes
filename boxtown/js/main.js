@@ -92,21 +92,30 @@ async function boot() {
   mark('engine');
   setProgress(0.06, '에셋 불러오는 중');
   const assets = new Assets(scene);
-  await assets.load(modelKeys(), (p) => setProgress(0.06 + p * 0.55, `에셋 불러오는 중 ${Math.round(p * 100)}%`));
-  await Promise.all(carKeys().map((k) => assets.loadCar(k)));
-  setProgress(0.66);
-
-  mark('assets');
-  setProgress(0.68, '섬과 바다 만드는 중');
-  await new Promise((r) => setTimeout(r, 0));
+  // 모델을 받는 동안(인터넷을 기다리는 시간) 땅을 먼저 만든다. 둘은 서로 기다릴 필요가 없다.
+  const loading = (async () => {
+    const packed = await assets.loadPack((p) => setProgress(0.06 + p * 0.3, `에셋 받는 중 ${Math.round(p * 100)}%`));
+    const from = packed ? 0.36 : 0.06, span = packed ? 0.26 : 0.56;
+    await assets.load(modelKeys(), (p) => setProgress(from + p * span, `에셋 ${packed ? '펼치는' : '불러오는'} 중 ${Math.round(p * 100)}%`));
+    await Promise.all(carKeys().map((k) => assets.loadCar(k)));
+  })();
+  await pause();
   initGrid();
   mark('heightGrid');
-  setProgress(0.72, '땅 모양 빚는 중'); await pause();
+  await pause();
   const chunks = buildTerrain(scene);
   mark('terrainMesh');
-  setProgress(0.76, '땅 다지는 중'); await pause();
-  for (const chunk of chunks) new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  await pause();
+  // 땅의 충돌 처리: 시작 지점 둘레만 먼저 하고, 먼 곳은 게임이 뜬 뒤에 조금씩 한다(전부 하면 1초 넘게 걸린다).
+  const solid = (chunk) => new B.PhysicsAggregate(chunk, B.PhysicsShapeType.MESH, { mass: 0, friction: 0.8 }, scene);
+  const chunkDist = (c) => { const bb = c.getBoundingInfo().boundingBox.centerWorld; return Math.hypot(bb.x - SPAWN.x, bb.z - SPAWN.z); };
+  const farChunks = chunks.filter((c) => chunkDist(c) > 420).sort((p, q) => chunkDist(p) - chunkDist(q));
+  for (const chunk of chunks) if (!farChunks.includes(chunk)) solid(chunk);
   mark('terrainPhysics');
+  await loading;
+  setProgress(0.66);
+  mark('assets');
+  setProgress(0.7, '섬과 바다 만드는 중'); await pause();
   buildSky(scene, env);
   buildWater(scene, env);
 
@@ -206,18 +215,21 @@ async function boot() {
     ssao.radius = 1.6; ssao.totalStrength = 1.15; ssao.base = 0.1; ssao.samples = 16; ssao.maxZ = 220; ssao.minZAspect = 0.4;
     ssao.expensiveBlur = true;
   }
-  setProgress(0.94, '화면 효과 준비하는 중'); await pause();
-  // 아주 가볍게(lite)에서는 후처리를 통째로 뺀다: 준비 시간이 길고, 약한 기기에서는 프레임도 많이 깎는다.
-  const pipe = lite ? { bloomEnabled: false } : new B.DefaultRenderingPipeline('pipe', true, scene, [player.cam]);
-  if (!lite) {
-    pipe.fxaaEnabled = true;
-    pipe.bloomEnabled = quality !== 'low';
-    pipe.bloomThreshold = 0.86; pipe.bloomWeight = 0.28; pipe.bloomKernel = 48; pipe.bloomScale = 0.5;
-    pipe.imageProcessingEnabled = true;
-    const ip = pipe.imageProcessing;
+  // 화면 효과(번짐, 색 보정)는 준비가 오래 걸려서, 게임이 뜬 뒤에 붙인다. 아주 가볍게(lite)에서는 쓰지 않는다.
+  const pipe = { bloomEnabled: false };
+  const addFx = () => {
+    if (lite) return;
+    const p = new B.DefaultRenderingPipeline('pipe', true, scene, [player.cam]);
+    p.fxaaEnabled = true;
+    p.bloomEnabled = quality !== 'low' && !fxOff;
+    p.bloomThreshold = 0.86; p.bloomWeight = 0.28; p.bloomKernel = 48; p.bloomScale = 0.5;
+    p.imageProcessingEnabled = true;
+    const ip = p.imageProcessing;
     ip.contrast = 1.22; ip.exposure = 1.04;
     ip.vignetteEnabled = true; ip.vignetteWeight = 1.1; ip.vignetteStretch = 0.3; ip.vignetteColor = new B.Color4(0.05, 0.1, 0.2, 0);
-  }
+    pipeReal = p;
+  };
+  let pipeReal = null, fxOff = false;
 
   // 매 프레임: 마을 장식, 주민, 바퀴, 화면 안내
   const prompt = $('prompt'), speedo = $('speed');
@@ -296,7 +308,8 @@ async function boot() {
     if (slow >= 3) {
       slow = 0;
       if (ssao) { ssao.dispose(); ssao = null; }
-      else if (pipe.bloomEnabled) pipe.bloomEnabled = false;
+      else if (pipeReal && pipeReal.bloomEnabled) pipeReal.bloomEnabled = false;
+      else if (!fxOff) fxOff = true;
       else if (engine.getHardwareScalingLevel() < 1.4) engine.setHardwareScalingLevel(engine.getHardwareScalingLevel() * 1.25);
       else clearInterval(perf);
     }
@@ -335,6 +348,21 @@ async function boot() {
   mark('shaders');
   timing.total = Math.round(performance.now() - t0);
   engine.runRenderLoop(() => scene.render());
+  // 게임이 뜬 뒤에 마저 하는 일: 먼 땅의 충돌 처리를 프레임마다 몇 개씩, 그다음 화면 효과.
+  // 그 사이에 먼 곳의 차가 땅 밑으로 떨어지지 않도록, 충돌이 준비될 때까지 붙들어 둔다.
+  { const f = player.feet; for (let k = farChunks.length - 1; k >= 0; k--) { const bb = farChunks[k].getBoundingInfo().boundingBox.centerWorld; if (Math.hypot(bb.x - f.x, bb.z - f.z) < 300) solid(farChunks.splice(k, 1)[0]); } } // 내 집 앞에서 시작하는 경우
+  const heldProps = town.dynamics.filter((d) => Math.hypot(d.mesh.position.x - SPAWN.x, d.mesh.position.z - SPAWN.z) > 330);
+  for (const d of heldProps) d.agg.body.setMotionType(B.PhysicsMotionType.STATIC);
+  const heldCars = garage.cars.filter((c) => !c.isBoat && Math.hypot(c.pos.x - SPAWN.x, c.pos.z - SPAWN.z) > 330);
+  for (const c of heldCars) c.body.setMotionType(B.PhysicsMotionType.STATIC);
+  const later = setInterval(() => { // 화면 속도와 상관없이 1~2초 안에 끝난다
+    for (let k = 0; k < 3 && farChunks.length; k++) solid(farChunks.shift());
+    if (farChunks.length) return;
+    clearInterval(later);
+    for (const c of heldCars) if (!c.netHeld) c.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
+    for (const d of heldProps) d.agg.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
+    setTimeout(addFx, 1500);
+  }, 30);
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');
   $('hud').hidden = false;
