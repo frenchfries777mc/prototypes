@@ -25,7 +25,7 @@ export class Traffic {
     Object.assign(this, { scene, assets, player, garage, residents, police, jobs, weapons, health });
     this.t = 0; this.hitCd = 0; this.temps = []; this.inJ = null; this.redCd = 0;
     // ----- 차가 다니는 길과 네거리 -----
-    this.lanes = [...paths.filter((p) => p.type === 'road'), ...TOWN_LINES.map(makeLine)];
+    this.lanes = [...paths.filter((p) => p.type === 'road' && !p.noTraffic), ...TOWN_LINES.map(makeLine)];
     this.junctions = [...JUNCTIONS.map((j) => ({ x: j.x, z: j.z, h: 6.6 })), ...TOWN_J];
     for (const L of this.lanes) {
       L.len = L.pts[L.pts.length - 1].s;
