@@ -267,6 +267,48 @@ export function buildDistricts(h) {
     Bx('signBack', 7, 1.5, 0.3, 0, 6.6, Dp, M('#34456f'), { base: S.y });
   }
 
+  // ===================== 군사 기지 =====================
+  // 외딴 평지에 담장을 두르고, 정문(남쪽)으로 들어가면 격납고·막사·무기고·헬기장이 있다. 안에 들어서면 경보가 울린다(js/base.js).
+  {
+    const S = SITES.base, { P, Bx } = at(S, 'base'), C = '#7d8576', DK = '#3b4332', OL = '#55623f', SAND = '#b9a47a';
+    const bx = (name, w, hh, dd, dx, dy, dz, hex, o = {}) => Bx(name, w, hh, dd, dx, dy, dz, M(hex), { base: S.y, ...o });
+    // 담장: 정문 자리(남쪽 가운데 14m)만 비워 둔다
+    for (const [n, w, d, lx, lz] of [['wallN', 84, 0.8, 0, 32], ['wallW', 0.8, 64, -42, 0], ['wallE', 0.8, 64, 42, 0], ['wallSL', 35, 0.8, -24.5, -32], ['wallSR', 35, 0.8, 24.5, -32]]) {
+      bx(n, w, 3.6, d, lx, 1.8, lz, C, { collide: true }); bx(n + 'Wire', w, 0.35, d + 0.25, lx, 3.78, lz, '#2a2d33', { noShadow: true });
+    }
+    // 망루: 네 모서리와 북쪽 가운데
+    for (const [lx, lz] of [[-42, -32], [42, -32], [-42, 32], [42, 32], [0, 32]]) {
+      bx('tower', 3.6, 9, 3.6, lx, 4.5, lz, C, { collide: true }); bx('towerDeck', 5, 0.4, 5, lx, 9.2, lz, DK);
+      bx('towerGlass', 3.4, 1.7, 3.4, lx, 10.2, lz, '#9fc6a8', { noShadow: true }); bx('towerRoof', 5.2, 0.5, 5.2, lx, 11.3, lz, OL);
+    }
+    // 정문: 기둥 둘, 차단기, 경비 초소, 깃발
+    bx('gateL', 1.2, 4.6, 1.2, -7, 2.3, -32, DK, { collide: true }); bx('gateR', 1.2, 4.6, 1.2, 7, 2.3, -32, DK, { collide: true }); bx('gateTop', 15.4, 0.8, 1.2, 0, 5, -32, OL);
+    bx('arm', 6.2, 0.22, 0.22, -3.2, 1.35, -32, '#e8e4dc'); for (let i = 0; i < 4; i++) bx('armStripe' + i, 0.7, 0.24, 0.24, -5.6 + i * 1.6, 1.35, -32, '#d9473c', { noShadow: true });
+    bx('booth', 3, 2.6, 3, 10, 1.3, -27, C, { collide: true }); bx('boothRoof', 3.6, 0.3, 3.6, 10, 2.75, -27, DK); bx('boothGlass', 2.4, 1, 0.1, 10, 1.7, -25.45, '#9fc6a8', { noShadow: true });
+    bx('pole', 0.25, 9, 0.25, -11, 4.5, -29, '#cfd3de'); bx('flag', 3.2, 1.9, 0.08, -9.4, 8.0, -29, '#55623f', { noShadow: true }); bx('flagStar', 0.8, 0.8, 0.1, -9.4, 8.0, -29, '#ffd84a', { noShadow: true });
+    // 바닥: 콘크리트 마당
+    bx('floor', 82, 0.2, 62, 0, 0, 0, '#9aa090', { noShadow: true, collide: true }); // 윗면 +0.1: 정문 길 쪽 땅(+0.055)이 삐져나오지 않게
+    // 격납고(북서)와 막사(서)
+    bx('hangar', 28, 8, 14, -24, 4, 21, OL, { collide: true }); bx('hangarRoof', 26, 1.8, 15, -24, 8.7, 21, DK); bx('hangarDoor', 16, 6, 0.3, -24, 3, 13.85, DK, { noShadow: true });
+    bx('barracks', 24, 5, 9, -27, 2.5, -12, OL, { collide: true }); bx('barracksRoof', 25, 0.6, 10, -27, 5.3, -12, DK);
+    for (let i = 0; i < 6; i++) bx('barrackWin' + i, 2.2, 1.2, 0.1, -36 + i * 3.6, 3, -7.44, '#c8d6b0', { noShadow: true });
+    bx('barracks2', 22, 5, 8, 8, 2.5, 21, OL, { collide: true }); bx('barracks2Roof', 23, 0.6, 9, 8, 5.3, 21, DK);
+    // 무기고(동쪽): 앞이 트인 창고. 안쪽 벽과 지붕, 기둥, 선반
+    bx('armoryBack', 22, 4, 0.8, 24, 2, -3, DK, { collide: true }); bx('armorySideL', 0.8, 4, 11, 13.6, 2, -8.5, DK, { collide: true }); bx('armorySideR', 0.8, 4, 11, 34.4, 2, -8.5, DK, { collide: true });
+    bx('armoryRoof', 23.5, 0.6, 12.4, 24, 4.3, -8.4, OL); for (const px of [14.6, 24, 33.4]) bx('armoryPost', 0.5, 4, 0.5, px, 2, -14, DK, { collide: true });
+    bx('armorySign', 10, 1.1, 0.2, 24, 3.4, -14.2, '#d9473c', { noShadow: true });
+    bx('rack', 20, 1.6, 0.5, 24, 0.8, -4.2, '#4a5240', { collide: true });
+    // 헬기장(북동): 흰 테두리와 H
+    bx('pad', 18, 0.2, 18, 24, 0.04, 18, '#6b7285', { noShadow: true, collide: true });
+    for (const [w, d, lx, lz] of [[18, 0.5, 0, 9], [18, 0.5, 0, -9], [0.5, 18, 9, 0], [0.5, 18, -9, 0]]) bx('padEdge', w, 0.04, d, 24 + lx, 0.16, 18 + lz, '#f4f1ea', { noShadow: true });
+    bx('padH1', 0.7, 0.04, 6, 21.5, 0.16, 18, '#f4f1ea', { noShadow: true }); bx('padH2', 0.7, 0.04, 6, 26.5, 0.16, 18, '#f4f1ea', { noShadow: true }); bx('padH3', 5.7, 0.04, 0.7, 24, 0.16, 18, '#f4f1ea', { noShadow: true });
+    // 연료 탱크, 레이더, 모래주머니, 상자
+    P('industrial/detail-tank-large', -4, 10, 0, 0.3, 0.9); P('industrial/detail-tank-large', 1, 11, 90, 0.3, 0.9); P('industrial/detail-tank-large', 6, 10, 0, 0.3, 0.9);
+    bx('radarMast', 0.8, 7, 0.8, 4, 3.5, -2, C, { collide: true }); bx('radarDish', 5, 0.5, 5, 4, 7.4, -2, '#cfd3de'); bx('radarArm', 0.4, 2, 0.4, 4, 8, -2, '#cfd3de');
+    for (const [lx, lz, w, d] of [[-10, -27, 6, 1.2], [-17, -27, 6, 1.2], [14, -27, 5, 1.2], [-30, 27, 1.2, 6], [38, 24, 1.2, 8], [38, -20, 1.2, 8]]) bx('sandbag', w, 0.9, d, lx, 0.45, lz, SAND, { collide: true });
+    for (const [lx, lz, yaw] of [[-4, -20, 0], [-2, -22, 40], [0, -19, 0], [16, 4, 10], [18, 6, 0]]) P(lx % 2 ? 'pirate/crate' : 'pirate/barrel', lx, lz, yaw, 1.1, 0.8);
+  }
+
   // ===================== 외딴 오두막들 =====================
   [['cabinA', 'k', 40], ['cabinB', 'h', 200], ['cabinC', 'i', 120], ['cabinD', 'q', 300]].forEach(([id, c, yaw]) => {
     const S = SITES[id], { P } = at(S, id);

@@ -18,6 +18,8 @@ import { Wardrobe } from './cosmetics.js';
 import { Lobby } from './lobby.js';
 import { Net } from './net.js';
 import { Dealer } from './dealer.js';
+import { Heli, HELI_PAL } from './heli.js';
+import { Base } from './base.js';
 import { Panel } from './panel.js';
 import { Heist } from './heist.js';
 import { DayNight } from './daynight.js';
@@ -169,7 +171,7 @@ async function boot() {
   interiors.wardrobe = wardrobe;
   interiors.init(player, jobs);
   let train0 = null, traffic0 = null;
-  player.onUse = () => (netRef && netRef.use()) || (dealerRef && dealerRef.use()) || (extraRef && (extraRef.heist.use() || extraRef.furnish.use() || extraRef.bag.use())) || (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
+  player.onUse = () => (netRef && netRef.use()) || (dealerRef && dealerRef.use()) || (extraRef && (extraRef.heist.use() || extraRef.furnish.use() || extraRef.bag.use() || (baseRef && baseRef.use()))) || (train0 && train0.use()) || (health && health.use()) || interiors.use() || jobs.use() || (traffic0 && traffic0.use()); // 문 앞에서는 드나들기가 먼저다
   let health = null;
   Panel.init();
   const weapons = new Weapons({ scene, player, garage, residents, dynamics: town.dynamics, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
@@ -197,7 +199,7 @@ async function boot() {
   train.onHit = (vx, vz, side) => { player.kick = new B.Vector3(vx * 0.6 + Math.sign(side || 1) * 6, 8, vz * 0.6); health.hurt(9999, vx, vz, 'train'); };
   train.onCarHit = (c) => { if (c === player.vehicle) player.shake = 1; };
   mark('actors');
-  let netRef = null, dealerRef = null, extraRef = null;
+  let netRef = null, dealerRef = null, extraRef = null, baseRef = null;
   const map = new MapView(() => ({
     x: (interiors.where() || player.feet).x, z: (interiors.where() || player.feet).z, yaw: player.vehicle ? player.vehicle.yaw : character.heading, target: jobs.target,
     pads: [
@@ -250,6 +252,14 @@ async function boot() {
   const daynight = new DayNight({ scene, env, sun, hemi, player });
   const bag = new Bag({ player, jobs, health, interiors, garage, weapons, police });
   extraRef = { heist, furnish, bag };
+  const base = new Base({ scene, assets, player, residents, police, weapons, garage, groundY, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  residents.onShoot = (n, dx, dz, atCar) => { // 군인이 쏜다
+    const f = n.pos; weapons.emit('spark', f.x + dx * 1.2, f.y + 1.3, f.z + dz * 1.2, 6); if (weapons.sfx.ctx) weapons.sfx.play('shot');
+    if (atCar && player.vehicle) { player.vehicle.hp -= 2.5; player.shake = Math.max(player.shake, 0.2); } else if (!atCar && Math.random() < 0.55) { health.hurt(3, dx, dz, 'soldier', 0.6); }
+  };
+  baseRef = base;
+  // 경찰 헬리콥터(별 셋일 때만 나타난다)
+  { const ph = new Heli(scene, -1000, 150, -800, 0, (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }), HELI_PAL.police); garage.cars.push(ph); weapons.byBody.set(ph.body, ph); police.attachHeli(ph, weapons); }
   // 멀티플레이
   const net = new Net({ scene, assets, player, character, wardrobe, weapons, health, train, traffic, garage, daynight, local: params.get('net') === 'local',
     addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }),
@@ -293,8 +303,9 @@ async function boot() {
     health.update(dt);
     interiors.update(dt);
     dealer.update(dt);
+    base.update(dt);
     heist.update(dt); furnish.update(); bag.update(dt);
-    const text = net.prompt() || dealer.prompt() || heist.prompt() || furnish.prompt() || bag.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
+    const text = net.prompt() || dealer.prompt() || base.prompt() || heist.prompt() || furnish.prompt() || bag.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
       prompt.hidden = !text;
@@ -358,7 +369,7 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag, base };
   mark('map+fx');
   setProgress(0.97, '마무리하는 중'); await pause();
   // 셰이더나 그림 하나가 준비되지 않아도 끝없이 기다리지 않는다.
