@@ -46,7 +46,7 @@ const load = textureLoader();
 const names = ['forrest_ground_01', 'forest_ground_04', 'brown_mud_03', 'mossy_rock', 'red_brick_03', 'plaster_grey_04', 'ceramic_roof_01', 'weathered_planks'];
 const [grass, dirt, mud, rock, brick, plaster, roof, plank] = await Promise.all(names.map((n) => load(`assets/textures/${n}_diff.jpg`)));
 const tex = { grass, dirt, mud, rock, brick, plaster, roof, plank, sand: sandbagTexture() };
-const sim = new Sim(SEED, 16, TS !== 'block');
+const sim = new Sim(SEED, 32, TS !== 'block');
 const world = sim.world;
 const sky = makeSky(); scene.add(sky);
 scene.add(buildTerrain(world, tex, TS), makeBoxProps(world, tex), makeHouses(world, tex));
@@ -249,7 +249,7 @@ function frame(now) {
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05;
   if (!S.running) {
     demoAcc += dt; let k = 0;
-    while (demoAcc >= TICK && k++ < 3) { sim.step(TICK); demoAcc -= TICK; if (sim.winner >= 0) sim.reset(16); }
+    while (demoAcc >= TICK && k++ < 3) { sim.step(TICK); demoAcc -= TICK; if (sim.winner >= 0) sim.reset(32); }
     sim.events.length = 0;
     demoView(now / 1000);
     unitViews.update(dt, -1, false); pointViews.update(now / 1000); fx.update(dt);
