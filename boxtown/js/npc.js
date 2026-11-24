@@ -287,6 +287,8 @@ export class Residents {
         p.y = this.groundY(p.x, p.z);
       } else { // walk
         n.cool -= dt;
+        // 불량배는 플레이어가 6m 안에 오면 걸음을 멈추고 마주 선다(주먹을 쥐어 보이는 게 잘 보이게).
+        if (n.kind === 'thug' && player.active && pd < 6 && Math.abs(player.pos.y - p.y) < 2) { n.pause = Math.max(n.pause, 0.4); wish = Math.atan2(pdx, pdz); }
         if (n.pause > 0) {
           n.pause -= dt;
           n.vel.set(0, 0, 0);
@@ -328,10 +330,11 @@ export class Residents {
       // 가까이 오면 고개를 돌려 보고 손을 흔든다
       // 수배 중이면 근처 경찰관이 달려든다.
       if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
-      if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
+      const menace = n.kind === 'thug' && player.active && pd < 6.5 && Math.abs(player.pos.y - p.y) < 2; // 불량배는 주민보다 멀리서부터 으름장을 놓는다
+      if ((near || menace) && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
         // 주민은 손을 흔들고, 불량배는 인사 대신 주먹을 쥐어 보인다.
-        if (n.kind === 'thug') { chr.wave = 0; chr.fist = pd < 4.5 ? 1 : 0; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
+        if (n.kind === 'thug') { chr.wave = 0; chr.fist = 1; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
       } else { chr.wave = damp(chr.wave, 0, 8, dt); chr.fist = 0; }
       n.look = damp(n.look || 0, lookYaw, 6, dt);
 
