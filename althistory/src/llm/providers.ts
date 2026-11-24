@@ -5,8 +5,22 @@ import type { GameState } from '../engine/state';
 import { buildUserPrompt, systemPrompt } from './prompt';
 import { localAdjudicate } from './local';
 
-export type ProviderId = 'local' | 'gemini' | 'webllm';
-export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiModel: string; webllmModel: string }
+import Anthropic from '@anthropic-ai/sdk';
+
+/** 'local' 은 화면에서 고르는 선택지가 아니다: AI 키가 없을 때 엔진이 쓰는 간이 판정이다. */
+export type ProviderId = 'local' | 'gemini' | 'claude' | 'webllm';
+export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiModel: string; claudeKey: string; claudeModel: string; webllmModel: string }
+export const DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
+/** 고른 AI에 키가 없으면 간이 판정으로 대신한다. */
+export function effectiveProvider(cfg: LlmConfig): ProviderId {
+  if (cfg.provider === 'gemini' && !cfg.geminiKey.trim()) return 'local';
+  if (cfg.provider === 'claude' && !cfg.claudeKey.trim()) return 'local';
+  return cfg.provider;
+}
+export const providerLabel = (cfg: LlmConfig): string => {
+  const p = effectiveProvider(cfg);
+  return p === 'gemini' ? 'Gemini' : p === 'claude' ? 'Claude' : p === 'webllm' ? 'Qwen (브라우저)' : '간이 판정 (AI 키 없음)';
+};
 export interface Hooks { onProgress?: (msg: string) => void }
 
 export class LlmError extends Error {}
@@ -59,6 +73,36 @@ async function callGemini(cfg: LlmConfig, system: string, msgs: Msg[], signal: A
   return text;
 }
 
+// ---- Claude (Anthropic 공식 SDK, 사용자가 넣은 API 키로 브라우저에서 직접 호출) ----
+// 거절(refusal) 시 서버가 다른 모델로 이어서 처리하도록 fallbacks 를 켠다(지원 모델에서만).
+const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-fable-5-2', 'claude-fable-5-1', 'claude-sonnet-5-5']);
+async function callClaude(cfg: LlmConfig, system: string, msgs: Msg[], signal: AbortSignal): Promise<string> {
+  const model = cfg.claudeModel.trim() || DEFAULT_CLAUDE_MODEL;
+  const client = new Anthropic({ apiKey: cfg.claudeKey.trim(), dangerouslyAllowBrowser: true, maxRetries: 1 });
+  try {
+    const res = await client.beta.messages.create({
+      model, max_tokens: 16000, system,
+      output_config: { effort: 'medium' },
+      ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      messages: msgs.map((m) => ({ role: m.role, content: m.text })),
+    }, { signal });
+    if (res.stop_reason === 'refusal') throw new LlmError(`Claude가 이 명령을 거절했습니다${res.stop_details?.category ? ` (${res.stop_details.category})` : ''}. 표현을 바꿔 보세요.`);
+    const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    if (!text) throw new LlmError('Claude가 빈 응답을 보냈습니다. 다시 시도하세요.');
+    return text;
+  } catch (e) {
+    if (e instanceof LlmError) throw e;
+    if (e instanceof Anthropic.AuthenticationError) throw new LlmError('Claude API 키가 올바르지 않습니다. 메뉴에서 키를 확인하세요.');
+    if (e instanceof Anthropic.PermissionDeniedError) throw new LlmError('이 API 키로는 해당 모델을 쓸 수 없습니다(403). 키 권한/결제 상태를 확인하세요.');
+    if (e instanceof Anthropic.NotFoundError) throw new LlmError(`모델 "${model}"을(를) 찾을 수 없습니다. 메뉴에서 모델 이름을 확인하세요.`);
+    if (e instanceof Anthropic.RateLimitError) throw new LlmError('Claude 사용 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요.');
+    if (e instanceof Anthropic.APIUserAbortError) throw new LlmError('응답 시간이 너무 길어 중단했습니다(90초). 다시 시도하세요.');
+    if (e instanceof Anthropic.APIConnectionError) throw new LlmError('네트워크 오류: Claude API에 연결하지 못했습니다.');
+    if (e instanceof Anthropic.APIError) throw new LlmError(`Claude 오류 ${e.status ?? ''}: ${e.message.slice(0, 160)}`);
+    throw e;
+  }
+}
+
 // ---- 브라우저 내 Qwen (WebLLM, 실험적) ----
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let engine: any = null;
@@ -93,9 +137,10 @@ async function callWebLlm(cfg: LlmConfig, system: string, msgs: Msg[], hooks: Ho
 export async function adjudicate(
   cfg: LlmConfig, s: GameState, w: World, command: string, pass: boolean, hooks: Hooks = {},
 ): Promise<{ adj: Adjudication; mode: string }> {
-  if (cfg.provider === 'local') return { adj: localAdjudicate(s, w, command, pass), mode: '규칙 모드' };
+  const provider = effectiveProvider(cfg);
+  if (provider === 'local') return { adj: localAdjudicate(s, w, command, pass), mode: '간이 판정 (AI 키 없음)' };
 
-  const compact = cfg.provider === 'webllm';
+  const compact = provider === 'webllm';
   const system = systemPrompt(w, compact);
   const msgs: Msg[] = [{ role: 'user', text: buildUserPrompt(s, w, command, pass, compact) }];
   const ctl = new AbortController();
@@ -103,11 +148,11 @@ export async function adjudicate(
   try {
     let lastErr = '';
     for (let attempt = 0; attempt < 2; attempt++) {
-      hooks.onProgress?.(attempt === 0 ? (cfg.provider === 'gemini' ? 'Gemini가 판정하는 중…' : 'Qwen 준비 중…') : '형식 오류를 고쳐서 다시 요청하는 중…');
-      const text = cfg.provider === 'gemini' ? await callGemini(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
+      hooks.onProgress?.(attempt === 0 ? `${providerLabel(cfg)}가 판정하는 중…` : '형식 오류를 고쳐서 다시 요청하는 중…');
+      const text = provider === 'gemini' ? await callGemini(cfg, system, msgs, ctl.signal) : provider === 'claude' ? await callClaude(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
       try {
         const parsed = normalizeAdjudication(extractJson(text));
-        if (parsed.ok) return { adj: parsed.value, mode: cfg.provider === 'gemini' ? `Gemini (${cfg.geminiModel || 'gemini-flash-latest'})` : `Qwen (${cfg.webllmModel})` };
+        if (parsed.ok) return { adj: parsed.value, mode: provider === 'gemini' ? `Gemini (${cfg.geminiModel || 'gemini-flash-latest'})` : provider === 'claude' ? `Claude (${cfg.claudeModel || DEFAULT_CLAUDE_MODEL})` : `Qwen (${cfg.webllmModel})` };
         lastErr = parsed.error;
       } catch (e) { lastErr = (e as Error).message; }
       msgs.push({ role: 'assistant', text: text.slice(0, 6000) });
@@ -125,4 +170,11 @@ export async function testGemini(cfg: LlmConfig): Promise<string> {
     const t = await callGemini(cfg, '답은 JSON 한 개만.', [{ role: 'user', text: '{"ok":true} 라고만 답하라.' }], ctl.signal);
     return t.slice(0, 80);
   } finally { clearTimeout(timer); }
+}
+
+/** Claude 키 확인용 가벼운 호출. */
+export async function testClaude(cfg: LlmConfig): Promise<string> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 60_000);
+  try { return (await callClaude(cfg, '짧게 답하라.', [{ role: 'user', text: '"ok" 라고만 답하라.' }], ctl.signal)).slice(0, 40); } finally { clearTimeout(timer); }
 }

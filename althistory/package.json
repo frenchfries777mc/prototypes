@@ -13,6 +13,7 @@
     "test:e2e": "node tests/e2e.cjs && node tests/e2e-armies.cjs && node tests/e2e-studio.cjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.13.0",
     "maplibre-gl": "^6.19.0",
     "topojson-client": "^3.1.0"
   },

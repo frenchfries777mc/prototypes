@@ -113,7 +113,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   ok(bad[0] === 'null', '형식이 틀린 템플릿은 거부됨');
   const safe = await page.evaluate(() => { const sc = window.__game.world.scenarios.find((s) => s.id === 'ok2'); return sc && { color: sc.polities[0].color, stab: sc.polities[0].stats.stability, bonus: sc.bonuses[0].bonus, name: sc.name }; });
   ok(safe && safe.color === '#8a93a3' && safe.stab === 100 && safe.bonus === 50, `외부 템플릿 값 정화: 색 ${safe && safe.color}, 능력치 ${safe && safe.stab}, 보정 ${safe && safe.bonus}`);
-  const html = await page.innerHTML('#tpl-grid'); ok(!html.includes('<img'), '템플릿 이름의 HTML은 이스케이프됨');
+  await page.click('.tpl-filter button[data-era="사용자"]'); const html = await page.innerHTML('#tpl-grid'); ok(!html.includes('<img src=x') && html.includes('&lt;img src=x onerror=alert(1)&gt;'), '템플릿 이름의 HTML은 이스케이프됨'); await page.click('.tpl-filter button[data-era="전체"]');
 
   // 갤러리: 목록 + 불러오기 (GitHub raw 모의)
   await page.route('https://raw.githubusercontent.com/**', async (route) => {

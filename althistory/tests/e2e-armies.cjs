@@ -37,7 +37,7 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(plan) }] } }] }) });
   });
-  await page.click('#btn-menu'); await page.check('input[name=ov-prov][value=gemini]'); await page.fill('#ov-key', 'K'); await page.click('#ov-apply');
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=gemini]'); await page.fill('#ov-key', 'K'); await page.click('#ov-apply');
   const m0 = setup.mine[0];
   // (a) 전쟁 중이 아닌 나라 땅으로 이동 + 너무 먼 이동 + 군대 없이 점령 → 모두 거부
   plan = { interpretation: 't', feasibility: 100, if_success: { narrative: 'x', army_moves: [{ army: m0.id, to: setup.near[0] }, { army: m0.id, to: setup.far }],
@@ -64,7 +64,7 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   const yi = await page.evaluate(() => { const a = window.__game.state.armies.find((x) => x.general.name === '이순신'); return a && { id: a.id, trait: a.general.trait, skill: a.general.skill, navy: a.navy }; });
   ok(yi && yi.skill === 10 && yi.navy && yi.trait.includes('불패'), '이순신: 능력 10, 함대, 불패 특성');
   plan = { interpretation: 't', feasibility: 100, if_success: { narrative: 'x', army_changes: [{ army: yi.id, troops_delta: -1, general: 'dead' }] }, if_failure: {}, world_events: {} };
-  await page.click('#btn-menu'); await page.check('input[name=ov-prov][value=gemini]'); await page.fill('#ov-key', 'K'); await page.click('#ov-apply');
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=gemini]'); await page.fill('#ov-key', 'K'); await page.click('#ov-apply');
   await turn('시험 3'); r = (await S()).log.at(-1);
   const yi2 = await page.evaluate((id) => { const a = window.__game.state.armies.find((x) => x.id === id); return a && a.general.name; }, yi.id);
   ok(yi2 === '이순신' && r.notes.some((n) => /불패/.test(n)), '불패의 장군은 전사 제안이 와도 쓰러지지 않는다');

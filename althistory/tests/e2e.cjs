@@ -35,7 +35,8 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.screenshot({ path: `${OUT}/s1_intro.png` });
   await page.click('.tpl[data-id="bipolar-world"]');
   ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '템플릿 선택(양극 냉전 세계)');
-  ok(!(await page.isVisible('#in-gemini')), '규칙 모드일 때 Gemini 입력칸 숨김');
+  ok((await page.locator('#intro-ai .ai-card').count()) === 3 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 3개(Gemini/Claude/Qwen), "모드" 선택지 없음');
+  ok((await page.locator('.tpl img.t-thumb').count()) === 22, '템플릿 카드마다 시작 지도 썸네일');
   await page.click('#btn-next');
 
   // ---- 2단계: 지도에서 클릭해 나라 선택 ----
@@ -103,7 +104,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
       if_failure: {}, world_events: { narrative: 'x', headlines: ['<img src=x onerror=alert(1)> 이벤트'] } };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '```json\n' + JSON.stringify(adj) + '\n```' }] } }] }) });
   });
-  await page.click('#btn-menu'); await page.check('input[name=ov-prov][value=gemini]');
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=gemini]');
   ok(await page.isVisible('#ov-gemini'), '메뉴에서 Gemini 선택 시 키 입력칸 표시');
   await page.fill('#ov-key', 'TEST-KEY'); await page.click('#ov-apply');
   const before = await page.evaluate(() => ({ mil: window.__game.state.stats.KOR.military, rel: window.__game.state.relations['KOR|TWN'] ?? 0 }));
@@ -120,8 +121,29 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
   ok(/한도/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === tb, '429: 턴 소모 없이 안내');
 
+  // ---- Claude (모의 서버) ----
+  let claudeReq = null;
+  await page.unroute('https://generativelanguage.googleapis.com/**');
+  await page.route('https://api.anthropic.com/**', async (route) => {
+    const r = route.request(); claudeReq = { h: r.headers(), body: JSON.parse(r.postData()) };
+    const adj = { interpretation: 'Claude 판정', feasibility: 100, reasoning: 't', if_success: { narrative: 'Claude 서술', headlines: ['Claude 헤드라인'] }, if_failure: {}, world_events: {} };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: JSON.stringify(adj) }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }) });
+  });
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=claude]');
+  ok(await page.isVisible('#ov-claude'), '메뉴에서 Claude 선택 시 키 입력칸 표시');
+  await page.fill('#ov-ckey', 'sk-ant-TEST'); await page.click('#ov-apply');
+  await turn('외교 협상을 한다');
+  const r8 = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(claudeReq && claudeReq.h['authorization'] === 'Bearer sk-ant-TEST' && claudeReq.h['anthropic-dangerous-direct-browser-access'] === 'true', 'Claude 요청: 사용자 키(Authorization) + 브라우저 직접 호출 헤더');
+  ok(claudeReq && claudeReq.body.model === 'claude-opus-5-5' && claudeReq.body.fallbacks === 'default' && /server-side-fallback/.test(claudeReq.h['anthropic-beta'] || ''), 'Claude 요청: 기본 모델 claude-opus-5-5, 거절 시 서버 대체(fallbacks) 사용');
+  ok(r8.mode.startsWith('Claude') && r8.narrative.includes('Claude 서술'), 'Claude 응답으로 턴 판정: ' + r8.mode);
+  await page.route('https://api.anthropic.com/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }) }));
+  const t9 = await page.evaluate(() => window.__game.state.turn);
+  await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
+  ok(/키가 올바르지 않습니다/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t9, 'Claude 401: 턴 소모 없이 키 안내');
+
   // ---- Qwen 오류 ----
-  await page.click('#btn-menu'); await page.check('input[name=ov-prov][value=webllm]'); await page.click('#ov-apply');
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=webllm]'); await page.click('#ov-apply');
   await page.fill('#g-cmd', '군비를 늘린다'); await page.click('#btn-go'); await idle();
   ok(/WebGPU|WebLLM/.test(await page.textContent('#g-msg')), 'Qwen 사용 불가 환경의 오류 안내');
 

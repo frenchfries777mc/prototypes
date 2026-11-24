@@ -6,7 +6,8 @@ import type { GameState } from '../engine/state';
 import type { Army } from '../engine/state';
 import { armiesOf, cloneState, controlledBy, fmtDate, getRel, isAlive, isAtWar, newGame, ownedBy, totalTroops, warsOf } from '../engine/state';
 import { buildArmies, reachWithin } from '../engine/armies';
-import { LlmError, adjudicate, testGemini } from '../llm/providers';
+import { DEFAULT_CLAUDE_MODEL, LlmError, adjudicate, providerLabel, testClaude, testGemini } from '../llm/providers';
+import { Thumbs } from '../ui/thumbs';
 import type { LlmConfig, ProviderId } from '../llm/providers';
 import { MapView } from '../map/MapView';
 import type { ArmyMarker } from '../map/MapView';
@@ -52,8 +53,10 @@ export async function startApp(opts: GameOptions) {
   }
   const view = await MapView.create({ container: 'map', workerUrl: opts.workerUrl, data: opts.data });
 
-  let cfg: LlmConfig = { provider: 'local', geminiKey: '', geminiModel: 'gemini-flash-latest', webllmModel: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
-  if (!loadJson(CFG_KEY) && cfg.geminiKey) cfg.provider = 'gemini';
+  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, webllmModel: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
+  if (cfg.provider === 'local') cfg.provider = 'gemini'; // 예전 "규칙 모드" 설정은 AI 선택으로 옮긴다
+  const thumbs = new Thumbs(world, view.geometries());
+  let eraFilter = '전체';
   let phase: Phase = 'intro';
   let state: GameState | null = null;
   let undoSnap: string | null = null;
@@ -73,44 +76,59 @@ export async function startApp(opts: GameOptions) {
       : { top: 20, bottom: phase === 'play' ? Math.round(window.innerHeight * 0.6) : 20, left: 20, right: 20 };
   };
 
-  // ---------- AI 설정 폼 (시작 화면과 메뉴에서 같은 모양을 재사용) ----------
+  // ---------- AI 선택 (시작 화면과 메뉴에서 같은 모양을 재사용) ----------
+  const AIS: { id: ProviderId; name: string; maker: string; desc: string }[] = [
+    { id: 'gemini', name: 'Gemini', maker: 'Google', desc: '무료 API 키로 시작' },
+    { id: 'claude', name: 'Claude', maker: 'Anthropic', desc: 'API 키 · 유료(턴마다 과금)' },
+    { id: 'webllm', name: 'Qwen', maker: '내 브라우저에서 실행', desc: '키 없음 · WebGPU 필요(실험적)' },
+  ];
   function mountAi(container: HTMLElement, p: string) {
-    container.innerHTML = `<div class="ai">
-      <label class="radio"><input type="radio" name="${p}-prov" value="local" /> <span><b>규칙 모드</b> — 키 없이 바로 플레이. 키워드(공격·평화·동맹·제재·투자·군비·개혁)만 이해하는 단순 판정</span></label>
-      <label class="radio"><input type="radio" name="${p}-prov" value="gemini" /> <span><b>Gemini</b> — 자유로운 문장, 풍부한 서술 (무료 API 키 필요)</span></label>
-      <div class="sub" id="${p}-gemini">
-        <label for="${p}-key">Gemini API 키 · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">발급 받기</a></label>
-        <input id="${p}-key" type="password" placeholder="AIza…" autocomplete="off" />
-        <label for="${p}-model">모델</label>
-        <input id="${p}-model" placeholder="gemini-flash-latest" />
-        <div class="row"><button type="button" id="${p}-test" class="ghost small">키 테스트</button><span id="${p}-testmsg" class="hint"></span></div>
-        <div class="hint">키는 이 기기의 localStorage에만 저장되고 Google API 요청에만 쓰입니다.</div>
+    container.innerHTML = `<div class="ai-cards">${AIS.map((a) => `<label class="ai-card" data-ai="${a.id}"><input type="radio" name="${p}-prov" value="${a.id}" />
+        <span class="ai-logo ai-${a.id}">${a.name[0]}</span><span class="ai-txt"><b>${a.name}</b><span>${a.maker}</span><small>${a.desc}</small></span></label>`).join('')}</div>
+      <div class="ai-key" id="${p}-gemini">
+        <label for="${p}-key">Gemini API 키 · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">무료 발급</a></label>
+        <div class="row"><input id="${p}-key" type="password" placeholder="AIza…" autocomplete="off" /><input id="${p}-model" class="model" placeholder="gemini-flash-latest" title="모델" /><button type="button" id="${p}-test" class="ghost small">키 확인</button></div>
       </div>
-      <label class="radio"><input type="radio" name="${p}-prov" value="webllm" /> <span><b>브라우저 Qwen</b> — 내 기기에서 실행, 실험적 (WebGPU 필요, 첫 실행 때 모델 다운로드)</span></label>
-      <div class="sub" id="${p}-webllm">
-        <label for="${p}-wmodel">WebLLM 모델 ID</label>
+      <div class="ai-key" id="${p}-claude">
+        <label for="${p}-ckey">Claude API 키 · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">발급</a> <span class="hint">(Claude 구독과 별도로 API 사용량만큼 과금)</span></label>
+        <div class="row"><input id="${p}-ckey" type="password" placeholder="sk-ant-…" autocomplete="off" /><input id="${p}-cmodel" class="model" placeholder="${DEFAULT_CLAUDE_MODEL}" title="모델" /><button type="button" id="${p}-ctest" class="ghost small">키 확인</button></div>
+      </div>
+      <div class="ai-key" id="${p}-webllm">
+        <label for="${p}-wmodel">Qwen 모델 (처음 한 번 수백 MB~수 GB 내려받음)</label>
         <input id="${p}-wmodel" placeholder="Qwen2.5-3B-Instruct-q4f16_1-MLC" />
-        <div class="hint">작은 모델은 형식을 자주 틀립니다. 안 되면 Gemini나 규칙 모드를 쓰세요.</div>
-      </div></div>`;
+      </div>
+      <div class="ai-note" id="${p}-note"></div>`;
     const sync = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value;
-      $(`${p}-gemini`).hidden = v !== 'gemini'; $(`${p}-webllm`).hidden = v !== 'webllm';
+      container.querySelectorAll<HTMLElement>('.ai-card').forEach((el) => el.classList.toggle('on', el.dataset.ai === v));
+      $(`${p}-gemini`).hidden = v !== 'gemini'; $(`${p}-claude`).hidden = v !== 'claude'; $(`${p}-webllm`).hidden = v !== 'webllm';
+      const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim());
+      $(`${p}-note`).textContent = keyless ? '키를 넣기 전에는 AI 대신 간이 판정으로 진행됩니다. 키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.' : '키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.';
     };
     container.querySelectorAll(`input[name=${p}-prov]`).forEach((r) => r.addEventListener('change', sync));
+    container.addEventListener('input', sync);
     const read = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value as ProviderId | undefined;
-      cfg = { provider: v ?? 'local', geminiKey: $<HTMLInputElement>(`${p}-key`).value.trim(), geminiModel: $<HTMLInputElement>(`${p}-model`).value.trim() || 'gemini-flash-latest', webllmModel: $<HTMLInputElement>(`${p}-wmodel`).value.trim() || 'Qwen2.5-3B-Instruct-q4f16_1-MLC' };
+      cfg = {
+        provider: v ?? 'gemini',
+        geminiKey: $<HTMLInputElement>(`${p}-key`).value.trim(), geminiModel: $<HTMLInputElement>(`${p}-model`).value.trim() || 'gemini-flash-latest',
+        claudeKey: $<HTMLInputElement>(`${p}-ckey`).value.trim(), claudeModel: $<HTMLInputElement>(`${p}-cmodel`).value.trim() || DEFAULT_CLAUDE_MODEL,
+        webllmModel: $<HTMLInputElement>(`${p}-wmodel`).value.trim() || 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
+      };
       saveJson(CFG_KEY, cfg);
     };
     const write = () => {
-      (container.querySelector(`input[name=${p}-prov][value=${cfg.provider}]`) as HTMLInputElement).checked = true;
-      $<HTMLInputElement>(`${p}-key`).value = cfg.geminiKey; $<HTMLInputElement>(`${p}-model`).value = cfg.geminiModel; $<HTMLInputElement>(`${p}-wmodel`).value = cfg.webllmModel;
+      (container.querySelector(`input[name=${p}-prov][value=${cfg.provider === 'local' ? 'gemini' : cfg.provider}]`) as HTMLInputElement).checked = true;
+      $<HTMLInputElement>(`${p}-key`).value = cfg.geminiKey; $<HTMLInputElement>(`${p}-model`).value = cfg.geminiModel;
+      $<HTMLInputElement>(`${p}-ckey`).value = cfg.claudeKey; $<HTMLInputElement>(`${p}-cmodel`).value = cfg.claudeModel;
+      $<HTMLInputElement>(`${p}-wmodel`).value = cfg.webllmModel;
       sync();
     };
-    $(`${p}-test`).addEventListener('click', async () => {
-      read(); const out = $(`${p}-testmsg`); out.textContent = '확인 중…';
-      try { await testGemini(cfg); out.textContent = '✔ 키가 동작합니다'; } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
+    const test = (btn: string, fn: (c: LlmConfig) => Promise<string>) => $(btn).addEventListener('click', async () => {
+      read(); const out = $(`${p}-note`); out.textContent = '키 확인 중…';
+      try { await fn(cfg); out.textContent = '✔ 키가 동작합니다.'; } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
     });
+    test(`${p}-test`, testGemini); test(`${p}-ctest`, testClaude);
     write();
     return { read, write };
   }
@@ -134,20 +152,66 @@ export async function startApp(opts: GameOptions) {
   }
 
   // ---------- 1단계: 템플릿 ----------
+  const nationsOf = (sc: Scenario, n: number): { name: string; color: string }[] => {
+    if (sc.polities && sc.owners) {
+      // 주인공 순서: 시작 시 전쟁 당사국 → 이름 있는 군대를 가진 나라 → 영토 크기
+      const cnt = new Map<number, number>(); sc.owners.forEach((o) => cnt.set(o, (cnt.get(o) ?? 0) + 1));
+      const warring = new Set((sc.wars ?? []).flat());
+      const armies = new Map<string, number>(); (sc.armies ?? []).forEach((a) => armies.set(a.c, (armies.get(a.c) ?? 0) + 1));
+      const score = (i: number) => { const id = sc.polities![i].id; return (warring.has(id) ? 1e6 : 0) + (armies.get(id) ?? 0) * 1e4 + (cnt.get(i) ?? 0); };
+      return [...cnt.keys()].filter((i) => !sc.polities![i]?.neutral).sort((x, y) => score(y) - score(x)).slice(0, n).map((i) => ({ name: sc.polities![i].nameKo || sc.polities![i].name, color: sc.polities![i].color }));
+    }
+    return ['USA', 'CHN', 'RUS', 'IND', 'KOR', 'JPN'].slice(0, n).map((id) => world.modernCountry(id)).filter(Boolean).map((c) => ({ name: c!.nameKo || c!.name, color: c!.color }));
+  };
+  const nameOf = (sc: Scenario, id: string) => { const p = sc.polities?.find((x) => x.id === id); return p ? (p.nameKo || p.name) : (world.modernCountry(id)?.nameKo ?? id); };
+  const chips = (list: { name: string; color: string }[]) => list.map((x) => `<span class="nchip"><i style="background:${esc(x.color)}"></i>${esc(x.name)}</span>`).join('');
+  const fillThumbs = (root: HTMLElement) => {
+    root.querySelectorAll<HTMLImageElement>('img[data-thumb]').forEach((img) => {
+      const sc = world.scenarios.find((x) => x.id === img.dataset.thumb); if (!sc) return;
+      const W = Number(img.dataset.w), H = Number(img.dataset.h);
+      thumbs.request(sc, W, H, (url) => { img.src = url; img.classList.add('ok'); });
+    });
+  };
+  const thumbImg = (sc: Scenario, W: number, H: number, cls: string) => {
+    const url = thumbs.cached(sc, W, H);
+    return `<img class="${cls}${url ? ' ok' : ''}" data-thumb="${esc(sc.id)}" data-w="${W}" data-h="${H}" alt="${esc(sc.name)} 시작 지도" ${url ? `src="${url}"` : ''} />`;
+  };
+  const renderHero = () => {
+    const sc = world.scenarios.find((x) => x.id === templateId); const box = $('tpl-hero');
+    if (!sc) { box.innerHTML = ''; return; }
+    const gens = (sc.armies ?? []).filter((a) => (a.skill ?? 0) >= 7).sort((x, y) => (y.skill ?? 0) - (x.skill ?? 0)).slice(0, 6);
+    const wars = (sc.wars ?? []).slice(0, 4);
+    box.innerHTML = `${thumbImg(sc, 560, 300, 'h-img')}
+      <div class="h-info"><div class="h-era">${esc(sc.era ?? '')}${sc.year ? ` · ${esc(sc.year)}` : ''}${sc.custom ? ' · 내 템플릿' : ''}</div>
+        <h3>${esc(sc.name)}</h3><div class="h-tag">${esc(sc.tagline ?? '')}</div><p>${esc(sc.description ?? '')}</p>
+        <div class="h-sec"><b>주요 국가</b><div>${chips(nationsOf(sc, 6))}</div></div>
+        ${wars.length ? `<div class="h-sec"><b>시작 시 전쟁</b><div>${wars.map(([a, b]) => `<span class="wchip">⚔ ${esc(nameOf(sc, a))} 대 ${esc(nameOf(sc, b))}</span>`).join('')}</div></div>` : ''}
+        ${gens.length ? `<div class="h-sec"><b>이름난 장군</b><div>${gens.map((a) => `<span class="gchip">${esc(a.g)} <em>${a.skill}</em><small>${esc(nameOf(sc, a.c))}</small></span>`).join('')}</div></div>` : ''}
+      </div>`;
+    fillThumbs(box);
+  };
   const renderTemplates = () => {
-    const card = (sc: Scenario) => `<button type="button" class="tpl ${sc.id === templateId ? 'sel' : ''}" data-id="${esc(sc.id)}">
-        <div class="t-name">${esc(sc.name)}${sc.custom ? ' <span class="t-badge">내 템플릿</span>' : ''}</div><div class="t-year">${esc(sc.year ?? '')}</div><div class="t-tag">${esc(sc.tagline ?? '')}</div><div class="t-desc">${esc(sc.description ?? '')}</div></button>`;
-    const keepScroll = $('tpl-grid').scrollTop;
     const list = world.scenarios.filter((x) => x.id !== '__draft__');
     const eras = [...new Set([...ERA_ORDER, ...list.map((x) => x.era ?? '기타')])].filter((e) => list.some((x) => (x.era ?? '기타') === e));
-    $('tpl-grid').innerHTML = eras.map((e) => `<div class="tpl-era">${esc(e)}</div>` + list.filter((x) => (x.era ?? '기타') === e).map(card).join('')).join('');
-    $('tpl-grid').scrollTop = keepScroll;
+    if (eraFilter !== '전체' && !eras.includes(eraFilter)) eraFilter = '전체';
+    $('tpl-filter').innerHTML = ['전체', ...eras].map((e) => `<button type="button" class="fchip ${e === eraFilter ? 'on' : ''}" data-era="${esc(e)}">${esc(e === '사용자' ? '내 템플릿' : e)} <small>${e === '전체' ? list.length : list.filter((x) => (x.era ?? '기타') === e).length}</small></button>`).join('');
+    const card = (sc: Scenario) => `<button type="button" class="tpl ${sc.id === templateId ? 'sel' : ''}" data-id="${esc(sc.id)}">
+        <div class="t-img">${thumbImg(sc, 300, 150, 't-thumb')}<span class="t-yr">${esc(sc.year ?? '')}</span>${sc.custom ? '<span class="t-badge">내 템플릿</span>' : ''}${(sc.wars ?? []).length ? '<span class="t-war">⚔ 전쟁 중</span>' : ''}</div>
+        <div class="t-body"><div class="t-name">${esc(sc.name)}</div><div class="t-tag">${esc(sc.tagline ?? '')}</div><div class="t-nat">${chips(nationsOf(sc, 3))}</div></div></button>`;
+    const shown = eraFilter === '전체' ? list : list.filter((x) => (x.era ?? '기타') === eraFilter);
+    $('tpl-grid').innerHTML = shown.map(card).join('');
+    fillThumbs($('tpl-grid'));
+    renderHero();
     renderTplActions();
   };
+  $('tpl-filter').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.era) { eraFilter = b.dataset.era; renderTemplates(); } });
   $('tpl-grid').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest('button.tpl') as HTMLElement | null;
     if (!b) return;
-    templateId = b.dataset.id!; renderTemplates();
+    templateId = b.dataset.id!;
+    $('tpl-grid').querySelectorAll('.tpl').forEach((el) => el.classList.toggle('sel', (el as HTMLElement).dataset.id === templateId));
+    renderHero(); renderTplActions();
+    $('tpl-hero').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
   const refreshContinue = () => {
     const sv = loadJson<GameState>(SAVE_KEY);
@@ -162,7 +226,6 @@ export async function startApp(opts: GameOptions) {
   const introMsg = (t: string, err = false) => { const m = $('intro-msg'); m.textContent = t; m.classList.toggle('err', err); };
   $('btn-next').addEventListener('click', () => {
     aiIntro.read();
-    if (cfg.provider === 'gemini' && !cfg.geminiKey) { introMsg('Gemini 모드는 API 키가 필요합니다. 키를 입력하거나 규칙 모드를 선택하세요.', true); return; }
     introMsg('');
     state = null; selCountry = null; selProv = null;
     showScenario(world.scenarios.find((x) => x.id === templateId) ?? world.scenarios[0]);
@@ -220,7 +283,6 @@ export async function startApp(opts: GameOptions) {
   $('ov-close').addEventListener('click', () => { $('overlay').hidden = true; });
   $('ov-apply').addEventListener('click', () => {
     aiMenu.read();
-    if (cfg.provider === 'gemini' && !cfg.geminiKey) { ovMsg('Gemini 모드는 API 키가 필요합니다.', 'err'); return; }
     $('overlay').hidden = true; renderGame();
   });
   $('ov-newgame').addEventListener('click', () => {
@@ -369,7 +431,7 @@ export async function startApp(opts: GameOptions) {
     const mine = controlledBy(s, pid).length, owned = ownedBy(s, pid).length;
     const dead = !isAlive(s, pid);
     const tpl = world.scenarios.find((x) => x.id === s.scenarioId)?.name ?? '';
-    $('g-date').textContent = `${fmtDate(s.date)} · 턴 ${s.turn} · 영토 ${mine}주${owned !== mine ? ` (소유 ${owned})` : ''} · ${tpl} · ${cfg.provider === 'local' ? '규칙 모드' : cfg.provider === 'gemini' ? 'Gemini' : 'Qwen'}`;
+    $('g-date').textContent = `${fmtDate(s.date)} · 턴 ${s.turn} · 영토 ${mine}주${owned !== mine ? ` (소유 ${owned})` : ''} · ${tpl} · ${providerLabel(cfg)}`;
     $('g-stats').innerHTML = STAT_KEYS.map((k) => {
       const v = s.stats[pid]?.[k] ?? 0, d = lastDelta[k] ?? 0;
       return `<div class="stat"><div class="lab"><span>${STAT_LABEL[k]}</span><span><b>${v}</b>${d ? `<span class="${d > 0 ? 'd-up' : 'd-down'}">${sign(d)}</span>` : ''}</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
@@ -437,7 +499,7 @@ export async function startApp(opts: GameOptions) {
   // ---------- 사용자 템플릿 / 스튜디오 / 공유 ----------
   const TPL_KEY = 'althist-templates-v1', SHARE_KEY = 'althist-share-v1';
   const persistCustom = () => { if (!saveJson(TPL_KEY, world.scenarios.filter((x) => x.custom && x.id !== '__draft__'))) opts.onStatus('템플릿 저장 공간이 부족합니다. 파일로 내보내 두세요.', true); };
-  const addCustom = (sc: Scenario) => { world.scenarios = [...world.scenarios.filter((x) => x.id !== sc.id), sc]; persistCustom(); renderTemplates(); };
+  const addCustom = (sc: Scenario) => { thumbs.forget(sc.id); world.scenarios = [...world.scenarios.filter((x) => x.id !== sc.id), sc]; persistCustom(); renderTemplates(); };
   const shareCfg = (): ShareConfig => ({ ...DEFAULT_SHARE, ...(loadJson<Partial<ShareConfig>>(SHARE_KEY) ?? {}) });
   const importRaw = (raw: unknown): Scenario | null => {
     const r = sanitizeScenario(raw, world, new Set(world.scenarios.map((x) => x.id)));

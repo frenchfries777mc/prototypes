@@ -187,6 +187,9 @@ export class MapView {
     for (const [id, e] of this.markers) if (!alive.has(id)) { e.m.remove(); this.markers.delete(id); }
   }
 
+  /** 주별 지오메트리(경위도) — 템플릿 썸네일용. 주 순서는 World.provinces 와 같다. */
+  geometries(): ({ type: string; coordinates: unknown } | null)[] { return this.fc.features.map((f) => f.geometry as unknown as { type: string; coordinates: unknown } | null); }
+
   /** 주 ID -> 경계 상자(경도 최소, 위도 최소, 경도 최대, 위도 최대). */
   boxOf(id: ProvinceId): BBox | undefined { return this.bbox.get(id); }
   /** 주의 중심(마커 배치용). */
