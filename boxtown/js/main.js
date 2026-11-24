@@ -180,7 +180,8 @@ async function boot() {
   health = new Health({ player, jobs, garage, residents, police, interiors, weapons });
   const train = new Train({ scene, player, jobs, assets, garage, sfx: weapons.sfx, lazyCollider: town.lazyCollider, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   train0 = train;
-  const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, count: lite ? 14 : 34, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, count: lite ? 20 : 53, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
+  jobs.weapons = weapons;
   weapons.traffic = traffic; traffic0 = traffic;
   // 배경 음악: 수배 > 내 집 > 건물 안 > 배 위 > 시골 지역 > 다른 섬 > 시작 대륙
   const RURAL = ['farm', 'wind', 'camp', 'lake', 'lookout', 'mill', 'cabinA', 'cabinB', 'cabinC', 'cabinD', 'woods'].map((k) => SITES[k]).filter(Boolean);
