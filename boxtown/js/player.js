@@ -371,6 +371,7 @@ export class Player {
     inp.lookX = inp.lookY = 0;
     // 시점은 입력을 살짝 늦게 따라가서 덜 딱딱하게 돈다(순간 이동 직후에는 바로 맞춘다).
     if (this.snap) { this.camYaw = this.yaw; this.camPitch = this.pitch; }
+    if (this.riding && this.riding.seatYaw !== undefined && !this.freeCam) return; // 기차를 탔을 때 카메라는 syncRide()가 열차 위치에 맞춰 정한다
     let dy = (this.yaw - this.camYaw) % (Math.PI * 2);
     if (dy > Math.PI) dy -= Math.PI * 2; if (dy < -Math.PI) dy += Math.PI * 2;
     this.camYaw += dy * (1 - Math.exp(-(first ? 30 : 18) * dt));
@@ -416,6 +417,19 @@ export class Player {
     this.curDist = damp(this.curDist, want, want < this.curDist ? 22 : 4, dt); // 벽에 막히면 빠르게, 풀리면 천천히
     this.cam.position.copyFrom(t).addInPlace(dir.scale(this.curDist));
     this.cam.setTarget(t);
+  }
+
+  // 기차에 탄 동안의 시점: 열차 뒤쪽 위에서 열차를 내려다보는 고정 시점. 열차를 움직인 직후(같은 프레임 안)에 불러서 흔들리지 않는다.
+  // 마우스로 열차 둘레를 돌아볼 수 있다(0이 열차 뒤쪽).
+  syncRide() {
+    const T = this.riding;
+    if (!T || T.seatYaw === undefined || this.freeCam) return;
+    this.pitch = clamp(this.pitch, 0.05, 1.25);
+    const yaw = T.seatYaw + this.yaw, cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const tgt = new B.Vector3(T.seat.x, T.seat.y + 1.6, T.seat.z);
+    this.cam.position.set(tgt.x - Math.sin(yaw) * cp * 24, tgt.y + sp * 24, tgt.z - Math.cos(yaw) * cp * 24);
+    this.cam.setTarget(tgt);
+    this.target.copyFrom(tgt);
   }
 
   // 운전 중 카메라: 차 뒤를 따라가고, 마우스를 놓고 달리면 진행 방향으로 돌아온다.

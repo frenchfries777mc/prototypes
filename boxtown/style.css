@@ -323,3 +323,4 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 @media (max-height: 460px) { #lobby .note { display: none; } #lobby h1 { -webkit-text-stroke-width: 4px; } #lobby .money { font-size: 13px; padding: 5px 10px; } #lobby .ticker { font-size: 11px; padding-top: 5px; padding-bottom: calc(5px + env(safe-area-inset-bottom)); } }
 @media (max-width: 520px) { #lobby .left { width: min(300px, 78vw); } #lobby .n2 { display: none; } #lobby .n1 { width: min(200px, 52vw); right: 10px; font-size: 11px; top: 56px; } #lobby nav { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { #lobby .left { width: min(240px, 62vw); } #lobby nav button { font-size: 14px; padding: 7px 12px; } }
+#lobby.still { background-size: cover; background-position: center; background-repeat: no-repeat; }

@@ -267,28 +267,30 @@ async function boot() {
     dropShadow: (ms) => { for (const o of ms) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); } } });
   weapons.net = net; netRef = net;
   wardrobe.onChange = () => net.sendLook();
-  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality: quality0, net, dealer });
+  // 그리기 반복은 로비가 멈춰 세울 수 있게 이름을 붙여 둔다(로비에서 화면을 사진 한 장으로 얼리면 그리는 일이 0이 된다).
+  const renderFrame = () => scene.render();
+  const loop = { run: () => engine.runRenderLoop(renderFrame), stop: () => engine.stopRenderLoop(renderFrame) };
+  B.Scene.MaxDeltaTime = 100; // 멈췄다가 다시 돌 때 첫 프레임이 물리를 한꺼번에 돌리지 않게
+  const lobby = new Lobby({ player, jobs, wardrobe, music, interiors, input, quality: quality0, net, dealer, loop, engine });
   setupChat(net, input, lobby);
   stats.onReward = (n) => { jobs.money += n; try { localStorage.setItem('boxtown.money', String(jobs.money)); } catch (e) { /* 무시 */ } jobs.renderMoney(); };
   let useLabel = '', quitT = 0, carShown = -1;
   const carHp = $('carHp');
   $('btnView').addEventListener('click', () => player.nextView());
-  // 로비가 떠 있는 동안은 게임을 멈춘 것과 같다: 무거운 것(주민, 차, 기차)은 1초에 20번만 돌리고, 일·경찰·체력·화면 안내는 건너뛴다.
-  let lobbyAcc = 0, lobbyWas = false;
+  // 로비가 떠 있는 동안은 게임 규칙(일·경찰·체력·화면 안내)을 건너뛴다. 무거운 것은 프레임마다 고르게 돌린다
+  // (몇 프레임씩 몰아서 돌리면 그 프레임만 길어지고 움직임도 끊겨 보인다).
   const tick = (dt) => {
     const inLobby = lobby.open;
-    if (inLobby !== lobbyWas) { lobbyWas = inLobby; csm.getShadowMap().refreshRate = inLobby ? 3 : 1; lobbyAcc = 0; } // 로비에서는 그림자를 3프레임에 한 번만 다시 그린다
     town.update(dt);
     cullT -= dt;
-    if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
+    if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = inLobby ? 1.5 : 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
-    let hd = dt;
-    if (inLobby) { lobbyAcc += dt; hd = lobbyAcc; }
-    if (!inLobby || lobbyAcc >= 0.05) {
-    if (inLobby) lobbyAcc = 0;
+    const hd = dt;
+    {
     residents.update(hd, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
     train.update(hd);
+    player.syncRide(); // 열차가 움직인 직후에 카메라를 맞춘다(한 프레임 늦으면 흔들려 보인다)
     traffic.blocked = train.closed;
     traffic.update(hd);
     }
@@ -370,14 +372,14 @@ async function boot() {
     engine.getDeltaTime = real;
     return { feet: player.feet.asArray().map((v) => +v.toFixed(2)), maxY: +maxY.toFixed(2), grounded: player.grounded };
   };
-  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag, base };
+  window.__game = { engine, scene, player, assets, height, groundY, env, csm, pipe, sim, input, garage, residents, jobs, town, map, timing, weapons, police, interiors, health, train, traffic, music, wardrobe, lobby, stats, net, dealer, heist, furnish, daynight, bag, base, loop };
   mark('map+fx');
   setProgress(0.97, '마무리하는 중'); await pause();
   // 셰이더나 그림 하나가 준비되지 않아도 끝없이 기다리지 않는다.
   await Promise.race([scene.whenReadyAsync(), new Promise((r) => setTimeout(r, 15000))]);
   mark('shaders');
   timing.total = Math.round(performance.now() - t0);
-  engine.runRenderLoop(() => scene.render());
+  loop.run();
   // 게임이 뜬 뒤에 마저 하는 일: 먼 땅의 충돌 처리를 프레임마다 몇 개씩, 그다음 화면 효과.
   // 그 사이에 먼 곳의 차가 땅 밑으로 떨어지지 않도록, 충돌이 준비될 때까지 붙들어 둔다.
   { const f = player.feet; for (let k = farChunks.length - 1; k >= 0; k--) { const bb = farChunks[k].getBoundingInfo().boundingBox.centerWorld; if (Math.hypot(bb.x - f.x, bb.z - f.z) < 300) solid(farChunks.splice(k, 1)[0]); } } // 내 집 앞에서 시작하는 경우
@@ -392,6 +394,7 @@ async function boot() {
     for (const c of heldCars) if (!c.netHeld) c.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
     for (const d of heldProps) d.agg.body.setMotionType(B.PhysicsMotionType.DYNAMIC);
     setTimeout(addFx, 1500);
+    setTimeout(() => { window.__game.settled = true; }, 2300); // 뒤로 미룬 준비가 끝났다(로비가 이때 화면을 얼린다)
   }, 30);
   setProgress(1, '준비 완료');
   $('loading').classList.add('done');

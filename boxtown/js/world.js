@@ -140,7 +140,7 @@ ROADS.push(
   { type: 'dirt', noTraffic: true, pts: [[-770, -60], [-740, -30], [-690, -40], [-660, -90], [-640, -150], [-600, -170]] }, // 고요숲 섬
   { type: 'dirt', noTraffic: true, pts: [[-640, 1010], [-600, 1010], [-570, 1010], [-530, 1000], [-490, 980]] }, // 풍차섬
   { type: 'dirt', noTraffic: true, pts: [[985, 230], [985, 290], [975, 360]] }, // 쌍둥이섬
-  { type: 'dirt', noTraffic: true, pts: [[560, -660], [600, -660], [640, -650]] }, // 야자섬
+  { type: 'dirt', noTraffic: true, pts: [[560, -660], [575, -688], [606, -694], [640, -664]] }, // 야자섬
   { type: 'dirt', noTraffic: true, pts: [[-80, -620], [-30, -620], [20, -615]] }, // 모래섬
 );
 
@@ -177,7 +177,7 @@ export const DISTRICT_KEYS = [
   ...'abcdefghijkmnoqst'.split('').map((c) => 'suburban/building-type-' + c),
   ...'abcefglmqrsk'.split('').map((c) => 'industrial/building-' + c),
   'industrial/chimney-large', 'industrial/chimney-medium', 'industrial/detail-tank-large', 'industrial/water-tower', 'industrial/windmill',
-  'industrial/solar-panel-landscape-group', 'industrial/shipping-container-a', 'industrial/shipping-container-b', 'industrial/shipping-container-c',
+  'industrial/shipping-container-a', 'industrial/shipping-container-b', 'industrial/shipping-container-c',
   'commercial/building-n', 'commercial/building-skyscraper-a', 'commercial/building-e', 'commercial/building-c', 'commercial/building-h',
   'commercial/detail-parasol-a', 'commercial/detail-parasol-b',
   'nature/tent_detailedOpen', 'nature/tent_smallOpen', 'nature/tent_detailedClosed', 'nature/campfire_stones', 'nature/log_stack', 'nature/log_stackLarge',
