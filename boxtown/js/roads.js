@@ -1,6 +1,6 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
-import { ROADS, JUNCTIONS, STATIONS } from './world.js';
+import { ROADS, JUNCTIONS, STATIONS, SITES } from './world.js';
 import { baseHeight, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
@@ -83,7 +83,8 @@ for (const r of ROADS) {
     }
     return y;
   };
-  const y0 = r.pin !== undefined ? r.pin : joinY(pts[0]), y1 = joinY(pts[pts.length - 1]);
+  const pinY = r.pinSite ? SITES[r.pinSite].y : r.pin;
+  const y0 = pinY !== undefined ? pinY : joinY(pts[0]), y1 = joinY(pts[pts.length - 1]);
   pts.forEach((p) => {
     // 만나는 곳의 높이를 같게 맞춘다(갈림길에 턱이 생기지 않게).
     if (y0 !== null) p.y = lerp(y0, p.y, smoothstep(5, 66, p.s));
@@ -95,7 +96,7 @@ for (const r of ROADS) {
     const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     p.tx = (b.x - a.x) / l; p.tz = (b.z - a.z) / l;
   });
-  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined });
+  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined, noTraffic: !!r.noTraffic });
 }
 
 // 끝과 끝이 맞닿은 길은 맞닿는 단면의 방향을 똑같이 맞춘다(띠의 끝 모서리가 정확히 겹치게).
@@ -254,7 +255,7 @@ setRoadMod((x, z, h) => {
   // 역 터를 먼저 다지고, 그 위에 길을 낸다(역 옆으로 내려가는 선로가 땅에 묻히지 않게).
   for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 26) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 26, d)); }
   const flat = n.half + 6;
-  return lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 30, n.d)); // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
+  return lerp(h, n.y + 0.055, 1 - smoothstep(flat, flat + 30, n.d)); // 아스팔트 윗면(+0.1) 바로 밑: 발이 묻히지 않고, 땅이 길 위로 삐져나오지도 않는다 // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
 });
 
 // h: { scene, addBox, casters }

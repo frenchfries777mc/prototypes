@@ -9,6 +9,8 @@ import { Character, randomLook } from './character.js';
 const B = window.BABYLON;
 
 const LOT = [[123.7, 20, 0], [123.7, 27, 0], [123.7, 34, 0]]; // 평소 세워 두는 자리(동쪽 세로길 가)
+const HOLD = [0, 15, 60, 90]; // 단계별로 수배가 최소한 유지되는 시간(초)
+const ESCALATE = [0, 50, 75]; // 1·2단계에서 이만큼 못 잡으면 다음 단계로 오른다(초)
 const LOSE_DIST = 150; // 이보다 멀어지면 따돌리기 시작
 const $ = (id) => document.getElementById(id);
 const isRoad = (cx, cz) => { const c = GRID[cz] && GRID[cz][cx]; return c === '#' || c === 'x'; };
@@ -83,6 +85,8 @@ export class Police {
     this.heat = Math.min(260, this.heat + amount);
     this.lostT = 0;
     this.level = this.heat >= 170 ? 3 : this.heat >= 90 ? 2 : this.heat >= 28 ? 1 : 0;
+    // 단계가 오르면 그 단계의 수배가 한동안(HOLD초) 풀리지 않고, 못 잡고 시간이 흐르면 다음 단계로 오른다.
+    if (this.level > was) { this.holdT = HOLD[this.level]; this.escT = 0; }
     if (this.level > was) this.jobs.toast(was === 0 ? '경찰이 출동했어요! 달아나세요' : '수배 단계가 올랐어요!');
   }
 
@@ -114,6 +118,53 @@ export class Police {
     if (!u || !this.dispatch(u, c.pos)) return false;
     u.quarry = c; u.quarryT = 45;
     return true;
+  }
+  // ----- 경찰 헬리콥터: 별 셋이 되면 나타나 머리 위를 맴돌며 미사일을 쏜다 -----
+  attachHeli(heli, weapons) {
+    this.heli = heli; this.weapons = weapons; heli.police = true;
+    heli.ai = (dt) => this.heliDrive(heli, dt);
+    this.hs = { active: false, stowed: false, fireT: 5 };
+    this.stowHeli();
+  }
+  stowHeli() {
+    const h = this.heli;
+    h.home.pos.set(-1000, 150, -800); h.root.setEnabled(false);
+    h.reset(-1000, 150, -800, null);
+    h.body.setMotionType(B.PhysicsMotionType.STATIC);
+    this.hs.active = false; this.hs.stowed = true;
+  }
+  callHeli() {
+    const h = this.heli, p = this.player.feet;
+    h.body.setMotionType(B.PhysicsMotionType.DYNAMIC); h.root.setEnabled(true); h.hp = 100;
+    const a = Math.random() * 6.28, x = p.x + Math.sin(a) * 230, z = p.z + Math.cos(a) * 230, y = Math.max(this.height(x, z), 0) + 50;
+    h.reset(x, y, z, Math.atan2(p.x - x, p.z - z)); h.rpm = 1;
+    this.hs.active = true; this.hs.stowed = false; this.hs.fireT = 6;
+  }
+  heliDrive(h, dt) {
+    if (!this.hs.active) return null;
+    const P = this.player, t = P.vehicle ? P.vehicle.pos : P.feet;
+    const dx = t.x - h.pos.x, dz = t.z - h.pos.z, dist = Math.hypot(dx, dz), diff = angDiff(h.yaw, Math.atan2(dx, dz));
+    // 산에 부딪히지 않게: 가는 쪽 30m 앞과 바로 아래 땅보다 14m 위를 지난다.
+    const ground = Math.max(this.height(h.pos.x + h.fwd.x * 30, h.pos.z + h.fwd.z * 30), this.height(h.pos.x, h.pos.z));
+    const alt = Math.max(this.height(t.x, t.z) + (dist > 70 ? 32 : 22), ground + 14), err = alt - h.pos.y;
+    let th = dist > 100 ? 1 : dist > 55 ? 0.5 : dist < 28 ? -0.5 : 0;
+    if (err > 12) th *= 0.3; // 고도가 한참 모자라면 먼저 오른다
+    this.hs.fireT -= dt;
+    if (this.hs.fireT <= 0 && dist < 150 && dist > 22 && Math.abs(diff) < 0.6 && !P.inside && !P.riding) { this.hs.fireT = 3.8 + Math.random() * 1.6; this.fireMissile(h); }
+    return { throttle: th, steer: Math.max(-1, Math.min(1, diff * 2.2)), lift: err > 4 ? 1 : err < -4 ? -1 : 0, handbrake: false };
+  }
+  fireMissile(h) {
+    const P = this.player, tgt = () => (P.vehicle ? { x: P.vehicle.pos.x, y: P.vehicle.pos.y + 0.4, z: P.vehicle.pos.z } : { x: P.feet.x, y: P.feet.y + 0.2, z: P.feet.z });
+    this.hs.side = -(this.hs.side || 1);
+    const m = new B.Vector3(h.pos.x + h.right.x * 1.3 * this.hs.side + h.fwd.x * 2.2, h.pos.y - 0.3, h.pos.z + h.right.z * 1.3 * this.hs.side + h.fwd.z * 2.2), t = tgt();
+    const dir = new B.Vector3(t.x - m.x + (Math.random() - 0.5) * 6, t.y - m.y, t.z - m.z + (Math.random() - 0.5) * 6).normalize();
+    this.weapons.missile(m, dir, h, tgt);
+  }
+  manageHeli() {
+    if (!this.heli) return;
+    if (this.level >= 3 && !this.hs.active && !this.heli.dead) this.callHeli();
+    else if (this.level < 3 && this.hs.active) this.stowHeli();
+    else if (!this.hs.active && !this.hs.stowed && !this.heli.dead) this.stowHeli();
   }
   // 쉬는 경찰차는 길가에 세워 두지 않고 먼 곳에 감춰 둔다(출동할 때만 길 위에 나타난다).
   stow(u) {
@@ -204,15 +255,16 @@ export class Police {
     this.clear();
     this.jobs.toast(fine > 0 ? `붙잡혔어요. 벌금 ${fine.toLocaleString('ko-KR')}원` : '붙잡혔어요. 다음엔 조심하세요');
   }
-  clear() { this.heat = 0; this.level = 0; this.lostT = 0; this.catchT = 0; this.units.forEach((u) => this.recall(u)); }
+  clear() { if (this.heli && this.hs.active) this.stowHeli(); this.heat = 0; this.level = 0; this.lostT = 0; this.catchT = 0; this.holdT = 0; this.escT = 0; this.units.forEach((u) => this.recall(u)); }
 
   // 지도에 찍을 경찰차 위치
-  marks() { return this.units.filter((u) => u.active && !u.car.dead).map((u) => ({ x: u.car.pos.x, z: u.car.pos.z })); }
+  marks() { const m = this.units.filter((u) => u.active && !u.car.dead).map((u) => ({ x: u.car.pos.x, z: u.car.pos.z })); if (this.heli && this.hs.active && !this.heli.dead) m.push({ x: this.heli.pos.x, z: this.heli.pos.z }); return m; }
 
   update(dt) {
     const P = this.player, me = P.vehicle ? P.vehicle.pos : P.feet, el = $('wanted');
     this.t += dt;
     for (const u of this.units) if (!u.active && !u.car.dead && !u.stowed) this.stow(u); // 처음과, 터졌다가 되살아난 차도 감춘다
+    this.manageHeli();
     // 뺑소니 차 쫓기(수배와 상관없이 돌아간다)
     let chasing = false;
     for (const u of this.units) {
@@ -245,8 +297,14 @@ export class Police {
     }
     // 따돌리기: 멀리 떨어지거나, 건물 안에 숨거나, 경찰이 올 수 없는 곳이면 수배가 식는다.
     this.hotT = Math.max(0, (this.hotT || 0) - dt); // 은행을 턴 직후에는 숨어도 식지 않는다
-    const hidden = !P.jailAlarm && this.hotT <= 0 && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중에는 식지 않는다
+    this.holdT = Math.max(0, (this.holdT || 0) - dt);
+    const hidden = !P.jailAlarm && this.hotT <= 0 && this.holdT <= 0 && (P.inside || nearest > LOSE_DIST); // 탈옥 경보 중이거나 수배 유지 시간 안에는 식지 않는다
     if (hidden) { this.lostT += dt; if (this.lostT > 5) this.heat -= dt * 22; } else this.lostT = 0;
+    // 못 잡으면 단계가 오른다.
+    if (this.level >= 1 && this.level <= 2 && !P.jailed) {
+      this.escT = (this.escT || 0) + dt;
+      if (this.escT >= ESCALATE[this.level]) { this.report((this.level === 1 ? 90 : 170) - this.heat + 1); this.escT = 0; }
+    } else this.escT = 0;
     if (this.heat <= 0) { stats.bump('escapes'); this.clear(); el.hidden = true; this.siren(false); this.jobs.toast('경찰을 따돌렸어요!', true); return; }
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면
     const mySpeed = P.vehicle ? Math.abs(P.vehicle.speed) : Math.hypot(P.vel.x, P.vel.z);
