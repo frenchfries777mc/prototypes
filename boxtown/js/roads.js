@@ -95,7 +95,7 @@ for (const r of ROADS) {
     const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     p.tx = (b.x - a.x) / l; p.tz = (b.z - a.z) / l;
   });
-  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined });
+  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined, noTraffic: !!r.noTraffic });
 }
 
 // 끝과 끝이 맞닿은 길은 맞닿는 단면의 방향을 똑같이 맞춘다(띠의 끝 모서리가 정확히 겹치게).
