@@ -255,6 +255,15 @@ export class Traffic {
 
       // 플레이어의 차가 가까이 오면 진짜 차로 바꿔서 부딪힐 수 있게 한다.
       if (P.vehicle && far < 6.2 + Math.abs(P.vehicle.speed) * 0.25) { this.convert(c); continue; }
+      // 경찰차(와 다른 사람이 모는 차, 일차, 내 차)가 가까이 오면 주민 차도 진짜 차로 바꿔서, 서로 부딪히고 밀리게 한다(전에는 그냥 통과했다).
+      let touched = false;
+      for (const g of this.garage.cars) {
+        if (g.isBoat || g.dead || g === P.vehicle || (!g.police && !g.mine && !g.jobCar && !g.temp && !g.netHeld)) continue;
+        if (Math.abs(g.pos.y - c.pos.y) > 4) continue;
+        const dx = g.pos.x - c.pos.x, dz = g.pos.z - c.pos.z;
+        if (Math.abs(dx) < 14 && Math.abs(dz) < 14 && Math.hypot(dx, dz) < 6.5 + Math.abs(g.speed || 0) * 0.3) { touched = true; break; }
+      }
+      if (touched) { this.convert(c); continue; }
       // 걸어가다 치이면 다친다.
       if (!P.vehicle && !P.inside && this.hitCd <= 0 && c.v > 4 && far < 4) {
         const dx = me.x - c.pos.x, dz = me.z - c.pos.z, f = dx * c.fx + dz * c.fz, lat = dx * c.fz - dz * c.fx;

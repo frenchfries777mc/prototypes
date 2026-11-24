@@ -133,19 +133,27 @@ export class Jobs {
     if (this.weapons) this.weapons.byBody.set(v.body, v);
     return v;
   }
-  // 피자 트럭: 지붕 위 커다란 피자 간판과 옆면 광고(그냥 배달 트럭이 쓰레기차처럼 보이지 않게)
+  // 옛날식 피자 배달차: 승용차 지붕에 둥근 피자 간판을 얹고, 옆면에 붉은 줄무늬와 "모서리 피자" 광고를 붙인다.
   decoratePizza(v) {
-    const scene = this.scene, mk = (w, h, d, x, y, z, hex, glow) => { const b = B.MeshBuilder.CreateBox('pizzaTruck', { width: w, height: h, depth: d }, scene); b.parent = v.root; b.position.set(x, y, z); b.material = flatMat('pt_' + hex, hex, scene, glow ? { emissive: hex } : undefined); b.isPickable = false; return b; };
-    const top = v.height + 0.02, cz = v.zc - v.length * 0.2;
-    mk(0.22, 0.7, 0.22, 0, top + 0.35, cz, '#34456f'); // 받침
-    mk(1.9, 0.2, 1.9, 0, top + 0.8, cz, '#e8b04a'); mk(1.62, 0.24, 1.62, 0, top + 0.82, cz, '#d9473c'); mk(1.4, 0.26, 1.4, 0, top + 0.84, cz, '#ffd35a');
-    for (const [px, pz] of [[-0.4, -0.3], [0.45, -0.2], [-0.1, 0.45], [0.2, 0.1], [-0.5, 0.35]]) mk(0.32, 0.28, 0.32, px, top + 0.86, cz + pz, '#b8322a');
-    const tex = new B.DynamicTexture('pizzaTruckAd', { width: 512, height: 256 }, scene, true), c = tex.getContext();
-    c.fillStyle = '#d9473c'; c.fillRect(0, 0, 512, 256); c.fillStyle = '#fff3d6'; c.fillRect(14, 14, 484, 228);
-    c.fillStyle = '#d9473c'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '900 92px "Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif'; c.fillText('모서리 피자', 256, 100);
-    c.font = '800 54px "Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif'; c.fillStyle = '#34456f'; c.fillText('🍕 따끈 배달 🍕', 256, 190); tex.update();
-    const m = new B.StandardMaterial('pizzaTruckAdMat', scene); m.diffuseTexture = tex; m.emissiveTexture = tex; m.emissiveColor = new B.Color3(0.5, 0.5, 0.5); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
-    for (const s of [-1, 1]) { const p = B.MeshBuilder.CreatePlane('pizzaTruckAdPlane', { width: v.length * 0.5, height: v.height * 0.5 }, scene); p.parent = v.root; p.position.set(s * (v.width / 2 + 0.03), v.height * 0.58, cz - v.length * 0.02); p.rotation.y = -s * Math.PI / 2; p.material = m; p.isPickable = false; }
+    const scene = this.scene;
+    v.pizzaCar = true;
+    const mk = (w, h, d, x, y, z, hex, glow) => { const b = B.MeshBuilder.CreateBox('pizzaCar', { width: w, height: h, depth: d }, scene); b.parent = v.root; b.position.set(x, y, z); b.material = flatMat('pc_' + hex, hex, scene, glow ? { emissive: hex } : undefined); b.isPickable = false; return b; };
+    const cyl = (dia, h, x, y, z, hex, tilt = 0) => { const b = B.MeshBuilder.CreateCylinder('pizzaCar', { diameter: dia, height: h, tessellation: 24 }, scene); b.parent = v.root; b.position.set(x, y, z); b.rotation.x = tilt; b.material = flatMat('pc_' + hex, hex, scene); b.isPickable = false; return b; };
+    const top = v.height + 0.02, cz = v.zc - v.length * 0.05, W = v.width, L = v.length, H = v.height;
+    // 지붕 위 피자: 받침 두 개, 크러스트, 치즈, 페퍼로니, 빠진 한 조각
+    mk(0.12, 0.5, 0.12, -0.3, top + 0.25, cz, '#34456f'); mk(0.12, 0.5, 0.12, 0.3, top + 0.25, cz, '#34456f');
+    const tilt = -0.3, y0 = top + 0.62;
+    cyl(1.55, 0.16, 0, y0, cz, '#e0a24a', Math.PI / 2 + tilt); cyl(1.36, 0.2, 0, y0, cz, '#ffd35a', Math.PI / 2 + tilt);
+    for (const [px, pz] of [[-0.35, 0.25], [0.3, 0.3], [-0.05, -0.1], [0.4, -0.2], [-0.45, -0.3], [0.0, 0.5]]) { const c = cyl(0.26, 0.24, px, y0 + pz * 0.2 * -tilt * 0 + pz * 0.0, cz, '#b8322a', Math.PI / 2 + tilt); c.position.y = y0 + pz * 0.55 * Math.sin(-tilt) * 0 + pz * 0.62; c.position.z = cz + px * 0.0 + 0; c.position.x = px; }
+    mk(0.08, 0.08, 0.7, 0, y0 + 0.32, cz + 0.2, '#fff3d6', true); // 간판 불빛
+    // 옆면: 붉은 줄무늬 두 줄
+    for (const s of [-1, 1]) { mk(0.04, 0.12, L * 0.8, s * (W / 2 + 0.005), H * 0.44, v.zc, '#d9473c'); mk(0.04, 0.05, L * 0.8, s * (W / 2 + 0.005), H * 0.34, v.zc, '#fff3d6'); }
+    // 문짝 광고판
+    const tex = new B.DynamicTexture('pizzaCarAd', { width: 512, height: 192 }, scene, true), c = tex.getContext();
+    c.fillStyle = '#d9473c'; c.fillRect(0, 0, 512, 192); c.fillStyle = '#fff3d6'; c.fillRect(10, 10, 492, 172);
+    c.fillStyle = '#d9473c'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '900 92px "Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif'; c.fillText('모서리 피자', 256, 98); tex.update();
+    const m = new B.StandardMaterial('pizzaCarAdMat', scene); m.diffuseTexture = tex; m.emissiveTexture = tex; m.emissiveColor = new B.Color3(0.45, 0.45, 0.45); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
+    for (const s of [-1, 1]) { const p = B.MeshBuilder.CreatePlane('pizzaCarAdPlane', { width: L * 0.34, height: H * 0.22 }, scene); p.parent = v.root; p.position.set(s * (W / 2 + 0.03), H * 0.62, v.zc - L * 0.02); p.rotation.y = -s * Math.PI / 2; p.material = m; p.isPickable = false; }
   }
   // 일이 끝나면 내가 타고 있지 않은 임시 일차는 치운다.
   dropJobCars() {
@@ -233,8 +241,8 @@ const PIZZA_ZONES = [
   { id: 'island', name: '갈매기섬', w: 1.6, areas: ['gull'] }, { id: 'outskirts', name: '외곽 마을', w: 1.8, areas: ['farm', 'lake', 'resort', 'camp'] },
 ];
 function pizzaJob(J, site) {
-  // 피자는 가게 앞 배달 트럭으로 나른다.
-  const isVan = (v) => v.key === 'cars/delivery';
+  // 피자는 가게 앞 피자 배달차로 나른다.
+  const isVan = (v) => !!v.pizzaCar; // 피자 배달차(승용차에 간판을 단 것)
   const shop = { x: 43.2, z: 8.8 }; // 가게 앞 찻길
   let state = 'get', order = null, stop = 0, time = 0, offers = [], shown = false, lastCar = null;
   const near = (p, r) => dist2(J.pos, p.x, p.z) < r;
@@ -288,20 +296,20 @@ function pizzaJob(J, site) {
     update(dt) {
       const inVan = inVehicle(J, isVan);
       if (state === 'get') {
-        J.panel('피자 배달', '배달 트럭에 타세요', 'E로 타고 내립니다');
+        J.panel('피자 배달', '피자 배달차에 타세요', 'E로 타고 내립니다');
         const t = J.fetchVehicle(JOB_CARS.pizza, isVan);
-        J.setTarget(t.pos.x, t.pos.z, '배달 트럭', t.pos.y);
+        J.setTarget(t.pos.x, t.pos.z, '피자 배달차', t.pos.y);
         if (inVan) { state = 'board'; shown = false; J.target = null; }
       } else if (state === 'board') {
         // 가게 앞에 서면 주문 창이 뜬다(닫으면 E로 다시 연다).
-        J.panel('피자 배달', inVan ? (near(shop, 16) ? '주문 창에서 주문을 고르세요' : '가게 앞으로 가서 주문을 받으세요') : '배달 트럭에 타세요', inVan && near(shop, 16) ? 'E로 주문 창을 열어요' : '');
+        J.panel('피자 배달', inVan ? (near(shop, 16) ? '주문 창에서 주문을 고르세요' : '가게 앞으로 가서 주문을 받으세요') : '피자 배달차에 타세요', inVan && near(shop, 16) ? 'E로 주문 창을 열어요' : '');
         if (inVan && !near(shop, 16)) J.setTarget(shop.x, shop.z, '피자 가게', 0.2); else J.target = null;
         if (inVan && near(shop, 16) && Math.abs(J.player.vehicle.speed) < 2.5 && !shown && !Panel.open) { shown = true; board(); }
         if (!near(shop, 40)) shown = false;
       } else if (state === 'deliver') {
         time -= dt;
         const d = order.route[stop];
-        J.panel('피자 배달', inVan ? `${stop + 1}/${order.route.length}번째 집 앞에 트럭을 세우세요` : '배달 트럭에 다시 타세요', (time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (보수가 줄어요)') + ` · 예상 ${won(order.pay)}원`);
+        J.panel('피자 배달', inVan ? `${stop + 1}/${order.route.length}번째 집 앞에 차를 세우세요` : '피자 배달차에 다시 타세요', (time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (보수가 줄어요)') + ` · 예상 ${won(order.pay)}원`);
         if (stoppedAt(J, d, 16, isVan)) {
           stop++;
           if (stop >= order.route.length) {
@@ -311,7 +319,7 @@ function pizzaJob(J, site) {
           } else aim();
         }
       } else {
-        J.panel('피자 배달', '가게 앞으로 돌아가 다음 주문을 받으세요', inVan ? '' : '배달 트럭에 다시 타세요');
+        J.panel('피자 배달', '가게 앞으로 돌아가 다음 주문을 받으세요', inVan ? '' : '피자 배달차에 다시 타세요');
         if (stoppedAt(J, shop, 16, isVan)) { state = 'board'; shown = false; J.target = null; }
       }
     },

@@ -1,6 +1,6 @@
 // 규칙 기반 자연물 배치: 높이·경사·해안 거리·섬 성격을 보고 나무, 야자, 바위, 풀, 꽃을 세계 전체에 뿌린다.
 import { height, slope, coast, islandAt, SEA, WORLD } from './terrain.js';
-import { roadDist } from './roads.js';
+import { roadEdge } from './roads.js';
 import { SITES } from './world.js';
 import { BUILDINGS, CELL, JOB_SITES } from './mapdata.js';
 import { rng, makeNoise } from './util.js';
@@ -32,7 +32,7 @@ export function scatterNature(assets, addBox) {
     if (kd < 32) continue;
     const h = height(x, z);
     if (h < SEA + 3.4 || h > 98 || slope(x, z) > 0.62) continue;
-    if (inTown(x, z, 3) || nearBuilding(x, z, 2) || roadDist(x, z) < 8.5 || inSite(x, z, 3)) continue;
+    if (inTown(x, z, 3) || nearBuilding(x, z, 2) || roadEdge(x, z) < 2.5 || inSite(x, z, 3)) continue;
     const isl = islandAt(x, z);
     if (!isl.forest) continue;
     const dens = noise.fbm(x * 0.006, z * 0.006, 3);
@@ -50,7 +50,7 @@ export function scatterNature(assets, addBox) {
     const kd = coast(x, z);
     if (kd < 7 || kd > 30 || z > 700) continue; // 북쪽 해안에는 야자가 없다
     const h = height(x, z);
-    if (h < SEA + 1.1 || h > SEA + 5 || slope(x, z) > 0.38 || inTown(x, z, 2) || roadDist(x, z) < 7) continue;
+    if (h < SEA + 1.1 || h > SEA + 5 || slope(x, z) > 0.38 || inTown(x, z, 2) || roadEdge(x, z) < 2) continue;
     const key = r.pick(palms);
     assets.place(key, x, h - 0.2, z, r() * 6.28, key.startsWith('nature') ? r.range(1.2, 1.9) : r.range(1.5, 2.4));
     addBox(x, h + 2, z, 0.7, 4, 0.7);
@@ -63,7 +63,7 @@ export function scatterNature(assets, addBox) {
     const kd = coast(x, z);
     if (kd < -6) continue;
     const h = height(x, z), sl = slope(x, z);
-    if (h < SEA - 0.6 || inTown(x, z, 4) || nearBuilding(x, z, 2) || roadDist(x, z) < 8 || inSite(x, z, 0)) continue;
+    if (h < SEA - 0.6 || inTown(x, z, 4) || nearBuilding(x, z, 2) || roadEdge(x, z) < 2 || inSite(x, z, 0)) continue;
     if (!(sl > 0.5 || (kd < 14 && r() < 0.12) || r() < 0.012)) continue;
     const key = r.pick(rocks), s = r.range(0.7, h > 40 ? 3.2 : 2);
     assets.place(key, x, h - 0.3, z, r() * 6.28, s);
@@ -78,7 +78,7 @@ export function scatterNature(assets, addBox) {
     const [x, z] = rnd();
     if (coast(x, z) < 34) continue;
     const h = height(x, z);
-    if (h < SEA + 3.3 || h > 92 || slope(x, z) > 0.6 || inTown(x, z, 0.5) || nearBuilding(x, z, -4) || roadDist(x, z) < 5.5) continue;
+    if (h < SEA + 3.3 || h > 92 || slope(x, z) > 0.6 || inTown(x, z, 0.5) || nearBuilding(x, z, -4) || roadEdge(x, z) < 1.4) continue;
     const k = r.pick(small);
     assets.place(k, x, h - 0.05, z, r() * 6.28, r.range(0.9, 1.9) * SMALL(k));
     n++;
@@ -92,7 +92,7 @@ export function scatterNature(assets, addBox) {
     const kind = r.pick(flowers);
     for (let i = 0; i < 9; i++) {
       const x = cx + r.range(-4, 4), z = cz + r.range(-4, 4), h = height(x, z);
-      if (h < SEA + 3.3 || slope(x, z) > 0.5 || inTown(x, z, 0.5) || nearBuilding(x, z, -4) || roadDist(x, z) < 5.5) continue;
+      if (h < SEA + 3.3 || slope(x, z) > 0.5 || inTown(x, z, 0.5) || nearBuilding(x, z, -4) || roadEdge(x, z) < 1.4) continue;
       assets.place(kind, x, h - 0.03, z, r() * 6.28, r.range(1, 1.6) * SMALL(kind));
     }
     n++;

@@ -162,6 +162,7 @@ async function boot() {
   { const r = interiors.rooms.hospital; town.jobSites.nurse = { x: r.cx + 1.5, z: r.cz + 0.3, y: r.y0, room: r }; }
   const jobs = new Jobs({ scene, player, garage, assets, groundY, sites: town.jobSites, docks: town.docks, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   police.jobs = jobs;
+  police.residents = residents; // 체포 장면과 경찰 추격이 주민을 다룬다
   // 치장품: 새로 단 부품도 그림자를 드리우게 목록을 고쳐 준다.
   character.onMeshes = (old, added) => {
     for (const o of old) for (const list of [fixedCasters, rl]) { const k = list.indexOf(o); if (k >= 0) list.splice(k, 1); }

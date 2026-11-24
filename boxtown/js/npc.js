@@ -3,6 +3,7 @@
 import { Character, randomLook } from './character.js';
 import { rng, clamp, damp, angDiff } from './util.js';
 import { CITY, CITY_HALF } from './world.js';
+import { CAR_MASK } from './vehicles.js';
 const B = window.BABYLON;
 
 // 블록을 한 바퀴 도는 인도(블록 터 가장자리에서 0.75m 바깥). 좌표는 mapdata의 도로 격자에서 나온다.
@@ -73,6 +74,31 @@ export function lookFor(kind, seed) {
 }
 
 export class Residents {
+  // 건물과 벽을 통과하지 못하게 한다: 가려는 쪽으로 허리 높이에 짧은 광선을 쏴서 막히면 벽을 따라 미끄러지거나 멈춘다.
+  // (달아나거나 쫓는 주민만 쓴다. 인도를 도는 주민은 길이 정해져 있다.)
+  step(n, dt, vx, vz, water = true) {
+    const p = n.pos, nx = p.x + vx * dt, nz = p.z + vz * dt;
+    if (!this.phys) { this.phys = this.scene.getPhysicsEngine(); this.ray = new B.PhysicsRaycastResult(); this.o = new B.Vector3(); this.e = new B.Vector3(); }
+    const ok = (tx, tz) => {
+      const gy = this.groundY(tx, tz);
+      if (water && gy < -1.2) return false;
+      if (this.phys) {
+        const l = Math.hypot(tx - p.x, tz - p.z);
+        if (l < 1e-4) return true;
+        const k = (l + 0.5) / l; // 몸 반지름만큼 더 멀리 본다
+        this.o.set(p.x, p.y + 0.7, p.z); this.e.set(p.x + (tx - p.x) * k, p.y + 0.7, p.z + (tz - p.z) * k);
+        this.phys.raycastToRef(this.o, this.e, this.ray, { collideWith: ~CAR_MASK });
+        if (this.ray.hasHit && Math.abs(this.ray.hitNormalWorld.y) < 0.7) return false; // 세로 면(벽)만 막는다(비탈은 오른다)
+      }
+      return true;
+    };
+    let moved = false;
+    if (ok(nx, nz)) { p.x = nx; p.z = nz; moved = true; }
+    else if (Math.abs(vx) > 1e-3 && ok(nx, p.z)) { p.x = nx; moved = true; }
+    else if (Math.abs(vz) > 1e-3 && ok(p.x, nz)) { p.z = nz; moved = true; }
+    p.y = this.groundY(p.x, p.z);
+    return moved;
+  }
   // 종류에 맞는 체력과 덩치를 준다. 불량배는 머리 위에 빨간 표식이 떠 있어 멀리서도 보인다.
   setup(n, scene) {
     n.hp = MAXHP[n.kind]; n.scale = SCALE[n.kind];
@@ -89,6 +115,7 @@ export class Residents {
     n.mark = m;
   }
   constructor(scene, groundY, walkers = 16) {
+    this.scene = scene;
     const townN = Math.min(walkers, 16); // 항구 마을에 16명, 나머지는 시가지 블록에
     this.groundY = groundY;
     this.list = [];
@@ -168,6 +195,10 @@ export class Residents {
     n.chr.wave = 0;
   }
   // 총소리에 놀라 달아나게 한다.
+  // 체포: 이 주민을 붙잡아 세운다(뒷짐). 끝나면 release로 풀거나 take로 차에 태워 데려간다.
+  cuff(n) { n.mode = 'cuffed'; n.cuffVel = new B.Vector3(); n.cuffWish = n.chr.heading; n.chr.wave = 0; n.chr.hands = 1; n.pause = 0; }
+  release(n) { n.chr.hands = 0; n.mode = 'return'; n.back = n.home ? 'stand' : 'walk'; if (!n.home) { n.s = ringS(RINGS[n.ring], n.pos.x, n.pos.z); } }
+  take(n) { n.chr.hands = 0; n.chr.setVisible(false); n.mode = 'sky'; n.t = 1.6; n.gone = true; n.hp = 0.01; } // 차에 태웠다: 한참 뒤 제자리로 돌아온다
   scare(x, z, radius) {
     for (const n of this.list) {
       if (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return') {
@@ -256,22 +287,24 @@ export class Residents {
         if (n.stagger > 0) n.stagger -= dt;
         n.hitT = (n.hitT || 0) - dt;
         const thug = n.kind === 'thug', soldier = n.kind === 'soldier', chase = player.active || ((thug || soldier) && !!player.car), reach = soldier ? 14 : player.car ? 3.1 : 1.9;
-        const d = pd0 || 1, sp = n.stagger > 0 || d < reach - 0.5 ? 0 : soldier ? 5.4 : thug ? 6.2 : 5.6;
+        const d = pd0 || 1, sp = n.stagger > 0 || d < reach - 0.5 ? 0 : soldier ? 7.2 : thug ? 7.4 : n.kind === 'cop' ? 8.6 : 6; // 쫓을 때는 뛴다(플레이어 걷기 6.2, 달리기 9.8)
         if (soldier && chase && d < 52 && Math.abs(player.pos.y - p.y) < 14) { n.shootT -= dt; if (n.shootT <= 0) { n.shootT = 1.1 + n.r() * 0.7; chr.recoil = -0.3; if (this.onShoot) this.onShoot(n, pdx0 / d, pdz0 / d, !!player.car); } }
         n.vel.set((pdx0 / d) * sp, 0, (pdz0 / d) * sp);
-        const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
-        if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; }
+        this.step(n, dt, n.vel.x, n.vel.z);
         wish = Math.atan2(pdx0, pdz0);
         if (!soldier && chase && d < reach && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2.5) { n.hitT = thug ? 1.05 : 0.95; chr.swing = 1; chr.swingTime = 0.3; if (player.car) { if (this.onPunchCar) this.onPunchCar(n, player.car); } else if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
         if (n.t <= 0 || d > (thug ? 70 : soldier ? 60 : 45) || !chase || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
+      } else if (n.mode === 'cuffed') {
+        // 경찰관에게 붙잡혀 끌려간다: 위치는 경찰 쪽(police.js)이 정하고, 여기서는 뒷짐 진 자세로 걷는 모양만 낸다.
+        grounded = true; chr.hands = 1; wish = n.cuffWish;
+        if (n.cuffVel) n.vel.copyFrom(n.cuffVel);
       } else if (n.mode === 'flee') {
         // 놀라서 플레이어 반대쪽으로 달아난다.
         n.t -= dt;
         if (n.stagger > 0) n.stagger -= dt; // 맞은 직후에는 잠깐 비틀거린다
-        const d = pd0 || 1, sp = n.stagger > 0 ? 0 : 5.2;
+        const d = pd0 || 1, sp = n.stagger > 0 ? 0 : 6.4;
         n.vel.set((-pdx0 / d) * sp, 0, (-pdz0 / d) * sp);
-        const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
-        if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; } else n.vel.set(0, 0, 0); // 물가에서는 멈춘다
+        if (!this.step(n, dt, n.vel.x, n.vel.z)) n.vel.set(0, 0, 0); // 물가나 벽에서는 멈춘다
         wish = Math.atan2(-pdx0, -pdz0);
         chr.wave = 0;
         if (n.t <= 0) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
@@ -302,7 +335,7 @@ export class Residents {
         const [tx, tz] = n.back === 'stand' ? n.home : ringPoint(RINGS[n.ring], n.s);
         const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
         if (d < 0.25) n.mode = n.back;
-        else { const sp = 2.6; n.vel.set((dx / d) * sp, 0, (dz / d) * sp); p.x += n.vel.x * dt; p.z += n.vel.z * dt; wish = Math.atan2(dx, dz); }
+        else { const sp = 2.6; n.vel.set((dx / d) * sp, 0, (dz / d) * sp); this.step(n, dt, n.vel.x, n.vel.z, false); wish = Math.atan2(dx, dz); }
         p.y = this.groundY(p.x, p.z);
       } else if (n.mode === 'stand') {
         n.t += dt;
@@ -315,7 +348,7 @@ export class Residents {
         const [tx, tz] = n.to;
         const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
         if (d < 0.15) { n.mode = 'walk'; n.ring = n.toRing; n.s = ringS(RINGS[n.ring], tx, tz); n.cool = 10 + n.r() * 10; }
-        else { n.vel.set((dx / d) * n.speed, 0, (dz / d) * n.speed); p.x += n.vel.x * dt; p.z += n.vel.z * dt; wish = Math.atan2(dx, dz); }
+        else { n.vel.set((dx / d) * n.speed, 0, (dz / d) * n.speed); this.step(n, dt, n.vel.x, n.vel.z, false); wish = Math.atan2(dx, dz); }
         p.y = this.groundY(p.x, p.z);
       } else { // walk
         n.cool -= dt;
@@ -351,7 +384,7 @@ export class Residents {
       }
 
       // --- 플레이어와 겹치면 밀려난다 ---
-      if (player.active && pd < 0.85 && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && Math.abs(player.pos.y - p.y) < 1.6) {
+      if (player.active && pd < 0.85 && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'cuffed' && Math.abs(player.pos.y - p.y) < 1.6) {
         const k = (0.85 - pd) / (pd || 1);
         p.x -= pdx * k; p.z -= pdz * k;
         const pv = Math.hypot(player.vel.x, player.vel.z);
@@ -364,7 +397,7 @@ export class Residents {
       if (n.kind === 'soldier' && this.alert && pd < 75 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'return')) { n.mode = 'fight'; n.t = 30; n.stagger = 0; }
       if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
       const menace = n.kind === 'thug' && player.active && pd < 6.5 && Math.abs(player.pos.y - p.y) < 2; // 불량배는 주민보다 멀리서부터 으름장을 놓는다
-      if ((near || menace) && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
+      if ((near || menace) && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight' && n.mode !== 'cuffed') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
         // 주민은 손을 흔들고, 불량배는 인사 대신 주먹을 쥐어 보인다.
         if (n.kind === 'thug') { chr.wave = 0; chr.fist = 1; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
