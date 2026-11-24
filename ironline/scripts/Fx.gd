@@ -12,6 +12,7 @@ var blast_light: OmniLight3D
 var fires: Array = []
 var motes: CPUParticles3D
 var fire_lights := true
+static var lights_on := true  # false 면 총구·폭발·불 광원을 쓰지 않는다(?lights=0)
 var clock := 0.0
 
 
@@ -171,11 +172,15 @@ func blast(pos: Vector3) -> void:
 	burst("blastsmoke", pos + Vector3(0, 0.6, 0), Vector3.UP)
 	burst("dust", pos + Vector3(0, 0.3, 0), Vector3.UP)
 	burst("wall", pos + Vector3(0, 0.3, 0), Vector3.UP)
+	if not lights_on:
+		return
 	blast_light.position = pos + Vector3(0, 3.0, 0)
 	blast_light.light_energy = 9.0
 
 
 func muzzle_light(pos: Vector3) -> void:
+	if not lights_on:
+		return
 	flash_light.position = pos
 	flash_light.light_energy = 3.5
 
@@ -297,7 +302,7 @@ func follow(cam_pos: Vector3) -> void:
 	clock += get_process_delta_time()
 	for f in fires:
 		var l: OmniLight3D = f.light
-		l.visible = fire_lights
+		l.visible = fire_lights and lights_on
 		l.light_energy = 1.5 + 0.55 * sin(clock * 13.0 + f.phase) + 0.3 * sin(clock * 29.0 + f.phase * 2.0)
 
 

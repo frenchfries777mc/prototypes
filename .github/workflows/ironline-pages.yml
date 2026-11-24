@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - "ironline/**"
+      - "ironline-web/**"
       - "ffscript/**"
       - "lodestar/**"
       - "resonance/**"
@@ -48,6 +49,8 @@ jobs:
           mkdir -p _site/ironline _site/ffscript _site/lodestar/js _site/resonance _site/kitchendefense _site/trilantern
           cp -r site/. _site/
           cp -r ironline/build/web/. _site/ironline/
+          mkdir -p _site/ironline-web
+          cp -r ironline-web/index.html ironline-web/src ironline-web/vendor ironline-web/assets _site/ironline-web/
           cp ffscript/index.html _site/ffscript/index.html
           cp lodestar/index.html lodestar/style.css _site/lodestar/
           cp lodestar/js/*.js _site/lodestar/js/

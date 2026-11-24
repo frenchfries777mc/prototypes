@@ -1,3 +1,42 @@
+# 3D 모델 추가분 (모두 CC0)
+
+아래 두 묶음은 모두 **CC0 1.0 (퍼블릭 도메인)** 이라 저작자 표시 의무가 없다. 그래도 출처를 남긴다.
+게임에서는 `Geo.add_model` 로 소품 청크 메시에 정점 색으로 구워 넣는다(`WorldGfx._extras_cc0` 등). 충돌 없는 장식이다.
+
+## Kenney — Nature Kit 2.1 (`kenney/` 폴더, 54개)
+
+- 제작: [Kenney](https://kenney.nl) · 라이선스: Creative Commons Zero (동봉된 `kenney/License.txt` 참고)
+- 받은 곳: OpenGameArt 의 "Nature Kit" 게시물(<https://opengameart.org/content/nature-kit>), GLTF 형식 중 아래 모델만 골라 담았다. 모델 자체는 수정하지 않았다.
+- 쓰임: 나무 15종(맵 가장자리), 덤불 5종, 바위·돌 16종, 통나무·그루터기 7종, 울타리 3종, 들꽃 5종, 버섯 2종, 모닥불 장작 1종.
+- 원본의 파스텔 색은 전장 색조에 맞도록 실행 중에 올리브·갈색 쪽으로 섞는다. 바위·껍질·판자는 기존 Poly Haven 텍스처 셰이더로 입힌다.
+
+## Poly Haven — 소품 16종 (폴더 이름 = 모델 이름)
+
+[Poly Haven](https://polyhaven.com) 모델이다. 웹 용량·정점 색 굽기에 맞춰 법선·ARM 텍스처를 빼고 알베도만 256px JPG 로 줄여 담았다. 형상은 그대로다.
+
+| 폴더 | 이름 | 작가 | 쓰임 |
+|---|---|---|---|
+| `wooden_ladder_02` | Wooden Ladder 02 | JN_3DPRINTINGNERD | 참호 사다리 |
+| `wooden_bucket_01` | Wooden Bucket 01 | James Ray Cock | 참호 양동이 |
+| `picke_dirty_01` | Picke Dirty 01 | Dennis Halbeck | 참호의 곡괭이 |
+| `wooden_axe_02` | Wooden Axe 02 | Ulan Cabanilla | 참호의 도끼 |
+| `crowbar_01` | Crowbar 01 | Alexander Otterbeck | 참호의 쇠지렛대 |
+| `cross_pein_hammer` | Cross Pein Hammer | Tics | 참호의 망치 |
+| `oil_tin` | Oil Tin | Niklas | 참호의 기름통 |
+| `can_rusted` | Can Rusted | Rahul Chaudhary | 참호의 녹슨 깡통 |
+| `russian_food_cans_01` | Russian Food Cans 01 | Kosan Aziz | 참호의 통조림 |
+| `medical_box` | Medical Box | Ulan Cabanilla | 참호의 구급상자 |
+| `old_tyre` | Old Tyre | MP | 참호의 낡은 타이어 |
+| `stone_fire_pit` | Stone Fire Pit | Sebastian Platen | 천막 옆 돌 화덕 |
+| `painted_wooden_chair_01` | Painted Wooden Chair 01 | Kuutti Siitonen | 집 안 의자 |
+| `painted_wooden_shelves` | Painted Wooden Shelves | Kirill Sannikov | 집 안 벽 선반 |
+| `painted_wooden_stool` | Painted Wooden Stool | Kirill Sannikov | 야영지 걸상 |
+| `jug_01` | Jug 01 | Kuutti Siitonen | 집 안 탁자 위 항아리 |
+
+원본: `https://polyhaven.com/a/<폴더 이름>` · 라이선스 원문: https://polyhaven.com/license
+
+---
+
 # 서드파티 에셋
 
 모든 3D 모델은 [Poly Haven](https://polyhaven.com) 의 **CC0 1.0 (퍼블릭 도메인)** 자산이다. 저작자 표시 의무는 없지만 출처를 남긴다.

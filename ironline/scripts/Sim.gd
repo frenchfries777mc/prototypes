@@ -169,7 +169,10 @@ func claim_slot(id: int, loadout: int = 0) -> void:
 	u.weapon = loadout
 	u.label = "P%d" % id
 	if not u.alive:
-		u.respawn_t = minf(u.respawn_t, 0.15)
+		if u.deaths == 0 and tickets[u.team] > 0:
+			_spawn(u)  # 아직 한 번도 죽지 않았다면(경기 시작·첫 접속) 기다리지 않고 바로 투입한다
+		else:
+			u.respawn_t = minf(u.respawn_t, 0.15)
 
 
 ## 슬롯을 다시 봇에게 돌려준다(접속 종료).
