@@ -259,7 +259,7 @@ varying vec3 vW;
 uniform sampler2D heightTex;
 uniform vec4 worldRect; // x0, z0, 1/w, 1/h
 uniform vec3 camPos; uniform vec3 sunDir; uniform vec3 horizon; uniform vec3 fogColor;
-uniform float time; uniform float fogDensity;
+uniform float time; uniform float fogDensity; uniform float light;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
   return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
@@ -290,6 +290,7 @@ void main(){
   float spec = pow(max(dot(reflect(-sunDir, N), -V), 0.0), 220.0);
   col += vec3(1.0,0.96,0.85) * spec * 0.9;
   col = mix(col, vec3(0.97,1.0,1.0), foam*0.85);
+  col *= mix(vec3(0.2,0.26,0.44), vec3(1.0), light); // 밤에는 바다도 어둡고 푸르게(light: 낮 1, 밤 0)
   float alpha = mix(0.62, 0.97, smoothstep(0.0,0.5,d01));
   alpha = max(alpha, foam);
   float dist = distance(camPos, vW);
@@ -303,7 +304,7 @@ export function buildWater(scene, env) {
   mesh.position.set(90, SEA, 282);
   const mat = new B.ShaderMaterial('waterMat', scene, { vertex: 'bxWater', fragment: 'bxWater' }, {
     attributes: ['position'],
-    uniforms: ['world', 'viewProjection', 'time', 'worldRect', 'camPos', 'sunDir', 'horizon', 'fogColor', 'fogDensity'],
+    uniforms: ['world', 'viewProjection', 'time', 'worldRect', 'camPos', 'sunDir', 'horizon', 'fogColor', 'fogDensity', 'light'],
     samplers: ['heightTex'],
     needAlphaBlending: true,
   });
@@ -314,6 +315,7 @@ export function buildWater(scene, env) {
   mat.setColor3('horizon', env.horizon);
   mat.setColor3('fogColor', env.fog);
   mat.setFloat('fogDensity', env.fogDensity);
+  mat.setFloat('light', 1);
   mat.backFaceCulling = true;
   mesh.material = mat;
   mesh.isPickable = false;

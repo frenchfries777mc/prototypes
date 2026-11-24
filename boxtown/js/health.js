@@ -15,7 +15,7 @@ export class Health {
     this.hp = 100; this.calm = 0; this.waterT = 0; this.hitCd = 0; this.jailed = false; this.fine = 0; this.labor = 0; this.esc = 0; this.shown = -1;
     residents.onPunch = (n, dx, dz) => this.hurt(n.kind === 'cop' ? 14 : n.kind === 'thug' ? 9 : 11, dx, dz, n.kind, 3);
     residents.onPunchCar = (n, c) => { c.hp -= 7; c.body.applyImpulse(new BABYLON.Vector3((c.pos.x - n.pos.x) * 260, 180, (c.pos.z - n.pos.z) * 260), c.pos); }; // 불량배는 차도 두들긴다
-    residents.onCarHit = (c, n) => { c.hp -= 6; if (c === player.vehicle) police.report(n.kind === 'cop' ? 80 : 40); }; // 차로 사람을 치면 경찰이 온다
+    residents.onCarHit = (c, n) => { c.hp -= 6; if (c === player.vehicle && n.kind !== 'thug') police.report(n.kind === 'cop' ? 80 : 40); }; // 차로 사람을 치면 경찰이 온다(불량배는 빼고)
     weapons.onBlast = (amount) => this.hurt(amount, 0, 0, 'blast');
     police.onArrest = () => this.jail();
   }

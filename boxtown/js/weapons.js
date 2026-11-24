@@ -12,6 +12,8 @@ export const WEAPONS = [
   { id: 'pistol', name: '권총', dmg: 50, carDmg: 14, cd: 0.3, spread: 0.004, range: 170 },
   { id: 'smg', name: '기관단총', dmg: 22, carDmg: 6, cd: 0.085, spread: 0.02, range: 130, auto: true },
   { id: 'rifle', name: '돌격소총', dmg: 34, carDmg: 11, cd: 0.11, spread: 0.009, range: 210, auto: true },
+  { id: 'shotgun', name: '산탄총', dmg: 26, carDmg: 7, cd: 0.85, spread: 0.07, range: 70, pellets: 8 },
+  { id: 'sniper', name: '저격소총', dmg: 140, carDmg: 34, cd: 1.15, spread: 0.0006, range: 420 },
   { id: 'rocket', name: '로켓 발사기', cd: 1.3, rocket: true, range: 260 },
 ];
 
@@ -71,8 +73,10 @@ export class Weapons {
     { const n = node(); part(n, 0.1, 0.44, 0.17, 0, -0.16, 0.1, M('#2a2c36')); part(n, 0.08, 0.2, 0.1, 0, -0.02, -0.03, M('#5a4636')); this.models.pistol = n; }
     { const n = node(); part(n, 0.11, 0.74, 0.18, 0, -0.26, 0.1, M('#2a2c36')); part(n, 0.08, 0.14, 0.3, 0, -0.3, -0.12, M('#3a3d4d')); part(n, 0.09, 0.26, 0.12, 0, 0.14, 0.08, M('#5a4636')); this.models.smg = n; }
     { const n = node(); part(n, 0.11, 1.05, 0.18, 0, -0.42, 0.1, M('#3a3d4d')); part(n, 0.08, 0.16, 0.34, 0, -0.34, -0.14, M('#2a2c36')); part(n, 0.1, 0.4, 0.16, 0, 0.2, 0.06, M('#8b5d3a')); part(n, 0.06, 0.3, 0.06, 0, -1.05, 0.1, M('#2a2c36')); this.models.rifle = n; }
+    { const n = node(); part(n, 0.1, 1.0, 0.16, 0, -0.42, 0.1, M('#2a2c36')); part(n, 0.12, 0.34, 0.2, 0, 0.1, 0.08, M('#8b5d3a')); part(n, 0.13, 0.3, 0.2, 0, -0.5, 0.0, M('#5a4636')); this.models.shotgun = n; }
+    { const n = node(); part(n, 0.09, 1.3, 0.14, 0, -0.52, 0.1, M('#2f3a2a')); part(n, 0.1, 0.5, 0.18, 0, 0.18, 0.06, M('#3a3d4d')); part(n, 0.14, 0.34, 0.14, 0, -0.4, 0.28, M('#22202b')); part(n, 0.06, 0.2, 0.06, 0, -1.2, 0.1, M('#22202b')); this.models.sniper = n; }
     { const n = node(); part(n, 0.27, 1.5, 0.27, 0, -0.12, 0.26, M('#55693f')); part(n, 0.33, 0.16, 0.33, 0, -0.9, 0.26, M('#3a3d4d')); part(n, 0.2, 0.3, 0.2, 0, -1.02, 0.26, M('#d9473c')); this.models.rocket = n; }
-    this.muzzle = { pistol: 0.45, smg: 0.75, rifle: 1.15, rocket: 1.25 };
+    this.muzzle = { pistol: 0.45, smg: 0.75, rifle: 1.15, shotgun: 1.0, sniper: 1.45, rocket: 1.25 };
 
     // ----- 입자 효과: 한 번에 터뜨리는 것들은 넷으로 나눠 재사용한다 -----
     const burst = (name, cap, setup) => { const p = new B.ParticleSystem(name, cap, scene); p.particleTexture = spark(scene); p.emitter = new B.Vector3(0, -100, 0); p.emitRate = 0; p.manualEmitCount = 0; p.updateSpeed = 0.016; setup(p); p.start(); return p; };
@@ -94,7 +98,7 @@ export class Weapons {
     // 처음에는 주먹뿐이다. 나머지는 사거나 빼앗아서 얻는다.
     this.owned = new Set(['fist']);
     try { const saved = JSON.parse(localStorage.getItem('boxtown.weapons') || '[]').filter((id) => id !== 'fist' && WEAPONS.some((w) => w.id === id)); if (saved.length) this.owned.add(saved[saved.length - 1]); } catch (e) { /* 무시 */ }
-    residents.onDefeat = (n) => { if (n.kind === 'thug') stats.bump('kos'); if (n.kind === 'thug') this.unlock('bat', '불량배에게서', '빼앗았어요'); else if (n.kind === 'cop') this.unlock('pistol', '경찰관에게서', '빼앗았어요'); };
+    residents.onDefeat = (n) => { if (n.kind === 'thug') stats.bump('kos'); if (n.kind === 'thug') this.unlock('bat', '불량배에게서', '빼앗았어요'); else if (n.kind === 'soldier') this.unlock('rifle', '군인에게서', '빼앗았어요'); else if (n.kind === 'cop') this.unlock('pistol', '경찰관에게서', '빼앗았어요'); };
     this.renderBar();
     this.select(0);
   }
@@ -164,22 +168,38 @@ export class Weapons {
       this.sfx.play('launch');
       return;
     }
-    // 총: 맞는 즉시 판정
-    const sd = d.add(new B.Vector3((Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread)).normalize();
-    const hit = this.trace(o, sd, w.range);
-    if (this.net && this.net.on) { this.net.shot(hit.point); if (hit.remote) { this.net.hit(hit.remote, w.dmg, sd.x, sd.z); this.sfx.play('hit'); } }
-    if (hit.resident) {
-      const gone = this.residents.damage(hit.resident, w.dmg, sd.x, sd.z);
-      this.crimeOn(hit.resident, gone);
-      this.emit('star', hit.point.x, hit.point.y, hit.point.z, gone ? 0 : 10);
-      this.sfx.play(gone ? 'pop' : 'hit');
-    } else if (hit.hit) {
-      this.emit('spark', hit.point.x, hit.point.y, hit.point.z, 10);
-      if (hit.car) { this.hurtCar(hit.car, w.carDmg); this.sfx.play('clank'); }
-      if (hit.dyn) hit.dyn.agg.body.applyImpulse(sd.scale(45), hit.point);
+    // 총: 맞는 즉시 판정(산탄총은 알갱이 여럿)
+    const pellets = w.pellets || 1;
+    for (let k = 0; k < pellets; k++) {
+      const sd = d.add(new B.Vector3((Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread, (Math.random() - 0.5) * 2 * w.spread)).normalize();
+      const hit = this.trace(o, sd, w.range);
+      if (this.net && this.net.on) { if (k === 0) this.net.shot(hit.point); if (hit.remote) { this.net.hit(hit.remote, w.dmg, sd.x, sd.z); this.sfx.play('hit'); } }
+      if (hit.resident) {
+        const gone = this.residents.damage(hit.resident, w.dmg, sd.x, sd.z);
+        this.crimeOn(hit.resident, gone);
+        this.emit('star', hit.point.x, hit.point.y, hit.point.z, gone ? 0 : 10);
+        this.sfx.play(gone ? 'pop' : 'hit');
+      } else if (hit.hit) {
+        this.emit('spark', hit.point.x, hit.point.y, hit.point.z, 10);
+        if (hit.car) { this.hurtCar(hit.car, w.carDmg); this.sfx.play('clank'); }
+        if (hit.dyn) hit.dyn.agg.body.applyImpulse(sd.scale(45), hit.point);
+      }
+      if (k < 3) this.tracer(muzzle, hit.point);
     }
-    this.tracer(muzzle, hit.point);
     this.sfx.play('shot');
+  }
+
+  // 적대 미사일(경찰 헬리콥터): from에서 dir 방향으로 쏘고, target()이 돌려주는 곳을 향해 한동안 꺾인다.
+  missile(from, dir, owner, target) {
+    const mesh = B.MeshBuilder.CreateBox('missile', { width: 0.3, height: 0.3, depth: 1.3 }, this.scene);
+    mesh.material = flatMat('missileMat', '#cfd3de', this.scene, { emissive: '#7a3a22' }); mesh.isPickable = false;
+    mesh.position.copyFrom(from); mesh.lookAt(from.add(dir));
+    const trail = new B.ParticleSystem('missileTrail', 160, this.scene);
+    trail.particleTexture = spark(this.scene); trail.emitter = mesh; trail.emitRate = 130; trail.updateSpeed = 0.016;
+    trail.color1 = new B.Color4(1, 0.75, 0.3, 0.95); trail.color2 = new B.Color4(0.85, 0.85, 0.85, 0.7); trail.colorDead = new B.Color4(0.5, 0.5, 0.5, 0);
+    trail.minSize = 0.5; trail.maxSize = 1.3; trail.minLifeTime = 0.35; trail.maxLifeTime = 0.9; trail.minEmitPower = 0.2; trail.maxEmitPower = 1; trail.start();
+    this.rockets.push({ mesh, trail, dir: dir.clone().normalize(), t: 0, owner, target, hostile: true, speed: 36, life: 6 });
+    this.sfx.play('launch');
   }
 
   melee(w, yaw) {
@@ -249,7 +269,7 @@ export class Weapons {
     try { localStorage.setItem('boxtown.weapons', JSON.stringify([...this.owned])); } catch (e) { /* 무시 */ }
     this.renderBar();
     this.select(WEAPONS.findIndex((w) => w.id === id));
-    const OBJ = { bat: '방망이를', pistol: '권총을', smg: '기관단총을', rifle: '돌격소총을', rocket: '로켓 발사기를' };
+    const OBJ = { bat: '방망이를', pistol: '권총을', smg: '기관단총을', rifle: '돌격소총을', shotgun: '산탄총을', sniper: '저격소총을', rocket: '로켓 발사기를' };
     if (this.toast) this.toast(`${how || ''} ${OBJ[id]} ${verb || '얻었어요'}!`.trim(), true);
     return true;
   }
@@ -267,7 +287,7 @@ export class Weapons {
   }
 
   // 폭발: 주변 주민은 날아가고, 차는 망가지며 밀려나고, 물건과 플레이어도 밀려난다.
-  explode(x, y, z, radius = 8, skip = null) {
+  explode(x, y, z, radius = 8, skip = null, opt = null) {
     const P = this.player;
     this.emit('boom', x, y + 0.5, z, 130); this.emit('puff', x, y + 1, z, 46); this.emit('spark', x, y + 0.5, z, 60);
     this.sfx.play('boom');
@@ -280,14 +300,14 @@ export class Weapons {
       if (dist > radius) continue;
       const l = Math.hypot(dx, dz) || 1;
       if (dist < radius * 0.8) this.residents.launch(n, dx / l, dz / l); else this.residents.damage(n, 60, dx, dz);
-      this.crimeOn(n, true);
+      if (!(opt && opt.silent)) this.crimeOn(n, true);
     }
     for (const c of this.garage.cars) {
       if (c === skip) continue;
       const dx = c.pos.x - x, dy = c.pos.y + 0.6 - y, dz = c.pos.z - z, dist = Math.hypot(dx, dy, dz);
       if (dist > radius + 3) continue;
       const f = clamp(1 - dist / (radius + 3), 0, 1), l = Math.hypot(dx, dz) || 1, M = c.spec.mass;
-      this.hurtCar(c, 140 * f);
+      if (opt && opt.silent) c.hp -= 140 * f * 0.6; else this.hurtCar(c, 140 * f); // 경찰 미사일은 범죄로 치지 않는다
       c.body.applyImpulse(new B.Vector3((dx / l) * M * 9 * f, M * 7 * f, (dz / l) * M * 9 * f), c.pos.add(new B.Vector3(0, 0.3, 0)));
     }
     for (const d of this.dynamics) {
@@ -302,7 +322,7 @@ export class Weapons {
       const f = 1 - pd / (radius + 1), l = Math.hypot(P.feet.x - x, P.feet.z - z) || 1;
       P.kick = new B.Vector3(((P.feet.x - x) / l) * 15 * f, 5 + 9 * f, ((P.feet.z - z) / l) * 15 * f);
       P.chr.bump(P.feet.x - x, P.feet.z - z, 2);
-      if (this.onBlast) this.onBlast(65 * f);
+      if (this.onBlast) this.onBlast((opt && opt.dmg ? opt.dmg : 65) * f);
     }
   }
 
@@ -380,12 +400,22 @@ export class Weapons {
 
     // 로켓
     for (let i = this.rockets.length - 1; i >= 0; i--) {
-      const r = this.rockets[i], step = 58 * dt, from = r.mesh.position.clone();
+      const r = this.rockets[i], step = (r.speed || 58) * dt, from = r.mesh.position.clone();
       r.t += dt;
-      const hit = this.trace(from, r.dir, step + 0.3);
-      if (hit.hit || hit.resident || r.t > 4.5 || from.y < SEA - 0.5) {
+      // 적대 미사일: 한동안 목표를 따라 꺾이고, 쏜 헬리콥터 자신에게는 맞지 않는다.
+      if (r.hostile && r.t < 2.6 && r.target) {
+        const tp = r.target(), want = new B.Vector3(tp.x - from.x, tp.y + 0.8 - from.y, tp.z - from.z).normalize();
+        r.dir = r.dir.scale(1 - Math.min(1, 1.5 * dt)).add(want.scale(Math.min(1, 1.5 * dt))).normalize();
+        r.mesh.lookAt(from.add(r.dir));
+      }
+      let hit = this.trace(from, r.dir, step + 0.3);
+      if (r.hostile && hit.car && hit.car === r.owner && r.t < 1.5) hit = { hit: false, point: from };
+      // 플레이어는 물리 충돌체가 아니라서 거리로 따로 맞는지 본다(걷고 있으면 몸, 타고 있으면 차).
+      let direct = false;
+      if (r.hostile) { const tp = r.target(), dd = Math.hypot(tp.x - from.x, tp.y + 0.8 - from.y, tp.z - from.z); direct = dd < (this.player.vehicle ? 2.6 : 1.8); }
+      if (hit.hit || hit.resident || direct || r.t > (r.life || 4.5) || from.y < SEA - 0.5) {
         const p = hit.hit || hit.resident ? hit.point : from;
-        this.explode(p.x, p.y, p.z, 8.5);
+        this.explode(p.x, p.y, p.z, r.hostile ? 6.5 : 8.5, r.owner || null, r.hostile ? { silent: true, dmg: 42 } : null);
         r.trail.stop(); const tr = r.trail; setTimeout(() => tr.dispose(false), 900);
         r.mesh.dispose();
         this.rockets.splice(i, 1);

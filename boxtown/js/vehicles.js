@@ -11,7 +11,7 @@ const SAG = 0.14; // 정지 상태에서 스프링이 눌린 길이
 const DROOP = 0.3; // 바퀴가 아래로 늘어질 수 있는 길이
 
 // 차종별 성격: mass 무게, engine 가속력, vmax 최고 속도(m/s), grip 접지력, steer 핸들이 꺾이는 정도.
-const SPECS = {
+export const SPECS = {
   default: { mass: 900, engine: 10, vmax: 26, grip: 12, steer: 0.5 },
   'cars/sedan': { mass: 950, engine: 10, vmax: 27, grip: 12, steer: 0.5 },
   'cars/taxi': { mass: 950, engine: 11, vmax: 28, grip: 12, steer: 0.52 },
@@ -100,8 +100,8 @@ export class Vehicle {
     const throttle = input ? input.throttle : 0;
     const speedAbs = Math.abs(this.speed);
     // 빠를수록 핸들이 덜 꺾인다.
-    const maxSteer = (this.spec.steer || 0.5) / (1 + speedAbs / 9);
-    this.steer = damp(this.steer, input ? input.steer * maxSteer : 0, 9, dt);
+    const maxSteer = (this.spec.steer || 0.5) / (1 + speedAbs / 14); // 고속에서도 코너를 돌 수 있게(전에는 9)
+    this.steer = damp(this.steer, input ? input.steer * maxSteer : 0, input && Math.abs(input.steer) > 0.05 ? 8 : 12, dt); // 놓으면 빨리 곧게 돌아온다
     const phys = this.scene.getPhysicsEngine();
     const pointVel = (pt) => v.add(B.Vector3.Cross(w, pt.subtract(comW)));
     let grounded = 0;
@@ -148,6 +148,18 @@ export class Vehicle {
       wh.spin += (vf / wh.r) * dt;
     }
     this.groundedWheels = grounded;
+    // 운전 보조: 가려는 만큼만 돌고(헛바퀴 없이), 놓으면 곧게 달리고, 옆으로 쉽게 뒤집히지 않는다.
+    if (grounded >= 3 && !this.dead) {
+      const hand = input && input.handbrake;
+      let wy = w.y;
+      if (!hand) {
+        const L = Math.max(2.2, this.length * 0.62);
+        const want = (this.speed * Math.tan(this.steer)) / L; // 자전거 모델이 말하는 돌아야 할 속도
+        wy = damp(w.y, want, input ? 5.5 : 3, dt);
+      }
+      const k = Math.exp(-3.2 * dt); // 앞뒤·좌우로 기우는 흔들림은 빨리 가라앉힌다
+      body.setAngularVelocity(new B.Vector3(w.x * k, wy, w.z * k));
+    }
     // 부딪힘: 속도가 한순간에 크게 바뀌면 차가 망가진다.
     if (this.pv && this.restore === 0 && !this.dead) {
       const dv = Math.hypot(v.x - this.pv.x, v.y - this.pv.y, v.z - this.pv.z);

@@ -5,7 +5,12 @@ import { clamp, damp } from './util.js';
 const B = window.BABYLON;
 const G = 24; // 게임의 중력(vehicles.js와 같다)
 
-function build(scene) {
+export const HELI_PAL = {
+  civ: { body: '#e5553f', trim: '#f4f1ea', glass: '#9fd3f2' },
+  police: { body: '#2f4fa8', trim: '#f4f1ea', glass: '#9fd3f2' },
+  army: { body: '#55623f', trim: '#3a4430', glass: '#7fa08a' },
+};
+function build(scene, pal) {
   const parts = [];
   const box = (w, h, d, x, y, z, hex) => {
     const m = B.MeshBuilder.CreateBox('heliPart', { width: w, height: h, depth: d }, scene);
@@ -15,8 +20,8 @@ function build(scene) {
     m.setVerticesData(B.VertexBuffer.ColorKind, cols);
     parts.push(m);
   };
-  box(2.0, 1.5, 3.0, 0, 1.25, 0.2, '#e5553f'); box(1.7, 0.9, 1.0, 0, 1.45, 1.9, '#9fd3f2'); box(2.02, 0.5, 3.02, 0, 0.75, 0.2, '#f4f1ea'); // 몸통, 앞유리, 아래 띠
-  box(0.5, 0.5, 3.4, 0, 1.5, -2.9, '#e5553f'); box(0.16, 1.2, 0.7, 0, 2.0, -4.4, '#f4f1ea'); box(1.4, 0.1, 0.5, 0, 1.6, -4.3, '#f4f1ea'); // 꼬리
+  box(2.0, 1.5, 3.0, 0, 1.25, 0.2, pal.body); box(1.7, 0.9, 1.0, 0, 1.45, 1.9, pal.glass); box(2.02, 0.5, 3.02, 0, 0.75, 0.2, pal.trim); // 몸통, 앞유리, 아래 띠
+  box(0.5, 0.5, 3.4, 0, 1.5, -2.9, pal.body); box(0.16, 1.2, 0.7, 0, 2.0, -4.4, pal.trim); box(1.4, 0.1, 0.5, 0, 1.6, -4.3, pal.trim); // 꼬리
   box(0.5, 0.5, 0.5, 0, 2.2, 0.2, '#3a3d4d'); // 회전축
   for (const s of [-1, 1]) { box(0.14, 0.14, 3.4, s * 0.95, 0.12, 0.2, '#3a3d4d'); box(0.1, 0.5, 0.1, s * 0.95, 0.4, 1.0, '#3a3d4d'); box(0.1, 0.5, 0.1, s * 0.95, 0.4, -0.6, '#3a3d4d'); } // 착륙 다리
   const body = B.Mesh.MergeMeshes(parts, true, true);
@@ -30,14 +35,14 @@ function build(scene) {
 }
 
 export class Heli {
-  constructor(scene, x, y, z, yaw, addShadow) {
+  constructor(scene, x, y, z, yaw, addShadow, pal = HELI_PAL.civ) {
     this.scene = scene; this.key = 'heli'; this.isHeli = true;
     this.spec = { mass: 900, vmax: 30 };
     this.root = new B.TransformNode('heli', scene);
     this.root.position.set(x, y + 0.1, z);
     this.root.rotationQuaternion = B.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
     this.home = { pos: this.root.position.clone(), rot: this.root.rotationQuaternion.clone() };
-    const m = build(scene);
+    const m = build(scene, pal);
     this.tilt = new B.TransformNode('heliTilt', scene); this.tilt.parent = this.root; // 기울어 보이는 것은 겉모습만
     m.body.parent = this.tilt; m.rotor.parent = this.tilt; m.rotor.position.set(0, 2.5, 0.2); m.tail.parent = this.tilt; m.tail.position.set(0.14, 2.0, -4.4);
     this.rotor = m.rotor; this.tailRotor = m.tail;

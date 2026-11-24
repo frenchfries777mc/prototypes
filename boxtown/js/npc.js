@@ -55,8 +55,9 @@ function ringS(r, x, z) {
 // 불량배와 경찰관은 옷차림으로 구분된다.
 const THUG = { pants: '#18161f', shoes: '#18161f' };
 // 체력: 불량배와 경찰관은 더 튼튼하다.
-const MAXHP = { citizen: 160, thug: 280, cop: 230 };
-const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
+const MAXHP = { citizen: 160, thug: 280, cop: 230, soldier: 300 };
+const SCALE = { citizen: 1, thug: 1.22, cop: 1.05, soldier: 1.1 };
+const SOLDIER = { shirt: '#55623f', pants: '#3f4a30', shoes: '#22202b', head: 'helmet', hat: '#3f4a30', brim: '#3f4a30', face: 'none', neck: 'none', back: 'none', arm: 'none' };
 const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' };
 // 불량배는 공통으로 험상궂은 얼굴(찌푸린 눈썹, 흉터)이고, 머리·얼굴·옷·팔을 섞어서 저마다 다르게 만든다.
 const PUNK = ['#e0261c', '#3fc16a', '#ff5fa2', '#ffd84a', '#4f9bea'];
@@ -68,7 +69,7 @@ function thugLook(base, seed) {
 }
 export function lookFor(kind, seed) {
   const base = randomLook(seed);
-  return kind === 'thug' ? thugLook(base, seed) : kind === 'cop' ? { ...base, ...COP } : base;
+  return kind === 'thug' ? thugLook(base, seed) : kind === 'cop' ? { ...base, ...COP } : kind === 'soldier' ? { ...base, ...SOLDIER } : base;
 }
 
 export class Residents {
@@ -76,6 +77,11 @@ export class Residents {
   setup(n, scene) {
     n.hp = MAXHP[n.kind]; n.scale = SCALE[n.kind];
     n.chr.root.scaling.setAll(n.scale);
+    if (n.kind === 'soldier') { // 손에 든 소총
+      if (!this.gunMat) { this.gunMat = new B.StandardMaterial('soldierGun', scene); this.gunMat.diffuseColor = new B.Color3(0.13, 0.14, 0.15); this.gunMat.specularColor = B.Color3.Black(); }
+      const gun = B.MeshBuilder.CreateBox('soldierGun', { width: 0.11, height: 0.95, depth: 0.16 }, scene);
+      gun.material = this.gunMat; gun.parent = n.chr.armR; gun.position.set(0, -0.45, 0.12); gun.isPickable = false; return;
+    }
     if (n.kind !== 'thug') return;
     if (!this.markMat) { this.markMat = new B.StandardMaterial('thugMark', scene); this.markMat.emissiveColor = new B.Color3(1, 0.16, 0.1); this.markMat.disableLighting = true; }
     const m = B.MeshBuilder.CreatePolyhedron('thugMark', { type: 1, size: 0.17 }, scene);
@@ -116,6 +122,23 @@ export class Residents {
 
   // ----- 공격 받기 -----
   alive(n) { return n.mode !== 'sky'; }
+  // 군사 기지의 군인: 안쪽 길을 돌며 순찰하고, 문 앞에 서 있는 군인도 있다. 경보가 울리면 쏘면서 덤빈다.
+  spawnSoldiers(scene, base) {
+    const ri = RINGS.push(base.ring) - 1, r = rng(515);
+    const make = (stand, i, x, z, yaw) => {
+      const chr = new Character(scene, lookFor('soldier', 6000 + i * 11));
+      const n = { chr, kind: 'soldier', mode: stand ? 'stand' : 'walk', ring: ri, s: r() * perim(base.ring), dir: r() < 0.5 ? 1 : -1, speed: 1.9 + r() * 0.4, pause: 0, cool: 99, pos: new B.Vector3(x, this.groundY(x, z), z), vel: new B.Vector3(), vy: 0, lie: 0, t: r() * 5, look: 0, r: rng(1300 + i), shootT: 1 };
+      if (stand) n.home = [x, z, yaw];
+      else { const [px, pz] = ringPoint(base.ring, n.s); n.pos.set(px, this.groundY(px, pz), pz); }
+      chr.heading = yaw || 0;
+      this.setup(n, scene);
+      this.list.push(n); this.meshes.push(...chr.meshes);
+      return n;
+    };
+    for (let i = 0; i < 6; i++) make(false, i, base.ring.x0, base.ring.z0, 0);
+    base.posts.forEach(([x, z, yaw], i) => make(true, 10 + i, x, z, yaw));
+    return this.meshes;
+  }
   // 피해를 준다. (dx, dz)는 맞은 방향. 체력이 다하면 하늘로 날아간다.
   damage(n, amount, dx = 0, dz = 0) {
     if (n.mode === 'sky') return false;
@@ -232,14 +255,15 @@ export class Residents {
         n.t -= dt;
         if (n.stagger > 0) n.stagger -= dt;
         n.hitT = (n.hitT || 0) - dt;
-        const thug = n.kind === 'thug', chase = player.active || (thug && !!player.car), reach = player.car ? 3.1 : 1.9;
-        const d = pd0 || 1, sp = n.stagger > 0 || d < reach - 0.5 ? 0 : thug ? 6.2 : 5.6;
+        const thug = n.kind === 'thug', soldier = n.kind === 'soldier', chase = player.active || ((thug || soldier) && !!player.car), reach = soldier ? 14 : player.car ? 3.1 : 1.9;
+        const d = pd0 || 1, sp = n.stagger > 0 || d < reach - 0.5 ? 0 : soldier ? 5.4 : thug ? 6.2 : 5.6;
+        if (soldier && chase && d < 52 && Math.abs(player.pos.y - p.y) < 14) { n.shootT -= dt; if (n.shootT <= 0) { n.shootT = 1.1 + n.r() * 0.7; chr.recoil = -0.3; if (this.onShoot) this.onShoot(n, pdx0 / d, pdz0 / d, !!player.car); } }
         n.vel.set((pdx0 / d) * sp, 0, (pdz0 / d) * sp);
         const nx = p.x + n.vel.x * dt, nz = p.z + n.vel.z * dt, gy = this.groundY(nx, nz);
         if (gy > -1.2) { p.x = nx; p.z = nz; p.y = gy; }
         wish = Math.atan2(pdx0, pdz0);
-        if (chase && d < reach && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2.5) { n.hitT = thug ? 1.05 : 0.95; chr.swing = 1; chr.swingTime = 0.3; if (player.car) { if (this.onPunchCar) this.onPunchCar(n, player.car); } else if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
-        if (n.t <= 0 || d > (thug ? 70 : 45) || !chase || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
+        if (!soldier && chase && d < reach && n.hitT <= 0 && n.stagger <= 0 && Math.abs(player.pos.y - p.y) < 2.5) { n.hitT = thug ? 1.05 : 0.95; chr.swing = 1; chr.swingTime = 0.3; if (player.car) { if (this.onPunchCar) this.onPunchCar(n, player.car); } else if (this.onPunch) this.onPunch(n, pdx0 / d, pdz0 / d); }
+        if (n.t <= 0 || d > (thug ? 70 : soldier ? 60 : 45) || !chase || (n.kind === 'cop' && !player.wanted && n.t < 8)) { n.back = n.home ? 'stand' : 'walk'; if (!n.home) { let best = 0, bd = 1e9; RINGS.forEach((r, i) => { const [x, z] = ringPoint(r, ringS(r, p.x, p.z)); const dd = Math.hypot(x - p.x, z - p.z); if (dd < bd) { bd = dd; best = i; } }); n.ring = best; n.s = ringS(RINGS[best], p.x, p.z); } n.mode = 'return'; }
       } else if (n.mode === 'flee') {
         // 놀라서 플레이어 반대쪽으로 달아난다.
         n.t -= dt;
@@ -337,6 +361,7 @@ export class Residents {
 
       // 가까이 오면 고개를 돌려 보고 손을 흔든다
       // 수배 중이면 근처 경찰관이 달려든다.
+      if (n.kind === 'soldier' && this.alert && pd < 75 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'return')) { n.mode = 'fight'; n.t = 30; n.stagger = 0; }
       if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
       const menace = n.kind === 'thug' && player.active && pd < 6.5 && Math.abs(player.pos.y - p.y) < 2; // 불량배는 주민보다 멀리서부터 으름장을 놓는다
       if ((near || menace) && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
@@ -346,6 +371,7 @@ export class Residents {
       } else { chr.wave = damp(chr.wave, 0, 8, dt); chr.fist = 0; }
       n.look = damp(n.look || 0, lookYaw, 6, dt);
 
+      if (n.kind === 'soldier') chr.aim = n.mode === 'fight' ? 1 : 0;
       if (n.mark) { n.mark.rotation.y += dt * 2.5; n.mark.position.y = 2.25 + Math.sin(n.mark.rotation.y * 1.3) * 0.07; }
       chr.update(dt, { pos: p, vel: n.vel, grounded, wishHeading: wish, landed, jumped: false, lie: n.lie, lookYaw: n.look });
     }
