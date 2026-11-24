@@ -81,6 +81,12 @@ export class World {
     return out;
   }
 
+  /** 현재 시나리오에서 이 주의 시작 소유국(역사 템플릿이면 그 시대 국가). */
+  startOwner(id: ProvinceId): CountryId | undefined {
+    const i = this.index.get(id); if (i === undefined) return undefined;
+    const sc = this.active;
+    return sc.polities && sc.owners ? (sc.polities[sc.owners[i]]?.id ?? this.provinces[i].owner) : this.provinces[i].owner;
+  }
   country(id: CountryId): CountryMeta | undefined { return this.countries.get(id); }
   /** 화면 표시용 이름: 한국어 이름, 없으면 영문명. */
   label(id: CountryId): string { const c = this.countries.get(id); return c ? (c.nameKo || c.name) : id; }

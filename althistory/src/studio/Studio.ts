@@ -250,11 +250,11 @@ export class Studio {
       ${sec('base', '1. 시작점', `<div class="row"><select id="s-base"><option value="blank">빈 지도 (전부 기타 세력)</option><option value="modern20">현대 주요 26개국 기반</option><optgroup label="기존 템플릿 복제">${cloneOpts}</optgroup></select><button type="button" class="ghost small" data-act="load">불러오기</button></div><div class="hint">불러오면 지금 편집 중인 내용은 사라집니다.</div>`)}
       ${sec('info', '2. 기본 정보', `
         <label>이름</label><input data-f="name" value="${E(d.name)}" maxlength="40" />
-        <div class="row2"><div><label>연도 표시</label><input data-f="year" value="${E(d.year)}" placeholder="예: 1815년" maxlength="24" /></div><div><label>시대</label><select data-f="era">${ERAS.map((e) => `<option ${e === d.era ? 'selected' : ''}>${e}</option>`).join('')}</select></div></div>
+        <div class="row2"><div><label>연도 표시</label><input data-f="year" value="${E(d.year)}" placeholder="1815년" maxlength="24" /></div><div><label>시대</label><select data-f="era">${ERAS.map((e) => `<option ${e === d.era ? 'selected' : ''}>${e}</option>`).join('')}</select></div></div>
         <label>한 줄 소개</label><input data-f="tagline" value="${E(d.tagline)}" maxlength="80" />
         <label>설명</label><textarea data-f="description" rows="2" maxlength="400">${E(d.description)}</textarea>
         <label>배경 브리핑 (AI가 참고하는 역사적 맥락)</label><textarea data-f="briefing" rows="3" maxlength="2000">${E(d.briefing)}</textarea>
-        <label>GM 지침 (AI 판정 규칙: 특별한 장군·보정 등)</label><textarea data-f="gmNotes" rows="3" maxlength="3000" placeholder="예: A국의 장군 ○○는 해전에서 압도적으로 강하다…">${E(d.gmNotes)}</textarea>
+        <label>GM 지침 (AI 판정 규칙: 특별한 장군·보정 등)</label><textarea data-f="gmNotes" rows="3" maxlength="3000" placeholder="">${E(d.gmNotes)}</textarea>
         <div class="row3"><div><label>시작 연도 (기원전은 음수)</label>${num('startYear', d.startYear)}</div><div><label>월</label>${num('startMonth', d.startMonth, 'min="1" max="12"')}</div><div><label>턴 길이(개월)</label>${num('turnMonths', d.turnMonths, 'min="1" max="24"')}</div></div>
         <label>제작자</label><input data-f="author" value="${E(d.author)}" maxlength="40" />`)}
       ${sec('pols', '3. 국가와 영토 칠하기', `
@@ -276,7 +276,7 @@ export class Studio {
         <div class="hint">군대가 없는 국가는 국력에 맞춰 자동 생성됩니다. 군대를 직접 만들면 그 국가는 만든 군대만 갖습니다. 병력 단위는 천 명.</div>
         ${d.armies.map((a, i) => `<div class="arow"><div class="row"><select data-a="${i}" data-f="c">${polOpts(a.c)}</select><input data-a="${i}" data-f="n" value="${E(a.n)}" placeholder="군대 이름" /></div>
           <div class="row"><input data-a="${i}" data-f="g" value="${E(a.g)}" placeholder="장군 이름" /><label>능력${num('skill', a.skill, `min="1" max="10" data-a="${i}"`)}</label><label>병력${num('troops', a.troops, `min="0.5" step="0.5" data-a="${i}"`)}</label></div>
-          <div class="row"><input data-a="${i}" data-f="t" value="${E(a.trait)}" placeholder="특성 (예: 해전의 신 · 불패)" /><label class="inl"><input type="checkbox" data-a="${i}" data-f="navy" ${a.navy ? 'checked' : ''}/>함대</label></div>
+          <div class="row"><input data-a="${i}" data-f="t" value="${E(a.trait)}" placeholder="특성" /><label class="inl"><input type="checkbox" data-a="${i}" data-f="navy" ${a.navy ? 'checked' : ''}/>함대</label></div>
           <div class="row"><button type="button" class="ghost small" data-act="pick-army" data-i="${i}">📍 위치 지정</button><span class="hint">${a.at ? E(w.provLabel(a.at)) : '위치 미지정(저장 시 제외됨)'}</span><button type="button" class="ghost small" data-act="del-army" data-i="${i}">✕</button></div></div>`).join('')}
         <button type="button" class="ghost small" data-act="add-army">+ 군대 추가</button>`)}
       ${sec('save', '6. 검증·테스트·저장·공유', `

@@ -34,6 +34,27 @@ const fmtPop = (n: number): string => (n >= 1e8 ? `${(n / 1e8).toFixed(1)}억` :
 
 const ERA_ORDER = ['사용자', '고대', '중세', '근세', '근대', '현대'];
 
+/** WebLLM 0.2.89 기본 목록에 있는 Qwen 모델 (q4f16_1). gb = 그 목록의 vram_required_MB ÷ 1024. */
+const DEFAULT_QWEN = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+const QWEN_GROUPS: { label: string; items: { id: string; name: string; gb: string; note?: string }[] }[] = [
+  { label: 'Qwen2.5 (가볍고 안정적)', items: [
+    { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', name: 'Qwen2.5 0.5B', gb: '0.9', note: '아주 가벼움, 판정 품질 낮음' },
+    { id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', name: 'Qwen2.5 1.5B', gb: '1.6', note: '노트북 내장 GPU' },
+    { id: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', name: 'Qwen2.5 3B', gb: '2.4', note: '기본값' },
+    { id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC', name: 'Qwen2.5 7B', gb: '5.0', note: '외장 GPU 권장' },
+  ] },
+  { label: 'Qwen3', items: [
+    { id: 'Qwen3-1.7B-q4f16_1-MLC', name: 'Qwen3 1.7B', gb: '2.0' },
+    { id: 'Qwen3-4B-q4f16_1-MLC', name: 'Qwen3 4B', gb: '3.4' },
+    { id: 'Qwen3-8B-q4f16_1-MLC', name: 'Qwen3 8B', gb: '5.6', note: '외장 GPU 권장' },
+  ] },
+  { label: 'Qwen3.5 (최신)', items: [
+    { id: 'Qwen3.5-2B-q4f16_1-MLC', name: 'Qwen3.5 2B', gb: '2.2' },
+    { id: 'Qwen3.5-4B-q4f16_1-MLC', name: 'Qwen3.5 4B', gb: '3.8' },
+    { id: 'Qwen3.5-9B-q4f16_1-MLC', name: 'Qwen3.5 9B', gb: '6.3', note: '외장 GPU 권장' },
+  ] },
+];
+
 export interface GameOptions { workerUrl: string; data: WorldData; onStatus: (msg: string, isError?: boolean) => void }
 
 type Phase = 'intro' | 'pick' | 'play' | 'studio';
@@ -53,7 +74,7 @@ export async function startApp(opts: GameOptions) {
   }
   const view = await MapView.create({ container: 'map', workerUrl: opts.workerUrl, data: opts.data });
 
-  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, webllmModel: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
+  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, webllmModel: DEFAULT_QWEN, ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
   if (cfg.provider === 'local') cfg.provider = 'gemini'; // 예전 "규칙 모드" 설정은 AI 선택으로 옮긴다
   const thumbs = new Thumbs(world, view.geometries());
   let eraFilter = '전체';
@@ -94,26 +115,29 @@ export async function startApp(opts: GameOptions) {
         <div class="row"><input id="${p}-ckey" type="password" placeholder="sk-ant-…" autocomplete="off" /><input id="${p}-cmodel" class="model" placeholder="${DEFAULT_CLAUDE_MODEL}" title="모델" /><button type="button" id="${p}-ctest" class="ghost small">키 확인</button></div>
       </div>
       <div class="ai-key" id="${p}-webllm">
-        <label for="${p}-wmodel">Qwen 모델 (처음 한 번 수백 MB~수 GB 내려받음)</label>
-        <input id="${p}-wmodel" placeholder="Qwen2.5-3B-Instruct-q4f16_1-MLC" />
+        <label for="${p}-wsel">Qwen 모델 고르기 <span class="hint">(처음 한 번 내려받음 · 괄호는 WebLLM이 밝힌 필요 GPU 메모리, 내려받는 크기도 대략 비슷)</span></label>
+        <div class="row"><select id="${p}-wsel">${QWEN_GROUPS.map((g) => `<optgroup label="${g.label}">${g.items.map((m) => `<option value="${m.id}">${m.name} (약 ${m.gb} GB)${m.note ? ` · ${m.note}` : ''}</option>`).join('')}</optgroup>`).join('')}<option value="__custom">직접 입력…</option></select>
+        <input id="${p}-wmodel" class="model" placeholder="WebLLM 모델 ID" title="WebLLM 모델 ID" hidden /></div>
       </div>
       <div class="ai-note" id="${p}-note"></div>`;
     const sync = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value;
       container.querySelectorAll<HTMLElement>('.ai-card').forEach((el) => el.classList.toggle('on', el.dataset.ai === v));
+      $(`${p}-wmodel`).hidden = $<HTMLSelectElement>(`${p}-wsel`).value !== '__custom';
       $(`${p}-gemini`).hidden = v !== 'gemini'; $(`${p}-claude`).hidden = v !== 'claude'; $(`${p}-webllm`).hidden = v !== 'webllm';
       const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim());
       $(`${p}-note`).textContent = keyless ? '키를 넣기 전에는 AI 대신 간이 판정으로 진행됩니다. 키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.' : '키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.';
     };
     container.querySelectorAll(`input[name=${p}-prov]`).forEach((r) => r.addEventListener('change', sync));
     container.addEventListener('input', sync);
+    container.addEventListener('change', sync);
     const read = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value as ProviderId | undefined;
       cfg = {
         provider: v ?? 'gemini',
         geminiKey: $<HTMLInputElement>(`${p}-key`).value.trim(), geminiModel: $<HTMLInputElement>(`${p}-model`).value.trim() || 'gemini-flash-latest',
         claudeKey: $<HTMLInputElement>(`${p}-ckey`).value.trim(), claudeModel: $<HTMLInputElement>(`${p}-cmodel`).value.trim() || DEFAULT_CLAUDE_MODEL,
-        webllmModel: $<HTMLInputElement>(`${p}-wmodel`).value.trim() || 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
+        webllmModel: ($<HTMLSelectElement>(`${p}-wsel`).value === '__custom' ? $<HTMLInputElement>(`${p}-wmodel`).value.trim() : $<HTMLSelectElement>(`${p}-wsel`).value) || DEFAULT_QWEN,
       };
       saveJson(CFG_KEY, cfg);
     };
@@ -121,7 +145,9 @@ export async function startApp(opts: GameOptions) {
       (container.querySelector(`input[name=${p}-prov][value=${cfg.provider === 'local' ? 'gemini' : cfg.provider}]`) as HTMLInputElement).checked = true;
       $<HTMLInputElement>(`${p}-key`).value = cfg.geminiKey; $<HTMLInputElement>(`${p}-model`).value = cfg.geminiModel;
       $<HTMLInputElement>(`${p}-ckey`).value = cfg.claudeKey; $<HTMLInputElement>(`${p}-cmodel`).value = cfg.claudeModel;
-      $<HTMLInputElement>(`${p}-wmodel`).value = cfg.webllmModel;
+      const known = QWEN_GROUPS.some((g) => g.items.some((m) => m.id === cfg.webllmModel));
+      $<HTMLSelectElement>(`${p}-wsel`).value = known ? cfg.webllmModel : '__custom';
+      $<HTMLInputElement>(`${p}-wmodel`).value = known ? '' : cfg.webllmModel;
       sync();
     };
     const test = (btn: string, fn: (c: LlmConfig) => Promise<string>) => $(btn).addEventListener('click', async () => {
@@ -160,7 +186,7 @@ export async function startApp(opts: GameOptions) {
       const warring = new Set((sc.wars ?? []).flat());
       const armies = new Map<string, number>(); (sc.armies ?? []).forEach((a) => armies.set(a.c, (armies.get(a.c) ?? 0) + 1));
       const score = (i: number) => { const id = sc.polities![i].id; return (warring.has(id) ? 1e6 : 0) + (armies.get(id) ?? 0) * 1e4 + (cnt.get(i) ?? 0); };
-      return [...cnt.keys()].filter((i) => !sc.polities![i]?.neutral).sort((x, y) => score(y) - score(x)).slice(0, n).map((i) => ({ name: sc.polities![i].nameKo || sc.polities![i].name, color: sc.polities![i].color }));
+      return [...cnt.keys()].filter((i) => !sc.polities![i]?.neutral && !sc.polities![i]?.regional).sort((x, y) => score(y) - score(x)).slice(0, n).map((i) => ({ name: sc.polities![i].nameKo || sc.polities![i].name, color: sc.polities![i].color }));
     }
     return ['USA', 'CHN', 'RUS', 'IND', 'KOR', 'JPN'].slice(0, n).map((id) => world.modernCountry(id)).filter(Boolean).map((c) => ({ name: c!.nameKo || c!.name, color: c!.color }));
   };
@@ -253,8 +279,9 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- 새 게임 / 불러오기 ----------
   /** 시나리오를 지도에 반영한다(국가 색, 시작 소유 상태, 초기 시점). */
+  function countStatus() { opts.onStatus(`주 ${world.provinces.length.toLocaleString()}개 · 국가 ${[...world.countries.values()].filter((c) => !c.neutral).length}개 · Natural Earth`); }
   function showScenario(sc: Scenario, fit = true) {
-    world.useScenario(sc);
+    world.useScenario(sc); countStatus();
     view.setColors(world.countryList);
     view.setMicro(!world.isHistorical);
     const owners = world.initialOwners();
@@ -268,7 +295,7 @@ export async function startApp(opts: GameOptions) {
     if (!s.armies) { world.useScenario(sc); buildArmies(world, s, sc); }
     state = s; undoSnap = null; lastDelta = {}; tab = 'log'; focusArmy = null;
     templateId = sc.id;
-    world.useScenario(sc); view.setColors(world.countryList); view.setMicro(!world.isHistorical);
+    world.useScenario(sc); countStatus(); view.setColors(world.countryList); view.setMicro(!world.isHistorical);
     view.setControl(s.owner, s.controller);
     view.setPlayer(s.playerId); view.setHighlightCountry(null); view.setSelectedProvince(null);
     selCountry = s.playerId; selProv = null; setTab('log');
@@ -345,7 +372,7 @@ export async function startApp(opts: GameOptions) {
       }
     }
     if (selProv) {
-      const own = state?.owner[selProv] ?? world.province(selProv)?.owner ?? '', ctl = state?.controller[selProv] ?? own;
+      const own = state?.owner[selProv] ?? world.startOwner(selProv) ?? '', ctl = state?.controller[selProv] ?? own;
       const here = (state?.armies ?? []).filter((a) => a.at === selProv && a.troops > 0);
       const hereHtml = here.length ? `<div class="here">${here.map((a) => `<div>${a.navy ? '⚓' : '⚔'} <b>${esc(a.name)}</b> · ${esc(a.general.name)} (${a.general.skill}/10) · ${a.troops}천 <span class="hint">${esc(world.label(a.owner))}</span></div>`).join('')}</div>` : '';
       lines.push(`<div class="prov">📍 <b>${esc(world.provLabel(selProv))}</b>${own !== ctl ? ` <span class="hint">(소유 ${esc(world.label(own))} · 점령 ${esc(world.label(ctl))})</span>` : ''}
@@ -370,7 +397,7 @@ export async function startApp(opts: GameOptions) {
     const p = world.province(id);
     if (!p) return;
     selProv = id;
-    selCountry = state ? state.controller[id] : p.owner;
+    selCountry = state ? state.controller[id] : (world.startOwner(id) ?? p.owner);
     view.setSelectedProvince(id);
     view.setHighlightCountry(phase === 'pick' || selCountry !== state?.playerId ? selCountry : null);
     renderCard();
@@ -467,7 +494,7 @@ export async function startApp(opts: GameOptions) {
         ${r.notes.length ? `<ul class="notes">${r.notes.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
         ${r.rejected.length ? `<ul class="rej">${r.rejected.map((h) => `<li>엔진이 거부: ${esc(h)}</li>`).join('')}</ul>` : ''}
         <div class="mode">판정: ${esc(r.mode)}</div></div>`;
-    }).join('') : '<div class="hint">아직 기록이 없습니다. 아래에 명령을 적고 "턴 진행"을 누르세요. 지도에서 주를 클릭하면 왼쪽 카드의 "명령에 넣기"로 이름을 넣을 수 있습니다.</div>';
+    }).join('') : '<div class="hint">아직 기록이 없습니다.</div>';
     $<HTMLButtonElement>('btn-undo').disabled = !undoSnap || busy;
     $<HTMLButtonElement>('btn-go').disabled = busy || dead;
     $<HTMLButtonElement>('btn-pass').disabled = busy || dead;
@@ -601,7 +628,7 @@ export async function startApp(opts: GameOptions) {
   $<HTMLButtonElement>('btn-next').disabled = false;
   introMsg('');
   setPhase('intro');
-  opts.onStatus(`주 ${world.provinces.length.toLocaleString()}개 · 국가 ${[...world.countries.values()].filter((c) => !c.neutral).length}개 · Natural Earth`);
+  countStatus();
 
   // 테스트/디버그용 훅
   (window as unknown as Record<string, unknown>).__game = {

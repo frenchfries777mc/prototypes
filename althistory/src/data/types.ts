@@ -13,7 +13,7 @@ export interface CountryMeta {
 export interface ProvinceMeta { id: ProvinceId; name: string; nameKo: string | null; adm0: string; owner: CountryId }
 export interface PolityDef {
   id: CountryId; name: string; nameKo: string | null; color: string; stats: Stats | null;
-  aliases?: string[]; provinces?: number; neutral?: boolean; npc?: boolean;
+  aliases?: string[]; provinces?: number; neutral?: boolean; npc?: boolean; regional?: boolean;
 }
 export interface ArmyDef {
   c: CountryId; n: string; g: string; skill?: number; trait?: string; troops: number; at: ProvinceId; navy?: boolean;

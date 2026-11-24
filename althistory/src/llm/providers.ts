@@ -110,7 +110,7 @@ let engineModel = '';
 async function getEngine(model: string, onProgress?: (m: string) => void) {
   if (engine && engineModel === model) return engine;
   if (!('gpu' in navigator)) throw new LlmError('이 브라우저는 WebGPU를 지원하지 않아 브라우저 Qwen을 쓸 수 없습니다. 최신 Chrome/Edge 데스크톱을 쓰거나 다른 모드를 선택하세요.');
-  const url = 'https://esm.run/@mlc-ai/web-llm';
+  const url = 'https://esm.run/@mlc-ai/web-llm@0.2.89'; // 메뉴의 모델 목록과 같은 버전으로 고정
   let mod;
   try { mod = await import(/* @vite-ignore */ url); } catch (e) { throw new LlmError(`WebLLM 라이브러리를 불러오지 못했습니다(인터넷 필요): ${(e as Error).message}`); }
   onProgress?.('모델을 내려받는 중… (처음 한 번만, 수백 MB~수 GB)');
@@ -128,9 +128,13 @@ async function callWebLlm(cfg: LlmConfig, system: string, msgs: Msg[], hooks: Ho
   let out;
   try { out = await eng.chat.completions.create({
     messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))],
-    temperature: 0.7, max_tokens: 1800, response_format: { type: 'json_object' },
+    temperature: 0.7, max_tokens: 1800,
+    // response_format json_object는 일부 모델에서 "Failed to initialize the grammar matcher" 오류를 내서 쓰지 않는다.
+    // JSON은 프롬프트로 요구하고 응답에서 { … } 부분만 뽑아 쓴다. Qwen3 계열은 생각 모드를 꺼서 바로 JSON을 쓰게 한다.
+    ...(/^Qwen3/.test(cfg.webllmModel) ? { extra_body: { enable_thinking: false } } : {}),
   }); } catch (e) { throw new LlmError(`Qwen 추론 중 오류: ${(e as Error).message.slice(0, 160)}`); }
-  return out.choices?.[0]?.message?.content ?? '';
+  // Qwen3 계열은 <think>…</think>를 앞에 붙일 수 있어 잘라 낸다
+  return String(out.choices?.[0]?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
 /** 명령 하나를 판정한다. LLM 모드는 형식이 틀리면 오류 내용을 알려 주고 한 번 다시 시도한다. */

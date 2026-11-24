@@ -246,6 +246,9 @@ const matchSel = (i, sel) => {
 const scaleStats = (st, k) => ({ stability: st.stability, economy: Math.round(st.economy * k), military: Math.round(st.military * k), influence: Math.round(st.influence * k) });
 const toStats = (a) => ({ stability: a[0], economy: a[1], military: a[2], influence: a[3] });
 
+// 지역 세력은 회색 쪽으로 섞은 차분한 색: 그 시대의 주역 국가가 눈에 띄게, 그래도 서로는 구분되게
+const muted = (hex) => { const n = parseInt(hex.slice(1), 16), g = [0x7a, 0x80, 0x8c], k = 0.62;
+  return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v * (1 - k) + g[i] * k).toString(16).padStart(2, '0')).join(''); };
 function compileHistory(def) {
   const tag = def.id;
   const pol = Object.entries(def.polities).map(([id, d]) => ({
@@ -278,6 +281,18 @@ function compileHistory(def) {
         idxOf.set(m, pol.length - 1);
       }
       owner[i] = idxOf.get(m);
+    } else if (!NEUTRAL.has(m) && countries.has(m)) {
+      // 템플릿이 칠하지 않은 땅도 플레이할 수 있게: 현대 나라 경계 단위의 "지역 세력"(약한 능력치)
+      const rid = `R_${m}`;
+      if (!idxOf.has(rid)) {
+        const c = countries.get(m); const base = statsFor({ id: m, pop: c.pop, gdp: c.gdp, income: c.income });
+        const cap = (v) => Math.min(Math.round(v * 0.3), 28);
+        pol.push({ id: rid, name: `${c.name} region`, nameKo: `${c.nameKo ?? c.name} 지역 세력`, color: muted(colorOf[m] ?? '#8a93a3'),
+          stats: { stability: 45, economy: Math.max(cap(base.economy), 6), military: Math.max(cap(base.military), 5), influence: Math.max(cap(base.influence), 3) },
+          aliases: [`${c.nameKo ?? c.name} 지역`], provinces: 0, regional: true });
+        idxOf.set(rid, pol.length - 1);
+      }
+      owner[i] = idxOf.get(rid);
     } else owner[i] = unc();
   }
   owner.forEach((o) => { pol[o].provinces++; });
@@ -410,7 +425,7 @@ console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
 console.log(`시나리오 템플릿: 현대 ${scenarios.length}개 + 역사 ${historical.length}개`);
-for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length}, 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
+for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length} (지역 세력 ${h.polities.filter((p) => p.regional).length}), 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
 if (histWarnings.length) console.log('\n[역사 규칙 경고]\n' + histWarnings.join('\n'));
 console.log(`reach 평균 ${(reachTotal / geoms.length).toFixed(1)}개/주`);
 console.log(`world.topo.json ${kb(outTopo)} · reach.json ${kb(path.join(OUT, 'reach.json'))} · countries.json ${kb(path.join(OUT, 'countries.json'))}`);

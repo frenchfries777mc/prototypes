@@ -52,8 +52,11 @@ export function systemPrompt(world: World, compact: boolean): string {
   const tm = world.active.turnMonths ?? 1;
   const rules = RULES.replace('한 턴은 1개월이다.', `한 턴은 ${tm}개월이다.`);
   if (compact) return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}`;
-  const ids = [...world.countries.values()].filter((c) => !c.neutral).map((c) => `${c.id}=${c.name}${c.nameKo && c.nameKo !== c.name ? `(${c.nameKo})` : ''}`).join('; ');
-  return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}\n\n${EXAMPLE}\n\nCOUNTRY_IDS: ${ids}`;
+  const all = [...world.countries.values()].filter((c) => !c.neutral);
+  const ids = all.filter((c) => !c.id.startsWith('R_')).map((c) => `${c.id}=${c.name}${c.nameKo && c.nameKo !== c.name ? `(${c.nameKo})` : ''}`).join('; ');
+  // 템플릿이 칠하지 않은 땅의 "지역 세력"은 R_<현대 ISO 코드> 규칙으로만 알려 준다(목록이 길어 토큰 절약)
+  const reg = all.filter((c) => c.id.startsWith('R_')).map((c) => c.id.slice(2)).join(',');
+  return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}\n\n${EXAMPLE}\n\nCOUNTRY_IDS: ${ids}${reg ? `\nREGIONAL_IDS: R_<ISO3> = 그 현대 나라 영역에 있는 이 시대의 지역 세력(소국·부족·도시국가 등). 사용 가능한 ISO3: ${reg}` : ''}`;
 }
 
 /** 군대 목록: 플레이어 군대 전부 + 교전국/근처 군대. 장군의 능력과 특성을 함께 보여 준다. */

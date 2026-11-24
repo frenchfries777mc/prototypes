@@ -144,7 +144,16 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   ok(/키가 올바르지 않습니다/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t9, 'Claude 401: 턴 소모 없이 키 안내');
 
   // ---- Qwen 오류 ----
-  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=webllm]'); await page.click('#ov-apply');
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=webllm]');
+  const qopts = await page.$$eval('#ov-wsel option', (os) => os.map((o) => o.value));
+  ok(qopts.length >= 10 && qopts.includes('Qwen2.5-3B-Instruct-q4f16_1-MLC') && qopts.includes('__custom'), 'Qwen 모델 선택 창: ' + qopts.length + '개');
+  ok(await page.isHidden('#ov-wmodel'), '직접 입력 칸은 기본으로 숨김');
+  await page.selectOption('#ov-wsel', '__custom'); ok(await page.isVisible('#ov-wmodel'), '직접 입력 선택 시 칸 표시');
+  await page.fill('#ov-wmodel', 'Qwen3-4B-q4f32_1-MLC'); await page.click('#ov-apply');
+  const savedCfg = await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('althist-config-v1') || 'null'); } catch (e) { return 'ERR ' + e.message; } });
+  ok(savedCfg?.webllmModel === 'Qwen3-4B-q4f32_1-MLC', '직접 입력한 모델 저장: ' + JSON.stringify(savedCfg)?.slice(0, 160));
+  await page.click('#btn-menu'); ok((await page.inputValue('#ov-wsel')) === '__custom' && (await page.inputValue('#ov-wmodel')) === 'Qwen3-4B-q4f32_1-MLC', '다시 열면 직접 입력 값 복원');
+  await page.selectOption('#ov-wsel', 'Qwen3.5-2B-q4f16_1-MLC'); await page.click('#ov-apply');
   await page.fill('#g-cmd', '군비를 늘린다'); await page.click('#btn-go'); await idle();
   ok(/WebGPU|WebLLM/.test(await page.textContent('#g-msg')), 'Qwen 사용 불가 환경의 오류 안내');
 

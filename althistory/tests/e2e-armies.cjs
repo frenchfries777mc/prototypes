@@ -19,10 +19,11 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   ok((await page.textContent('#g-date')).startsWith('기원전 264년 3월'), '기원전 날짜 표시: ' + (await page.textContent('#g-date')).slice(0, 24));
   await page.click('#btn-pass'); await page.waitForTimeout(200); await idle();
   ok((await page.textContent('#g-date')).startsWith('기원전 264년 9월'), '한 턴(6개월) 뒤 기원전 264년 9월');
-  const wild = await page.evaluate(() => { const g = window.__game, s = g.state, w = g.world; const out = [];
-    for (const a of s.armies.filter((x) => x.owner === 'ROM')) { const i = w.index.get(a.at); for (const j of w.reach[i]) { const id = w.provinces[j].id; if (w.country(s.controller[id])?.neutral) out.push({ army: a.id, id }); } }
-    return out[0]; });
-  ok(!!wild, '로마 군대 근처에 주인 없는 땅(기타 세력)이 있다: ' + (wild && wild.id));
+  const land = await page.evaluate(() => { const g = window.__game, s = g.state, w = g.world;
+    const gray = w.provinces.filter((p) => w.country(s.controller[p.id])?.neutral && !/ATA/.test(p.owner)).length;
+    const reg = w.provinces.filter((p) => s.controller[p.id]?.startsWith('R_')).length;
+    return { gray, reg, stats: Object.keys(s.stats).filter((c) => c.startsWith('R_')).length }; });
+  ok(land.gray === 0 && land.reg > 1000 && land.stats > 100, `주인 없는 회색 땅 없이 모두 플레이 가능한 나라(지역 세력 ${land.stats}개, ${land.reg}주)`);
 
   // ---- Gemini 모의: 군대 규칙 검증 ----
   await page.evaluate(() => window.__game.start('KOR', 'modern-2026')); await page.waitForTimeout(800);
