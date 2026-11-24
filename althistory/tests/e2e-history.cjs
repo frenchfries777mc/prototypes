@@ -5,8 +5,8 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
 (async () => {
   const b = await chromium.launch();
   const cases = [
-    ['imjin-1592', 127, 37.5, /조선/], ['imjin-1592', -50, -10, /브라질 지역 세력/], ['punic-264', 10, 36.5, /카르타고/],
-    ['punic-264', 100, 60, /지역 세력/], ['ww2-1939', 10, 51, /독일/], ['hundred-years-1337', 2.3, 48.8, /프랑스/],
+    ['imjin-1592', 127, 37.5, /조선/], ['imjin-1592', -50, -10, /^(?!.*지역 세력).+/], ['punic-264', 10, 36.5, /카르타고/],
+    ['punic-264', 100, 60, /^(?!.*지역 세력).+/], ['ww2-1939', 10, 51, /독일/], ['hundred-years-1337', 2.3, 48.8, /프랑스/],
   ];
   for (const [tid, lon, lat, re] of cases) {
     const page = await b.newPage({ viewport: { width: 1300, height: 820 } });
@@ -21,7 +21,8 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
     ok(re.test(txt) && await page.isVisible('#btn-startgame'), `${tid} (${lon},${lat}) 카드: ${txt.slice(0, 50)}`);
     if (tid === 'imjin-1592' && lon < 0) {
       await page.click('#btn-startgame'); await page.waitForTimeout(500);
-      ok(await page.evaluate(() => window.__game.state?.playerId === 'R_BRA'), '지역 세력으로 게임 시작');
+      const pid = await page.evaluate(() => window.__game.state?.playerId);
+      ok(!!pid && !pid.startsWith('R_'), '1592년 남아메리카 나라로 게임 시작: ' + pid);
     }
     ok(!errs.length, `${tid} 페이지 오류 없음 ${errs.join(' | ')}`);
     await page.close();

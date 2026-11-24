@@ -19,11 +19,15 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   ok((await page.textContent('#g-date')).startsWith('기원전 264년 3월'), '기원전 날짜 표시: ' + (await page.textContent('#g-date')).slice(0, 24));
   await page.click('#btn-pass'); await page.waitForTimeout(200); await idle();
   ok((await page.textContent('#g-date')).startsWith('기원전 264년 9월'), '한 턴(6개월) 뒤 기원전 264년 9월');
-  const land = await page.evaluate(() => { const g = window.__game, s = g.state, w = g.world;
-    const gray = w.provinces.filter((p) => w.country(s.controller[p.id])?.neutral && !/ATA/.test(p.owner)).length;
-    const reg = w.provinces.filter((p) => s.controller[p.id]?.startsWith('R_')).length;
-    return { gray, reg, stats: Object.keys(s.stats).filter((c) => c.startsWith('R_')).length }; });
-  ok(land.gray === 0 && land.reg > 1000 && land.stats > 100, `주인 없는 회색 땅 없이 모두 플레이 가능한 나라(지역 세력 ${land.stats}개, ${land.reg}주)`);
+  const land = await page.evaluate(() => { const w = window.__game.world, bad = {};
+    for (const sc of w.scenarios.filter((x) => x.polities && x.owners)) {
+      const hit = new Set();
+      sc.owners.forEach((o, k) => { const p = sc.polities[o];
+        if (p.id.startsWith('R_') || /지역 세력/.test(p.nameKo || '') || (p.neutral && !/ATA/.test(w.provinces[k].owner) && !/무인지/.test(p.nameKo || ''))) hit.add(p.nameKo || p.id); });
+      if (hit.size) bad[sc.id] = [...hit].slice(0, 5);
+    }
+    return bad; });
+  ok(Object.keys(land).length === 0, '역사 템플릿 전부 "지역 세력"·주인 없는 땅 없이 실제 나라로 채움 ' + JSON.stringify(land).slice(0, 400));
 
   // ---- Gemini 모의: 군대 규칙 검증 ----
   await page.evaluate(() => window.__game.start('KOR', 'modern-2026')); await page.waitForTimeout(800);

@@ -6,7 +6,7 @@ import type { GameState } from '../engine/state';
 import type { Army } from '../engine/state';
 import { armiesOf, cloneState, controlledBy, fmtDate, getRel, isAlive, isAtWar, newGame, ownedBy, totalTroops, warsOf } from '../engine/state';
 import { buildArmies, reachWithin } from '../engine/armies';
-import { DEFAULT_CLAUDE_MODEL, LlmError, adjudicate, providerLabel, testClaude, testGemini } from '../llm/providers';
+import { DEFAULT_CLAUDE_MODEL, DEFAULT_OPENAI_MODEL, LlmError, adjudicate, listOpenAiModels, providerLabel, testClaude, testGemini } from '../llm/providers';
 import { Thumbs } from '../ui/thumbs';
 import type { LlmConfig, ProviderId } from '../llm/providers';
 import { MapView } from '../map/MapView';
@@ -34,6 +34,25 @@ const fmtPop = (n: number): string => (n >= 1e8 ? `${(n / 1e8).toFixed(1)}억` :
 
 const ERA_ORDER = ['사용자', '고대', '중세', '근세', '근대', '현대'];
 
+const CLAUDE_MODELS: { label: string; items: { id: string; name: string; note?: string }[] }[] = [
+  { label: 'Claude', items: [
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', note: '기본값' },
+    { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5', note: '더 저렴' },
+    { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5', note: '가장 저렴·빠름' },
+    { id: 'claude-fable-5-2', name: 'Claude Fable 5.2' },
+  ] },
+];
+const OPENAI_MODELS: { label: string; items: { id: string; name: string; note?: string }[] }[] = [
+  { label: '기본 목록 (키 확인을 누르면 내 키로 쓸 수 있는 목록으로 바뀜)', items: [
+    { id: 'gpt-5-mini', name: 'gpt-5-mini', note: '기본값' },
+    { id: 'gpt-5', name: 'gpt-5' },
+    { id: 'gpt-5-nano', name: 'gpt-5-nano', note: '가장 저렴' },
+    { id: 'gpt-4.1-mini', name: 'gpt-4.1-mini' },
+  ] },
+];
+/** 모델 선택 창 + "직접 입력" 칸 */
+const picker = (selId: string, inputId: string, groups: { label: string; items: { id: string; name: string; note?: string; gb?: string }[] }[]) =>
+  `<select id="${selId}" title="모델">${groups.map((g) => `<optgroup label="${g.label}">${g.items.map((m) => `<option value="${m.id}">${m.name}${m.gb ? ` (약 ${m.gb} GB)` : ''}${m.note ? ` · ${m.note}` : ''}</option>`).join('')}</optgroup>`).join('')}<option value="__custom">직접 입력…</option></select><input id="${inputId}" class="model" placeholder="모델 ID" title="모델 ID" hidden />`;
 /** WebLLM 0.2.89 기본 목록에 있는 Qwen 모델 (q4f16_1). gb = 그 목록의 vram_required_MB ÷ 1024. */
 const DEFAULT_QWEN = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
 const QWEN_GROUPS: { label: string; items: { id: string; name: string; gb: string; note?: string }[] }[] = [
@@ -74,7 +93,7 @@ export async function startApp(opts: GameOptions) {
   }
   const view = await MapView.create({ container: 'map', workerUrl: opts.workerUrl, data: opts.data });
 
-  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, webllmModel: DEFAULT_QWEN, ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
+  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, openaiKey: '', openaiModel: DEFAULT_OPENAI_MODEL, webllmModel: DEFAULT_QWEN, ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
   if (cfg.provider === 'local') cfg.provider = 'gemini'; // 예전 "규칙 모드" 설정은 AI 선택으로 옮긴다
   const thumbs = new Thumbs(world, view.geometries());
   let eraFilter = '전체';
@@ -100,54 +119,65 @@ export async function startApp(opts: GameOptions) {
   // ---------- AI 선택 (시작 화면과 메뉴에서 같은 모양을 재사용) ----------
   const AIS: { id: ProviderId; name: string; maker: string; desc: string }[] = [
     { id: 'gemini', name: 'Gemini', maker: 'Google', desc: '무료 API 키로 시작' },
-    { id: 'claude', name: 'Claude', maker: 'Anthropic', desc: 'API 키 · 유료(턴마다 과금)' },
+    { id: 'claude', name: 'Claude', maker: 'Anthropic', desc: '내 API 키 · 사용량만큼 과금' },
+    { id: 'openai', name: 'ChatGPT', maker: 'OpenAI', desc: '내 API 키 · 사용량만큼 과금' },
     { id: 'webllm', name: 'Qwen', maker: '내 브라우저에서 실행', desc: '키 없음 · WebGPU 필요(실험적)' },
   ];
   function mountAi(container: HTMLElement, p: string) {
     container.innerHTML = `<div class="ai-cards">${AIS.map((a) => `<label class="ai-card" data-ai="${a.id}"><input type="radio" name="${p}-prov" value="${a.id}" />
-        <span class="ai-logo ai-${a.id}">${a.name[0]}</span><span class="ai-txt"><b>${a.name}</b><span>${a.maker}</span><small>${a.desc}</small></span></label>`).join('')}</div>
+        <span class="ai-logo ai-${a.id}">${a.id === 'openai' ? 'GPT' : a.name[0]}</span><span class="ai-txt"><b>${a.name}</b><span>${a.maker}</span><small>${a.desc}</small></span></label>`).join('')}</div>
       <div class="ai-key" id="${p}-gemini">
         <label for="${p}-key">Gemini API 키 · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">무료 발급</a></label>
         <div class="row"><input id="${p}-key" type="password" placeholder="AIza…" autocomplete="off" /><input id="${p}-model" class="model" placeholder="gemini-flash-latest" title="모델" /><button type="button" id="${p}-test" class="ghost small">키 확인</button></div>
       </div>
       <div class="ai-key" id="${p}-claude">
-        <label for="${p}-ckey">Claude API 키 · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">발급</a> <span class="hint">(Claude 구독과 별도로 API 사용량만큼 과금)</span></label>
-        <div class="row"><input id="${p}-ckey" type="password" placeholder="sk-ant-…" autocomplete="off" /><input id="${p}-cmodel" class="model" placeholder="${DEFAULT_CLAUDE_MODEL}" title="모델" /><button type="button" id="${p}-ctest" class="ghost small">키 확인</button></div>
+        <label for="${p}-ckey">Claude API 키 · <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">발급</a></label>
+        <div class="row"><input id="${p}-ckey" type="password" placeholder="sk-ant-…" autocomplete="off" /><button type="button" id="${p}-ctest" class="ghost small">키 확인</button></div>
+        <div class="row">${picker(`${p}-csel`, `${p}-cmodel`, CLAUDE_MODELS)}</div>
+      </div>
+      <div class="ai-key" id="${p}-openai">
+        <label for="${p}-okey">OpenAI API 키 · <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">발급</a></label>
+        <div class="row"><input id="${p}-okey" type="password" placeholder="sk-…" autocomplete="off" /><button type="button" id="${p}-otest" class="ghost small">키 확인</button></div>
+        <div class="row">${picker(`${p}-osel`, `${p}-omodel`, OPENAI_MODELS)}</div>
       </div>
       <div class="ai-key" id="${p}-webllm">
         <label for="${p}-wsel">Qwen 모델 고르기 <span class="hint">(처음 한 번 내려받음 · 괄호는 WebLLM이 밝힌 필요 GPU 메모리, 내려받는 크기도 대략 비슷)</span></label>
-        <div class="row"><select id="${p}-wsel">${QWEN_GROUPS.map((g) => `<optgroup label="${g.label}">${g.items.map((m) => `<option value="${m.id}">${m.name} (약 ${m.gb} GB)${m.note ? ` · ${m.note}` : ''}</option>`).join('')}</optgroup>`).join('')}<option value="__custom">직접 입력…</option></select>
-        <input id="${p}-wmodel" class="model" placeholder="WebLLM 모델 ID" title="WebLLM 모델 ID" hidden /></div>
+        <div class="row">${picker(`${p}-wsel`, `${p}-wmodel`, QWEN_GROUPS)}</div>
       </div>
       <div class="ai-note" id="${p}-note"></div>`;
     const sync = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value;
       container.querySelectorAll<HTMLElement>('.ai-card').forEach((el) => el.classList.toggle('on', el.dataset.ai === v));
-      $(`${p}-wmodel`).hidden = $<HTMLSelectElement>(`${p}-wsel`).value !== '__custom';
-      $(`${p}-gemini`).hidden = v !== 'gemini'; $(`${p}-claude`).hidden = v !== 'claude'; $(`${p}-webllm`).hidden = v !== 'webllm';
-      const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim());
+      for (const k of ['w', 'c', 'o']) $(`${p}-${k}model`).hidden = $<HTMLSelectElement>(`${p}-${k}sel`).value !== '__custom';
+      for (const id of ['gemini', 'claude', 'openai', 'webllm']) $(`${p}-${id}`).hidden = v !== id;
+      const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim()) || (v === 'openai' && !$<HTMLInputElement>(`${p}-okey`).value.trim());
       $(`${p}-note`).textContent = keyless ? '키를 넣기 전에는 AI 대신 간이 판정으로 진행됩니다. 키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.' : '키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.';
     };
     container.querySelectorAll(`input[name=${p}-prov]`).forEach((r) => r.addEventListener('change', sync));
     container.addEventListener('input', sync);
     container.addEventListener('change', sync);
+    const pick = (k: string) => ($<HTMLSelectElement>(`${p}-${k}sel`).value === '__custom' ? $<HTMLInputElement>(`${p}-${k}model`).value.trim() : $<HTMLSelectElement>(`${p}-${k}sel`).value);
+    const put = (k: string, v: string) => {
+      const sel = $<HTMLSelectElement>(`${p}-${k}sel`); const known = [...sel.options].some((o) => o.value === v && v !== '__custom');
+      sel.value = known ? v : '__custom'; $<HTMLInputElement>(`${p}-${k}model`).value = known ? '' : v;
+    };
     const read = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value as ProviderId | undefined;
       cfg = {
         provider: v ?? 'gemini',
         geminiKey: $<HTMLInputElement>(`${p}-key`).value.trim(), geminiModel: $<HTMLInputElement>(`${p}-model`).value.trim() || 'gemini-flash-latest',
-        claudeKey: $<HTMLInputElement>(`${p}-ckey`).value.trim(), claudeModel: $<HTMLInputElement>(`${p}-cmodel`).value.trim() || DEFAULT_CLAUDE_MODEL,
-        webllmModel: ($<HTMLSelectElement>(`${p}-wsel`).value === '__custom' ? $<HTMLInputElement>(`${p}-wmodel`).value.trim() : $<HTMLSelectElement>(`${p}-wsel`).value) || DEFAULT_QWEN,
+        claudeKey: $<HTMLInputElement>(`${p}-ckey`).value.trim(), claudeModel: pick('c') || DEFAULT_CLAUDE_MODEL,
+        openaiKey: $<HTMLInputElement>(`${p}-okey`).value.trim(), openaiModel: pick('o') || DEFAULT_OPENAI_MODEL,
+        webllmModel: pick('w') || DEFAULT_QWEN,
       };
       saveJson(CFG_KEY, cfg);
     };
     const write = () => {
       (container.querySelector(`input[name=${p}-prov][value=${cfg.provider === 'local' ? 'gemini' : cfg.provider}]`) as HTMLInputElement).checked = true;
       $<HTMLInputElement>(`${p}-key`).value = cfg.geminiKey; $<HTMLInputElement>(`${p}-model`).value = cfg.geminiModel;
-      $<HTMLInputElement>(`${p}-ckey`).value = cfg.claudeKey; $<HTMLInputElement>(`${p}-cmodel`).value = cfg.claudeModel;
-      const known = QWEN_GROUPS.some((g) => g.items.some((m) => m.id === cfg.webllmModel));
-      $<HTMLSelectElement>(`${p}-wsel`).value = known ? cfg.webllmModel : '__custom';
-      $<HTMLInputElement>(`${p}-wmodel`).value = known ? '' : cfg.webllmModel;
+      $<HTMLInputElement>(`${p}-ckey`).value = cfg.claudeKey; put('c', cfg.claudeModel);
+      $<HTMLInputElement>(`${p}-okey`).value = cfg.openaiKey ?? ''; put('o', cfg.openaiModel ?? DEFAULT_OPENAI_MODEL);
+      put('w', cfg.webllmModel);
       sync();
     };
     const test = (btn: string, fn: (c: LlmConfig) => Promise<string>) => $(btn).addEventListener('click', async () => {
@@ -155,6 +185,17 @@ export async function startApp(opts: GameOptions) {
       try { await fn(cfg); out.textContent = '✔ 키가 동작합니다.'; } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
     });
     test(`${p}-test`, testGemini); test(`${p}-ctest`, testClaude);
+    // ChatGPT: 키 확인 = 이 키로 쓸 수 있는 모델 목록을 받아 선택 창을 채운다
+    $(`${p}-otest`).addEventListener('click', async () => {
+      read(); const out = $(`${p}-note`); out.textContent = '키 확인 중…';
+      try {
+        const ids = await listOpenAiModels(cfg);
+        const sel = $<HTMLSelectElement>(`${p}-osel`), cur = cfg.openaiModel;
+        sel.innerHTML = `<optgroup label="이 키로 쓸 수 있는 모델">${ids.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join('')}</optgroup><option value="__custom">직접 입력…</option>`;
+        put('o', ids.includes(cur) ? cur : (ids.find((x) => x === DEFAULT_OPENAI_MODEL) ?? ids[0] ?? cur)); read(); sync();
+        out.textContent = `✔ 키가 동작합니다. 모델 ${ids.length}개를 불러왔습니다.`;
+      } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
+    });
     write();
     return { read, write };
   }
@@ -357,7 +398,7 @@ export async function startApp(opts: GameOptions) {
     info.className = 'info';
     const lines: string[] = [];
     if (c.neutral) {
-      lines.push(`<div class="cname"><i class="swatch" style="background:${c.color}"></i>${esc(world.label(cid))}</div><div class="sub">주인 없는 땅입니다. 플레이할 수 없습니다.</div>`);
+      lines.push(`<div class="cname"><i class="swatch" style="background:${c.color}"></i>${esc(world.label(cid))}</div><div class="sub">사람이 살지 않거나 주인이 없는 땅입니다. 고를 수는 없고, 군대로 개척·점령할 수 있습니다.</div>`);
     } else {
       const st = statsOf(cid);
       const nProv = state ? controlledBy(state, cid).length : c.provinces;

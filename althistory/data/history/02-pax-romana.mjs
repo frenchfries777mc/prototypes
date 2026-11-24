@@ -15,7 +15,7 @@ export default {
   },
   paint: [
     ['ROM', 'ITA', { adm0: 'FRA', box: BOX.FRANCE }, { adm0: 'ESP', box: BOX.IBERIA }, { adm0: 'PRT', box: BOX.IBERIA }, { adm0: 'GBR', box: BOX.ENG_WALES },
-      'CHE', 'AUT', 'BEL', 'LUX', 'NLD', { adm0: 'DEU', box: [5.5, 47.3, 9.8, 51.5] }, 'SVN', 'HRV', 'BIH', 'SRB', 'MNE', 'MKD', 'ALB', 'GRC', 'BGR', 'ROU', 'HUN',
+      'CHE', 'AUT', 'BEL', 'LUX', { adm0: 'NLD', box: [3, 50.5, 7.5, 54] }, { adm0: 'DEU', box: [5.5, 47.3, 9.8, 51.5] }, 'SVN', 'HRV', 'BIH', 'SRB', 'MNE', 'MKD', 'ALB', 'GRC', 'BGR', 'ROU', 'HUN',
       'TUR', 'CYP', 'SYR', 'LBN', 'ISR', 'PSX', 'JOR', 'EGY', { adm0: 'LBY', box: [8, 29, 26, 34] }, 'TUN', { adm0: 'DZA', box: BOX.NAFRICA_COAST }, { adm0: 'MAR', box: [-6.5, 33.3, -1, 36] }, 'MLT'],
     ['PAR', ['IRN', 'IRQ', 'ARM', 'AZE', 'TKM', 'KWT', 'AFG']],
     ['KUS', 'AFG', 'PAK', 'TJK', 'UZB', { adm0: 'IND', box: [70, 24, 82, 34] }],

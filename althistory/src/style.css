@@ -261,13 +261,14 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } }
 
 /* ---- AI 선택 카드 ---- */
-.ai-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ai-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .ai-card { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px; border: 2px solid #dfe3ea; border-radius: 14px; background: #fff; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
 .ai-card:hover { border-color: #9db4d6; }
 .ai-card.on { border-color: #2f6fb0; box-shadow: 0 0 0 4px rgba(47, 111, 176, .15); }
 .ai-card input { position: absolute; opacity: 0; pointer-events: none; }
 .ai-logo { flex: none; width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px; color: #fff; }
-.ai-gemini { background: linear-gradient(135deg, #4a78c2, #8a63d2); } .ai-claude { background: linear-gradient(135deg, #d9825b, #b8553a); } .ai-webllm { background: linear-gradient(135deg, #3aa6a0, #2e7d6f); }
+.ai-gemini { background: linear-gradient(135deg, #4a78c2, #8a63d2); } .ai-claude { background: linear-gradient(135deg, #d9825b, #b8553a); } .ai-webllm { background: linear-gradient(135deg, #3aa6a0, #2e7d6f); } .ai-openai { background: linear-gradient(135deg, #2f3a45, #10a37f); font-size: 13px; letter-spacing: -0.3px; }
+.ai-key .row + .row { margin-top: 6px; }
 .ai-txt { display: flex; flex-direction: column; line-height: 1.3; color: #172033; } .ai-txt b { font-size: 16px; } .ai-txt span { font-size: 12px; color: #6b7686; } .ai-txt small { font-size: 12px; color: #2f6fb0; margin-top: 2px; }
 .ai-key { margin-top: 10px; }
 .ai-key .row { display: flex; gap: 8px; }
@@ -283,6 +284,7 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 .modal .ai-txt, .modal .ai-txt b { color: var(--text); } .modal .ai-txt small { color: #8fb8e8; }
 .modal .ai-key input { padding: 7px 9px; border-radius: 7px; border: 1px solid var(--panel-border); background: #0e1a2c; color: var(--text); font: inherit; }
 .modal .ai-note { color: var(--muted); }
+@media (max-width: 980px) { .ai-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .ai-cards { grid-template-columns: 1fr; } .ai-key .row { flex-wrap: wrap; } .ai-key input.model { flex-basis: 100%; } }
 
 /* 시작 화면 2단계 */

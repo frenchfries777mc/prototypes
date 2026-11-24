@@ -36,7 +36,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.click('.tpl[data-id="bipolar-world"]');
   ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '템플릿 선택(양극 냉전 세계)');
   ok(!(await page.isVisible('#intro-ai')), 'AI 선택은 템플릿을 고르기 전에는 보이지 않는다');
-  ok((await page.locator('#intro-ai .ai-card').count()) === 3 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 3개(Gemini/Claude/Qwen), "모드" 선택지 없음');
+  ok((await page.locator('#intro-ai .ai-card').count()) === 4 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 4개(Gemini/Claude/ChatGPT/Qwen), "모드" 선택지 없음');
   ok((await page.locator('.tpl img.t-thumb').count()) === 22, '템플릿 카드마다 시작 지도 썸네일');
   await page.click('#btn-to-ai'); await page.click('#btn-next');
 
@@ -50,7 +50,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.screenshot({ path: `${OUT}/s3_pick_korea.png` });
   await clickLL(0, -80);  // 남극
   card = await page.textContent('#info');
-  ok(/주인 없는 땅/.test(card) && !(await page.isVisible('#btn-startgame')), '남극은 플레이 불가로 표시되고 시작 버튼이 없다');
+  ok(/주인이 없는 땅/.test(card) && !(await page.isVisible('#btn-startgame')), '남극은 플레이 불가로 표시되고 시작 버튼이 없다');
   await clickLL(127.0, 37.5);
   await page.click('#btn-startgame'); await page.waitForTimeout(500);
   ok((await page.isVisible('#game')) && (await page.evaluate(() => window.__game.phase)) === 'play', '시작 → 플레이 화면');
@@ -132,6 +132,8 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   });
   await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=claude]');
   ok(await page.isVisible('#ov-claude'), '메뉴에서 Claude 선택 시 키 입력칸 표시');
+  const copts = await page.$$eval('#ov-csel option', (os) => os.map((o) => o.value));
+  ok(copts.includes('claude-opus-5-5') && copts.includes('claude-haiku-5-5') && copts.includes('__custom'), 'Claude 모델 선택 창: ' + copts.join(','));
   await page.fill('#ov-ckey', 'sk-ant-TEST'); await page.click('#ov-apply');
   await turn('외교 협상을 한다');
   const r8 = (await page.evaluate(() => window.__game.state)).log.at(-1);
@@ -142,6 +144,34 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   const t9 = await page.evaluate(() => window.__game.state.turn);
   await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
   ok(/키가 올바르지 않습니다/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t9, 'Claude 401: 턴 소모 없이 키 안내');
+
+  // ---- ChatGPT (모의 서버) ----
+  await page.unroute('https://api.anthropic.com/**');
+  let oaiReq = null;
+  await page.route('https://api.openai.com/v1/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'gpt-5-mini' }, { id: 'gpt-5.1' }, { id: 'gpt-4o-mini-tts' }, { id: 'text-embedding-3-small' }, { id: 'gpt-4.1' }] }) }));
+  await page.route('https://api.openai.com/v1/chat/completions', async (route) => {
+    const r = route.request(); oaiReq = { h: r.headers(), body: JSON.parse(r.postData()) };
+    const adj = { interpretation: 'GPT 판정', feasibility: 100, reasoning: 't', if_success: { narrative: 'GPT 서술', headlines: ['GPT 헤드라인'] }, if_failure: {}, world_events: {} };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { role: 'assistant', content: JSON.stringify(adj) }, finish_reason: 'stop' }] }) });
+  });
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=openai]');
+  ok(await page.isVisible('#ov-openai') && !(await page.isVisible('#ov-claude')), '메뉴에서 ChatGPT 선택 시 OpenAI 키 칸 표시');
+  await page.fill('#ov-okey', 'sk-TEST-OAI'); await page.click('#ov-otest');
+  await page.waitForFunction(() => /모델 \d+개/.test(document.getElementById('ov-note').textContent), null, { timeout: 10000 });
+  const oopts = await page.$$eval('#ov-osel option', (os) => os.map((o) => o.value));
+  ok(oopts.includes('gpt-5.1') && oopts.includes('gpt-4.1') && !oopts.includes('gpt-4o-mini-tts') && !oopts.includes('text-embedding-3-small'), '키 확인으로 채팅 모델만 목록에: ' + oopts.join(','));
+  await page.selectOption('#ov-osel', 'gpt-4.1'); await page.click('#ov-apply');
+  await turn('동맹을 제안한다');
+  const r10 = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(oaiReq && oaiReq.h['authorization'] === 'Bearer sk-TEST-OAI' && oaiReq.body.model === 'gpt-4.1' && oaiReq.body.response_format?.type === 'json_object' && oaiReq.body.temperature !== undefined && !oaiReq.body.reasoning_effort, 'ChatGPT 요청: 내 키, 고른 모델, JSON 형식(비추론 모델은 temperature)');
+  ok(r10.mode === 'ChatGPT (gpt-4.1)' && r10.narrative.includes('GPT 서술'), 'ChatGPT 응답으로 턴 판정: ' + r10.mode);
+  await page.click('#btn-menu'); await page.selectOption('#ov-osel', 'gpt-5.1'); await page.click('#ov-apply');
+  await turn('군비를 정비한다');
+  ok(oaiReq.body.model === 'gpt-5.1' && oaiReq.body.reasoning_effort === 'low' && oaiReq.body.temperature === undefined, '추론 모델(gpt-5 계열)은 reasoning_effort, temperature 없음');
+  await page.route('https://api.openai.com/v1/chat/completions', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"Incorrect API key"}}' }));
+  const t11 = await page.evaluate(() => window.__game.state.turn);
+  await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
+  ok(/OpenAI API 키가 올바르지 않습니다/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t11, 'ChatGPT 401: 턴 소모 없이 키 안내');
 
   // ---- Qwen 오류 ----
   await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=webllm]');

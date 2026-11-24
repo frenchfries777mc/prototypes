@@ -10,7 +10,10 @@ import { feature, neighbors } from 'topojson-client';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const RAW = path.join(ROOT, 'data/raw');
 const OUT = path.join(ROOT, 'public/data');
-const TMP = path.join(ROOT, 'data/.tmp');
+// HIST_DRY=1: 결과 파일을 쓰지 않고 검사만(여러 개를 동시에 돌려도 안전). HIST_ONLY=<템플릿 id>: 그 템플릿만 컴파일
+// HIST_GAPS=1: 채우기 후에도 남은 빈 땅(지역 세력이 될 땅)을 현대 나라·주 이름과 좌표로 출력
+const DRY = !!process.env.HIST_DRY, ONLY = process.env.HIST_ONLY || '', GAPS = !!process.env.HIST_GAPS;
+const TMP = path.join(ROOT, DRY ? `data/.tmp-${process.pid}` : 'data/.tmp');
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(TMP, { recursive: true });
 
@@ -176,7 +179,7 @@ if (problems.length) {
 // ---- 4. 단순화 + TopoJSON (mapshaper) ---------------------------------------
 const tmpIn = path.join(TMP, 'provinces.geojson');
 fs.writeFileSync(tmpIn, JSON.stringify({ type: 'FeatureCollection', features: provinces }));
-const outTopo = path.join(OUT, 'world.topo.json');
+const outTopo = path.join(DRY ? TMP : OUT, 'world.topo.json');
 execFileSync(
   path.join(ROOT, 'node_modules/.bin/mapshaper'),
   [tmpIn, '-simplify', SIMPLIFY, 'keep-shapes', '-rename-layers', 'provinces',
@@ -249,10 +252,18 @@ const toStats = (a) => ({ stability: a[0], economy: a[1], military: a[2], influe
 // 지역 세력은 회색 쪽으로 섞은 차분한 색: 그 시대의 주역 국가가 눈에 띄게, 그래도 서로는 구분되게
 const muted = (hex) => { const n = parseInt(hex.slice(1), 16), g = [0x7a, 0x80, 0x8c], k = 0.62;
   return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v * (1 - k) + g[i] * k).toString(16).padStart(2, '0')).join(''); };
+// 채우기 국가의 자동 색: 이름 해시로 고른 색상, 강한 나라일수록 선명하게
+const autoColor = (id, st) => { const h = hash(id) % 360, power = st ? (st[1] + st[2] + st[3]) / 3 : 30;
+  const sat = power >= 45 ? 0.5 : power >= 30 ? 0.36 : 0.24, l = 0.5;
+  const f = (n) => { const k = (n + h / 30) % 12, a = sat * Math.min(l, 1 - l); return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0'); };
+  return `#${f(0)}${f(8)}${f(4)}`; };
 function compileHistory(def) {
   const tag = def.id;
-  const pol = Object.entries(def.polities).map(([id, d]) => ({
-    id, name: d.e ?? d.n, nameKo: d.n, color: d.c, stats: toStats(d.s), aliases: d.a ?? [], provinces: 0, ...(d.p === false ? { npc: true } : {}),
+  const fill = def._fill ?? { polities: {}, paint: [] };
+  for (const id of Object.keys(fill.polities)) if (def.polities[id]) throw new Error(`[${tag}] fill: 템플릿 국가와 ID 충돌 ${id}`);
+  const pol = Object.entries({ ...def.polities, ...fill.polities }).map(([id, d]) => ({
+    id, name: d.e ?? d.n, nameKo: d.n, color: d.c ?? (d.neutral ? '#5b6577' : autoColor(id, d.s)), stats: d.neutral ? null : toStats(d.s), aliases: d.a ?? [], provinces: 0, ...(d.neutral ? { neutral: true } : {}),
+    ...(d.p === false ? { npc: true } : {}), ...(fill.polities[id] ? { filled: true } : {}),
   }));
   const idxOf = new Map(pol.map((p, i) => [p.id, i]));
   for (const c of def.self ?? []) if (!ownerSet.has(c)) histWarnings.push(`[${tag}] self: 알 수 없는 국가 코드 ${c}`);
@@ -264,6 +275,35 @@ function compileHistory(def) {
       for (const c of [...(sel.adm0 ?? []), ...(sel.any ?? [])]) if (!adm0Set.has(c) && !ownerSet.has(c)) histWarnings.push(`[${tag}] ${pid}: 알 수 없는 국가 코드 ${c}`);
       for (let i = 0; i < geoms.length; i++) if (matchSel(i, sel)) { owner[i] = idxOf.get(pid); n++; }
       if (n === 0) histWarnings.push(`[${tag}] ${pid}: 규칙이 아무 주도 잡지 못함 ${JSON.stringify(raw)}`);
+    }
+  }
+  // 채우기(fill): 템플릿이 칠하지 않은 땅에만, 그 시대의 실제 나라·부족 연맹 등을 칠한다(data/history/fill/<id>.mjs)
+  for (const [pid, ...sels] of fill.paint ?? []) {
+    if (!idxOf.has(pid)) throw new Error(`[${tag}] fill.paint: 알 수 없는 국가 ${pid}`);
+    for (const raw of sels) {
+      const sel = normSel(raw); let n = 0;
+      for (const c of [...(sel.adm0 ?? []), ...(sel.any ?? [])]) if (!adm0Set.has(c) && !ownerSet.has(c)) histWarnings.push(`[${tag}] fill ${pid}: 알 수 없는 국가 코드 ${c}`);
+      for (let i = 0; i < geoms.length; i++) if (owner[i] < 0 && matchSel(i, sel)) { owner[i] = idxOf.get(pid); n++; }
+      if (n === 0) histWarnings.push(`[${tag}] fill ${pid}: 빈 땅을 하나도 잡지 못함 ${JSON.stringify(raw)}`);
+    }
+  }
+  if (GAPS) {
+    const by = new Map();
+    for (let i = 0; i < geoms.length; i++) if (owner[i] < 0 && !NEUTRAL.has(geoms[i].properties.owner)) {
+      const g = geoms[i].properties, k = g.adm0; if (!by.has(k)) by.set(k, []);
+      by.get(k).push(`${g.name}(${centers[i].map((v) => v.toFixed(1)).join(',')})`);
+    }
+    console.log(`\n[GAPS ${tag}] 남은 빈 땅 ${[...by.values()].reduce((a, b) => a + b.length, 0)}주`);
+    // 현대 나라 전체가 비었으면 한 줄로, 일부만 비었거나 HIST_GAPS=ISO,ISO 로 지정하면 주 이름과 중심 좌표까지
+    const detail = new Set(process.env.HIST_GAPS.split(',').filter((x) => x.length === 3));
+    for (const [k, list] of [...by.entries()].sort()) {
+      const total = geoms.filter((g) => g.properties.adm0 === k).length, nm = countries.get(k)?.nameKo ?? countries.get(k)?.name ?? '';
+      const idx = geoms.map((g, i) => (g.properties.adm0 === k && owner[i] < 0 ? i : -1)).filter((i) => i >= 0);
+      const bb = idx.reduce((b, i) => [Math.min(b[0], centers[i][0]), Math.min(b[1], centers[i][1]), Math.max(b[2], centers[i][0]), Math.max(b[3], centers[i][1])], [999, 999, -999, -999]).map((v) => v.toFixed(0));
+      const own = geoms[idx[0]].properties.owner;
+      const auto = ((def.rest ?? 'unc') === 'modern' || (def.self ?? []).includes(own)) && !REST_NEVER.has(own) && !(def.restExclude ?? []).includes(own) && countries.has(own);
+      if (auto) { console.log(`  ${k} ${nm}: [${list.length}주] → 그대로 두면 현대 나라 "${countries.get(own)?.nameKo ?? own}"(소속 ${own})로 채워짐. 그 시점에 실제 독립국이 아니었다면 채우기 필요`); continue; }
+      console.log(list.length === total && !detail.has(k) ? `  ${k} ${nm}: 전체 ${total}주 비어 있음, 중심 범위 [${bb}]` : `  ${k} ${nm} [${list.length}/${total}주 비어 있음]: ${list.join('; ')}`);
     }
   }
   // 남은 땅: modern 이면 현대 국가를 그대로(축소 능력치) 쓰고, 아니면 "기타 세력"
@@ -395,7 +435,10 @@ const histDir = path.join(ROOT, 'data/history');
 if (fs.existsSync(histDir)) {
   for (const f of fs.readdirSync(histDir).filter((x) => x.endsWith('.mjs') && !x.startsWith('_')).sort()) {
     const mod = await import(pathToFileURL(path.join(histDir, f)).href);
-    historical.push(compileHistory(mod.default));
+    if (ONLY && mod.default.id !== ONLY) continue;
+    const fillPath = path.join(histDir, 'fill', `${mod.default.id}.mjs`);
+    const def = fs.existsSync(fillPath) ? { ...mod.default, _fill: (await import(pathToFileURL(fillPath).href)).default } : mod.default;
+    historical.push(compileHistory(def));
   }
 }
 const allScenarios = [...scenarios, ...historical.map(({ _unc, ...h }) => h)];
@@ -410,12 +453,11 @@ const countryList = Object.keys(provCount).map((id) => {
   };
 }).sort((a, b) => a.name.localeCompare(b.name));
 
-fs.writeFileSync(path.join(OUT, 'countries.json'), JSON.stringify(countryList));
-fs.writeFileSync(path.join(OUT, 'adjacency.json'), JSON.stringify(adjacency));
-fs.writeFileSync(path.join(OUT, 'reach.json'), JSON.stringify(reach));
-fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(allScenarios));
-fs.rmSync(path.join(OUT, 'scenario.json'), { force: true });
-fs.rmSync(TMP, { recursive: true, force: true });
+if (!DRY) fs.writeFileSync(path.join(OUT, 'countries.json'), JSON.stringify(countryList));
+if (!DRY) fs.writeFileSync(path.join(OUT, 'adjacency.json'), JSON.stringify(adjacency));
+if (!DRY) fs.writeFileSync(path.join(OUT, 'reach.json'), JSON.stringify(reach));
+if (!DRY) fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(allScenarios));
+if (!DRY) fs.rmSync(path.join(OUT, 'scenario.json'), { force: true });
 
 // ---- 7. 리포트 -------------------------------------------------------------
 const kb = (f) => (fs.statSync(f).size / 1024).toFixed(0) + ' KB';
@@ -425,8 +467,9 @@ console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
 console.log(`시나리오 템플릿: 현대 ${scenarios.length}개 + 역사 ${historical.length}개`);
-for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length} (지역 세력 ${h.polities.filter((p) => p.regional).length}), 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
+for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length} (채움 ${h.polities.filter((p) => p.filled).length}, 남은 지역 세력 ${h.polities.filter((p) => p.regional).length}), 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
 if (histWarnings.length) console.log('\n[역사 규칙 경고]\n' + histWarnings.join('\n'));
 console.log(`reach 평균 ${(reachTotal / geoms.length).toFixed(1)}개/주`);
 console.log(`world.topo.json ${kb(outTopo)} · reach.json ${kb(path.join(OUT, 'reach.json'))} · countries.json ${kb(path.join(OUT, 'countries.json'))}`);
 console.log('알려진 한계:', worldview.knownLimitations.join(' / '));
+fs.rmSync(TMP, { recursive: true, force: true });

@@ -8,18 +8,20 @@ import { localAdjudicate } from './local';
 import Anthropic from '@anthropic-ai/sdk';
 
 /** 'local' 은 화면에서 고르는 선택지가 아니다: AI 키가 없을 때 엔진이 쓰는 간이 판정이다. */
-export type ProviderId = 'local' | 'gemini' | 'claude' | 'webllm';
-export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiModel: string; claudeKey: string; claudeModel: string; webllmModel: string }
+export type ProviderId = 'local' | 'gemini' | 'claude' | 'openai' | 'webllm';
+export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiModel: string; claudeKey: string; claudeModel: string; openaiKey: string; openaiModel: string; webllmModel: string }
+export const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
 export const DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
 /** 고른 AI에 키가 없으면 간이 판정으로 대신한다. */
 export function effectiveProvider(cfg: LlmConfig): ProviderId {
   if (cfg.provider === 'gemini' && !cfg.geminiKey.trim()) return 'local';
   if (cfg.provider === 'claude' && !cfg.claudeKey.trim()) return 'local';
+  if (cfg.provider === 'openai' && !(cfg.openaiKey ?? '').trim()) return 'local';
   return cfg.provider;
 }
 export const providerLabel = (cfg: LlmConfig): string => {
   const p = effectiveProvider(cfg);
-  return p === 'gemini' ? 'Gemini' : p === 'claude' ? 'Claude' : p === 'webllm' ? 'Qwen (브라우저)' : '간이 판정 (AI 키 없음)';
+  return p === 'gemini' ? 'Gemini' : p === 'claude' ? 'Claude' : p === 'openai' ? 'ChatGPT' : p === 'webllm' ? 'Qwen (브라우저)' : '간이 판정 (AI 키 없음)';
 };
 export interface Hooks { onProgress?: (msg: string) => void }
 
@@ -71,6 +73,57 @@ async function callGemini(cfg: LlmConfig, system: string, msgs: Msg[], signal: A
   const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
   if (!text) throw new LlmError(`Gemini가 빈 응답을 보냈습니다 (${j.promptFeedback?.blockReason ?? j.candidates?.[0]?.finishReason ?? '이유 불명'}). 명령 표현을 바꿔 보세요.`);
   return text;
+}
+
+// ---- ChatGPT (OpenAI Chat Completions, 사용자가 넣은 API 키로 브라우저에서 직접 호출) ----
+// 추론 모델(gpt-5 계열, o 계열)은 temperature 를 받지 않고 reasoning_effort 를 받는다. 그 밖의 모델은 반대.
+const isReasoningModel = (m: string) => /^(gpt-5|o\d)/.test(m);
+async function openaiFetch(cfg: LlmConfig, path: string, init: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`https://api.openai.com/v1/${path}`, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(cfg.openaiKey ?? '').trim()}` } });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw new LlmError('응답 시간이 너무 길어 중단했습니다(90초). 다시 시도하세요.');
+    throw new LlmError(`네트워크 오류: OpenAI에 연결하지 못했습니다. (${(e as Error).message})`);
+  }
+  if (!res.ok) {
+    let detail = '';
+    try { detail = ((await res.json()) as { error?: { message?: string } }).error?.message ?? ''; } catch { /* 무시 */ }
+    if (res.status === 401) throw new LlmError('OpenAI API 키가 올바르지 않습니다. 메뉴에서 키를 확인하세요.');
+    if (res.status === 429) throw new LlmError(/quota|billing/i.test(detail) ? 'OpenAI 크레딧(결제 한도)이 부족합니다. platform.openai.com의 Billing을 확인하세요.' : 'OpenAI 사용 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요.');
+    if (res.status === 404) throw new LlmError(`모델 "${cfg.openaiModel}"을(를) 쓸 수 없습니다. "키 확인"을 눌러 쓸 수 있는 모델 목록을 받아 고르세요.`);
+    throw new LlmError(`OpenAI 오류 ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res;
+}
+async function callOpenAi(cfg: LlmConfig, system: string, msgs: Msg[], signal: AbortSignal, json = true): Promise<string> {
+  const model = (cfg.openaiModel ?? '').trim() || DEFAULT_OPENAI_MODEL;
+  const r = isReasoningModel(model);
+  const res = await openaiFetch(cfg, 'chat/completions', {
+    method: 'POST', signal,
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))],
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      ...(r ? { reasoning_effort: 'low', max_completion_tokens: 12000 } : { temperature: 0.8, max_completion_tokens: 4000 }),
+    }),
+  });
+  const j = (await res.json()) as { choices?: { message?: { content?: string; refusal?: string }; finish_reason?: string }[] };
+  const c = j.choices?.[0];
+  if (c?.message?.refusal) throw new LlmError(`ChatGPT가 이 명령을 거절했습니다: ${c.message.refusal.slice(0, 160)}`);
+  const text = c?.message?.content ?? '';
+  if (!text) throw new LlmError(`ChatGPT가 빈 응답을 보냈습니다 (${c?.finish_reason ?? '이유 불명'}).`);
+  return text;
+}
+/** 이 키로 쓸 수 있는 채팅 모델 목록(키 확인 겸용). */
+export async function listOpenAiModels(cfg: LlmConfig): Promise<string[]> {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 30_000);
+  try {
+    const j = (await (await openaiFetch(cfg, 'models', { method: 'GET', signal: ctl.signal })).json()) as { data?: { id: string }[] };
+    return (j.data ?? []).map((m) => m.id)
+      .filter((id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/(audio|realtime|transcribe|tts|image|search|embedding|instruct|codex|moderation)/.test(id))
+      .sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
+  } finally { clearTimeout(timer); }
 }
 
 // ---- Claude (Anthropic 공식 SDK, 사용자가 넣은 API 키로 브라우저에서 직접 호출) ----
@@ -153,10 +206,10 @@ export async function adjudicate(
     let lastErr = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       hooks.onProgress?.(attempt === 0 ? `${providerLabel(cfg)}가 판정하는 중…` : '형식 오류를 고쳐서 다시 요청하는 중…');
-      const text = provider === 'gemini' ? await callGemini(cfg, system, msgs, ctl.signal) : provider === 'claude' ? await callClaude(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
+      const text = provider === 'gemini' ? await callGemini(cfg, system, msgs, ctl.signal) : provider === 'claude' ? await callClaude(cfg, system, msgs, ctl.signal) : provider === 'openai' ? await callOpenAi(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
       try {
         const parsed = normalizeAdjudication(extractJson(text));
-        if (parsed.ok) return { adj: parsed.value, mode: provider === 'gemini' ? `Gemini (${cfg.geminiModel || 'gemini-flash-latest'})` : provider === 'claude' ? `Claude (${cfg.claudeModel || DEFAULT_CLAUDE_MODEL})` : `Qwen (${cfg.webllmModel})` };
+        if (parsed.ok) return { adj: parsed.value, mode: provider === 'gemini' ? `Gemini (${cfg.geminiModel || 'gemini-flash-latest'})` : provider === 'claude' ? `Claude (${cfg.claudeModel || DEFAULT_CLAUDE_MODEL})` : provider === 'openai' ? `ChatGPT (${cfg.openaiModel || DEFAULT_OPENAI_MODEL})` : `Qwen (${cfg.webllmModel})` };
         lastErr = parsed.error;
       } catch (e) { lastErr = (e as Error).message; }
       msgs.push({ role: 'assistant', text: text.slice(0, 6000) });

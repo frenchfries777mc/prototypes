@@ -79,6 +79,7 @@ export function wpost(year) {
         ['DRV', { adm0: 'VNM', box: [102, 17.2, 110, 24] }],
         ['PAK', 'PAK', 'BGD'], ['IDN', 'IDN'],
         ['NET', 'NLD'],
+        ['NET', { adm0: 'IDN', names: ['Papua'] }], // 서뉴기니는 1962년까지 네덜란드령
       );
     }
     if (y50) {
@@ -98,6 +99,7 @@ export function wpost(year) {
       );
     }
   }
+  if (y39) paint.push(['POR', { adm0: 'IND', names: ['Goa', 'Daman', 'Dadra'] }], ['FRA', { adm0: 'IND', names: ['Puducherry'] }]); // 영국령 인도 안의 포르투갈·프랑스 식민지
   paint.push(['GBR', 'HKG'], ['POR', 'MAC']); // 홍콩(영국령), 마카오(포르투갈령): 중국 규칙에 덮이지 않게 마지막에
   return { polities, paint, ...rest };
 }
