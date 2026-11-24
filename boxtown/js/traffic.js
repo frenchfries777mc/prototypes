@@ -2,7 +2,7 @@
 // 차는 물리 없이 차선을 따라 달린다(우측통행). 플레이어가 건드리면(타기, 쏘기, 들이받기, 폭발) 진짜 물리 자동차로 바뀐다.
 import { Character, randomLook } from './character.js';
 import { paths, halfAt } from './roads.js';
-import { JUNCTIONS } from './world.js';
+import { JUNCTIONS, CITY_HALF } from './world.js';
 import { Vehicle } from './vehicles.js';
 import { clamp, damp, angDiff, flatMat, rng } from './util.js';
 const B = window.BABYLON;
@@ -26,7 +26,7 @@ export class Traffic {
     this.t = 0; this.hitCd = 0; this.temps = []; this.inJ = null; this.redCd = 0;
     // ----- 차가 다니는 길과 네거리 -----
     this.lanes = [...paths.filter((p) => p.type === 'road' && !p.noTraffic), ...TOWN_LINES.map(makeLine)];
-    this.junctions = [...JUNCTIONS.map((j) => ({ x: j.x, z: j.z, h: 6.6 })), ...TOWN_J];
+    this.junctions = [...JUNCTIONS.map((j) => ({ x: j.x, z: j.z, h: CITY_HALF })), ...TOWN_J];
     for (const L of this.lanes) {
       L.len = L.pts[L.pts.length - 1].s;
       L.cross = [];
@@ -55,7 +55,7 @@ export class Traffic {
 
   put(c, L, s, dir) {
     c.L = L; c.s = s; c.dir = dir; c.v = 0; c.dead = false; c.wait = 0;
-    c.lane = L.town ? 1.25 : r2(c) < 0.5 ? 1.75 : 4.75;
+    c.lane = L.town ? 1.25 : L.city ? [1.5, 4.5, 7.5][Math.floor(r2(c) * 3) % 3] : r2(c) < 0.5 ? 1.75 : 4.75; // 시가지는 한쪽 세 차선
     const q = this.at(L, s);
     c.yaw = Math.atan2(q.tx * dir, q.tz * dir);
     c.root.setEnabled(true);

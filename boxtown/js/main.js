@@ -184,6 +184,7 @@ async function boot() {
   train0 = train;
   const traffic = new Traffic({ scene, assets, player, garage, residents, police, jobs, weapons, health, count: lite ? 20 : 53, addShadow: (ms) => ms.forEach((m) => { fixedCasters.push(m); rl.push(m); }) });
   jobs.weapons = weapons;
+  jobs.addresses = interiors.homes.map((d) => ({ area: d.id.split('#')[0], x: d.x, y: d.y, z: d.z, name: d.name })); // 피자 배달 주소(집 앞)
   weapons.traffic = traffic; traffic0 = traffic;
   // 배경 음악: 수배 > 내 집 > 건물 안 > 배 위 > 시골 지역 > 다른 섬 > 시작 대륙
   const RURAL = ['farm', 'wind', 'camp', 'lake', 'lookout', 'mill', 'cabinA', 'cabinB', 'cabinC', 'cabinD', 'woods'].map((k) => SITES[k]).filter(Boolean);
