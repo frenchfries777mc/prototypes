@@ -20,6 +20,7 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hud.on{display:block}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
 #mini{position:absolute;left:14px;top:14px;width:240px;height:134px;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:#1a1e18}
+#netinfo{position:absolute;left:16px;top:154px;font-size:13px;color:#fff;background:var(--panel);padding:3px 10px;border-radius:4px}
 #top{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:flex-start;gap:12px}
 .tix{display:flex;align-items:center;gap:8px;font-size:30px}
 .tix i{display:block;width:210px;height:12px;border-radius:6px;background:rgba(0,0,0,.55);border:2px solid #14171a;overflow:hidden}
@@ -129,6 +130,7 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 <canvas id="view"></canvas>
 <div id="hud">
   <canvas id="mini" width="480" height="268"></canvas>
+  <div id="netinfo"></div>
   <div id="top"><div class="tix a num"><span id="ta">250</span><i><b id="tab"></b></i></div><div id="pts"></div><div class="tix b num"><i><b id="tbb"></b></i><span id="tb">250</span></div><div id="timer" class="num">8:00</div></div>
   <div id="feed"></div><div id="msg" class="num"></div>
   <div id="cross"></div><div id="hitm"></div>
@@ -145,6 +147,7 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
   <h1 class="num">IRON<span>LINE</span></h1>
   <p>수십 명이 맞붙는 대규모 1인칭 점령전.<br>거점 5개를 앞에서부터 차례로 점령해 적 본진까지 밀어붙이세요.</p>
   <div class="row" id="wps"></div>
+  <div id="opts" style="display:none">
   <div class="row">
     <label class="opt">팀당 인원 <select id="per"><option value="16">16 (총 32명)</option><option value="24">24 (총 48명)</option><option value="32" selected>32 (총 64명)</option><option value="48">48 (총 96명)</option></select></label>
     <label class="opt">지형 <select id="tstyle"><option value="block">블록</option><option value="lowpoly">로우폴리</option><option value="toon">카툰</option><option value="paint">수채화</option><option value="real">사실적</option><option value="ps1">레트로 PS1</option></select></label>
@@ -153,11 +156,13 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
     <label class="opt">소리 <select id="snd"><option value="1" selected>켜짐</option><option value="0">꺼짐</option></select></label>
   </div>
   <div class="keys"><div><b>WASD</b>이동</div><div><b>Shift</b>달리기</div><div><b>Space</b>점프</div><div><b>마우스</b>조준·발사</div><div><b>우클릭</b>정조준</div><div><b>R</b>장전</div><div><b>1 2 3</b>무기 교체</div><div><b>Tab</b>점수판</div></div>
+  </div>
   <button class="btn num" id="go">출격</button>
 </div>
 <div class="box panel" id="pause" style="display:none"><h2 class="num" style="margin:0;font-size:40px">일시정지</h2><p>마우스를 다시 잡으려면 아래 버튼을 누르세요.</p><div class="row"><button class="btn num" id="resume">계속</button><button class="btn sec" id="quit">메뉴로</button></div></div>
 <div class="box panel" id="res" style="display:none"><h2 class="num" id="resh"></h2><p id="resp"></p><div class="stats" id="resst"></div><div class="row"><button class="btn num" id="again">다시 출격</button><button class="btn sec" id="tomenu">메뉴로</button></div></div>
 </div>
+<script src="vendor/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

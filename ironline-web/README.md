@@ -8,5 +8,7 @@ three.js 로 처음부터 다시 만든 대규모 1인칭 거점 점령전. 설�
 - 구조: `src/world.js`(지형·충돌) `src/sim.js`(규칙·봇, 렌더 없이 Node 에서 시험 가능) `src/gfx.js` `decor.js` `units.js` `fx.js` `audio.js` `hud.js` `main.js`
 - 시험: `node tools/sim_test.mjs`
 - 에셋: CC0 (Kenney Nature Kit, Poly Haven) — `assets/models/LICENSES.md`. three.js 는 MIT (`vendor/LICENSE-three.txt`).
-- 한계: 온라인 멀티플레이는 아직 옮기지 않았습니다.
+- **온라인(PeerJS)**: 출격하면 자동으로 공용 방(1~4번)을 찾아 들어가고, 비어 있으면 그 자리를 잡습니다. 방 만들기·방장 선택 화면은 없습니다. 판을 돌리던 사람이 나가면 남은 사람 중 먼저 자리를 잡는 사람이 이어받고, 사람이 부족한 팀의 봇 자리를 넘겨받아 중간에 들어오고 나가도 됩니다. 시그널 서버에 닿지 않으면 자동으로 오프라인(봇전)으로 시작합니다.
+  - 개발용: `?peerhost=localhost:9000&secure=0` 로 시그널 서버를 바꿀 수 있고, `?solo=1` 은 온라인을 끕니다. `?norender=1` 은 그리지 않고 시뮬레이션·네트워크만 돌립니다.
+  - 한계: 판 정보는 한 브라우저(자리를 잡은 사람)가 계산하므로 그 사람의 탭이 백그라운드로 가면 판이 느려질 수 있습니다. TURN 서버가 없어 일부 사내망·통신사 NAT 에서는 연결이 안 될 수 있습니다.
 - 지형 스타일: 기본은 카툰(`toon`). `?terrain=block|lowpoly|toon|paint|real|ps1` 로 바꿀 수 있고 메뉴에서도 고를 수 있습니다.
