@@ -34,6 +34,7 @@ function tune(kit, name, c) {
 
 export class Assets {
   constructor(scene, base = 'assets/') {
+    this.missing = new Set(); // 끝내 못 받은 모델
     this.scene = scene;
     this.base = base;
     this.templates = new Map(); // "kit/name" -> 틀 메시
@@ -65,10 +66,18 @@ export class Assets {
     const worker = async () => {
       while (queue.length) {
         const key = queue.shift();
-        try {
-          await this._loadOne(key);
-        } catch (e) {
-          console.error('에셋을 불러오지 못했습니다:', key, e.message || e);
+        {
+          // 느린 연결에서 파일 하나가 끝없이 안 오면 로딩 전체가 멈춘다: 20초 기다리고 두 번 더 시도한 뒤, 그래도 안 되면 그 모델 없이 시작한다.
+          let ok = false;
+          for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+            try {
+              await Promise.race([this._loadOne(key), new Promise((_, bad) => setTimeout(() => bad(new Error('시간 초과')), 20000 + attempt * 10000))]);
+              ok = true;
+            } catch (e) {
+              if (this.templates.has(key)) ok = true; // 늦게라도 도착했다
+              else if (attempt === 2) { console.error('에셋을 불러오지 못했습니다:', key, e.message || e); this.missing.add(key); }
+            }
+          }
         }
         done++;
         if (onProgress) onProgress(done / uniq.length);
@@ -183,6 +192,7 @@ export class Assets {
 
   // 모델의 크기(배율 적용 후). 충돌 상자를 만들 때 쓴다.
   bounds(key) {
+    if (this.missing.has(key)) return { min: new B.Vector3(-1, 0, -1), max: new B.Vector3(1, 2, 1) };
     const bb = this.tpl(key).getBoundingInfo().boundingBox;
     return { min: bb.minimum.clone(), max: bb.maximum.clone() };
   }
@@ -190,6 +200,7 @@ export class Assets {
   // 고정 배치. 실제 그리기는 flush()에서 "모델 × 구역"별로 한꺼번에 등록된다.
   // 구역(192m)으로 나눠 두면 화면 밖이거나 먼 구역은 통째로 건너뛸 수 있다.
   place(key, x, y, z, rotY = 0, scale = 1, tag = '') {
+    if (this.missing.has(key)) return; // 못 받은 모델은 건너뛴다
     this.tpl(key);
     const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
     const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));

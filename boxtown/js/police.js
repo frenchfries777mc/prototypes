@@ -215,7 +215,11 @@ export class Police {
       else if (u.quarryT <= 0 || q.dead || u.car.dead || this.level > 0) { q.fugitive = false; if (this.level > 0) { u.quarry = null; u.holdT = 0; } else this.recall(u); }
       if (u.active && Math.hypot(u.car.pos.x - me.x, u.car.pos.z - me.z) < 110) chasing = true;
     }
-    if (this.level === 0) { if (!el.hidden) el.hidden = true; this.siren(chasing); return; }
+    if (this.level === 0) {
+      for (const u of this.units) if (u.active && !u.quarry) this.recall(u); // 별이 없으면 쫓지 않는다
+      this.heat = 0;
+      if (!el.hidden) el.hidden = true; this.siren(chasing); return;
+    }
     // 필요한 만큼 출동시킨다(터진 경찰차는 새로 나타난 뒤 다시 온다).
     let nearest = 1e9, active = 0;
     for (const u of this.units) {

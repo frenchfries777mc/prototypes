@@ -54,7 +54,7 @@ export class Lobby {
     if (a === 'mcopy') { try { navigator.clipboard.writeText(this.net.code); this.copied = true; } catch (e) { /* 무시 */ } return this.render(); }
     if (a === 'music') this.music.toggle();
     else if (a === 'view') this.player.nextView();
-    else if (a === 'quality') { const q = this.quality === 'low' ? 'high' : 'low'; try { localStorage.setItem('boxtown.quality', q); } catch (e) { /* 무시 */ } location.reload(); return; }
+    else if (a === 'quality') { const q = { high: 'low', low: 'lite', lite: 'high' }[this.quality] || 'low'; try { localStorage.setItem('boxtown.quality', q); } catch (e) { /* 무시 */ } location.reload(); return; }
     else if (a === 'wipe') { if (this.wipeArmed) { try { Object.keys(localStorage).filter((k) => k.startsWith('boxtown.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* 무시 */ } location.reload(); return; } this.wipeArmed = true; }
     else if (a === 'back') this.panel = null;
     else { this.wardrobe.close(); this.panel = this.panel === a ? null : a; this.wipeArmed = false; this.copied = false; }
@@ -67,7 +67,7 @@ export class Lobby {
     if (this.panel === 'settings') panel = `<div class="sheet"><h3>⚙ 설정</h3>
       <button data-act="music">음악 <b>${this.music.muted ? '꺼짐' : '켜짐'}</b></button>
       <button data-act="view">시점 <b>${view}</b></button>
-      <button data-act="quality">그래픽 <b>${this.quality === 'low' ? '가볍게' : '좋게'}</b><small>바꾸면 다시 불러와요</small></button>
+      <button data-act="quality">그래픽 <b>${{ high: '좋게', low: '가볍게', lite: '아주 가볍게' }[this.quality] || '가볍게'}</b><small>바꾸면 다시 불러와요</small></button>
       <button data-act="wipe" class="danger">${this.wipeArmed ? '정말요? 한 번 더 누르면 전부 지워져요' : '저장 지우고 처음부터'}</button>
       <button data-act="back" class="back">닫기</button></div>`;
     else if (this.panel === 'multi') {
