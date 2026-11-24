@@ -88,5 +88,9 @@
 <script src="https://cdn.jsdelivr.net/npm/babylonjs-loaders@9.37.1/babylonjs.loaders.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@babylonjs/havok@1.3.14/lib/umd/HavokPhysics_umd.js"></script>
 <script type="module" src="js/main.js"></script>
+<script>
+// 20초가 지나도 시작을 못 했으면(인터넷이 느려 필요한 파일을 못 받는 중) 알려 준다.
+setTimeout(function () { var t = document.getElementById('loadText'); if (!window.__ready && t && t.textContent === '시작하는 중') t.textContent = '인터넷이 느려요. 조금만 기다리거나 새로고침해 주세요'; }, 20000);
+</script>
 </body>
 </html>

@@ -57,6 +57,8 @@ jobs:
           mkdir -p _site/boxtown
           cp boxtown/index.html boxtown/style.css _site/boxtown/
           cp -r boxtown/js boxtown/assets _site/boxtown/
+          # 박스타운: 모델 파일 수백 개를 하나로 묶는다(요청 수와 받는 양을 줄여 로딩을 줄인다).
+          sh boxtown/tools/pack.sh _site/boxtown/assets
           # 박스타운: 배포할 때마다 스크립트·스타일 주소에 커밋 번호를 붙인다.
           # 브라우저와 CDN이 예전 파일을 4시간씩 붙들고 있어서, 주소가 바뀌어야 새 버전이 바로 보인다.
           V=$(echo "$GITHUB_SHA" | cut -c1-8)
