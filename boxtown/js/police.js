@@ -98,6 +98,7 @@ export class Police {
   dispatch(u, at) {
     const p = at || this.player.feet, s = this.spawnPoint(p);
     if (!s) return false;
+    this.unstow(u);
     u.car.hp = 100;
     // 길이 난 방향을 보고 나타난다(플레이어 쪽을 보면 건물이나 비탈로 곧장 들이받는다).
     let yaw = Math.atan2(p.x - s[0], p.z - s[1]);
@@ -114,6 +115,15 @@ export class Police {
     u.quarry = c; u.quarryT = 45;
     return true;
   }
+  // 쉬는 경찰차는 길가에 세워 두지 않고 먼 곳에 감춰 둔다(출동할 때만 길 위에 나타난다).
+  stow(u) {
+    const c = u.car;
+    c.home.pos.set(-1000, 60, -800); c.root.setEnabled(false);
+    c.reset(-1000, 60, -800, null);
+    c.body.setMotionType(B.PhysicsMotionType.STATIC);
+    u.stowed = true;
+  }
+  unstow(u) { if (!u.stowed) return; u.car.body.setMotionType(B.PhysicsMotionType.DYNAMIC); u.car.root.setEnabled(true); u.stowed = false; }
   copIn(u) { if (u.cop.out) { u.cop.out = false; u.cop.chr.setVisible(false); } }
   // 경찰관이 내려서 뛰어 쫓는다. 플레이어에게 닿아 있으면 true.
   footChase(u, dt) {
@@ -135,7 +145,7 @@ export class Police {
   recall(u) {
     u.active = false; u.quarry = null; this.copIn(u);
     u.lamps.forEach((l) => l.setEnabled(false));
-    if (!u.car.dead) { u.car.hp = 100; u.car.reset(u.car.home.pos.x, u.car.home.pos.y + 0.3, u.car.home.pos.z, null); }
+    if (!u.car.dead) { u.car.hp = 100; this.stow(u); }
   }
 
   // 경찰차 한 대의 운전: 길 그물 위에서 가장 짧은 길을 따라가고, 굽이 앞에서는 속도를 줄인다.
@@ -202,6 +212,7 @@ export class Police {
   update(dt) {
     const P = this.player, me = P.vehicle ? P.vehicle.pos : P.feet, el = $('wanted');
     this.t += dt;
+    for (const u of this.units) if (!u.active && !u.car.dead && !u.stowed) this.stow(u); // 처음과, 터졌다가 되살아난 차도 감춘다
     // 뺑소니 차 쫓기(수배와 상관없이 돌아간다)
     let chasing = false;
     for (const u of this.units) {

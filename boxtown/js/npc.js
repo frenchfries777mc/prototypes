@@ -53,14 +53,22 @@ function ringS(r, x, z) {
 }
 
 // 불량배와 경찰관은 옷차림으로 구분된다.
-const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c', face: 'sunglasses', neck: 'none', back: 'none' };
+const THUG = { pants: '#18161f', shoes: '#18161f' };
 // 체력: 불량배와 경찰관은 더 튼튼하다.
 const MAXHP = { citizen: 160, thug: 280, cop: 230 };
 const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
 const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' };
-function lookFor(kind, seed) {
+// 불량배는 공통으로 험상궂은 얼굴(찌푸린 눈썹, 흉터)이고, 머리·얼굴·옷·팔을 섞어서 저마다 다르게 만든다.
+const PUNK = ['#e0261c', '#3fc16a', '#ff5fa2', '#ffd84a', '#4f9bea'];
+function thugLook(base, seed) {
+  const r = rng(seed * 31 + 7), head = r.pick(['beanie', 'beanie', 'mohawk', 'spiky', 'headband', 'capback']);
+  const neck = r.pick(['leathervest', 'thugchain', 'skullshirt', 'none']);
+  return { ...base, ...THUG, grim: true, head, hat: head === 'mohawk' || head === 'spiky' || head === 'headband' ? r.pick(PUNK) : '#18161f', brim: r.pick(['#e0261c', '#e0261c', '#f2f2f2']),
+    face: r.pick(['thugA', 'thugB', 'thugC', 'thugD']), neck, arm: r.pick(['wraps', 'ripped', 'none']), back: 'none', shirt: neck === 'skullshirt' ? '#1c1c22' : r.pick(['#e0261c', '#e0261c', '#2a2a33']) };
+}
+export function lookFor(kind, seed) {
   const base = randomLook(seed);
-  return kind === 'thug' ? { ...base, ...THUG } : kind === 'cop' ? { ...base, ...COP } : base;
+  return kind === 'thug' ? thugLook(base, seed) : kind === 'cop' ? { ...base, ...COP } : base;
 }
 
 export class Residents {
@@ -287,6 +295,8 @@ export class Residents {
         p.y = this.groundY(p.x, p.z);
       } else { // walk
         n.cool -= dt;
+        // 불량배는 플레이어가 6m 안에 오면 걸음을 멈추고 마주 선다(주먹을 쥐어 보이는 게 잘 보이게).
+        if (n.kind === 'thug' && player.active && pd < 6 && Math.abs(player.pos.y - p.y) < 2) { n.pause = Math.max(n.pause, 0.4); wish = Math.atan2(pdx, pdz); }
         if (n.pause > 0) {
           n.pause -= dt;
           n.vel.set(0, 0, 0);
@@ -328,10 +338,11 @@ export class Residents {
       // 가까이 오면 고개를 돌려 보고 손을 흔든다
       // 수배 중이면 근처 경찰관이 달려든다.
       if (n.kind === 'cop' && player.wanted && player.active && pd < 28 && (n.mode === 'walk' || n.mode === 'stand' || n.mode === 'cross' || n.mode === 'return')) { n.mode = 'fight'; n.t = 14; }
-      if (near && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
+      const menace = n.kind === 'thug' && player.active && pd < 6.5 && Math.abs(player.pos.y - p.y) < 2; // 불량배는 주민보다 멀리서부터 으름장을 놓는다
+      if ((near || menace) && n.mode !== 'fly' && n.mode !== 'down' && n.mode !== 'sky' && n.mode !== 'flee' && n.mode !== 'fight') {
         lookYaw = clamp(angDiff(chr.heading, Math.atan2(pdx, pdz)), -1.1, 1.1);
         // 주민은 손을 흔들고, 불량배는 인사 대신 주먹을 쥐어 보인다.
-        if (n.kind === 'thug') { chr.wave = 0; chr.fist = pd < 4.5 ? 1 : 0; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
+        if (n.kind === 'thug') { chr.wave = 0; chr.fist = 1; } else chr.wave = damp(chr.wave, pd < 3.6 ? 1 : 0, 8, dt);
       } else { chr.wave = damp(chr.wave, 0, 8, dt); chr.fist = 0; }
       n.look = damp(n.look || 0, lookYaw, 6, dt);
 
