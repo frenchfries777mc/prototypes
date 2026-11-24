@@ -307,3 +307,19 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 #alarm { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 90px 24px rgba(229, 40, 40, .75); animation: alarmPulse .8s ease-in-out infinite alternate; }
 #alarm[hidden] { display: none; }
 @keyframes alarmPulse { from { opacity: .25; } to { opacity: 1; } }
+
+/* 로비를 작은 화면(낮은 가로 화면, 세로 화면)에 맞춘다: 제목이 잘리고 차림표가 아래로 넘치던 것 */
+#lobby h1 { font-size: clamp(34px, min(8.4vw, 13vh), 104px); }
+#lobby nav button { font-size: clamp(13px, min(2vw, 3.3vh), 22px); padding: clamp(5px, 1.5vh, 15px) 18px; }
+#lobby nav .go { font-size: clamp(16px, min(2.6vw, 4.4vh), 30px); }
+#lobby .left { top: calc(50% - 8px); transform: translateY(-50%); max-height: calc(100% - 64px); }
+@media (max-height: 600px) {
+  #lobby .left { width: min(440px, 58vw); }
+  #lobby nav { grid-template-columns: 1fr 1fr; gap: 6px; }
+  #lobby nav .go { grid-column: 1 / -1; margin-bottom: 2px; }
+  #lobby .sub { margin: 4px 0 8px; }
+  #lobby nav button { padding: 6px 12px; }
+}
+@media (max-height: 460px) { #lobby .note { display: none; } #lobby h1 { -webkit-text-stroke-width: 4px; } #lobby .money { font-size: 13px; padding: 5px 10px; } #lobby .ticker { font-size: 11px; padding-top: 5px; padding-bottom: calc(5px + env(safe-area-inset-bottom)); } }
+@media (max-width: 520px) { #lobby .left { width: min(300px, 78vw); } #lobby .n2 { display: none; } #lobby .n1 { width: min(200px, 52vw); right: 10px; font-size: 11px; top: 56px; } #lobby nav { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { #lobby .left { width: min(240px, 62vw); } #lobby nav button { font-size: 14px; padding: 7px 12px; } }

@@ -1,6 +1,6 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
-import { ROADS, JUNCTIONS, STATIONS, SITES } from './world.js';
+import { ROADS, JUNCTIONS, STATIONS, SITES, CITY_HALF } from './world.js';
 import { baseHeight, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
@@ -96,7 +96,7 @@ for (const r of ROADS) {
     const l = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     p.tx = (b.x - a.x) / l; p.tz = (b.z - a.z) / l;
   });
-  paths.push({ type: r.type, half: HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined, noTraffic: !!r.noTraffic });
+  paths.push({ type: r.type, half: r.city ? CITY_HALF : HALF[r.type], pts, city: r.city, ns: !!r.ns, pin: r.pin !== undefined, noTraffic: !!r.noTraffic });
 }
 
 // 끝과 끝이 맞닿은 길은 맞닿는 단면의 방향을 똑같이 맞춘다(띠의 끝 모서리가 정확히 겹치게).
@@ -322,11 +322,14 @@ export function buildRoads(h) {
         // 4차선: 가장자리 턱, 아스팔트, 가운데 노란 두 줄, 차선 점선. 네거리 안은 표시 없이 아스팔트만, 그 앞은 횡단보도.
         const L = lift + (path.ns ? 0.035 : 0), jd = (a.jn || b.jn) ? 0 : Math.min(jdist(path, a), jdist(path, b));
         const Q = (o1, o2, up, c) => quad(across(a, o1, L + up), across(b, o1, L + up), across(a, o2, L + up), across(b, o2, L + up), c);
-        if (jd < 9.4) Q(-hw, hw, 0, ASPH);
+        if (jd < hw + 2.8) Q(-hw, hw, 0, ASPH);
         else {
           Q(-hw, -hw + 0.55, 0, EDGE); Q(-hw + 0.55, hw - 0.55, 0, ASPH); Q(hw - 0.55, hw, 0, EDGE);
-          if (jd < 13.6) for (let o = -5.2; o <= 5.21; o += 1.3) Q(o - 0.42, o + 0.42, 0.03, LINE);
-          else { Q(-0.3, -0.14, 0.03, YELLOW); Q(0.14, 0.3, 0.03, YELLOW); if (i % 2 === 0 && !(path.pin && a.s < 52)) { Q(-3.12, -2.98, 0.03, LINE); Q(2.98, 3.12, 0.03, LINE); } }
+          if (jd < hw + 7) for (let o = -(hw - 1.4); o <= hw - 1.39; o += 1.3) Q(o - 0.42, o + 0.42, 0.03, LINE); // 횡단보도
+          else {
+            Q(-0.3, -0.14, 0.03, YELLOW); Q(0.14, 0.3, 0.03, YELLOW);
+            if (i % 2 === 0 && !(path.pin && a.s < 52)) { const lanes = hw > 8 ? [3, 6] : [3.05]; for (const lo of lanes) { Q(-lo - 0.07, -lo + 0.07, 0.03, LINE); Q(lo - 0.07, lo + 0.07, 0.03, LINE); } } // 차선 점선(6차선이면 두 줄씩)
+          }
         }
       } else {
         // 갈라지는 곳은 아스팔트 색에서 흙색으로 물든다.

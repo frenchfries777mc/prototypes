@@ -2,7 +2,7 @@
 // 물리 강체 없이 직접 움직이며, 플레이어가 밀면 비켜나고 차에 치이면 날아갔다가 일어난다.
 import { Character, randomLook } from './character.js';
 import { rng, clamp, damp, angDiff } from './util.js';
-import { CITY } from './world.js';
+import { CITY, CITY_HALF } from './world.js';
 const B = window.BABYLON;
 
 // 블록을 한 바퀴 도는 인도(블록 터 가장자리에서 0.75m 바깥). 좌표는 mapdata의 도로 격자에서 나온다.
@@ -18,7 +18,7 @@ const TOWN_RINGS = RINGS.length;
 for (const c of CITY) {
   const o = c.offsets;
   for (let i = 0; i < o.length - 1; i++) for (let j = 0; j < o.length - 1; j++) {
-    const r = { x0: c.x + o[i] + 7.9, x1: c.x + o[i + 1] - 7.9, z0: c.z + o[j] + 7.9, z1: c.z + o[j + 1] - 7.9 };
+    const r = { x0: c.x + o[i] + CITY_HALF + 2.6, x1: c.x + o[i + 1] - CITY_HALF - 2.6, z0: c.z + o[j] + CITY_HALF + 2.6, z1: c.z + o[j + 1] - CITY_HALF - 2.6 };
     if ([[r.x0, r.z0], [r.x1, r.z0], [r.x0, r.z1], [r.x1, r.z1]].every(([x, z]) => Math.hypot(x - c.x, z - c.z) < c.r - 8)) RINGS.push(r);
   }
 }
