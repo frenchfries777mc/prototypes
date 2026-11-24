@@ -35,12 +35,20 @@ export function randomLook(seed) {
 const TOP = [0.98, 0.3, 0.92, 0.12, 'H', 0, 0.74, -0.02];
 const GOLD = '#ffd84a', INK = '#22202b', WHITE = '#ffffff', RED = '#d9473c', STEEL = '#8f95a8';
 const pair = (p) => [p, [...p.slice(0, 5), -p[5], ...p.slice(6)]];
+// 불량배 전용 부품(옷장에서는 팔지 않는다)
+const BROW = pair([0.3, 0.09, 0.06, 0.02, '#14131a', 0.2, 0.56, 0.455, 0, 0.32]); // 안쪽이 내려간 찌푸린 눈썹
+const BANDAID = [[0.22, 0.12, 0.05, 0.02, '#f2c9a0', -0.3, 0.22, 0.46, 0, 0.5], [0.09, 0.12, 0.055, 0.01, '#fff3e0', -0.3, 0.22, 0.465, 0, 0.5]];
+const TOOTHPICK = [[0.04, 0.04, 0.32, 0.01, '#e8cf7a', 0.12, 0.15, 0.58, -0.25]];
+const GOLDTOOTH = [[0.06, 0.07, 0.05, 0.01, GOLD, 0.05, 0.14, 0.462]];
+const STUBBLE = [[0.72, 0.15, 0.05, 0.04, '#4a4244', 0, 0.06, 0.445], ...pair([0.08, 0.2, 0.05, 0.03, '#4a4244', 0.4, 0.14, 0.4])];
 export const PARTS = {
   head: {
     hair: [TOP, [0.8, 0.07, 0.36, 0.03, 'H', 0, 0.55, -0.42, Math.PI / 2]],
     cap: [[0.98, 0.3, 0.92, 0.12, 'H', 0, 0.74, -0.01], [0.8, 0.07, 0.36, 0.03, 'B', 0, 0.63, 0.55]],
     beanie: [[0.98, 0.3, 0.92, 0.12, 'H', 0, 0.74, 0], [0.21, 0.2, 0.23, 0.08, 'B', 0, 0.95, 0]],
     bald: [],
+    headband: [[0.99, 0.15, 0.93, 0.05, 'H', 0, 0.66, 0], [0.18, 0.4, 0.1, 0.04, 'H', -0.28, 0.4, -0.5, 0, 0.25], [0.18, 0.34, 0.1, 0.04, 'H', -0.1, 0.36, -0.52, 0, -0.2]],
+    capback: [[0.98, 0.3, 0.92, 0.12, 'H', 0, 0.74, -0.01], [0.8, 0.07, 0.36, 0.03, 'B', 0, 0.63, -0.55]],
     long: [TOP, [0.92, 0.66, 0.12, 0.05, 'H', 0, 0.36, -0.47], ...pair([0.1, 0.52, 0.5, 0.04, 'H', 0.5, 0.42, -0.14])],
     pigtails: [TOP, ...pair([0.22, 0.42, 0.22, 0.08, 'H', 0.6, 0.38, -0.1])],
     bun: [TOP, [0.36, 0.3, 0.36, 0.12, 'H', 0, 1.0, -0.2]],
@@ -89,6 +97,10 @@ export const PARTS = {
   },
   face: {
     none: [],
+    thugA: [...BROW, ...pair([0.34, 0.2, 0.06, 0.04, '#16161d', 0.21, 0.38, 0.47]), [0.14, 0.05, 0.05, 0.02, '#16161d', 0, 0.43, 0.47]], // 선글라스
+    thugB: [...BROW, ...BANDAID, ...TOOTHPICK],
+    thugC: [...BROW, ...GOLDTOOTH],
+    thugD: [...BROW, ...STUBBLE, ...TOOTHPICK],
     glasses: [[0.74, 0.05, 0.05, 0.02, INK, 0, 0.51, 0.47], ...pair([0.3, 0.04, 0.05, 0.015, INK, 0.2, 0.23, 0.47]), ...pair([0.04, 0.3, 0.05, 0.015, INK, 0.35, 0.37, 0.47]), ...pair([0.04, 0.3, 0.05, 0.015, INK, 0.06, 0.37, 0.47])],
     sunglasses: [...pair([0.34, 0.2, 0.06, 0.04, '#16161d', 0.21, 0.38, 0.47]), [0.14, 0.05, 0.05, 0.02, '#16161d', 0, 0.43, 0.47]],
     eyepatch: [[0.26, 0.26, 0.06, 0.04, '#16161d', 0.2, 0.37, 0.47], [0.97, 0.05, 0.91, 0.02, '#16161d', 0, 0.5, 0]],
@@ -114,6 +126,9 @@ export const PARTS = {
   },
   neck: {
     none: [],
+    leathervest: [[0.72, 0.44, 0.5, 0.1, '#17171c', 0, 0.3, 0], ...pair([0.08, 0.08, 0.06, 0.03, STEEL, 0.22, 0.5, 0.26]), ...pair([0.08, 0.08, 0.06, 0.03, STEEL, 0.22, 0.12, 0.26]), [0.035, 0.42, 0.05, 0.01, STEEL, 0, 0.3, 0.262], ...pair([0.13, 0.13, 0.28, 0.05, STEEL, 0.38, 0.55, 0])],
+    thugchain: [...pair([0.05, 0.34, 0.04, 0.01, STEEL, 0.13, 0.38, 0.235, 0, 0.45]), [0.14, 0.14, 0.05, 0.04, GOLD, 0, 0.2, 0.24], [0.72, 0.06, 0.5, 0.03, STEEL, 0, 0.04, 0], ...pair([0.06, 0.26, 0.05, 0.01, STEEL, 0.34, -0.1, 0.2])],
+    skullshirt: [[0.7, 0.44, 0.47, 0.1, '#1c1c22', 0, 0.3, 0], [0.3, 0.26, 0.04, 0.04, '#f0eee6', 0, 0.34, 0.245], ...pair([0.08, 0.09, 0.05, 0.01, INK, 0.075, 0.37, 0.25]), [0.04, 0.06, 0.05, 0.01, INK, 0, 0.3, 0.25], [0.22, 0.06, 0.05, 0.01, '#f0eee6', 0, 0.16, 0.245], [0.024, 0.06, 0.055, 0.005, INK, 0, 0.16, 0.25]],
     scarf: [[0.74, 0.14, 0.52, 0.06, '#e5553f', 0, 0.55, 0], [0.16, 0.34, 0.08, 0.04, '#e5553f', 0.18, 0.36, 0.25]],
     scarfblue: [[0.74, 0.14, 0.52, 0.06, '#4f9bea', 0, 0.55, 0], [0.16, 0.34, 0.08, 0.04, '#4f9bea', 0.18, 0.36, 0.25]],
     tie: [[0.1, 0.08, 0.05, 0.02, '#b8322a', 0, 0.5, 0.23], [0.1, 0.32, 0.04, 0.02, '#b8322a', 0, 0.3, 0.23]],
@@ -133,6 +148,11 @@ export const PARTS = {
     tutu: [[1.1, 0.1, 0.9, 0.04, '#f08fb0', 0, 0.06, 0], [0.9, 0.1, 0.7, 0.04, '#ff9fc6', 0, 0.14, 0]],
     sandwich: [[0.8, 0.8, 0.06, 0.03, WHITE, 0, 0.26, 0.28], [0.8, 0.8, 0.06, 0.03, WHITE, 0, 0.26, -0.28], [0.5, 0.12, 0.04, 0.02, RED, 0, 0.44, 0.32], [0.5, 0.12, 0.04, 0.02, INK, 0, 0.24, 0.32], ...pair([0.06, 0.1, 0.5, 0.02, INK, 0.3, 0.62, 0])],
     barrel: [[0.9, 0.7, 0.7, 0.14, '#b5713c', 0, 0.26, 0], [0.92, 0.07, 0.72, 0.03, STEEL, 0, 0.46, 0], [0.92, 0.07, 0.72, 0.03, STEEL, 0, 0.06, 0]],
+  },
+  arm: { // 어깨 기준, 양팔에 같이 붙는다
+    none: [],
+    wraps: [[0.24, 0.22, 0.26, 0.07, '#f0eee6', 0, -0.39, 0], [0.245, 0.04, 0.265, 0.01, '#c9c4b8', 0, -0.32, 0], [0.245, 0.04, 0.265, 0.01, '#c9c4b8', 0, -0.47, 0]],
+    ripped: [[0.205, 0.2, 0.225, 0.07, 'S', 0, -0.2, 0], [0.215, 0.05, 0.235, 0.02, '#2a2a3a', 0, -0.17, 0], [0.215, 0.03, 0.235, 0.01, '#2a2a3a', 0, -0.27, 0]],
   },
   back: {
     none: [],
@@ -221,8 +241,7 @@ export class Character {
     this.base.skin.push(part('head', 0.94, 0.82, 0.88, 0.2, look.skin, this.neck, 0, 0.41, 0));
     this.eyeL = part('eyeL', 0.13, 0.24, 0.06, 0.03, '#22202b', this.neck, -0.2, 0.36, 0.43);
     this.eyeR = part('eyeR', 0.13, 0.24, 0.06, 0.03, '#22202b', this.neck, 0.2, 0.36, 0.43);
-    part('cheekL', 0.14, 0.08, 0.04, 0.02, '#ff9d8a', this.neck, -0.33, 0.2, 0.43);
-    part('cheekR', 0.14, 0.08, 0.04, 0.02, '#ff9d8a', this.neck, 0.33, 0.2, 0.43);
+    this.cheeks = [part('cheekL', 0.14, 0.08, 0.04, 0.02, '#ff9d8a', this.neck, -0.33, 0.2, 0.43), part('cheekR', 0.14, 0.08, 0.04, 0.02, '#ff9d8a', this.neck, 0.33, 0.2, 0.43)];
     part('mouth', 0.14, 0.08, 0.04, 0.02, '#22202b', this.neck, 0, 0.17, 0.44).scaling.y = 0.6;
 
     const arm = (side) => {
@@ -269,7 +288,11 @@ export class Character {
     const old = this.extras;
     for (const m of old) { const i = this.meshes.indexOf(m); if (i >= 0) this.meshes.splice(i, 1); m.dispose(); }
     this.extras = [];
-    const col = (c) => (c === 'H' ? look.hat : c === 'B' ? look.brim || '#fff7e6' : c);
+    const col = (c) => (c === 'H' ? look.hat : c === 'B' ? look.brim || '#fff7e6' : c === 'S' ? look.skin : c);
+    // 험상궂은 얼굴(불량배): 볼터치를 빼고 눈을 가늘게 뜬다.
+    this.eyeK = look.grim ? 0.62 : 1;
+    for (const m of this.cheeks) m.setEnabled(!look.grim);
+    this.swagger = !!look.grim; // 어깨를 흔들며 건들건들 걷는다
     const add = (slot, parent) => {
       for (const p of (PARTS[slot][look[slot]] || PARTS[slot][slot === 'head' ? 'hair' : 'none'])) {
         const m = this.part(slot, p[0], p[1], p[2], p[3], col(p[4]), parent, p[5], p[6], p[7]);
@@ -279,6 +302,7 @@ export class Character {
       }
     };
     add('head', this.neck); add('face', this.neck); add('neck', this.torso); add('back', this.torso);
+    add('arm', this.armL); add('arm', this.armR);
     if (this.onMeshes) this.onMeshes(old, this.extras);
   }
   setVisible(v) { this.root.setEnabled(v); }
@@ -337,8 +361,10 @@ export class Character {
     this.legL.rotation.z = -0.12 * this.air;
     this.legR.rotation.z = 0.12 * this.air;
     this.hips.position.y = 0.42 + Math.abs(c) * 0.07 * this.amp + breath;
-    this.torso.rotation.y = s * 0.16 * this.amp;
-    this.torso.rotation.z = c * 0.05 * this.amp;
+    const sw = this.swagger ? 1 : 0; // 건들거리는 걸음: 어깨와 몸통을 크게 흔든다
+    this.torso.rotation.y = s * (0.16 + 0.2 * sw) * this.amp;
+    this.torso.rotation.z = c * (0.05 + 0.15 * sw) * this.amp;
+    this.hips.position.x = sw ? c * 0.09 * this.amp : 0;
 
     // 팔: 다리와 반대로 흔들고, 스프링으로 한 박자 늦게 따라온다. 공중에서는 번쩍 든다.
     const armLag = this.sArm.step(pitch * 1.6, dt);
@@ -384,6 +410,6 @@ export class Character {
     this.blinkT -= dt;
     const blink = this.blinkT < 0.11 ? 0.12 : 1;
     if (this.blinkT < 0) this.blinkT = 1.8 + Math.random() * 3.5;
-    this.eyeL.scaling.y = this.eyeR.scaling.y = blink;
+    this.eyeL.scaling.y = this.eyeR.scaling.y = blink * (this.eyeK || 1);
   }
 }

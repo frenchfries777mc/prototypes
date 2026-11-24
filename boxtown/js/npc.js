@@ -53,14 +53,22 @@ function ringS(r, x, z) {
 }
 
 // 불량배와 경찰관은 옷차림으로 구분된다.
-const THUG = { shirt: '#e0261c', pants: '#18161f', shoes: '#18161f', head: 'beanie', hat: '#18161f', brim: '#e0261c', face: 'sunglasses', neck: 'none', back: 'none' };
+const THUG = { pants: '#18161f', shoes: '#18161f' };
 // 체력: 불량배와 경찰관은 더 튼튼하다.
 const MAXHP = { citizen: 160, thug: 280, cop: 230 };
 const SCALE = { citizen: 1, thug: 1.22, cop: 1.05 };
 const COP = { shirt: '#2f4fa8', pants: '#1f2a4a', shoes: '#22202b', head: 'police', hat: '#1f2a4a', brim: '#ffd84a', face: 'none', neck: 'badge', back: 'none' };
-function lookFor(kind, seed) {
+// 불량배는 공통으로 험상궂은 얼굴(찌푸린 눈썹, 흉터)이고, 머리·얼굴·옷·팔을 섞어서 저마다 다르게 만든다.
+const PUNK = ['#e0261c', '#3fc16a', '#ff5fa2', '#ffd84a', '#4f9bea'];
+function thugLook(base, seed) {
+  const r = rng(seed * 31 + 7), head = r.pick(['beanie', 'beanie', 'mohawk', 'spiky', 'headband', 'capback']);
+  const neck = r.pick(['leathervest', 'thugchain', 'skullshirt', 'none']);
+  return { ...base, ...THUG, grim: true, head, hat: head === 'mohawk' || head === 'spiky' || head === 'headband' ? r.pick(PUNK) : '#18161f', brim: r.pick(['#e0261c', '#e0261c', '#f2f2f2']),
+    face: r.pick(['thugA', 'thugB', 'thugC', 'thugD']), neck, arm: r.pick(['wraps', 'ripped', 'none']), back: 'none', shirt: neck === 'skullshirt' ? '#1c1c22' : r.pick(['#e0261c', '#e0261c', '#2a2a33']) };
+}
+export function lookFor(kind, seed) {
   const base = randomLook(seed);
-  return kind === 'thug' ? { ...base, ...THUG } : kind === 'cop' ? { ...base, ...COP } : base;
+  return kind === 'thug' ? thugLook(base, seed) : kind === 'cop' ? { ...base, ...COP } : base;
 }
 
 export class Residents {
