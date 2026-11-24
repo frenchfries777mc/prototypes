@@ -92,20 +92,8 @@ export const PROPS = [
 ];
 
 // 길가에 세워 둔 차(전부 탈 수 있다). r은 도(°): 0이면 북쪽(+Z)을 본다. 우측통행 기준으로 차선을 잡았다.
-export const PARKED = [
-  { m: 'cars/taxi', cx: 8.45, cz: 4.30, r: -90 },
-  { m: 'cars/taxi', cx: 9.3, cz: 4.30, r: -90 },
-  { m: 'cars/garbage-truck', cx: 9.2, cz: 6.70, r: 90 },
-  { m: 'cars/delivery', cx: 3.6, cz: 0.70, r: 90 },
-  { m: 'cars/sedan', cx: 2.4, cz: 1.30, r: -90 },
-  { m: 'cars/hatchback-sports', cx: 8.6, cz: 3.70, r: 90 },
-  { m: 'cars/suv', cx: 4.70, cz: 6.2, r: 180 },
-  { m: 'cars/van', cx: 1.30, cz: 2.5, r: 0 },
-  { m: 'cars/police', cx: 6.6, cz: 7.30, r: -90 },
-  { m: 'cars/truck', cx: 9.70, cz: 5.4, r: 0 },
-  { m: 'cars/sedan-sports', cx: 3.2, cz: 6.70, r: 90 },
-  { m: 'cars/firetruck', cx: 3.3, cz: 3.70, r: 90 },
-];
+// 길가에 세워 둔 차는 없다(달리는 차는 traffic.js가 맡는다). 일에 필요한 차는 일을 시작할 때 jobs.js가 앞에 내놓는다.
+export const PARKED = [];
 
 // 밀고 다닐 수 있는 물리 소품(무게 kg).
 export const DYNAMIC = [
@@ -156,17 +144,16 @@ export function modelKeys() {
   return [...keys];
 }
 
-// 마을 밖에 세워 둔 차(월드 좌표). 높이는 지형에서 읽는다.
-PARKED.push(
-  { m: 'cars/tractor', x: -322, z: 180, r: 200 },
-  { m: 'cars/truck', x: 322, z: 240, r: 180 },
-  { m: 'cars/suv-luxury', x: 475, z: 148, r: 180 },
-  { m: 'cars/race', x: 480.5, z: 148, r: 180 },
-  { m: 'cars/suv', x: 132, z: 514, r: 20 },
-  { m: 'cars/van', x: 366, z: -262, r: 200 },
-  { m: 'cars/hatchback-sports', x: -76, z: 62, r: 250 },
-);
+
 
 // 길에 세워 두지는 않지만 판매장에서 파는 차
 export const EXTRA_CARS = ['cars/kart-oobi', 'cars/race-future', 'cars/ambulance', 'cars/truck-flat', 'cars/tractor-shovel'];
-export const carKeys = () => [...new Set([...PARKED.map((p) => p.m), ...EXTRA_CARS])];
+export const carKeys = () => [...new Set([...PARKED.map((p) => p.m), ...EXTRA_CARS, 'cars/taxi', 'cars/delivery', 'cars/truck', 'cars/race', 'cars/garbage-truck', 'cars/firetruck', 'cars/police', 'cars/sedan', 'cars/suv', 'cars/van', 'cars/hatchback-sports', 'cars/sedan-sports', 'cars/suv-luxury'])];
+
+// 일에 필요한 차를 내놓는 자리(월드 좌표, yaw는 라디안)
+export const JOB_CARS = {
+  pizza: { m: 'cars/delivery', x: 43.2, z: 8.4, yaw: Math.PI / 2 },
+  taxi: { m: 'cars/taxi', x: 101.4, z: 51.6, yaw: -Math.PI / 2 },
+  cargo: { m: 'cars/truck', x: 116.4, z: 64.8, yaw: 0 },
+  race: { m: 'cars/race', x: 480.5, z: 148, yaw: Math.PI },
+};

@@ -1,5 +1,7 @@
 // 직업 시스템. 직업 건물 앞 표시에서 E로 시작하고, 목표 지점은 빛기둥과 화면 화살표로 알려 준다.
 // 직업 하나는 { start, update, use, prompt, stop }만 구현하면 된다.
+import { JOB_CARS } from './mapdata.js';
+import { Vehicle } from './vehicles.js';
 import { stats } from './stats.js';
 import { BUILDINGS, CELL } from './mapdata.js';
 import { Character, randomLook } from './character.js';
@@ -119,11 +121,31 @@ export class Jobs {
     this.toast(`${DEFS[id].name} 시작!`);
     job.start();
   }
+  // 일에 필요한 차: 가까이에 있으면 그 차를 쓰고, 없으면 정해진 자리에 새로 내놓는다(길가에 세워 둔 차는 없다).
+  fetchVehicle(spot, test) {
+    const near = this.garage.cars.filter((c) => !c.isBoat && !c.dead && !c.police && !c.mine && !c.netHeld && test(c) && Math.hypot(c.pos.x - spot.x, c.pos.z - spot.z) < 90)[0];
+    if (near) return near;
+    const v = new Vehicle(this.scene, this.assets, spot.m, spot.x, this.groundY(spot.x, spot.z) + 0.8, spot.z, spot.yaw);
+    v.temp = true; v.jobCar = true;
+    this.garage.cars.push(v);
+    if (this.weapons) this.weapons.byBody.set(v.body, v);
+    return v;
+  }
+  // 일이 끝나면 내가 타고 있지 않은 임시 일차는 치운다.
+  dropJobCars() {
+    for (const v of this.garage.cars.slice()) {
+      if (!v.jobCar || v === this.player.vehicle || v.dead) continue;
+      const k = this.garage.cars.indexOf(v); if (k >= 0) this.garage.cars.splice(k, 1);
+      if (this.weapons) { this.weapons.byBody.delete(v.body); const fx = this.weapons.carFx.get(v); if (fx) { fx.smoke.dispose(false); fx.fire.dispose(false); this.weapons.carFx.delete(v); } }
+      v.body.dispose(); v.root.getChildMeshes().forEach((m) => m.dispose()); v.root.dispose();
+    }
+  }
   quit(silent) {
     if (!this.active) return;
     this.active.job.stop();
     if (!silent) this.toast(`${this.active.def.name}을(를) 마쳤어요`);
     this.active = null; this.target = null;
+    setTimeout(() => this.dropJobCars(), 8000); // 일을 마치고 바로 내려도 잠깐은 남겨 둔다
     $('job').hidden = true; $('btnQuit').hidden = true;
   }
 
@@ -206,7 +228,7 @@ function pizzaJob(J, site) {
       const inVan = inVehicle(J, isVan);
       if (state === 'get') {
         J.panel('피자 배달', '초록 배달 트럭에 타세요', 'E로 타고 내립니다');
-        const t = nearestVehicle(J, isVan);
+        const t = J.fetchVehicle(JOB_CARS.pizza, isVan);
         J.setTarget(t.pos.x, t.pos.z, '배달 트럭', t.pos.y);
         if (inVan) order();
       } else if (state === 'deliver') {
@@ -252,7 +274,7 @@ function taxiJob(J, site) {
     update(dt) {
       if (state === 'gettaxi') {
         J.panel('택시 기사', '노란 택시에 타세요', 'E로 타고 내립니다');
-        const taxi = J.garage.cars.filter((c) => c.key === 'cars/taxi').sort((a, b) => dist2(J.pos, a.pos.x, a.pos.z) - dist2(J.pos, b.pos.x, b.pos.z))[0];
+        const taxi = J.fetchVehicle(JOB_CARS.taxi, (c) => c.key === 'cars/taxi');
         J.setTarget(taxi.pos.x, taxi.pos.z, '택시', taxi.pos.y);
         if (inTaxi()) call();
       } else if (state === 'pickup') {
@@ -547,7 +569,7 @@ function cargoJob(J, site) {
     update() {
       if (state === 'get') {
         J.panel('화물 기사', '트럭에 타세요', '트럭·배달차·쓰레기차면 됩니다');
-        const t = nearestVehicle(J, isTruck);
+        const t = nearestVehicle(J, isTruck) && dist2(J.pos, nearestVehicle(J, isTruck).pos.x, nearestVehicle(J, isTruck).pos.z) < 120 * 120 ? nearestVehicle(J, isTruck) : J.fetchVehicle(JOB_CARS.cargo, isTruck);
         J.setTarget(t.pos.x, t.pos.z, '트럭', t.pos.y);
         if (inVehicle(J, isTruck)) next();
       } else {
@@ -718,7 +740,7 @@ function raceJob(J, site) {
     update(dt) {
       if (state === 'get') {
         J.panel('레이서', '경주차에 타세요 (다른 차도 됩니다)', '해변에서 바다 다리 건너 갈매기섬까지');
-        const c = J.garage.cars.find((v) => v.key === 'cars/race') || nearestVehicle(J, isCar);
+        const c = J.fetchVehicle(JOB_CARS.race, (v) => v.key === 'cars/race');
         J.setTarget(c.pos.x, c.pos.z, '경주차', c.pos.y);
         if (inVehicle(J, isCar)) go();
       } else if (state === 'run') {
