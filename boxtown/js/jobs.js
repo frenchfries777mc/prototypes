@@ -1,6 +1,7 @@
 // 직업 시스템. 직업 건물 앞 표시에서 E로 시작하고, 목표 지점은 빛기둥과 화면 화살표로 알려 준다.
 // 직업 하나는 { start, update, use, prompt, stop }만 구현하면 된다.
 import { JOB_CARS } from './mapdata.js';
+import { Panel } from './panel.js';
 import { Vehicle } from './vehicles.js';
 import { stats } from './stats.js';
 import { BUILDINGS, CELL } from './mapdata.js';
@@ -104,7 +105,7 @@ export class Jobs {
   }
   curbPoint(from, minDist) {
     for (let i = 0; i < 40; i++) {
-      const ring = this.r.pick(RINGS), [x, z] = ringPoint(ring, this.r() * 400);
+      const ring = this.r.pick(RINGS.slice(0, 4)), [x, z] = ringPoint(ring, this.r() * 400); // 항구 마을의 인도 고리 네 개만(시가지·기지 고리는 빼고)
       if (!from || dist2(from, x, z) > minDist) return { x, z, y: this.groundY(x, z) };
     }
     const [x, z] = ringPoint(RINGS[0], 0);
@@ -127,9 +128,24 @@ export class Jobs {
     if (near) return near;
     const v = new Vehicle(this.scene, this.assets, spot.m, spot.x, this.groundY(spot.x, spot.z) + 0.8, spot.z, spot.yaw);
     v.temp = true; v.jobCar = true;
+    if (spot === JOB_CARS.pizza) this.decoratePizza(v);
     this.garage.cars.push(v);
     if (this.weapons) this.weapons.byBody.set(v.body, v);
     return v;
+  }
+  // 피자 트럭: 지붕 위 커다란 피자 간판과 옆면 광고(그냥 배달 트럭이 쓰레기차처럼 보이지 않게)
+  decoratePizza(v) {
+    const scene = this.scene, mk = (w, h, d, x, y, z, hex, glow) => { const b = B.MeshBuilder.CreateBox('pizzaTruck', { width: w, height: h, depth: d }, scene); b.parent = v.root; b.position.set(x, y, z); b.material = flatMat('pt_' + hex, hex, scene, glow ? { emissive: hex } : undefined); b.isPickable = false; return b; };
+    const top = v.height + 0.02, cz = v.zc - v.length * 0.2;
+    mk(0.22, 0.7, 0.22, 0, top + 0.35, cz, '#34456f'); // 받침
+    mk(1.9, 0.2, 1.9, 0, top + 0.8, cz, '#e8b04a'); mk(1.62, 0.24, 1.62, 0, top + 0.82, cz, '#d9473c'); mk(1.4, 0.26, 1.4, 0, top + 0.84, cz, '#ffd35a');
+    for (const [px, pz] of [[-0.4, -0.3], [0.45, -0.2], [-0.1, 0.45], [0.2, 0.1], [-0.5, 0.35]]) mk(0.32, 0.28, 0.32, px, top + 0.86, cz + pz, '#b8322a');
+    const tex = new B.DynamicTexture('pizzaTruckAd', { width: 512, height: 256 }, scene, true), c = tex.getContext();
+    c.fillStyle = '#d9473c'; c.fillRect(0, 0, 512, 256); c.fillStyle = '#fff3d6'; c.fillRect(14, 14, 484, 228);
+    c.fillStyle = '#d9473c'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = '900 92px "Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif'; c.fillText('모서리 피자', 256, 100);
+    c.font = '800 54px "Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif'; c.fillStyle = '#34456f'; c.fillText('🍕 따끈 배달 🍕', 256, 190); tex.update();
+    const m = new B.StandardMaterial('pizzaTruckAdMat', scene); m.diffuseTexture = tex; m.emissiveTexture = tex; m.emissiveColor = new B.Color3(0.5, 0.5, 0.5); m.specularColor = B.Color3.Black(); m.backFaceCulling = false;
+    for (const s of [-1, 1]) { const p = B.MeshBuilder.CreatePlane('pizzaTruckAdPlane', { width: v.length * 0.5, height: v.height * 0.5 }, scene); p.parent = v.root; p.position.set(s * (v.width / 2 + 0.03), v.height * 0.58, cz - v.length * 0.02); p.rotation.y = -s * Math.PI / 2; p.material = m; p.isPickable = false; }
   }
   // 일이 끝나면 내가 타고 있지 않은 임시 일차는 치운다.
   dropJobCars() {
@@ -210,41 +226,96 @@ export class Jobs {
 // ======================= 직업들 =======================
 
 // ---------- 피자 배달 ----------
+// 가게 앞에서 주문 창이 뜨면 주문을 고른다. 주문은 1~4건짜리가 있고 항구 마을·도심·갈매기섬·외곽에 흩어져 있다.
+// 멀수록, 건수가 많을수록 보수가 크다. 다 배달하고 가게로 돌아오면 다음 주문 창이 뜬다.
+const PIZZA_ZONES = [
+  { id: 'harbor', name: '항구 마을', w: 3 }, { id: 'downtown', name: '도심', w: 4, areas: ['midtown', 'north', 'east', 'west'] },
+  { id: 'island', name: '갈매기섬', w: 1.6, areas: ['gull'] }, { id: 'outskirts', name: '외곽 마을', w: 1.8, areas: ['farm', 'lake', 'resort', 'camp'] },
+];
 function pizzaJob(J, site) {
   // 피자는 가게 앞 배달 트럭으로 나른다.
   const isVan = (v) => v.key === 'cars/delivery';
   const shop = { x: 43.2, z: 8.8 }; // 가게 앞 찻길
-  let state = 'get', dest, time;
-  const order = () => {
-    dest = J.randomDoor(site, 45);
-    time = dist2(site, dest.x, dest.z) / 7 + 22;
-    state = 'deliver';
-    J.setTarget(dest.x, dest.z, '배달지', dest.y);
-    J.toast('주문이 들어왔어요. 식기 전에 배달하세요!');
+  let state = 'get', order = null, stop = 0, time = 0, offers = [], shown = false, lastCar = null;
+  const near = (p, r) => dist2(J.pos, p.x, p.z) < r;
+  // 주문 하나 만들기: 구역을 고르고, 그 구역 안에서 n곳을 가까운 순서로 잇는다.
+  const makeOffer = () => {
+    let roll = J.r() * PIZZA_ZONES.reduce((a, z) => a + z.w, 0), zone = PIZZA_ZONES[0];
+    for (const z of PIZZA_ZONES) { if (roll < z.w) { zone = z; break; } roll -= z.w; }
+    const n = 1 + Math.floor(J.r() * 4);
+    let pool = zone.areas ? (J.addresses || []).filter((a) => zone.areas.includes(a.area)) : [];
+    if (!pool.length) zone = PIZZA_ZONES[0];
+    let stops = [];
+    if (zone.areas) {
+      const first = J.r.pick(pool);
+      pool = pool.slice().sort((a, c) => dist2(first, a.x, a.z) - dist2(first, c.x, c.z)); // 첫 집에서 가까운 집들
+      stops = pool.slice(0, Math.max(n, 1) * 2).filter((a, i) => i === 0 || J.r() < 0.6).slice(0, n);
+    } else {
+      for (let i = 0; i < n; i++) { const d = J.randomDoor(site, 18); if (!stops.some((s) => dist2(s, d.x, d.z) < 8)) stops.push(d); }
+    }
+    // 가까운 순서로 방문한다
+    const route = []; let at = shop, left = stops.slice(), dist = 0;
+    while (left.length) { left.sort((a, c) => dist2(at, a.x, a.z) - dist2(at, c.x, c.z)); const nx = left.shift(); dist += dist2(at, nx.x, nx.z) * 1.25; route.push(nx); at = nx; }
+    dist += dist2(at, shop.x, shop.z) * 1.25; // 돌아오는 길
+    const raw = 120 * route.length + dist * 0.5 + 30 * (route.length - 1), pay = Math.max(10, Math.round((raw * 0.6) / 10) * 10);
+    return { zone: zone.name, route, dist, raw, pay, limit: dist / 7.5 + 22 * route.length };
   };
+  const board = () => {
+    offers = []; while (offers.length < 4) offers.push(makeOffer());
+    offers.sort((a, c) => a.dist - c.dist);
+    J.player.input.blocked = true; J.player.input.keys.clear();
+    Panel.show({
+      title: '피자 주문', note: '주문을 골라 배달하세요. 멀수록, 많을수록 많이 받아요',
+      items: () => offers.map((o, i) => ({ id: String(i), label: `${o.zone} · ${o.route.length}건`, sub: `${o.dist < 1000 ? Math.round(o.dist) + 'm' : (o.dist / 1000).toFixed(1) + 'km'} · ${won(o.pay)}원`, state: 'buy' })),
+      detail: (id) => {
+        const o = offers[+id];
+        if (!o) return null;
+        return { name: `${o.zone}에 ${o.route.length}건`, bars: [
+          { label: '거리', ratio: o.dist / 2400, text: o.dist < 1000 ? Math.round(o.dist) + ' m' : (o.dist / 1000).toFixed(1) + ' km' },
+          { label: '주문 수', ratio: o.route.length / 4, text: o.route.length + '건' },
+          { label: '보수', ratio: o.pay / 1500, text: won(o.pay) + '원' },
+        ], action: { label: '이 주문 받기', state: 'buy' } };
+      },
+      pick: (id) => { const o = offers[+id]; if (!o) return; order = o; stop = 0; time = o.limit; state = 'deliver'; Panel.close(); aim(); },
+      close: () => { J.player.input.blocked = false; },
+    });
+  };
+  const aim = () => { const d = order.route[stop]; J.setTarget(d.x, d.z, order.route.length > 1 ? `배달지 ${stop + 1}/${order.route.length}` : '배달지', d.y); };
   return {
     start() {},
+    prompt() { return state === 'board' && near(shop, 16) && !Panel.open ? '주문 받기' : ''; },
+    use() { if (state === 'board' && near(shop, 16)) { if (Panel.open) Panel.close(); else board(); return true; } return false; },
     update(dt) {
       const inVan = inVehicle(J, isVan);
       if (state === 'get') {
-        J.panel('피자 배달', '초록 배달 트럭에 타세요', 'E로 타고 내립니다');
+        J.panel('피자 배달', '배달 트럭에 타세요', 'E로 타고 내립니다');
         const t = J.fetchVehicle(JOB_CARS.pizza, isVan);
         J.setTarget(t.pos.x, t.pos.z, '배달 트럭', t.pos.y);
-        if (inVan) order();
+        if (inVan) { state = 'board'; shown = false; J.target = null; }
+      } else if (state === 'board') {
+        // 가게 앞에 서면 주문 창이 뜬다(닫으면 E로 다시 연다).
+        J.panel('피자 배달', inVan ? (near(shop, 16) ? '주문 창에서 주문을 고르세요' : '가게 앞으로 가서 주문을 받으세요') : '배달 트럭에 타세요', inVan && near(shop, 16) ? 'E로 주문 창을 열어요' : '');
+        if (inVan && !near(shop, 16)) J.setTarget(shop.x, shop.z, '피자 가게', 0.2); else J.target = null;
+        if (inVan && near(shop, 16) && Math.abs(J.player.vehicle.speed) < 2.5 && !shown && !Panel.open) { shown = true; board(); }
+        if (!near(shop, 40)) shown = false;
       } else if (state === 'deliver') {
         time -= dt;
-        J.panel('피자 배달', inVan ? '빛기둥이 선 집 앞에 트럭을 세우세요' : '배달 트럭에 다시 타세요', time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (기본 요금만 받아요)');
-        if (stoppedAt(J, dest, 13, isVan)) {
-          J.pay(time > 0 ? 280 + time * 10 : 130, time > 0 ? '따끈한 배달 완료' : '식은 피자 배달');
-          state = 'return';
-          J.setTarget(shop.x, shop.z, '피자 가게', 0.2);
+        const d = order.route[stop];
+        J.panel('피자 배달', inVan ? `${stop + 1}/${order.route.length}번째 집 앞에 트럭을 세우세요` : '배달 트럭에 다시 타세요', (time > 0 ? `남은 시간 ${Math.ceil(time)}초` : '피자가 식었어요 (보수가 줄어요)') + ` · 예상 ${won(order.pay)}원`);
+        if (stoppedAt(J, d, 16, isVan)) {
+          stop++;
+          if (stop >= order.route.length) {
+            const bonus = time > 0 ? 1 + Math.min(0.25, (time / order.limit) * 0.3) : 0.55;
+            J.pay(order.raw * bonus, `${order.zone} ${order.route.length}건 배달 완료`);
+            state = 'return'; J.setTarget(shop.x, shop.z, '피자 가게', 0.2);
+          } else aim();
         }
       } else {
         J.panel('피자 배달', '가게 앞으로 돌아가 다음 주문을 받으세요', inVan ? '' : '배달 트럭에 다시 타세요');
-        if (stoppedAt(J, shop, 13, isVan)) order();
+        if (stoppedAt(J, shop, 16, isVan)) { state = 'board'; shown = false; J.target = null; }
       }
     },
-    stop() {},
+    stop() { if (Panel.open) Panel.close(); J.player.input.blocked = false; },
   };
 }
 

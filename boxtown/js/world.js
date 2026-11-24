@@ -96,6 +96,7 @@ export const CITY = [
   { id: 'west', x: -330, z: 330, r: 95, kind: 'homes', name: '서쪽 마을' },
 ];
 export const CITY_STEP = 60;
+export const CITY_HALF = 9; // 시가지 길의 반폭: 한쪽 세 차선씩 6차선(바깥 길은 6.6m, 4차선)
 export const JUNCTIONS = []; // 시가지 네거리: { x, z, city }
 for (const c of CITY) {
   SITES[c.id] = { x: c.x, z: c.z, r: c.r + 6, name: c.name };

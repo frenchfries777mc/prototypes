@@ -1,5 +1,5 @@
 // 시가지 채우기: world.js의 CITY마다 길가에 건물을 정면이 길을 보게 세우고, 보도·가로등·가로수를 놓는다.
-import { CITY, CITY_STEP } from './world.js';
+import { CITY, CITY_STEP, CITY_HALF } from './world.js';
 import { height } from './terrain.js';
 import { roadDist } from './roads.js';
 import { rng, flatMat } from './util.js';
@@ -13,7 +13,7 @@ const POOL = {
   homes: [...SUB, ...SUB, ...C('ceh')],
   mixed: [...C('abcdehk'), ...IND, ...SUB.slice(0, 6)],
 };
-const HW = 6.6;
+const HW = CITY_HALF;
 
 // h: { scene, assets, box, addBox, collideModel, bucket, houses }
 export function buildCity(h) {

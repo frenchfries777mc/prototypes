@@ -109,10 +109,12 @@ export class Lobby {
     this.t += dt;
     this.el.classList.toggle('closet', this.wardrobe.open);
     const P = this.player, f = P.vehicle ? P.vehicle.pos : P.feet;
-    const a = Math.PI + 0.35 + Math.sin(this.t * 0.22) * 0.22, dist = P.vehicle ? 9 : 5.4;
+    const cvs = document.getElementById('game'), aspect = cvs.clientWidth / Math.max(1, cvs.clientHeight);
+    const a = (this.baseAngle !== undefined ? this.baseAngle : Math.PI / 2) + Math.sin(this.t * 0.22) * 0.22, dist = (P.vehicle ? 9 : 5.4) * (aspect < 1 ? 1.35 : 1);
     const cx = f.x + Math.sin(a) * dist, cz = f.z + Math.cos(a) * dist;
     const lx = Math.cos(a), lz = -Math.sin(a); // 카메라에서 본 옆 방향
-    const side = this.wardrobe.open ? -1.3 : 1.5;
+    // 캐릭터가 화면의 오른쪽 가운데쯤 오도록, 화면 폭(가로세로 비율)에 맞춰 옆으로 옮긴다(세로 화면에서 잘리던 것).
+    const half = Math.tan(0.475) * aspect * dist, side = (this.wardrobe.open || Panel.open ? -0.36 : 0.36) * half;
     if (!P.freeCam) P.freeCam = { pos: new B.Vector3(), target: new B.Vector3() };
     P.freeCam.pos.set(cx + lx * side, f.y + 1.9, cz + lz * side);
     P.freeCam.target.set(f.x + lx * side, f.y + 1.15, f.z + lz * side);
