@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Althist · 대체역사 시뮬레이터</title>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <aside id="panel">
+      <h1>Althist <small>대체역사</small></h1>
+      <input id="search" list="country-list" placeholder="국가 검색 (한글/영문)" autocomplete="off" />
+      <datalist id="country-list"></datalist>
+      <div id="info" class="info empty">지도를 클릭하면 주 정보가 표시됩니다.</div>
+      <div id="status" class="status">데이터 불러오는 중…</div>
+    </aside>
+
+    <aside id="game" hidden>
+      <header class="g-head">
+        <div><div class="g-country"><i class="swatch" id="g-swatch"></i><b id="g-name"></b></div><div class="g-date" id="g-date"></div></div>
+        <button type="button" id="btn-menu" class="ghost">메뉴</button>
+      </header>
+      <div id="g-stats" class="g-stats"></div>
+      <div id="g-diplo" class="g-diplo"></div>
+      <div id="g-log" class="g-log"></div>
+      <form id="g-form" class="g-form">
+        <textarea id="g-cmd" rows="3" placeholder="명령을 자유롭게 적으세요. 예) 일본과 경제 협력 협정을 추진한다 / 북한에 선전포고하고 개성을 점령한다 / 군비를 증강한다"></textarea>
+        <div class="g-actions">
+          <button type="button" id="btn-undo" class="ghost">되돌리기</button>
+          <button type="button" id="btn-pass" class="ghost">명령 없이 넘기기</button>
+          <button type="submit" id="btn-go" class="primary">턴 진행 ▶</button>
+        </div>
+        <div id="g-msg" class="g-msg"></div>
+      </form>
+    </aside>
+
+    <div id="overlay" class="modal" hidden>
+      <div class="card">
+        <h2 id="ov-title">Althist</h2>
+        <p class="hint" id="ov-lead">실제 세계지도 위에서 한 나라를 골라 자유롭게 역사를 바꿔 보세요. 한 턴은 1개월입니다.</p>
+
+        <section id="ov-pick">
+          <label for="ov-country">1. 플레이할 국가</label>
+          <input id="ov-country" list="ov-list" placeholder="국가 검색 (한글/영문) — 지도를 직접 클릭해도 됩니다" autocomplete="off" />
+          <datalist id="ov-list"></datalist>
+          <div class="picked" id="ov-picked">아직 선택하지 않음</div>
+        </section>
+
+        <section id="ov-ai">
+          <label>2. AI 판정 방식</label>
+          <label class="radio"><input type="radio" name="prov" value="local" /> <span><b>규칙 모드</b> — 키 없이 바로 플레이. 키워드(공격·평화·동맹·제재·투자·군비·개혁)만 이해하는 단순 판정</span></label>
+          <label class="radio"><input type="radio" name="prov" value="gemini" /> <span><b>Gemini</b> — 자유로운 문장, 풍부한 서술 (무료 API 키 필요)</span></label>
+          <label class="radio"><input type="radio" name="prov" value="webllm" /> <span><b>브라우저 Qwen</b> — 내 기기에서 실행, 실험적 (WebGPU + 첫 실행 때 모델 다운로드)</span></label>
+          <div id="ov-gemini" class="sub">
+            <label for="ov-key">Gemini API 키 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">발급 받기</a></label>
+            <input id="ov-key" type="password" placeholder="AIza…" autocomplete="off" />
+            <label for="ov-model">모델</label>
+            <input id="ov-model" placeholder="gemini-flash-latest" />
+            <div class="row"><button type="button" id="ov-test" class="ghost">키 테스트</button><span id="ov-testmsg" class="hint"></span></div>
+            <div class="hint">키는 이 기기의 localStorage에만 저장되고 Google API 요청에만 쓰입니다.</div>
+          </div>
+          <div id="ov-webllm" class="sub">
+            <label for="ov-wmodel">WebLLM 모델 ID</label>
+            <input id="ov-wmodel" placeholder="Qwen2.5-3B-Instruct-q4f16_1-MLC" />
+            <div class="hint">작은 모델은 형식을 자주 틀립니다. 안 되면 Gemini나 규칙 모드를 쓰세요.</div>
+          </div>
+        </section>
+
+        <section id="ov-saves">
+          <label>저장 / 불러오기</label>
+          <div class="row">
+            <button type="button" id="ov-continue" class="ghost">이어하기 (자동저장)</button>
+            <button type="button" id="ov-export" class="ghost">파일로 내보내기</button>
+            <button type="button" id="ov-import" class="ghost">파일 불러오기</button>
+            <input id="ov-file" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+
+        <div class="btns">
+          <button type="button" id="ov-close" class="ghost">닫기</button>
+          <button type="button" id="ov-newgame" class="ghost">새 게임</button>
+          <button type="button" id="ov-start" class="primary">게임 시작</button>
+        </div>
+        <div id="ov-msg" class="g-msg"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/standalone.ts"></script>
+  </body>
+</html>

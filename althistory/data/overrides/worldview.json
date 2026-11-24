@@ -83,7 +83,7 @@
     }
   ],
   "knownLimitations": [
-    "마쭈(롄장)와 프라타스(둥사) 제도는 Natural Earth 10m 주 데이터에 폴리곤이 없다."
+    "마쭈·프라타스는 데이터에 없어 개략적인 원형 도형으로 직접 추가했다(정확한 해안선 아님)."
   ],
   "mustDiffer": [
     [
@@ -107,6 +107,65 @@
     "TWN": {
       "name": "Taiwan",
       "nameKo": "대만"
+    },
+    "PRK": {
+      "name": "North Korea",
+      "nameKo": "북한"
+    },
+    "CHN": {
+      "name": "People's Republic of China",
+      "nameKo": "중국"
+    },
+    "AUS": {
+      "name": "Australia",
+      "nameKo": "호주"
     }
-  }
+  },
+  "patches": [
+    {
+      "id": "TWN-PATCH-MATSU",
+      "name": "Lienchiang (Matsu)",
+      "nameKo": "롄장(마쭈)",
+      "adm0": "TWN",
+      "owner": "TWN",
+      "note": "개략 도형(원)",
+      "circles": [
+        {
+          "lon": 119.943,
+          "lat": 26.157,
+          "r": 0.04
+        },
+        {
+          "lon": 119.998,
+          "lat": 26.224,
+          "r": 0.035
+        },
+        {
+          "lon": 120.495,
+          "lat": 26.366,
+          "r": 0.03
+        },
+        {
+          "lon": 119.99,
+          "lat": 25.965,
+          "r": 0.03
+        }
+      ]
+    },
+    {
+      "id": "TWN-PATCH-PRATAS",
+      "name": "Pratas (Dongsha)",
+      "nameKo": "둥사(프라타스)",
+      "adm0": "TWN",
+      "owner": "TWN",
+      "note": "개략 도형(원)",
+      "circles": [
+        {
+          "lon": 116.716,
+          "lat": 20.703,
+          "r": 0.03
+        }
+      ]
+    }
+  ]
 }

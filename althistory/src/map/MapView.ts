@@ -1,0 +1,176 @@
+import { Map as MapLibreMap, NavigationControl, AttributionControl, setWorkerUrl } from 'maplibre-gl';
+import type { MapMouseEvent } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { feature, mesh } from 'topojson-client';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import type { CountryId, CountryMeta, ProvinceId, WorldData } from '../data/types';
+
+interface Props {
+  id: string; name: string; nameKo: string | null; adm0: string;
+  owner: string; controller: string; color: string; ownerColor: string;
+}
+type BBox = [number, number, number, number];
+const OCEAN = '#0b1626';
+
+export interface MapViewOptions { container: string; workerUrl: string; data: WorldData }
+
+/** 지도 표시 전담. 게임 규칙은 모르고, "누가 어느 주를 소유/지배하는가"만 받아서 칠한다. */
+export class MapView {
+  readonly map: MapLibreMap;
+  onProvinceClick: (id: ProvinceId) => void = () => {};
+  padding = { top: 40, bottom: 40, left: 360, right: 40 };
+
+  private fc: FeatureCollection<Geometry, Props>;
+  private topo: WorldData['topo'];
+  private colors = new Map<CountryId, string>();
+  private ctrl: Record<string, string> = {};
+  private bbox = new Map<ProvinceId, BBox>();
+  private micro: { id: ProvinceId; pt: [number, number] }[] = [];
+  private ready = false;
+
+  private constructor(map: MapLibreMap, data: WorldData, countries: CountryMeta[]) {
+    this.map = map; this.topo = data.topo;
+    for (const c of countries) this.colors.set(c.id, c.color);
+    this.fc = feature(data.topo, data.topo.objects.provinces) as unknown as FeatureCollection<Geometry, Props>;
+  }
+
+  static async create(opts: MapViewOptions): Promise<MapView> {
+    setWorkerUrl(opts.workerUrl);
+    const map = new MapLibreMap({
+      container: opts.container,
+      style: { version: 8, sources: {}, layers: [{ id: 'ocean', type: 'background', paint: { 'background-color': OCEAN } }] },
+      center: [15, 25], zoom: 1.4, minZoom: 0.6, maxZoom: 9, dragRotate: false, pitchWithRotate: false, attributionControl: false,
+    });
+    map.touchZoomRotate.disableRotation();
+    map.addControl(new NavigationControl({ showCompass: false }), 'bottom-left');
+    map.addControl(new AttributionControl({ compact: true, customAttribution: '지도 데이터: Natural Earth (퍼블릭 도메인)' }));
+    await new Promise<void>((r) => map.on('load', () => r()));
+    const v = new MapView(map, opts.data, opts.data.countries);
+    v.init();
+    return v;
+  }
+
+  private walk(c: unknown, b: BBox): void {
+    if (Array.isArray(c) && typeof c[0] === 'number') {
+      const x = c[0] as number, y = c[1] as number;
+      if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
+    } else if (Array.isArray(c)) for (const x of c) this.walk(x, b);
+  }
+
+  private init(): void {
+    const map = this.map;
+    // 주별 경계 상자, 초소국 판별
+    const ownerBox = new Map<string, BBox>();
+    for (const f of this.fc.features) {
+      const b: BBox = [Infinity, Infinity, -Infinity, -Infinity];
+      if (f.geometry) this.walk((f.geometry as { coordinates: unknown }).coordinates, b);
+      this.bbox.set(f.properties.id, b);
+      const ob = ownerBox.get(f.properties.owner) ?? [Infinity, Infinity, -Infinity, -Infinity];
+      ownerBox.set(f.properties.owner, [Math.min(ob[0], b[0]), Math.min(ob[1], b[1]), Math.max(ob[2], b[2]), Math.max(ob[3], b[3])]);
+    }
+    for (const f of this.fc.features) {
+      const ob = ownerBox.get(f.properties.owner)!;
+      if (ob[2] - ob[0] > 1.5 || ob[3] - ob[1] > 1.5 || f.properties.owner === 'ATA') continue;
+      const b = this.bbox.get(f.properties.id)!;
+      this.micro.push({ id: f.properties.id, pt: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] });
+    }
+    for (const f of this.fc.features) { this.ctrl[f.properties.id] = f.properties.owner; f.properties.controller = f.properties.owner; }
+    this.paint();
+
+    const empty = { type: 'FeatureCollection', features: [] } as FeatureCollection;
+    map.addSource('provinces', { type: 'geojson', data: this.fc, promoteId: 'id' });
+    map.addSource('country-borders', { type: 'geojson', data: empty });
+    map.addSource('province-borders', { type: 'geojson', data: empty });
+    map.addSource('coast', { type: 'geojson', data: empty });
+    map.addSource('micro', { type: 'geojson', data: empty });
+
+    map.addLayer({ id: 'prov-fill', type: 'fill', source: 'provinces', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.9 } });
+    map.addLayer({ id: 'player-fill', type: 'fill', source: 'provinces', filter: ['==', ['get', 'controller'], ''], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.14 } });
+    map.addLayer({ id: 'owner-highlight', type: 'fill', source: 'provinces', filter: ['==', ['get', 'controller'], ''], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.12 } });
+    map.addLayer({ id: 'prov-lines', type: 'line', source: 'province-borders', paint: { 'line-color': '#0b1626', 'line-opacity': 0.35, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.2, 6, 0.9] } });
+    map.addLayer({ id: 'coast-lines', type: 'line', source: 'coast', paint: { 'line-color': '#0b1626', 'line-opacity': 0.8, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.3, 6, 1] } });
+    map.addLayer({ id: 'country-lines', type: 'line', source: 'country-borders', paint: { 'line-color': '#0b1626', 'line-opacity': 0.95, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.7, 6, 2.2] } });
+    // 점령지: 소유국 색의 점선 테두리
+    map.addLayer({ id: 'occupied-line', type: 'line', source: 'provinces', filter: ['!=', ['get', 'owner'], ['get', 'controller']],
+      paint: { 'line-color': ['get', 'ownerColor'], 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 1.2, 6, 3], 'line-dasharray': [2, 1.2] } });
+    map.addLayer({ id: 'hover-line', type: 'line', source: 'provinces', filter: ['==', ['get', 'id'], ''], paint: { 'line-color': '#ffffff', 'line-width': 1.8 } });
+    map.addLayer({ id: 'select-line', type: 'line', source: 'provinces', filter: ['==', ['get', 'id'], ''], paint: { 'line-color': '#ffd24d', 'line-width': 2.6 } });
+    map.addLayer({ id: 'micro-dots', type: 'circle', source: 'micro', paint: {
+      'circle-color': ['get', 'color'], 'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 6, 6],
+      'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1 } });
+    this.ready = true;
+    this.refreshGeometryLayers();
+
+    let hover = '';
+    map.on('mousemove', 'prov-fill', (e: MapMouseEvent & { features?: { properties: unknown }[] }) => {
+      const id = (e.features?.[0]?.properties as Props | undefined)?.id ?? '';
+      if (id !== hover) { hover = id; map.setFilter('hover-line', ['==', ['get', 'id'], id]); }
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'prov-fill', () => { hover = ''; map.setFilter('hover-line', ['==', ['get', 'id'], '']); map.getCanvas().style.cursor = ''; });
+    map.on('click', (e: MapMouseEvent) => {
+      const f = map.queryRenderedFeatures(e.point, { layers: ['micro-dots'] })[0] ?? map.queryRenderedFeatures(e.point, { layers: ['prov-fill'] })[0];
+      if (f) this.onProvinceClick((f.properties as Props).id);
+    });
+  }
+
+  /** 주마다 색(지배국)과 점령 시 소유국 색을 입력. */
+  private paint(): void {
+    for (const f of this.fc.features) {
+      const p = f.properties;
+      p.controller = this.ctrl[p.id] ?? p.owner;
+      p.color = this.colors.get(p.controller) ?? '#555';
+      p.ownerColor = this.colors.get(p.owner) ?? '#555';
+    }
+  }
+
+  private refreshGeometryLayers(): void {
+    const ctrl = this.ctrl;
+    const c = (g: unknown) => ctrl[(g as { properties: Props }).properties.id];
+    const set = (id: string, data: unknown) => (this.map.getSource(id) as unknown as { setData(d: unknown): void }).setData(data);
+    set('country-borders', mesh(this.topo, this.topo.objects.provinces, (a: unknown, b: unknown) => a !== b && c(a) !== c(b)));
+    set('province-borders', mesh(this.topo, this.topo.objects.provinces, (a: unknown, b: unknown) => a !== b && c(a) === c(b)));
+    set('coast', mesh(this.topo, this.topo.objects.provinces, (a: unknown, b: unknown) => a === b));
+    set('micro', {
+      type: 'FeatureCollection',
+      features: this.micro.map((m) => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: m.pt },
+        properties: { id: m.id, color: this.colors.get(ctrl[m.id]) ?? '#555' },
+      })) as Feature[],
+    });
+  }
+
+  /** 소유/지배 상태를 통째로 반영한다 (영토가 바뀐 턴, 새 게임, 불러오기). */
+  setControl(owner: Record<string, string>, controller: Record<string, string>): void {
+    for (const f of this.fc.features) { f.properties.owner = owner[f.properties.id] ?? f.properties.owner; }
+    this.ctrl = { ...controller };
+    this.paint();
+    if (!this.ready) return;
+    (this.map.getSource('provinces') as unknown as { setData(d: unknown): void }).setData(this.fc);
+    this.refreshGeometryLayers();
+  }
+
+  setPlayer(cid: CountryId | null): void { this.map.setFilter('player-fill', ['==', ['get', 'controller'], cid ?? '']); }
+  setHighlightCountry(cid: CountryId | null): void { this.map.setFilter('owner-highlight', ['==', ['get', 'controller'], cid ?? '']); }
+  setSelectedProvince(id: ProvinceId | null): void { this.map.setFilter('select-line', ['==', ['get', 'id'], id ?? '']); }
+
+  /** 국가 본토 쪽 영역으로 이동(해외 영토가 멀리 있어도 본토 위주). */
+  fitCountry(cid: CountryId, animate = true): void {
+    const items = this.fc.features.filter((f) => f.properties.controller === cid && f.properties.id in this.ctrl).map((f) => ({ id: f.properties.id, b: this.bbox.get(f.properties.id)! }));
+    if (!items.length) return;
+    const area = (b: BBox) => (b[2] - b[0]) * (b[3] - b[1]);
+    const anchor = items.reduce((m, x) => (area(x.b) > area(m.b) ? x : m));
+    const ax = (anchor.b[0] + anchor.b[2]) / 2, ay = (anchor.b[1] + anchor.b[3]) / 2;
+    const box: BBox = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const it of items) {
+      const cx = (it.b[0] + it.b[2]) / 2, cy = (it.b[1] + it.b[3]) / 2;
+      if (Math.abs(cx - ax) > 45 || Math.abs(cy - ay) > 30) continue;
+      box[0] = Math.min(box[0], it.b[0]); box[1] = Math.min(box[1], it.b[1]); box[2] = Math.max(box[2], it.b[2]); box[3] = Math.max(box[3], it.b[3]);
+    }
+    this.fitBox(box, animate);
+  }
+  fitBox(b: BBox, animate = true): void {
+    this.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: this.padding, duration: animate ? 900 : 0, maxZoom: 6 });
+  }
+  fitProvince(id: ProvinceId, animate = true): void { const b = this.bbox.get(id); if (b) this.fitBox([b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1], animate); }
+}

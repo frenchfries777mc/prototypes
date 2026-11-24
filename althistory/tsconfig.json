@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
+    "resolveJsonModule": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -12,5 +13,5 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "vite.standalone.config.ts"]
 }
