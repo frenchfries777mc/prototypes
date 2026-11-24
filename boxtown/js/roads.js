@@ -254,7 +254,7 @@ setRoadMod((x, z, h) => {
   // 역 터를 먼저 다지고, 그 위에 길을 낸다(역 옆으로 내려가는 선로가 땅에 묻히지 않게).
   for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 26) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 26, d)); }
   const flat = n.half + 6;
-  return lerp(h, n.y - 0.05, 1 - smoothstep(flat, flat + 30, n.d)); // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
+  return lerp(h, n.y + 0.055, 1 - smoothstep(flat, flat + 30, n.d)); // 아스팔트 윗면(+0.1) 바로 밑: 발이 묻히지 않고, 땅이 길 위로 삐져나오지도 않는다 // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
 });
 
 // h: { scene, addBox, casters }

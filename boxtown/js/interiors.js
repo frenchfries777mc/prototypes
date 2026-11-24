@@ -343,7 +343,7 @@ export function buildInteriors(h) {
   ];
   for (const s of SHOPS) {
     // 새로 짓는 가게: 건물 모델을 세우고 앞마당을 깐다.
-    if (s.place) { const gy = h.groundY(s.x, s.z); assets.place(s.key, s.x, gy - 0.05, s.z, s.yaw); h.collideModel(s.key, s.x, gy - 0.05, s.z, s.yaw, 1, 0.95); h.box('plaza_' + s.id, 16, 0.3, 9, s.x, gy + 0.02, s.z + 9, M('#c9cede'), { noShadow: true }); }
+    if (s.place) { const gy = h.groundY(s.x, s.z); assets.place(s.key, s.x, gy - 0.05, s.z, s.yaw); h.collideModel(s.key, s.x, gy - 0.05, s.z, s.yaw, 1, 0.95); h.box('plaza_' + s.id, 16, 0.3, 9, s.x, gy - 0.13, s.z + 9, M('#c9cede'), { noShadow: true, collide: true }); }
     const f = s.door || frontOf(s.key, s.x, s.z, s.yaw, 1.1), y = h.groundY(f.x, f.z);
     buildRoom(s.id, s.id, f.x, f.z);
     doors.push({ id: s.id, room: s.id, x: f.x, y, z: f.z, yaw: s.yaw, gem: marker(f.x, y, f.z) });
