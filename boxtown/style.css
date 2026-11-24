@@ -302,3 +302,8 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 #shop .detail > button.buy { background: #57c27a; }
 #shop .detail > button.on { background: rgba(255, 216, 74, .3); cursor: default; }
 #shop .list { min-height: 0; }
+
+/* 군사 기지 경보: 화면 가장자리가 붉게 깜빡인다 */
+#alarm { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 90px 24px rgba(229, 40, 40, .75); animation: alarmPulse .8s ease-in-out infinite alternate; }
+#alarm[hidden] { display: none; }
+@keyframes alarmPulse { from { opacity: .25; } to { opacity: 1; } }

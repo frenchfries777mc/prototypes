@@ -1,6 +1,6 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
-import { ROADS, JUNCTIONS, STATIONS } from './world.js';
+import { ROADS, JUNCTIONS, STATIONS, SITES } from './world.js';
 import { baseHeight, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
@@ -83,7 +83,8 @@ for (const r of ROADS) {
     }
     return y;
   };
-  const y0 = r.pin !== undefined ? r.pin : joinY(pts[0]), y1 = joinY(pts[pts.length - 1]);
+  const pinY = r.pinSite ? SITES[r.pinSite].y : r.pin;
+  const y0 = pinY !== undefined ? pinY : joinY(pts[0]), y1 = joinY(pts[pts.length - 1]);
   pts.forEach((p) => {
     // 만나는 곳의 높이를 같게 맞춘다(갈림길에 턱이 생기지 않게).
     if (y0 !== null) p.y = lerp(y0, p.y, smoothstep(5, 66, p.s));
