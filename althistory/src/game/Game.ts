@@ -137,6 +137,7 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- 화면 단계 ----------
   function setPhase(p: Phase) {
+    if (p === 'intro' && phase !== 'intro') { $('intro-s1').hidden = false; $('intro-s2').hidden = true; }
     phase = p;
     document.body.classList.remove('phase-intro', 'phase-pick', 'phase-play', 'phase-studio');
     document.body.classList.add(`phase-${p}`);
@@ -224,6 +225,18 @@ export async function startApp(opts: GameOptions) {
     b.textContent = `이어하기 — ${svSc.name} · ${who} · ${fmtDate(sv.date)} (턴 ${sv.turn})`;
   };
   const introMsg = (t: string, err = false) => { const m = $('intro-msg'); m.textContent = t; m.classList.toggle('err', err); };
+  /** 시작 화면 2단계: 1 템플릿 → 2 AI. */
+  const introStep = (n: 1 | 2) => {
+    $('intro-s1').hidden = n !== 1; $('intro-s2').hidden = n !== 2;
+    if (n === 2) {
+      const sc = world.scenarios.find((x) => x.id === templateId);
+      $('s2-sum').innerHTML = sc ? `${thumbImg(sc, 300, 150, 's2-img')}<div><div class="h-era">${esc(sc.era ?? '')}${sc.year ? ` · ${esc(sc.year)}` : ''}</div><b>${esc(sc.name)}</b><div class="lhint">${esc(sc.tagline ?? '')}</div></div>` : '';
+      fillThumbs($('s2-sum'));
+    }
+    $('intro').scrollTop = 0;
+  };
+  $('btn-to-ai').addEventListener('click', () => { introMsg(''); introStep(2); });
+  $('btn-to-tpl').addEventListener('click', () => introStep(1));
   $('btn-next').addEventListener('click', () => {
     aiIntro.read();
     introMsg('');

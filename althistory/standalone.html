@@ -23,18 +23,26 @@
           <div id="gallery" class="gallery" hidden></div>
         </header>
 
-        <h2><span>1</span> 시나리오 템플릿</h2>
-        <div id="tpl-hero" class="hero"></div>
-        <div id="tpl-filter" class="tpl-filter"></div>
-        <div id="tpl-grid" class="tpl-grid"><div class="lhint">불러오는 중…</div></div>
-        <div id="tpl-actions" class="tpl-actions" hidden></div>
+        <div id="intro-s1">
+          <h2><span>1</span> 시나리오 템플릿</h2>
+          <div id="tpl-hero" class="hero"></div>
+          <div id="tpl-filter" class="tpl-filter"></div>
+          <div id="tpl-grid" class="tpl-grid"><div class="lhint">불러오는 중…</div></div>
+          <div id="tpl-actions" class="tpl-actions" hidden></div>
+          <div class="i-actions sticky">
+            <button type="button" id="btn-continue" class="lbtn" hidden></button>
+            <button type="button" id="btn-to-ai" class="lprimary">다음: AI 선택 →</button>
+          </div>
+        </div>
 
-        <h2><span>2</span> AI 선택</h2>
-        <div id="intro-ai"></div>
-
-        <div class="i-actions">
-          <button type="button" id="btn-continue" class="lbtn" hidden></button>
-          <button type="button" id="btn-next" class="lprimary" disabled>다음: 지도에서 나라 고르기 →</button>
+        <div id="intro-s2" hidden>
+          <h2><span>2</span> AI 선택</h2>
+          <div id="s2-sum" class="s2-sum"></div>
+          <div id="intro-ai"></div>
+          <div class="i-actions">
+            <button type="button" id="btn-to-tpl" class="lbtn">← 템플릿 다시 고르기</button>
+            <button type="button" id="btn-next" class="lprimary" disabled>다음: 지도에서 나라 고르기 →</button>
+          </div>
         </div>
         <div id="intro-msg" class="lmsg">데이터 불러오는 중…</div>
       </div>

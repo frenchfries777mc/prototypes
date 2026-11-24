@@ -77,7 +77,7 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
 
   // ---- 시나리오 전환 후에도 현대 소유 상태가 오염되지 않는다 ----
   await page.click('#btn-menu'); await page.click('#ov-newgame'); await page.waitForTimeout(300);
-  await page.click('.tpl[data-id="modern-2026"]'); await page.click('#btn-next'); await page.waitForTimeout(1200);
+  await page.click('.tpl[data-id="modern-2026"]'); await page.click('#btn-to-ai'); await page.click('#btn-next'); await page.waitForTimeout(1200);
   const own = await page.evaluate(() => { const w = window.__game.world; const o = w.initialOwners(); return { crimea: o['RUS-283'], taiwan: o['TWN-1166'], pak: o['PAK-1111'], n: Object.keys(o).length }; });
   ok(own.crimea === 'UKR' && own.taiwan === 'TWN' && own.pak === 'PAK', `역사 템플릿을 본 뒤에도 현대 소유 정책 유지 (크림 ${own.crimea}, 대만 ${own.taiwan}, 길기트 ${own.pak})`);
 

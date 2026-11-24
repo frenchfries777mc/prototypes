@@ -35,9 +35,10 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.screenshot({ path: `${OUT}/s1_intro.png` });
   await page.click('.tpl[data-id="bipolar-world"]');
   ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '템플릿 선택(양극 냉전 세계)');
+  ok(!(await page.isVisible('#intro-ai')), 'AI 선택은 템플릿을 고르기 전에는 보이지 않는다');
   ok((await page.locator('#intro-ai .ai-card').count()) === 3 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 3개(Gemini/Claude/Qwen), "모드" 선택지 없음');
   ok((await page.locator('.tpl img.t-thumb').count()) === 22, '템플릿 카드마다 시작 지도 썸네일');
-  await page.click('#btn-next');
+  await page.click('#btn-to-ai'); await page.click('#btn-next');
 
   // ---- 2단계: 지도에서 클릭해 나라 선택 ----
   ok(!(await page.isVisible('#intro')) && (await page.isVisible('#panel')) && (await page.isVisible('#p-hint')), '지도 화면으로 전환, 안내 문구 표시');
