@@ -6,14 +6,14 @@ export class World {
   readonly index = new Map<ProvinceId, number>();
   readonly countries = new Map<CountryId, CountryMeta>();
   readonly reach: number[][];
-  readonly scenario: Scenario;
+  readonly scenarios: Scenario[];
   /** 소문자 이름 -> 국가 ID. 긴 이름부터 매칭하도록 정렬되어 있다. */
   readonly countryNames: [string, CountryId][];
   readonly provinceNames: [string, ProvinceId][];
 
   constructor(data: WorldData) {
     this.reach = data.reach;
-    this.scenario = data.scenario;
+    this.scenarios = data.scenarios;
     for (const c of data.countries) this.countries.set(c.id, c);
     const geoms = data.topo.objects.provinces.geometries as { properties: ProvinceMeta }[];
     this.provinces = geoms.map((g) => g.properties);

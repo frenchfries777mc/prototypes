@@ -1,0 +1,144 @@
+{
+ "id": "bipolar-world",
+ "name": "양극 냉전 세계",
+ "tagline": "서방 대 동방, 두 진영의 대립",
+ "description": "세계가 두 진영으로 갈라져 있습니다. 같은 진영끼리는 관계가 두텁고(+40), 핵심 강대국 사이는 적대적입니다. 시작 시점에는 전쟁이 없지만 긴장이 높습니다.",
+ "startDate": "2026-01-01",
+ "alliances": [
+  {
+   "name": "서방 진영",
+   "members": [
+    "USA",
+    "GBR",
+    "CAN",
+    "FRA",
+    "DEU",
+    "ITA",
+    "ESP",
+    "NLD",
+    "BEL",
+    "POL",
+    "NOR",
+    "DNK",
+    "SWE",
+    "FIN",
+    "PRT",
+    "GRC",
+    "JPN",
+    "KOR",
+    "AUS",
+    "NZL",
+    "PHL",
+    "ISR",
+    "TWN"
+   ]
+  },
+  {
+   "name": "동방 진영",
+   "members": [
+    "RUS",
+    "CHN",
+    "PRK",
+    "IRN",
+    "BLR",
+    "SYR",
+    "CUB",
+    "VEN",
+    "NIC",
+    "MMR"
+   ]
+  }
+ ],
+ "relations": [
+  [
+   "USA",
+   "RUS",
+   -75
+  ],
+  [
+   "USA",
+   "CHN",
+   -65
+  ],
+  [
+   "USA",
+   "IRN",
+   -80
+  ],
+  [
+   "USA",
+   "PRK",
+   -80
+  ],
+  [
+   "GBR",
+   "RUS",
+   -70
+  ],
+  [
+   "FRA",
+   "RUS",
+   -55
+  ],
+  [
+   "DEU",
+   "RUS",
+   -55
+  ],
+  [
+   "POL",
+   "RUS",
+   -70
+  ],
+  [
+   "JPN",
+   "CHN",
+   -55
+  ],
+  [
+   "JPN",
+   "PRK",
+   -65
+  ],
+  [
+   "KOR",
+   "PRK",
+   -75
+  ],
+  [
+   "TWN",
+   "CHN",
+   -70
+  ],
+  [
+   "AUS",
+   "CHN",
+   -45
+  ],
+  [
+   "PHL",
+   "CHN",
+   -45
+  ],
+  [
+   "ISR",
+   "IRN",
+   -85
+  ],
+  [
+   "ISR",
+   "SYR",
+   -50
+  ],
+  [
+   "USA",
+   "CUB",
+   -50
+  ],
+  [
+   "USA",
+   "VEN",
+   -50
+  ]
+ ]
+}

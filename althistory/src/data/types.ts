@@ -12,9 +12,9 @@ export interface CountryMeta {
 }
 export interface ProvinceMeta { id: ProvinceId; name: string; nameKo: string | null; adm0: string; owner: CountryId }
 export interface Scenario {
-  id: string; name: string; startDate: string; note?: string;
+  id: string; name: string; startDate: string; tagline?: string; description?: string;
   alliances: { name: string; members: CountryId[] }[];
   relations: [CountryId, CountryId, number][];
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface WorldData { topo: any; countries: CountryMeta[]; reach: number[][]; scenario: Scenario }
+export interface WorldData { topo: any; countries: CountryMeta[]; reach: number[][]; scenarios: Scenario[] }

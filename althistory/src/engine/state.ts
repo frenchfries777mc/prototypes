@@ -1,4 +1,4 @@
-import type { CountryId, ProvinceId, Stats } from '../data/types';
+import type { CountryId, ProvinceId, Scenario, Stats } from '../data/types';
 import type { World } from '../data/world';
 
 export interface TurnRecord {
@@ -8,7 +8,7 @@ export interface TurnRecord {
 }
 
 export interface GameState {
-  v: 1; seed: number; rng: number; turn: number; date: string; playerId: CountryId;
+  v: 1; scenarioId: string; seed: number; rng: number; turn: number; date: string; playerId: CountryId;
   owner: Record<ProvinceId, CountryId>;
   controller: Record<ProvinceId, CountryId>;
   stats: Record<CountryId, Stats>;
@@ -22,7 +22,7 @@ export interface GameState {
 export const pairKey = (a: CountryId, b: CountryId): string => (a < b ? `${a}|${b}` : `${b}|${a}`);
 export const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 
-export function newGame(world: World, playerId: CountryId, seed: number): GameState {
+export function newGame(world: World, playerId: CountryId, seed: number, scenario: Scenario): GameState {
   const owner: Record<string, string> = {};
   const controller: Record<string, string> = {};
   for (const p of world.provinces) { owner[p.id] = p.owner; controller[p.id] = p.owner; }
@@ -32,12 +32,12 @@ export function newGame(world: World, playerId: CountryId, seed: number): GameSt
     stats[c.id] = { ...(c.stats ?? { stability: 50, economy: 40, military: 30, influence: 20 }) };
   }
   const relations: Record<string, number> = {};
-  for (const al of world.scenario.alliances) {
+  for (const al of scenario.alliances) {
     for (let i = 0; i < al.members.length; i++) for (let j = i + 1; j < al.members.length; j++) relations[pairKey(al.members[i], al.members[j])] = 40;
   }
-  for (const [a, b, v] of world.scenario.relations) relations[pairKey(a, b)] = v;
+  for (const [a, b, v] of scenario.relations) relations[pairKey(a, b)] = v;
   return {
-    v: 1, seed, rng: seed >>> 0, turn: 1, date: world.scenario.startDate, playerId,
+    v: 1, scenarioId: scenario.id, seed, rng: seed >>> 0, turn: 1, date: scenario.startDate, playerId,
     owner, controller, stats, relations, wars: [], eliminated: [], log: [], memory: '',
   };
 }

@@ -21,7 +21,10 @@ const NEUTRAL = new Set(['ATA']); // 주인 없는 땅(남극)
 const a0 = JSON.parse(fs.readFileSync(path.join(RAW, 'admin0.geojson'), 'utf8')).features;
 const a1 = JSON.parse(fs.readFileSync(path.join(RAW, 'admin1.geojson'), 'utf8')).features;
 const worldview = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/overrides/worldview.json'), 'utf8'));
-const scenario = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/scenario/modern-2026.json'), 'utf8'));
+const scenarioDir = path.join(ROOT, 'data/scenario');
+const ORDER = ['modern-2026', 'bipolar-world', 'blank-world'];
+const scenarios = fs.readdirSync(scenarioDir).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(scenarioDir, f), 'utf8')))
+  .sort((a, b) => (ORDER.indexOf(a.id) + 99) % 99 - (ORDER.indexOf(b.id) + 99) % 99);
 
 // ---- 1. 국가(주권) 표 + 초기 능력치 --------------------------------------------
 const clamp = (x, a = 0, b = 100) => Math.max(a, Math.min(b, x));
@@ -163,7 +166,7 @@ for (const e of worldview.expectCountryName ?? []) {
   const c = countries.get(e.owner);
   if (c?.name !== e.nameEn || (e.nameKo && c?.nameKo !== e.nameKo)) problems.push(`국가 표기 불일치 ${e.owner}: ${c?.name}/${c?.nameKo} (기대 ${e.nameEn}/${e.nameKo ?? '-'})`);
 }
-const scenarioIds = new Set([...scenario.relations.flatMap((r) => [r[0], r[1]]), ...scenario.alliances.flatMap((a) => a.members)]);
+const scenarioIds = new Set(scenarios.flatMap((sc) => [...sc.relations.flatMap((r) => [r[0], r[1]]), ...sc.alliances.flatMap((a) => a.members)]));
 for (const id of scenarioIds) if (!countries.has(id)) problems.push(`시나리오의 알 수 없는 국가 ID: ${id}`);
 if (problems.length) {
   console.error('\n[실패] 검증에서 문제 발견:\n - ' + problems.join('\n - '));
@@ -271,7 +274,8 @@ const countryList = Object.keys(provCount).map((id) => {
 fs.writeFileSync(path.join(OUT, 'countries.json'), JSON.stringify(countryList));
 fs.writeFileSync(path.join(OUT, 'adjacency.json'), JSON.stringify(adjacency));
 fs.writeFileSync(path.join(OUT, 'reach.json'), JSON.stringify(reach));
-fs.writeFileSync(path.join(OUT, 'scenario.json'), JSON.stringify(scenario));
+fs.writeFileSync(path.join(OUT, 'scenarios.json'), JSON.stringify(scenarios));
+fs.rmSync(path.join(OUT, 'scenario.json'), { force: true });
 fs.rmSync(TMP, { recursive: true, force: true });
 
 // ---- 7. 리포트 -------------------------------------------------------------
@@ -281,6 +285,7 @@ console.log(`주(province): ${geoms.length}  (admin-0 단일 주: ${singleProvin
 console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c.neutral).length})`);
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
+console.log(`시나리오 템플릿: ${scenarios.map((x) => x.id).join(', ')}`);
 console.log(`reach 평균 ${(reachTotal / geoms.length).toFixed(1)}개/주`);
 console.log(`world.topo.json ${kb(outTopo)} · reach.json ${kb(path.join(OUT, 'reach.json'))} · countries.json ${kb(path.join(OUT, 'countries.json'))}`);
 console.log('알려진 한계:', worldview.knownLimitations.join(' / '));
