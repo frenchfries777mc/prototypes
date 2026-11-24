@@ -1,4 +1,5 @@
 // 로비: 게임을 켜면 먼저 보이는 화면. 마을을 배경으로 내 캐릭터가 서 있고, 왼쪽에 차림표, 오른쪽에 쪽지(오늘의 일거리, 내 기록), 아래에 속보 자막.
+import { Panel } from './panel.js';
 import { stats } from './stats.js';
 const B = window.BABYLON;
 const $ = (id) => document.getElementById(id);
@@ -34,6 +35,7 @@ export class Lobby {
     this.el.hidden = false;
   }
   hide() {
+    Panel.close(); // 차고 창이 열린 채 게임으로 나가지 않게
     this.open = false; this.el.hidden = true; this.wardrobe.close();
     document.body.classList.remove('lobby');
     this.input.blocked = false;
@@ -99,7 +101,7 @@ export class Lobby {
       <div class="money">💰 ${won(this.jobs.money)}원</div>
       <div class="note n1"><h3>📌 오늘의 일거리</h3><ul>${quest}</ul></div>
       <div class="note n2"><h3>🏠 내 살림</h3>집 ${this.interiors.owned.size}채 · 치장품 ${this.wardrobe.owned.size}개<br>해낸 일 ${won(s('jobs'))}번</div>
-      ${panel}<div class="ticker"><span>${news}　·　${news}</span></div>`;
+      ${panel}<div class="ticker"><span>${news}</span></div>`;
   }
   // 로비 카메라: 캐릭터 앞에서 마을을 등지게 잡고 천천히 좌우로 흔들린다. 캐릭터는 화면 오른쪽에 선다.
   update(dt) {

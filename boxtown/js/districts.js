@@ -81,7 +81,7 @@ export function buildDistricts(h) {
       ['nature/crops_wheatStageB', 0.5, '#d8b455'], ['nature/crop_melon', 0.42, '#8a6240'], ['nature/crops_cornStageD', 0.36, '#9c6b43']];
     crops.forEach(([key, sc, soil], i) => {
       const fx = -36 + (i % 3) * 34, fz = -28 - Math.floor(i / 3) * 30;
-      Bx('field' + i, 30, 0.16, 25, fx, 0.06, fz, M(soil), { noShadow: true, base: S.y });
+      Bx('field' + i, 30, 0.16, 25, fx, -0.05, fz, M(soil), { noShadow: true, base: S.y });
       for (let a = -13; a <= 13; a += 2.9) for (let b = -10.5; b <= 10.5; b += 3) assets.place(key, S.x + fx + a, S.y + 0.12, S.z + fz + b, r() * 6.28, sc * r.range(0.9, 1.15));
     });
     for (let x = -54; x <= 50; x += 3) { assets.place('nature/fence_simple', S.x + x, S.y, S.z - 12, 0, 0.5); assets.place('nature/fence_simple', S.x + x, S.y, S.z - 74, 0, 0.5); }
@@ -110,7 +110,7 @@ export function buildDistricts(h) {
       if (i % 2) assets.place(cont[(i + 1) % 3], S.x + 20 + i * 5.2, S.y + 4.15, S.z - 66, 0); // 위에 한 층 더
     }
     for (let i = 0; i < 6; i++) P('industrial/solar-panel-landscape-group', -70 + (i % 3) * 20, 62 + Math.floor(i / 3) * 12, 0);
-    Bx('yard', 150, 0.1, 150, 0, 0.04, 0, M('#aeb3c2'), { noShadow: true, base: S.y });
+    Bx('yard', 150, 0.1, 150, 0, -0.02, 0, M('#aeb3c2'), { noShadow: true, base: S.y });
   }
 
   // ===================== 동쪽 해변 =====================
@@ -229,7 +229,7 @@ export function buildDistricts(h) {
     P(SUB('b'), -10, 12, 180); P(SUB('h'), 18, 10, 180); P(SUB('g'), 4, -22, 0); P(IND('s'), -34, -14, 90);
     for (let i = 0; i < 2; i++) {
       const fx = 34, fz = -30 + i * 28;
-      Bx('field' + i, 26, 0.16, 22, fx, 0.06, fz, M(i ? '#d8b455' : '#9c6b43'), { noShadow: true, base: S.y });
+      Bx('field' + i, 26, 0.16, 22, fx, -0.05, fz, M(i ? '#d8b455' : '#9c6b43'), { noShadow: true, base: S.y });
       for (let a = -11; a <= 11; a += 2.9) for (let b = -9; b <= 9; b += 3) assets.place(i ? 'nature/crops_wheatStageB' : 'nature/crop_pumpkin', S.x + fx + a, S.y + 0.12, S.z + fz + b, r() * 6.28, i ? 0.5 : 0.42);
     }
     const sh = shore(S.x, S.z - 60, 0.2, -1);
@@ -248,7 +248,7 @@ export function buildDistricts(h) {
   // ===================== 교도소 =====================
   {
     const S = SITES.prison, { Bx } = at(S, 'prison'), G = '#aab0c2', D = '#6b7285';
-    Bx('yard', 46, 0.12, 40, 0, 0.06, 0, M('#b9bfd0'), { noShadow: true, base: S.y });
+    Bx('yard', 46, 0.12, 40, 0, -0.03, 0, M('#b9bfd0'), { noShadow: true, base: S.y });
     Bx('block', 22, 7.5, 15, 0, 3.75, 0, M(G), { base: S.y, collide: true }); Bx('roof', 23, 0.6, 16, 0, 7.8, 0, M(D), { base: S.y });
     Bx('wing', 9, 5, 9, -14, 2.5, -2, M(G), { base: S.y, collide: true }); Bx('wingRoof', 9.8, 0.5, 9.8, -14, 5.25, -2, M(D), { base: S.y });
     Bx('door', 2.2, 3, 0.3, 0, 1.5, 7.6, M('#34456f'), { base: S.y }); Bx('doorTop', 4, 0.5, 1.4, 0, 3.4, 8, M(D), { base: S.y });

@@ -35,7 +35,7 @@ export function buildCity(h) {
           const n = Math.max(1, Math.ceil((b - a) / 6)), len = (b - a) / n;
           if (b - a > 4) for (let k = 0; k < n; k++) {
             const [px, pz] = at(a + (k + 0.5) * len, side, HW + 1.3);
-            h.box('pave', ns ? 2.6 : len + 0.1, 0.5, ns ? len + 0.1 : 2.6, px, height(px, pz) - 0.07, pz, pave, { noShadow: true });
+            h.box('pave', ns ? 2.6 : len + 0.1, 0.5, ns ? len + 0.1 : 2.6, px, height(px, pz) - 0.22, pz, pave, { noShadow: true }); // 윗면이 땅 위 3cm
           }
         }
         // 가로등과 가로수

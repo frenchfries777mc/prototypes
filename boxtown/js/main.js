@@ -218,8 +218,14 @@ async function boot() {
   }
   // 화면 효과(번짐, 색 보정)는 준비가 오래 걸려서, 게임이 뜬 뒤에 붙인다. 아주 가볍게(lite)에서는 쓰지 않는다.
   const pipe = { bloomEnabled: false };
+  // 높은 품질만 화면 효과 통로(번짐 + 앞뒤 선명화)를 쓴다. 낮은 품질은 전체 화면을 다시 그리는 통로를 아예 만들지 않고,
+  // 장면 자체의 색 보정(대비·밝기)으로 비슷한 느낌만 낸다: 한 프레임에 전체 화면 처리 둘이 줄고, 준비 시간도 없다.
+  if (quality !== 'high') {
+    const ip = scene.imageProcessingConfiguration;
+    ip.isEnabled = true; ip.contrast = 1.18; ip.exposure = 1.0; ip.toneMappingEnabled = false;
+  }
   const addFx = () => {
-    if (lite) return;
+    if (lite || quality !== 'high') return;
     const p = new B.DefaultRenderingPipeline('pipe', true, scene, [player.cam]);
     p.fxaaEnabled = true;
     p.bloomEnabled = quality !== 'low' && !fxOff;
@@ -256,27 +262,38 @@ async function boot() {
   let useLabel = '', quitT = 0, carShown = -1;
   const carHp = $('carHp');
   $('btnView').addEventListener('click', () => player.nextView());
+  // 로비가 떠 있는 동안은 게임을 멈춘 것과 같다: 무거운 것(주민, 차, 기차)은 1초에 20번만 돌리고, 일·경찰·체력·화면 안내는 건너뛴다.
+  let lobbyAcc = 0, lobbyWas = false;
   const tick = (dt) => {
+    const inLobby = lobby.open;
+    if (inLobby !== lobbyWas) { lobbyWas = inLobby; csm.getShadowMap().refreshRate = inLobby ? 3 : 1; lobbyAcc = 0; } // 로비에서는 그림자를 3프레임에 한 번만 다시 그린다
     town.update(dt);
     cullT -= dt;
     if (cullT <= 0 || assets.activeInterior !== lastInterior) { cullT = 0.3; lastInterior = assets.activeInterior; assets.cull(scene.activeCamera.position, rl, fixedCasters); }
     garage.frame();
     const car = player.vehicle;
-    residents.update(dt, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
+    let hd = dt;
+    if (inLobby) { lobbyAcc += dt; hd = lobbyAcc; }
+    if (!inLobby || lobbyAcc >= 0.05) {
+    if (inLobby) lobbyAcc = 0;
+    residents.update(hd, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
+    train.update(hd);
+    traffic.blocked = train.closed;
+    traffic.update(hd);
+    }
+    music.update(dt);
+    lobby.update(dt);
+    net.update(dt);
+    daynight.update(dt);
+    if (inLobby) return; // 아래는 화면 안내와 게임 규칙: 로비에서는 필요 없다
     jobs.update(dt);
     map.update(dt);
     weapons.update(dt, map.open || !!player.riding);
     police.update(dt);
     health.update(dt);
-    train.update(dt);
-    traffic.blocked = train.closed;
-    traffic.update(dt);
-    music.update(dt);
     interiors.update(dt);
-    lobby.update(dt);
-    net.update(dt);
     dealer.update(dt);
-    heist.update(dt); furnish.update(); daynight.update(dt); bag.update(dt);
+    heist.update(dt); furnish.update(); bag.update(dt);
     const text = net.prompt() || dealer.prompt() || heist.prompt() || furnish.prompt() || bag.prompt() || train.prompt() || health.prompt() || interiors.prompt() || jobs.prompt() || (car ? (Math.abs(car.speed) < 6 ? '내리기' : '') : player.nearCar ? '타기' : traffic.prompt());
     if (text !== promptText) {
       promptText = text;
