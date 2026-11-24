@@ -30,7 +30,8 @@ var fps_t := 0.0
 var render_scale := 1.0
 var cfg := {"bots": -1, "seed": 20260101, "team": -2, "tp": false, "tpd": 3.2, "perf": false, "nomouse": false,
 	"q": -1, "scale": 1.0, "join": "", "auto": "", "code": "", "name": "", "autostart": false,
-	"peerhost": "", "peerport": 443, "peersecure": true, "warp": "", "die": false}
+	"peerhost": "", "peerport": 443, "peersecure": true, "warp": "", "die": false,
+	"adapt": true, "lights": true, "debug": false}
 var perf_acc := 0.0
 var perf_steps := 0
 var perf_t := 0.0
@@ -123,6 +124,15 @@ func _read_config() -> void:
 			"tp": cfg.tp = (v == "1" or v == "2")
 			"tpd": cfg.tpd = float(v)
 			"perf": cfg.perf = v == "1"
+			# 3D 가 통째로 사라지는 GPU 를 가려내는 스위치: safe=1 은 아래 셋과 텍스처 없는 재질을 한꺼번에 켠다
+			"safe":
+				WorldGfx.safe_gfx = v == "1"
+				if v == "1":
+					cfg.adapt = false
+					cfg.lights = false
+			"adapt": cfg.adapt = v != "0"     # adapt=0: 적응형 해상도(scaling_3d_scale 을 계속 바꿈) 끄기
+			"lights": cfg.lights = v != "0"   # lights=0: 불·총구·폭발 광원 끄기
+			"debug": cfg.debug = v == "1"     # debug=1: 화면에 fps·해상도 배율 표시
 			"nomouse": cfg.nomouse = v == "1"
 			"q": cfg.q = clampi(int(v), 0, 3)
 			"scale": cfg.scale = float(v)
@@ -176,10 +186,13 @@ func _apply_quality() -> void:
 	if view == null:
 		return
 	var q: int = menu.quality
-	adaptive = q >= 3
-	var eff := 1 if adaptive else q
-	fx_level = 2 if (adaptive or q >= 2) else q
+	adaptive = q >= 3 and cfg.adapt
+	var eff := 1 if q >= 3 else q
+	fx_level = 2 if q >= 2 else q
 	view.apply_quality(eff)
+	Fx.lights_on = cfg.lights
+	if not cfg.lights:
+		view.fx.fire_lights = false
 	render_scale = clampf(cfg.scale, 0.4, 1.0)
 	get_viewport().scaling_3d_scale = render_scale
 
@@ -473,6 +486,8 @@ func _play(dt: float) -> void:
 		sim.damage(me, 999.0, att, true)
 		me.respawn_t = 60.0
 		cfg.die = false
+	hud.debug_text = ("fps %d   3D 배율 %.2f   품질 %d   적응형 %s   광원 %s   호환 %s" % [Engine.get_frames_per_second(), render_scale, menu.quality,
+		"켬" if adaptive else "끔", "켬" if cfg.lights else "끔", "켬" if WorldGfx.safe_gfx else "끔"]) if cfg.debug else ""
 	hud.show_score = Input.is_key_pressed(KEY_TAB)
 	hud.look_yaw = look_yaw
 	hud.spec_id = view.spec_id
