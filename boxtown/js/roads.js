@@ -398,8 +398,8 @@ export function buildRoads(h) {
           quad(at(a, o + 0.08, 0.1 + ta), at(b, o + 0.08, 0.1 + tb), at(a, o + 0.08, 0.1 + ba), at(b, o + 0.08, 0.1 + bb), STEEL2);
         }
         if ((a.water || b.water) || (path.pts[i + 2] && path.pts[i + 2].water) || (i > 0 && path.pts[i - 1].water)) {
-          const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
-          boxes.push({ w: 6.4, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, mat: deckMat, collide: true });
+          const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, hl = Math.hypot(b.x - a.x, b.z - a.z), pitch = -Math.atan2(b.y - a.y, hl || 1), len = hl / Math.cos(pitch) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
+          boxes.push({ w: 6.4, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, pitch, mat: deckMat, collide: true });
         }
       }
       continue;
@@ -438,11 +438,12 @@ export function buildRoads(h) {
       const span = a.water || b.water || (path.pts[i + 2] && path.pts[i + 2].water) || (i > 0 && path.pts[i - 1].water);
       if (span) {
         const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2;
-        const len = Math.hypot(b.x - a.x, b.z - a.z) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
-        boxes.push({ w: hw * 2 + 1.6, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, mat: deckMat, collide: true });
+        // 비탈 다리는 상판을 기울여 이어 붙인다(수평 상자로 이으면 구간마다 계단 턱이 생긴다).
+        const hl = Math.hypot(b.x - a.x, b.z - a.z), pitch = -Math.atan2(b.y - a.y, hl || 1), len = hl / Math.cos(pitch) + 0.3, yaw = Math.atan2(b.x - a.x, b.z - a.z);
+        boxes.push({ w: hw * 2 + 1.6, h: 0.9, d: len, x: mx, y: my - 0.42, z: mz, yaw, pitch, mat: deckMat, collide: true });
         for (const sd of [-1, 1]) {
           const rx = mx - ((a.tz + b.tz) / 2) * sd * (hw + 0.55), rz = mz + ((a.tx + b.tx) / 2) * sd * (hw + 0.55);
-          boxes.push({ w: 0.4, h: 1.2, d: len, x: rx, y: my + 0.6, z: rz, yaw, mat: railMat, collide: true });
+          boxes.push({ w: 0.4, h: 1.2, d: len, x: rx, y: my + 0.6, z: rz, yaw, pitch, mat: railMat, collide: true });
         }
         if (i % 5 === 0 && (a.water && b.water)) {
           const depth = my - (SEA - 7);
@@ -461,8 +462,8 @@ export function buildRoads(h) {
   const byMat = new Map();
   for (const b of boxes) {
     const m = B.MeshBuilder.CreateBox('bridgePart', { width: b.w, height: b.h, depth: b.d }, scene);
-    m.position.set(b.x, b.y, b.z); m.rotation.y = b.yaw;
-    if (b.collide) h.addBox(b.x, b.y, b.z, b.w, b.h, b.d, b.yaw);
+    m.position.set(b.x, b.y, b.z); m.rotation.y = b.yaw; m.rotation.x = b.pitch || 0;
+    if (b.collide) h.addBox(b.x, b.y, b.z, b.w, b.h, b.d, b.yaw, b.pitch || 0);
     if (!byMat.has(b.mat)) byMat.set(b.mat, []);
     byMat.get(b.mat).push(m);
   }
