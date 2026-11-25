@@ -186,14 +186,77 @@ export class Police {
     }
     const dx = me.x - cop.pos.x, dz = me.z - cop.pos.z, d = Math.hypot(dx, dz) || 1;
     if (P.vehicle || P.inside || d > 55 || car.dead) { this.copIn(u); return false; }
-    const sp = d < 1.3 ? 0 : 7.6; // 걷는 것보다는 빠르고, 달리면 따돌릴 수 있다
+    const sp = d < 1.3 ? 0 : 9.0; // 뛰어서 쫓는다: 걷기(6.2)보다 훨씬 빠르고 달리기(9.8)보다는 조금 느려서, 계속 달리면 따돌릴 수 있다
     cop.vel.set((dx / d) * sp, 0, (dz / d) * sp);
     const nx = cop.pos.x + cop.vel.x * dt, nz = cop.pos.z + cop.vel.z * dt, gy = this.groundY(nx, nz);
     if (gy > -1.2) cop.pos.set(nx, gy, nz); else cop.vel.set(0, 0, 0); // 물에는 들어가지 않는다
     cop.chr.update(dt, { pos: cop.pos, vel: cop.vel, grounded: true, wishHeading: Math.atan2(dx, dz), landed: 0, jumped: false });
     return d < 1.8 && Math.abs(me.y - cop.pos.y) < 2.2;
   }
+  // ----- 체포 장면: 경찰차가 와서 불량배 한 명을 붙잡아 끌고 간다 -----
+  // 순서: 경찰차가 달려옴(drive) → 경찰관이 내려서 뜀(run) → 수갑(cuff) → 차까지 끌고 감(walk) → 태움(load) → 차가 떠남(leave)
+  startArrest() {
+    const P = this.player, me = P.feet;
+    const cand = this.residents.list.filter((n) => n.kind === 'thug' && (n.mode === 'walk' || n.mode === 'stand') && n.mode !== 'sky' && Math.hypot(n.pos.x - me.x, n.pos.z - me.z) > 35 && Math.hypot(n.pos.x - me.x, n.pos.z - me.z) < 150);
+    const u = this.units.find((x) => !x.active && !x.car.dead);
+    if (!cand.length || !u) return false;
+    const n = cand[Math.floor(Math.random() * cand.length)];
+    if (!this.dispatch(u, n.pos)) return false;
+    const target = new B.Vector3(n.pos.x, n.pos.y, n.pos.z);
+    u.quarry = { pos: target, dead: false, caught: 0 }; u.quarryT = 9999; u.arrest = { n, state: 'drive', t: 0, target };
+    this.arrest = u;
+    return true;
+  }
+  moveCop(u, tx, tz, sp, dt) {
+    const cop = u.cop, dx = tx - cop.pos.x, dz = tz - cop.pos.z, d = Math.hypot(dx, dz) || 1;
+    if (d > 0.2) { cop.vel.set((dx / d) * sp, 0, (dz / d) * sp); const nx = cop.pos.x + cop.vel.x * dt, nz = cop.pos.z + cop.vel.z * dt; cop.pos.set(nx, this.groundY(nx, nz), nz); } else cop.vel.set(0, 0, 0);
+    cop.chr.update(dt, { pos: cop.pos, vel: cop.vel, grounded: true, wishHeading: Math.atan2(dx, dz), landed: 0, jumped: false });
+    return d;
+  }
+  stepArrest(dt) {
+    const u = this.arrest;
+    if (!u || !u.arrest) { this.arrest = null; return; }
+    const A = u.arrest, n = A.n, car = u.car, cop = u.cop, P = this.player;
+    const abort = () => { if (n.mode === 'cuffed') this.residents.release(n); this.recall(u); this.arrest = null; };
+    const done = A.state === 'load' || A.state === 'leave'; // 태운 뒤에는 주민이 이미 데려가진 상태라 주민 상태를 보지 않는다
+    if (this.level > 0 || P.jailed || car.dead || (!done && (n.mode === 'sky' || n.mode === 'fly' || n.mode === 'down' || n.mode === 'flee' || n.mode === 'fight'))) { this.lastAbort = [this.level, P.jailed, car.dead, n.mode, A.state].join('/'); return abort(); }
+    A.t += dt;
+    const lamp = Math.floor(this.t * 4) % 2 === 0; u.lamps[0].setEnabled(lamp); u.lamps[1].setEnabled(!lamp);
+    const door = { x: car.pos.x + car.right.x * (car.width / 2 + 0.7), z: car.pos.z + car.right.z * (car.width / 2 + 0.7) };
+    if (A.state === 'drive') { // 경찰차가 불량배 쪽으로 달려간다(길이 없으면 곧장). 가까이 와서 거의 서면 내린다.
+      A.target.set(n.pos.x, n.pos.y, n.pos.z);
+      const d = Math.hypot(car.pos.x - n.pos.x, car.pos.z - n.pos.z);
+      if ((d < 16 && Math.abs(car.speed) < 3) || A.t > 70) { u.holdT = 99; A.state = 'out'; A.t = 0; }
+      else if (A.t > 70) return abort();
+    } else if (A.state === 'out') {
+      if (!cop.out) { cop.out = true; cop.pos.set(door.x, car.pos.y, door.z); cop.chr.setVisible(true); }
+      if (A.t > 0.6) { A.state = 'run'; A.t = 0; }
+    } else if (A.state === 'run') { // 경찰관이 뛰어가 붙잡는다
+      const d = this.moveCop(u, n.pos.x, n.pos.z, 8.6, dt);
+      n.pause = 1; n.vel.set(0, 0, 0);
+      if (d < 1.7) { this.residents.cuff(n); A.state = 'cuff'; A.t = 0; }
+      else if (A.t > 25) return abort();
+    } else if (A.state === 'cuff') { // 수갑을 채우는 동안 잠깐 서 있는다
+      n.cuffVel.set(0, 0, 0); n.cuffWish = Math.atan2(cop.pos.x - n.pos.x, cop.pos.z - n.pos.z);
+      cop.chr.update(dt, { pos: cop.pos, vel: B.Vector3.Zero(), grounded: true, wishHeading: Math.atan2(n.pos.x - cop.pos.x, n.pos.z - cop.pos.z), landed: 0, jumped: false });
+      if (A.t > 1.3) { A.state = 'walk'; A.t = 0; }
+    } else if (A.state === 'walk') { // 경찰관이 앞서 걷고 붙잡힌 사람이 두 걸음 뒤에서 끌려간다
+      const d = this.moveCop(u, door.x, door.z, 3.0, dt);
+      const bx = cop.pos.x - cop.vel.x * 0.6, bz = cop.pos.z - cop.vel.z * 0.6; // 경찰관 바로 뒤
+      const dx = bx - n.pos.x, dz = bz - n.pos.z, l = Math.hypot(dx, dz) || 1, sp = Math.min(3.3, l * 4);
+      n.cuffVel.set((dx / l) * sp, 0, (dz / l) * sp); n.cuffWish = Math.atan2(dx, dz);
+      const nx = n.pos.x + n.cuffVel.x * dt, nz = n.pos.z + n.cuffVel.z * dt; n.pos.set(nx, this.groundY(nx, nz), nz);
+      if (d < 1.4 || A.t > 30) { A.state = 'load'; A.t = 0; }
+    } else if (A.state === 'load') { // 차에 태운다
+      cop.vel.set(0, 0, 0);
+      if (A.t > 0.5 && n.mode === 'cuffed') { this.residents.take(n); this.weapons && this.weapons.sfx.ctx && this.weapons.sfx.play('pop'); }
+      if (A.t > 1.4) { this.copIn(u); A.state = 'leave'; A.t = 0; const s = this.spawnPoint(car.pos); if (s) A.target.set(s[0], s[2], s[1]); else A.target.set(car.pos.x + 120, car.pos.y, car.pos.z + 120); u.holdT = 0; }
+    } else if (A.state === 'leave') { // 사이렌을 켠 채 떠난다
+      if (A.t > 7) { this.recall(u); this.arrest = null; }
+    }
+  }
   recall(u) {
+    u.arrest = null; if (this.arrest === u) this.arrest = null;
     u.active = false; u.quarry = null; this.copIn(u);
     u.lamps.forEach((l) => l.setEnabled(false));
     if (!u.car.dead) { u.car.hp = 100; this.stow(u); }
@@ -265,10 +328,13 @@ export class Police {
     this.t += dt;
     for (const u of this.units) if (!u.active && !u.car.dead && !u.stowed) this.stow(u); // 처음과, 터졌다가 되살아난 차도 감춘다
     this.manageHeli();
+    // 체포 장면: 수배가 없을 때 가끔(처음 30초 뒤, 그다음 1~2분마다) 가까운 불량배 한 명을 잡아간다.
+    if (this.arrest) this.stepArrest(dt);
+    else if (this.level === 0 && !P.jailed && !P.inside) { this.arrCd = (this.arrCd === undefined ? 30 : this.arrCd) - dt; if (this.arrCd <= 0) { this.arrCd = 60 + Math.random() * 60; this.startArrest(); } }
     // 뺑소니 차 쫓기(수배와 상관없이 돌아간다)
     let chasing = false;
     for (const u of this.units) {
-      if (!u.active || !u.quarry) continue;
+      if (!u.active || !u.quarry || u.arrest) continue;
       const q = u.quarry, d = Math.hypot(u.car.pos.x - q.pos.x, u.car.pos.z - q.pos.z);
       const on = Math.floor(this.t * 4 + u.i) % 2 === 0;
       u.lamps[0].setEnabled(on); u.lamps[1].setEnabled(!on);
@@ -309,7 +375,7 @@ export class Police {
     // 붙잡기: 경찰차가 바로 옆에 있는데 거의 멈춰 있으면
     const mySpeed = P.vehicle ? Math.abs(P.vehicle.speed) : Math.hypot(P.vel.x, P.vel.z);
     let tagged = false;
-    for (const u of this.units) if (u.active && !u.car.dead) tagged = this.footChase(u, dt) || tagged;
+    for (const u of this.units) if (u.active && !u.car.dead && !u.arrest) tagged = this.footChase(u, dt) || tagged;
     const close = !P.inside && this.units.some((u) => u.active && !u.car.dead && Math.hypot(u.car.pos.x - me.x, u.car.pos.z - me.z) < (P.vehicle ? 6.5 : 4.2) && Math.abs(u.car.pos.y - me.y) < 3);
     this.catchT = (close && mySpeed < (P.vehicle ? 3 : 6.5)) || tagged ? this.catchT + dt : Math.max(0, this.catchT - dt * 2);
     if (this.catchT > (P.vehicle ? 2.2 : 1.3)) { this.arrest(); el.hidden = true; this.siren(false); return; }

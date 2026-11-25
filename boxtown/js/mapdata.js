@@ -85,9 +85,6 @@ export const PROPS = [
   { m: 'suburban/planter', cx: 6.02, cz: 6.3, r: 0 },
   { m: 'suburban/planter', cx: 6.98, cz: 6.3, r: 0 },
   // 주택가 울타리
-  { m: 'suburban/fence-1x4', cx: 2.0, cz: 8.55, r: 180 },
-  { m: 'suburban/fence-1x3', cx: 6.55, cz: 8.6, r: 180 },
-  { m: 'suburban/fence-1x4', cx: 8.15, cz: 8.6, r: 180 },
   // 표지판
 ];
 
@@ -152,7 +149,7 @@ export const carKeys = () => [...new Set([...PARKED.map((p) => p.m), ...EXTRA_CA
 
 // 일에 필요한 차를 내놓는 자리(월드 좌표, yaw는 라디안)
 export const JOB_CARS = {
-  pizza: { m: 'cars/delivery', x: 43.2, z: 8.4, yaw: Math.PI / 2 },
+  pizza: { m: 'cars/sedan', x: 43.2, z: 8.4, yaw: Math.PI / 2 }, // 옛날식 피자 배달차(승용차에 지붕 간판과 줄무늬)
   taxi: { m: 'cars/taxi', x: 101.4, z: 51.6, yaw: -Math.PI / 2 },
   cargo: { m: 'cars/truck', x: 116.4, z: 64.8, yaw: 0 },
   race: { m: 'cars/race', x: 480.5, z: 148, yaw: Math.PI },

@@ -1,7 +1,7 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
 import { ROADS, JUNCTIONS, STATIONS, SITES, CITY_HALF } from './world.js';
-import { baseHeight, setRoadMod, SEA } from './terrain.js';
+import { baseHeight, height, setRoadMod, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
 
@@ -147,11 +147,23 @@ for (const A of paths) for (const B2 of paths) {
       for (let i = 0; i < L; i++) {
         let acc = 0;
         for (let k = -RAD; k <= RAD; k++) { const j = i + k; if (j < 0 || j >= L) continue; const w = 1 - Math.abs(k) / (RAD + 1); acc = Math.abs(d[j] * w) > Math.abs(acc) ? d[j] * w : acc; }
-        ny[i] = P.pts[i].y + acc * (P.type === 'rail' ? 1 : 0.7);
+        ny[i] = P.pts[i].y + acc * (P.type === 'rail' ? 1 : 0.9);
       }
       P.pts.forEach((p, i) => { p.y = P.pts[i].water ? Math.max(ny[i], SEA + 3.2) : ny[i]; });
     });
-    if (worst < 0.03) break;
+    if (worst < 0.02) break;
+  }
+  // 마무리: 서로 겹치는 점들을 한 번 더 평균으로 딱 맞춘다(완만하게 잇는 과정에서 생긴 작은 어긋남을 없앤다).
+  for (let pass = 0; pass < 3; pass++) {
+    const cellMap = new Map(), ck = (x, z) => Math.floor(x / 16) * 73856093 ^ Math.floor(z / 16) * 19349663;
+    paths.forEach((P, pi) => P.pts.forEach((p) => { const k = ck(p.x, p.z); if (!cellMap.has(k)) cellMap.set(k, []); cellMap.get(k).push([pi, p]); }));
+    for (const [, list] of cellMap) for (const [pa, a] of list) for (const [pb, b] of list) {
+      if (pa >= pb || a.water || b.water) continue;
+      if (paths[pa].type === 'rail' || paths[pb].type === 'rail') continue;
+      if (Math.hypot(a.x - b.x, a.z - b.z) > Math.min(paths[pa].half, paths[pb].half) * 0.8) continue;
+      if ((paths[pa].pin && a.s < 12) || (paths[pb].pin && b.s < 12)) continue;
+      const m = (a.y + b.y) / 2; a.y = m; b.y = m;
+    }
   }
 })();
 
@@ -179,7 +191,7 @@ export const STATION_PADS = [];
       let c = rail.pts[0]; for (const p of rail.pts) if (Math.abs(p.s - s0) < Math.abs(c.s - s0)) c = p;
       let sum = 0, n = 0; for (const p of rail.pts) if (Math.abs(p.s - s0) < 20 && !p.water) { sum += p.y; n++; }
       const y = n ? sum / n : c.y;
-      for (const p of rail.pts) if (!p.water) p.y = lerp(y, p.y, smoothstep(22, 70, Math.abs(p.s - s0)));
+      for (const p of rail.pts) if (!p.water) { p.y = lerp(y, p.y, smoothstep(22, 70, Math.abs(p.s - s0))); if (Math.abs(p.s - s0) <= 22) p.pinY = y; }
       STATION_PADS.push({ name, s: s0, y, x: c.x - c.tz * 5, z: c.z + c.tx * 5, r: 23 });
     }
   }
@@ -188,14 +200,46 @@ export const STATION_PADS = [];
 export const CROSSINGS = [];
 {
   const rail = paths.find((p) => p.type === 'rail');
+  const seg = (a, b, c, d) => { // 선분 ab와 cd의 교점(없으면 null)
+    const r = [b.x - a.x, b.z - a.z], q = [d.x - c.x, d.z - c.z], den = r[0] * q[1] - r[1] * q[0];
+    if (Math.abs(den) < 1e-6) return null;
+    const t = ((c.x - a.x) * q[1] - (c.z - a.z) * q[0]) / den, u = ((c.x - a.x) * r[1] - (c.z - a.z) * r[0]) / den;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? { t, u } : null;
+  };
   if (rail) for (const P of paths) {
-    if (P.type === 'rail') continue;
-    let best = null, bd = 3.2, bq = null;
-    for (const p of P.pts) for (const q of rail.pts) { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; best = p; bq = q; } }
-    if (!best) continue;
-    CROSSINGS.push({ x: best.x, z: best.z, y: best.y, tx: best.tx, tz: best.tz, half: P.half, s: bq.s, road: P.type === 'road' });
-    for (const p of P.pts) if (Math.hypot(p.x - best.x, p.z - best.z) < 9) p.jn = true;
-    for (const q of rail.pts) { const d = Math.hypot(q.x - best.x, q.z - best.z); if (d < P.half + 9) { q.xing = d < P.half + 2.5; q.y = best.y; } else if (d < P.half + 70 && !q.water) q.y = lerp(best.y, q.y, smoothstep(P.half + 9, P.half + 70, d)); }
+    if (P.type === 'rail' || P.city) continue;
+    for (let i = 0; i < P.pts.length - 1; i++) for (let k = 0; k < rail.pts.length - 1; k++) {
+      const hit = seg(P.pts[i], P.pts[i + 1], rail.pts[k], rail.pts[k + 1]);
+      if (!hit) continue;
+      const a = P.pts[i], b = P.pts[i + 1], x = a.x + (b.x - a.x) * hit.t, z = a.z + (b.z - a.z) * hit.t, y = a.y + (b.y - a.y) * hit.t;
+      if (a.water || b.water) continue;
+      CROSSINGS.push({ x, z, y, tx: a.tx, tz: a.tz, half: P.half, s: rail.pts[k].s + (rail.pts[k + 1].s - rail.pts[k].s) * hit.u, road: P.type === 'road' });
+      for (const p of P.pts) if (Math.hypot(p.x - x, p.z - z) < 9) p.jn = true;
+      // 철길을 건널목 높이로 맞추고, 앞뒤 70m에 걸쳐 원래 높이로 이어 준다.
+      for (const q of rail.pts) { const d = Math.hypot(q.x - x, q.z - z); if (d < P.half + 9) { q.xing = d < P.half + 2.5; q.y = y; q.pinY = y; } else if (d < P.half + 70 && !q.water) q.y = lerp(y, q.y, smoothstep(P.half + 9, P.half + 70, d)); }
+    }
+  }
+}
+
+// 선로 높이 다듬기: 지형을 따라 울퉁불퉁하던 높이를 넓게 평균 내고, 역과 건널목 높이만 그 자리에서 맞춘다.
+// 열차가 가파르게 기울지 않게 한다(전에는 최대 18%).
+{
+  const rail = paths.find((p) => p.type === 'rail');
+  if (rail) {
+    const pts = rail.pts, n = pts.length;
+    let ys = pts.map((p) => p.y);
+    for (let pass = 0; pass < 6; pass++) {
+      const nys = ys.slice();
+      for (let i = 0; i < n; i++) { if (pts[i].water) continue; let sum = 0, c = 0; for (let k = -8; k <= 8; k++) { const j = i + k; if (j < 0 || j >= n) continue; sum += ys[j]; c++; } nys[i] = sum / c; }
+      ys = nys;
+    }
+    const pins = []; pts.forEach((p, i) => { if (p.pinY !== undefined) pins.push({ i, d: p.pinY - ys[i] }); });
+    pts.forEach((p, j) => {
+      if (p.water) return;
+      let W = 0, A = 0;
+      for (const pn of pins) { const w = 1 - smoothstep(24, 90, Math.abs(p.s - pts[pn.i].s)); if (w > 0) { W += w; A += w * pn.d; } }
+      p.y = ys[j] + (W > 0 ? (A / W) * Math.min(1, W) : 0);
+    });
   }
 }
 
@@ -243,6 +287,51 @@ function nearest(x, z) {
     if (d < near.d) { near.d = d; near.y = lerp(best.y, q.y, t); near.water = best.water && q.water; }
   }
   return near;
+}
+// (x,z)를 덮는 모든 길의 그 자리 높이 중 가장 낮은 것. 길이 겹치는 곳에서 한쪽 길이 땅에 묻혀 끊겨 보이지 않게 한다.
+function coverMin(x, z, y0) {
+  let lo = y0;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const list = hash.get(key(x + i * CELL, z + j * CELL));
+    if (!list) continue;
+    for (const p of list) {
+      if (p.water) continue;
+      const d0 = Math.hypot(p.x - x, p.z - z);
+      if (d0 > p.half + 1.5) continue;
+      let y = p.y, dm = d0;
+      for (const q of [p.prev, p.next]) {
+        if (!q) continue;
+        const vx = q.x - p.x, vz = q.z - p.z, t = clamp(((x - p.x) * vx + (z - p.z) * vz) / (vx * vx + vz * vz), 0, 1);
+        const d = Math.hypot(x - p.x - vx * t, z - p.z - vz * t);
+        if (d < dm) { dm = d; y = lerp(p.y, q.y, t); }
+      }
+      if (dm <= p.half + 0.5 && y < lo) lo = y;
+    }
+  }
+  return lo;
+}
+// 길 가장자리까지의 거리(길 위면 음수, 길이 없으면 큰 값)
+export function roadEdge(x, z) { const n = nearest(x, z); return n.hit ? n.d - n.half : 1e9; }
+// 건물 발자국 아래 땅 높이의 가장 낮은 곳과 높은 곳(모서리·변 가운데·중심). 비탈에 지을 때 기초를 얼마나 받쳐야 하는지 알려 준다.
+export function footprintHeights(bb, x, z, yaw, scale = 1) {
+  const w = (bb.max.x - bb.min.x) * scale, d = (bb.max.z - bb.min.z) * scale, cx = ((bb.max.x + bb.min.x) / 2) * scale, cz = ((bb.max.z + bb.min.z) / 2) * scale;
+  const c = Math.cos(yaw), s = Math.sin(yaw), ox = x + cx * c + cz * s, oz = z - cx * s + cz * c;
+  let lo = 1e9, hi = -1e9;
+  for (const [fx, fz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, -0.5], [0, 0.5], [-0.5, 0], [0.5, 0], [0, 0]]) {
+    const lx = fx * w, lz = fz * d, h = height(ox + lx * c + lz * s, oz - lx * s + lz * c);
+    lo = Math.min(lo, h); hi = Math.max(hi, h);
+  }
+  return { lo, hi, ox, oz, w, d };
+}
+// 건물 발자국이 길을 침범하는지: bb는 모델 크기(assets.bounds), (x,z,yaw)는 놓는 자리. margin 안으로 들어오면 false.
+export function clearOfRoads(bb, x, z, yaw, scale = 1, margin = 1.2) {
+  const w = (bb.max.x - bb.min.x) * scale, d = (bb.max.z - bb.min.z) * scale, cx = ((bb.max.x + bb.min.x) / 2) * scale, cz = ((bb.max.z + bb.min.z) / 2) * scale;
+  const c = Math.cos(yaw), s = Math.sin(yaw), ox = x + cx * c + cz * s, oz = z - cx * s + cz * c;
+  for (const [fx, fz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5], [0, -0.5], [0, 0.5], [-0.5, 0], [0.5, 0], [0, 0]]) {
+    const lx = fx * w, lz = fz * d;
+    if (roadEdge(ox + lx * c + lz * s, oz - lx * s + lz * c) < margin) return false;
+  }
+  return true;
 }
 // 길 한가운데까지의 거리(길이 없으면 큰 값)
 export function roadDist(x, z) { return nearest(x, z).d; }
@@ -292,6 +381,10 @@ export function buildRoads(h) {
           quad(A(-2.8, -0.08), Bq(-2.8, -0.08), A(-1.9, 0.26), Bq(-1.9, 0.26), BALLAST2);
           quad(A(1.9, 0.26), Bq(1.9, 0.26), A(2.8, -0.08), Bq(2.8, -0.08), BALLAST3);
         }
+        if (ka && kb && !(a.water || b.water)) { // 자갈 둑은 밟을 수 있다
+          const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2, len = Math.hypot(b.x - a.x, b.z - a.z) + 0.2;
+          h.addBox(mx, my + 0.1 + 0.26 - 0.3, mz, 3.8, 0.6, len, Math.atan2(b.x - a.x, b.z - a.z));
+        }
         if (ka) for (const k of [0.5, 2.5]) {
           quad(A(-1.45, 0.36, k), A(-1.45, 0.36, k + 0.5), A(1.45, 0.36, k), A(1.45, 0.36, k + 0.5), SLEEPER);
           quad(A(-1.45, 0.26, k), A(-1.45, 0.36, k), A(1.45, 0.26, k), A(1.45, 0.36, k), SLEEPER2);
@@ -313,7 +406,12 @@ export function buildRoads(h) {
     }
     const road = path.type === 'road';
     const joined = path.joined;
-    const across = (p, o, lift) => { const k = halfAt(path, p) / path.half; return [p.x - p.tz * o * k, p.y + lift, p.z + p.tx * o * k]; };
+    // 길 면은 그 자리 땅 높이에 얹는다(다리 구간 제외). 땅이 곧 차가 달리는 바닥이라 보이는 길과 밟는 바닥이 늘 같고,
+    // 두 길이 겹쳐 땅이 한쪽 길을 따라갈 때도 다른 쪽 길이 땅에 묻혀 끊겨 보이지 않는다.
+    const across = (p, o, lift) => {
+      const k = halfAt(path, p) / path.half, x = p.x - p.tz * o * k, z = p.z + p.tx * o * k;
+      return [x, p.water ? p.y + lift : Math.max(p.y - 0.4, height(x, z) - 0.08) + lift, z];
+    };
     const hw = path.half;
     for (let i = 0; i < path.pts.length - 1; i++) {
       const a = path.pts[i], b = path.pts[i + 1];

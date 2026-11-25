@@ -35,6 +35,7 @@ function tune(kit, name, c) {
 export class Assets {
   constructor(scene, base = 'assets/') {
     this.missing = new Set(); // 끝내 못 받은 모델
+    this.placedBuildings = []; // 놓은 건물 기록: [모델, x, z, 방향, 배율]
     this.scene = scene;
     this.base = base;
     this.templates = new Map(); // "kit/name" -> 틀 메시
@@ -226,6 +227,7 @@ export class Assets {
   place(key, x, y, z, rotY = 0, scale = 1, tag = '') {
     if (this.missing.has(key)) return; // 못 받은 모델은 건너뛴다
     this.tpl(key);
+    if (/building|windmill|chimney|water-tower|detail-tank|container|castle|ship-wreck|structure|tower/.test(key)) this.placedBuildings.push([key, x, z, rotY, typeof scale === 'number' ? scale : 1]);
     const s = typeof scale === 'number' ? new B.Vector3(scale, scale, scale) : scale;
     const m = B.Matrix.Compose(s, B.Quaternion.RotationYawPitchRoll(rotY, 0, 0), new B.Vector3(x, y, z));
     const ix = Math.floor((x - WORLD.x0) / REGION), iz = Math.floor((z - WORLD.z0) / REGION);

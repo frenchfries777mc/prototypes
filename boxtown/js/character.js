@@ -380,6 +380,14 @@ export class Character {
     this.neck.rotation.z = this.sHeadR.step(-roll * 0.9, dt) + s * 0.04 * this.amp;
     this.neck.rotation.y = clamp(turn * 0.03, -0.5, 0.5) + (st.lookYaw || 0);
 
+    // 뒷짐(체포되어 끌려갈 때): 두 팔을 몸 뒤로 모으고 고개를 숙인다.
+    this.handsK = damp(this.handsK || 0, this.hands || 0, 10, dt);
+    if (this.handsK > 0.01) {
+      const k = this.handsK;
+      this.armL.rotation.x = lerp(this.armL.rotation.x, 0.95, k); this.armR.rotation.x = lerp(this.armR.rotation.x, 0.95, k);
+      this.armL.rotation.z = lerp(this.armL.rotation.z, 0.25, k); this.armR.rotation.z = lerp(this.armR.rotation.z, -0.25, k);
+      this.neck.rotation.x += 0.22 * k;
+    }
     // 주먹 쥐어 보이기: 오른 주먹을 머리 위로 치켜들어 크게 흔들고, 왼 주먹은 턱 앞에 든 채 몸을 들썩인다.
     this.fistK = damp(this.fistK || 0, this.fist || 0, 10, dt);
     if (this.fistK > 0.01) {

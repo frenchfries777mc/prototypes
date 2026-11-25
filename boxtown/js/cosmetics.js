@@ -84,8 +84,9 @@ export class Wardrobe {
     if (document.pointerLockElement) document.exitPointerLock();
     this.character.heading = this.player.yaw + Math.PI; // 화면 쪽을 보게 돌려 세운다
     this.el.hidden = false; this.render();
+    if (this.onShow) this.onShow();
   }
-  close() { this.open = false; this.el.hidden = true; }
+  close() { const was = this.open; this.open = false; this.el.hidden = true; if (was && this.onClose) this.onClose(); }
   render() {
     const slot = this.tab, cur = this.look[slot];
     const ids = ITEMS[slot] ? Object.keys(ITEMS[slot]) : COLORS[slot];
