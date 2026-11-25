@@ -150,14 +150,18 @@ export class Input {
     for (const id of ['btnGas', 'btnBrake']) document.getElementById(id).classList.remove('on');
   }
   // 운전 입력: 키보드와 화면 조작을 합친다. throttle +1 가속, -1 브레이크·후진.
-  drive() {
+  drive(dt = 1 / 60) {
     if (this.blocked) return { throttle: 0, steer: 0, handbrake: true };
     const k = this.keys;
-    const x = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0) + this.wheel;
+    // 키보드 핸들: 누르는 동안 천천히 꺾이고(톡 치면 살짝만 돈다), 떼면 빨리 돌아온다. 화면 핸들은 그대로 쓴다.
+    const key = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+    const cur = this.steerKey || 0, rate = key === 0 ? 7 : (Math.sign(key) !== Math.sign(cur) && cur !== 0 ? 9 : 3.2);
+    this.steerKey = key === 0 ? (Math.abs(cur) <= rate * dt ? 0 : cur - Math.sign(cur) * rate * dt) : Math.max(-1, Math.min(1, cur + Math.sign(key - cur) * rate * dt));
+    const x = this.steerKey + this.wheel;
     const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.gas - this.pedalBrake;
     // lift: 헬리콥터 오르내리기(Space 상승, Shift 하강, 화면의 ▲▼)
     const lift = (k.has('Space') || this.heliUp ? 1 : 0) - (k.has('ShiftLeft') || k.has('ShiftRight') || this.heliDown ? 1 : 0);
-    return { throttle: clamp(y, -1, 1), steer: clamp(x, -1, 1), handbrake: this.brake, lift };
+    return { throttle: clamp(y, -1, 1), steer: clamp(x, -1, 1), handbrake: this.brake, lift, human: true };
   }
 
   move() {
@@ -221,7 +225,7 @@ export class Player {
   // 물리 스텝 직전: 자동차에 힘을 준다.
   fixed() {
     const dt = clamp(this.scene.getEngine().getDeltaTime() / 1000, 0.001, 0.05);
-    this.garage.fixedUpdate(dt, this.vehicle, this.input.drive());
+    this.garage.fixedUpdate(dt, this.vehicle, this.input.drive(dt));
   }
 
   enter(car) {

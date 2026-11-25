@@ -36,7 +36,7 @@ export class Lobby {
     this.input.blocked = true;
     this.render();
     this.el.hidden = false;
-    this.arm();
+    this.slim(true); this.arm();
   }
   // ----- 화면 얼리기: 로비에서는 마을을 사진 한 장으로 바꾸고 그리기를 멈춘다. 그러면 약한 기기에서도 로비가 끊기지 않는다. -----
   // 방에 들어가 있거나(다른 사람이 나를 계속 봐야 한다) 옷장을 열었을 때(미리보기)는 살아 있는 화면을 쓴다.
@@ -46,12 +46,12 @@ export class Lobby {
     const wait = () => {
       if (!this.open) return;
       const g = window.__game;
-      if ((g && g.settled) || tries > 40) this.freeze(); else { tries++; this.armT = setTimeout(wait, 250); }
+      if ((g && g.ready0) || tries > 12) this.freeze(); else { tries++; this.armT = setTimeout(wait, 150); }
     };
-    this.armT = setTimeout(wait, 700);
+    this.armT = setTimeout(wait, 450);
   }
   freeze() {
-    if (!this.open || this.frozen || this.net.on || this.wardrobe.open) return;
+    if (!this.open || this.frozen || this.freezing || this.net.on || this.wardrobe.open) return;
     const canvas = document.getElementById('game');
     this.engine.onEndFrameObservable.addOnce(() => { // 그린 직후여야 화면을 읽을 수 있다
       let url = null;
@@ -59,24 +59,40 @@ export class Lobby {
         const t = document.createElement('canvas'); t.width = 24; t.height = 14; const c = t.getContext('2d'); c.drawImage(canvas, 0, 0, 24, 14);
         const d = c.getImageData(0, 0, 24, 14).data; let lo = 255, hi = 0;
         for (let i = 0; i < d.length; i += 4) { const v = d[i] + d[i + 1] + d[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); }
-        if (hi - lo > 30) url = canvas.toDataURL('image/jpeg', 0.86); // 텅 빈 화면이면 얼리지 않는다
-      } catch (e) { url = null; }
-      if (!url || !this.open || this.net.on || this.wardrobe.open) return;
-      this.el.style.backgroundImage = `url(${url})`; this.el.classList.add('still');
-      this.frozen = true;
-      setTimeout(() => { if (this.frozen) this.loop.stop(); }, 0);
-      this.musicT = setInterval(() => { const g = window.__game; if (g) g.music.update(0.1); }, 100); // 음악은 계속 돌본다
+        if (hi - lo > 30) { // 텅 빈 화면이면 얼리지 않는다
+          this.freezing = true;
+          canvas.toBlob((blob) => { // 사진 만들기는 따로 돌아서, 그 사이 화면이 멈칫하지 않는다
+            this.freezing = false;
+            if (!blob || !this.open || this.net.on || this.wardrobe.open || this.frozen) return;
+            const u = URL.createObjectURL(blob), im = new Image();
+            im.onload = () => { // 사진이 다 준비된 뒤에 바꿔 끼운다(빈 화면이 번쩍이지 않게)
+              if (!this.open || this.net.on || this.wardrobe.open || this.frozen) { URL.revokeObjectURL(u); return; }
+              if (this.stillUrl) URL.revokeObjectURL(this.stillUrl);
+              this.stillUrl = u; this.el.style.backgroundImage = `url(${u})`; this.el.classList.add('still');
+              this.frozen = true; this.slim(false);
+              requestAnimationFrame(() => { if (this.frozen) this.loop.stop(); });
+              this.musicT = setInterval(() => { const g = window.__game; if (g) g.music.update(0.1); }, 100); // 음악은 계속 돌본다
+            };
+            im.src = u;
+          }, 'image/jpeg', 0.86);
+        }
+      } catch (e) { /* 얼리기를 못 해도 그냥 살아 있는 화면을 쓴다 */ }
     });
+  }
+  // 살아 있는 화면을 쓰는 동안(얼리기 전, 옷장, 같이 하기)은 그림자를 몇 프레임에 한 번만 다시 그리고 마을 시뮬레이션을 쉰다.
+  slim(on) {
+    const sm = window.__game && window.__game.csm && window.__game.csm.getShadowMap();
+    if (sm) sm.refreshRate = on ? 3 : 1;
   }
   thaw() {
     clearTimeout(this.armT);
     if (!this.frozen) return;
-    this.frozen = false; clearInterval(this.musicT);
+    this.frozen = false; clearInterval(this.musicT); this.slim(true);
     this.el.classList.remove('still'); this.el.style.backgroundImage = '';
     this.loop.run();
   }
   hide() {
-    this.thaw();
+    this.thaw(); this.slim(false);
     Panel.close(); // 차고 창이 열린 채 게임으로 나가지 않게
     this.open = false; this.el.hidden = true; this.wardrobe.close();
     document.body.classList.remove('lobby');
