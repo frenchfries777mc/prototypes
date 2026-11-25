@@ -27,6 +27,8 @@ export class Unit {
     // 입력(사람은 키보드, 봇은 AI 가 채운다)
     this.moveX = 0; this.moveY = 0; this.jump = false; this.fire = false; this.reload = false; this.sprint = false; this.ads = false;
     this.trigger = false;
+    this.remote = false; this.inp = null; this.spawnN = 0;   // 원격 사람(다른 브라우저)이 조종하는 유닛
+    this.px = 0; this.py = 0; this.pz = 0; this.pyaw = 0;   // 직전 틱 상태(화면 보간용)
     // 봇
     this.target = -1; this.obj = -1; this.wp = { x: 0, z: 0 }; this.wpT = 0; this.thinkT = 0; this.stuckT = 0;
     this.lastX = 0; this.lastZ = 0; this.avoid = 1; this.strafe = 1; this.strafeT = 0; this.role = 0; this.botSpeed = WALK;
@@ -76,7 +78,7 @@ export class Sim {
   step(dt) {
     if (this.winner >= 0) { for (const u of this.units) if (!u.alive) u.deathAge += dt; return; }
     this.time += dt;
-    for (const u of this.units) this.stepUnit(u, dt);
+    for (const u of this.units) { u.px = u.x; u.py = u.y; u.pz = u.z; u.pyaw = u.yaw; this.stepUnit(u, dt); }
     this.stepPoints(dt);
     this.bleed(dt);
     this.checkEnd();
@@ -92,17 +94,43 @@ export class Sim {
     if (u.invT > 0) u.invT -= dt;
     u.fireCd = Math.max(0, u.fireCd - dt);
     if (u.reloadT > 0) { u.reloadT -= dt; if (u.reloadT <= 0) u.ammo = WEAPONS[u.weapon].mag; }
+    if (u.remote) { this.stepRemote(u, dt); return; }
     if (u.isBot) this.botAi(u, dt);
-    else {
-      const w = WEAPONS[u.weapon];
-      if (u.reload) { u.reload = false; if (u.ammo < w.mag && u.reloadT <= 0) this.startReload(u); }
-      if (u.fire && u.fireCd <= 0 && u.reloadT <= 0) {
-        if (u.ammo <= 0) this.startReload(u);
-        else if (w.auto || !u.trigger) this.shoot(u);
-      }
-      u.trigger = u.fire;
-    }
+    else this.humanActions(u);
     this.integrate(u, dt);
+  }
+
+  humanActions(u) {
+    const w = WEAPONS[u.weapon];
+    if (u.reload) { u.reload = false; if (u.ammo < w.mag && u.reloadT <= 0) this.startReload(u); }
+    if (u.fire && u.fireCd <= 0 && u.reloadT <= 0) {
+      if (u.ammo <= 0) this.startReload(u);
+      else if (w.auto || !u.trigger) this.shoot(u);
+    }
+    u.trigger = u.fire;
+  }
+
+  // 다른 브라우저의 플레이어: 위치는 그쪽이 계산해 보낸 값을 받아들이고(너무 먼 점프는 무시), 사격과 피해는 여기서 판정한다.
+  stepRemote(u, dt) {
+    const i = u.inp;
+    if (!i) return;
+    if (i.sn === u.spawnN) {
+      const d = Math.hypot(i.x - u.x, i.z - u.z);
+      if (d < 12) { u.speedNow = Math.min(d / dt, 9); u.walkDist += d; u.x = i.x; u.y = i.y; u.z = i.z; }
+      u.onGround = !!i.og;
+    }
+    u.yaw = i.yaw; u.pitch = i.pitch; u.fire = !!i.fire; u.ads = !!i.ads; u.sprint = !!i.sp;
+    if (i.w !== u.weapon && i.w >= 0 && i.w < WEAPONS.length) { u.weapon = i.w; u.loadout = i.w; u.ammo = WEAPONS[i.w].mag; u.reloadT = 0; u.fireCd = 0.35; }
+    if (i.rl) { u.reload = true; i.rl = 0; }
+    this.humanActions(u);
+  }
+
+  // 같은 유닛들로 새 경기를 시작한다(사람·봇 구분은 그대로)
+  rematch() {
+    this.tickets = [START_TICKETS, START_TICKETS]; this.time = 0; this.bleedT = 0; this.winner = -1; this.winReason = '';
+    for (let i = 0; i < NPOINTS; i++) { const p = this.pts[i]; p.owner = i === 0 ? 0 : i === NPOINTS - 1 ? 1 : -1; p.cap = i === 0 ? 1 : i === NPOINTS - 1 ? -1 : 0; p.nA = p.nB = 0; }
+    for (const u of this.units) { u.alive = false; u.kills = 0; u.deaths = 0; u.killer = -1; u.respawnT = u.isBot ? this.rng.range(0.3, 4) : 0.3; u.deathAge = 0; u.hp = 100; }
+    this.events.push({ t: 'new' });
   }
 
   startReload(u) { u.reloadT = WEAPONS[u.weapon].reload; this.events.push({ t: 'reload', id: u.id }); }
@@ -187,7 +215,7 @@ export class Sim {
     e.killer = attacker.id; e.killW = attacker.weapon;
     e.killDist = Math.hypot(attacker.x - e.x, attacker.z - e.z); e.killHp = Math.max(attacker.hp, 0);
     this.tickets[e.team] = Math.max(0, this.tickets[e.team] - 1);
-    this.events.push({ t: 'kill', k: attacker.id, v: e.id, w: attacker.weapon, head });
+    this.events.push({ t: 'kill', k: attacker.id, v: e.id, w: attacker.weapon, head, d: Math.round(e.killDist) });
   }
 
   // ---- 스폰 ----
@@ -217,13 +245,14 @@ export class Sim {
       if (w.blocked(px, pz, RADIUS + 0.2, w.heightAt(px, pz)) < -1e8) break;
     }
     u.x = px; u.z = pz; u.y = w.heightAt(px, pz); u.vx = u.vy = u.vz = 0;
-    u.hp = 100; u.alive = true; u.deathAge = 0;
+    u.hp = 100; u.alive = true; u.deathAge = 0; u.spawnN++;
     if (u.isBot) { u.weapon = this.botWeapon(); u.role = this.rng.next() < 0.18 ? 1 : 0; } else u.weapon = u.loadout;
     u.ammo = WEAPONS[u.weapon].mag; u.reloadT = 0; u.fireCd = 0.5;
     u.invT = u.isBot ? 2 : 4;
     u.target = -1; u.obj = -1; u.thinkT = this.rng.next() * 0.3; u.stuckT = 0;
     u.yaw = u.team === 1 ? Math.PI / 2 : -Math.PI / 2; u.pitch = 0;
     u.lastX = px; u.lastZ = pz; u.onGround = true; u.trigger = false;
+    u.px = u.x; u.py = u.y; u.pz = u.z; u.pyaw = u.yaw;
     this.events.push({ t: 'spawn', id: u.id });
   }
 
