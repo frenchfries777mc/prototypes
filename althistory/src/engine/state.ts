@@ -1,10 +1,24 @@
-import type { CountryId, ProvinceId, Scenario, Stats } from '../data/types';
+import type { CountryId, ProvinceId, Scenario, StatKey, Stats } from '../data/types';
+import type { Difficulty } from './difficulty';
 import type { World } from '../data/world';
 
+/** 한 턴 전후를 견준 보고(신문에 싣는다). 국가는 id. */
+export interface TurnReport {
+  stats: Record<StatKey, [number, number]>;
+  terr: [number, number];
+  gained: ProvinceId[]; lost: ProvinceId[];
+  rel: { c: CountryId; from: number; to: number }[];
+  warsStart: string[]; warsEnd: string[];
+}
 export interface TurnRecord {
   turn: number; date: string; command: string; interpretation: string;
+  /** 실제로 굴림에 쓴 확률(난이도 보정 후). 보정 전 AI의 확률은 base. */
   feasibility: number; roll: number; outcome: 'success' | 'failure' | 'pass';
   narrative: string; headlines: string[]; notes: string[]; rejected: string[]; mode: string;
+  base?: number; difficulty?: Difficulty; reasoning?: string;
+  /** 플레이어 명령의 결과와 세계 사건을 나눠 담는다(신문의 기사 구분). 옛 저장 파일에는 없다. */
+  main?: { narrative: string; headlines: string[] }; world?: { narrative: string; headlines: string[] };
+  report?: TurnReport;
 }
 
 export interface General { name: string; skill: number; trait: string; status: 'active' | 'wounded'; hurtUntil?: number }
@@ -23,6 +37,7 @@ export interface GameState {
   memory: string;
   armies: Army[];
   armySeq: number;
+  difficulty?: Difficulty;
 }
 
 export const pairKey = (a: CountryId, b: CountryId): string => (a < b ? `${a}|${b}` : `${b}|${a}`);

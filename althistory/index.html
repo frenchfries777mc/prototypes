@@ -36,7 +36,7 @@
         </div>
 
         <div id="intro-s2" hidden>
-          <h2><span>2</span> AI 선택</h2>
+          <h2><span>2</span> AI와 난이도 선택</h2>
           <div id="s2-sum" class="s2-sum"></div>
           <div id="intro-ai"></div>
           <div class="i-actions">
@@ -63,9 +63,14 @@
       </header>
       <div id="g-stats" class="g-stats"></div>
       <div id="g-diplo" class="g-diplo"></div>
-      <div class="g-tabs"><button type="button" data-tab="log" class="on">연대기</button><button type="button" data-tab="army">군대·장군</button></div>
-      <div id="g-log" class="g-log"></div>
-      <div id="g-army" class="g-log g-army" hidden></div>
+      <div id="g-news" class="g-news">
+        <button type="button" id="btn-paper" class="paper-btn"><span class="pb-ic">📰</span><span class="pb-tx"><small>이번 호 신문</small><b id="g-latest">아직 발행된 신문이 없습니다</b></span></button>
+        <button type="button" id="btn-archive" class="ghost small">📚 지난 신문</button>
+      </div>
+      <section class="g-orders">
+        <div class="g-orders-h"><b>명령</b><span class="hint">군대를 눌러 고르고, 지도에서 목표 주를 누른 뒤 이동·공격 버튼을 눌러 보세요. 직접 써도 됩니다.</span></div>
+        <div id="g-army" class="g-army"></div>
+      </section>
       <form id="g-form" class="g-form">
         <textarea id="g-cmd" rows="3" placeholder="명령 입력 (Ctrl+Enter)"></textarea>
         <div class="g-actions">
@@ -83,7 +88,7 @@
     <div id="overlay" class="modal" hidden>
       <div class="card">
         <h2>메뉴</h2>
-        <section><label>AI 선택</label><div id="ov-ai"></div></section>
+        <section><label>AI와 난이도</label><div id="ov-ai"></div></section>
         <section>
           <label>저장 / 불러오기</label>
           <div class="row">
@@ -101,6 +106,21 @@
         </div>
         <div id="ov-msg" class="g-msg"></div>
       </div>
+    </div>
+
+    <!-- 신문: 턴이 끝나면 큰 신문 한 장이 펼쳐진다 -->
+    <div id="paper" class="paper-modal" hidden>
+      <div class="paper-wrap">
+        <div class="paper-bar">
+          <button type="button" id="paper-prev" class="ghost small">← 이전 호</button><span id="paper-pos" class="paper-pos"></span><button type="button" id="paper-next" class="ghost small">다음 호 →</button>
+          <label class="paper-auto"><input type="checkbox" id="paper-auto" checked /> 매 턴 자동으로 펼치기</label>
+          <button type="button" id="paper-close" class="primary">닫고 계속 ▶</button>
+        </div>
+        <div id="paper-scroll" class="paper-scroll"><div id="paper-sheet" class="paper-sheet"></div></div>
+      </div>
+    </div>
+    <div id="archive" class="modal" hidden>
+      <div class="card"><h2>지난 신문</h2><div id="archive-list" class="arch-list"></div><div class="btns"><button type="button" id="archive-close" class="ghost">닫기</button></div></div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

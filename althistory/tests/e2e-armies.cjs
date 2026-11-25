@@ -7,9 +7,12 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
 (async () => {
   const browser = await chromium.launch({ args: ARGS });
   const page = await (await browser.newContext({ viewport: { width: 1500, height: 880 } })).newPage();
+  await page.addInitScript(() => { try { if (!localStorage.getItem('althist-config-v1')) localStorage.setItem('althist-config-v1', JSON.stringify({ provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest' })); } catch (e) { /* 무시 */ } });
   const errs = []; page.on('pageerror', (e) => errs.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   page.on('dialog', (d) => d.accept());
-  const idle = () => page.waitForFunction(() => !document.getElementById('btn-go').disabled, null, { timeout: 60000 });
+  let lastPaper = { open: false, html: '', text: '' };
+  const idle = async () => { await page.waitForFunction(() => !document.getElementById('btn-go').disabled, null, { timeout: 60000 });
+    lastPaper = await page.evaluate(() => { const p = document.getElementById('paper'); const open = !!p && !p.hidden; const sh = document.getElementById('paper-sheet'); const r = { open, html: open ? sh.innerHTML : '', text: open ? sh.textContent : '' }; if (open) document.getElementById('paper-close').click(); return r; }); };
   const turn = async (cmd) => { await page.fill('#g-cmd', cmd); await page.click('#btn-go'); await page.waitForTimeout(150); await idle(); };
   const S = () => page.evaluate(() => window.__game.state);
   await page.goto(URL, { waitUntil: 'load' }); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
@@ -74,10 +77,9 @@ const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swif
   const yi2 = await page.evaluate((id) => { const a = window.__game.state.armies.find((x) => x.id === id); return a && a.general.name; }, yi.id);
   ok(yi2 === '이순신' && r.notes.some((n) => /불패/.test(n)), '불패의 장군은 전사 제안이 와도 쓰러지지 않는다');
   // (d) 군대 탭 UI + 지도 마커
-  await page.click('.g-tabs button[data-tab=army]'); await page.waitForTimeout(200);
-  ok((await page.locator('#g-army .ac').count()) >= 5 && (await page.textContent('#g-army')).includes('이순신'), '군대·장군 탭에 카드 목록');
+  ok((await page.locator('.g-tabs').count()) === 0 && (await page.locator('#g-army .ac').count()) >= 5 && (await page.textContent('#g-army')).includes('이순신'), '탭 없이 명령 영역에 군대 목록');
   ok((await page.locator('.army-mk.mine').count()) >= 5 && (await page.locator('.army-mk.enemy').count()) >= 1, '지도에 내 군대/적 군대 마커');
-  await page.click('#g-army .ac:has-text("이순신") button[data-act=cmd]');
+  await page.click('#g-army .ac:has-text("이순신") .ac-h'); await page.click('#g-army .ac.focus button[data-act=cmd]');
   ok((await page.inputValue('#g-cmd')).includes('이순신'), '"명령에 넣기"가 장군 이름을 넣는다');
 
   // ---- 시나리오 전환 후에도 현대 소유 상태가 오염되지 않는다 ----

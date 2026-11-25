@@ -1,3 +1,4 @@
+import { difficultyBrief } from '../engine/difficulty';
 import type { World } from '../data/world';
 import type { GameState } from '../engine/state';
 import { armiesOf, controlledBy, fmtDate, getRel, neighborsOf, ownedBy, warsOf } from '../engine/state';
@@ -120,6 +121,7 @@ export function buildUserPrompt(s: GameState, w: World, command: string, pass: b
     lost.length ? `PLAYER_LOST_PROVINCES:\n${lost.join('\n')}` : '',
     `RECENT_HEADLINES: ${recent || '-'}`,
     `MEMORY:\n${s.memory || '-'}`,
+    difficultyBrief(s.difficulty ?? 'normal'),
     pass ? 'COMMAND: (PASS — 플레이어는 이번 달 특별한 명령이 없다. world_events만 채워라.)' : `COMMAND: ${command}`,
   ].filter(Boolean).join('\n\n');
 }

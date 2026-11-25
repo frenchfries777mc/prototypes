@@ -10,6 +10,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   ];
   for (const [tid, lon, lat, re] of cases) {
     const page = await b.newPage({ viewport: { width: 1300, height: 820 } });
+  await page.addInitScript(() => { try { if (!localStorage.getItem('althist-config-v1')) localStorage.setItem('althist-config-v1', JSON.stringify({ provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest' })); } catch (e) { /* 무시 */ } });
     const errs = []; page.on('pageerror', (e) => errs.push(e.message));
     await page.goto(URL); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
     await page.click(`.tpl[data-id="${tid}"]`); await page.click('#btn-to-ai'); await page.click('#btn-next');

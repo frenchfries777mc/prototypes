@@ -11,11 +11,14 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   const browser = await chromium.launch({ args: ARGS });
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 } });
   const page = await ctx.newPage();
+  await page.addInitScript(() => { try { if (!localStorage.getItem('althist-config-v1')) localStorage.setItem('althist-config-v1', JSON.stringify({ provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest' })); } catch (e) { /* 무시 */ } });
   const errs = [];
   page.on('pageerror', (e) => errs.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
   const settle = async () => { await page.evaluate(() => new Promise((r) => { const m = window.__map; m.once('idle', r); m.triggerRepaint(); setTimeout(r, 7000); })); await page.waitForTimeout(250); };
-  const idle = () => page.waitForFunction(() => !document.getElementById('btn-go').disabled, null, { timeout: 60000 });
+  let lastPaper = { open: false, html: '', text: '' };
+  const idle = async () => { await page.waitForFunction(() => !document.getElementById('btn-go').disabled, null, { timeout: 60000 });
+    lastPaper = await page.evaluate(() => { const p = document.getElementById('paper'); const open = !!p && !p.hidden; const sh = document.getElementById('paper-sheet'); const r = { open, html: open ? sh.innerHTML : '', text: open ? sh.textContent : '' }; if (open) document.getElementById('paper-close').click(); return r; }); };
   const clickLL = async (lon, lat) => {
     await page.evaluate(([x, y]) => window.__map.jumpTo({ center: [x, y], zoom: 4.3 }), [lon, lat]); await settle();
     const px = await page.evaluate(([x, y]) => { const p = window.__map.project([x, y]); return [p.x, p.y]; }, [lon, lat]);
@@ -36,7 +39,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.click('.tpl[data-id="bipolar-world"]');
   ok((await page.getAttribute('.tpl[data-id="bipolar-world"]', 'class')).includes('sel'), '템플릿 선택(양극 냉전 세계)');
   ok(!(await page.isVisible('#intro-ai')), 'AI 선택은 템플릿을 고르기 전에는 보이지 않는다');
-  ok((await page.locator('#intro-ai .ai-card').count()) === 4 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 4개(Gemini/Claude/ChatGPT/Qwen), "모드" 선택지 없음');
+  ok((await page.locator('#intro-ai .ai-card').count()) === 5 && (await page.locator('#intro-ai input[value=local]').count()) === 0, 'AI 선택은 카드 5개(무료 AI/Gemini/Claude/ChatGPT/Qwen), "모드" 선택지 없음');
   ok((await page.locator('.tpl img.t-thumb').count()) === 22, '템플릿 카드마다 시작 지도 썸네일');
   await page.click('#btn-to-ai'); await page.click('#btn-next');
 
@@ -75,8 +78,8 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   for (let i = 0; i < 6; i++) { await page.click('#btn-pass'); await idle(); }
   const s4 = await page.evaluate(() => window.__game.state);
   ok(s4.turn === 10, `턴 진행: ${s4.turn}`);
-  const logText = await page.textContent('#g-log');
-  ok(!ENGLISH.test(logText), '연대기에 영어 국가명이 섞이지 않는다');
+  await page.click('#btn-archive'); const logText = await page.textContent('#archive-list'); await page.click('#archive-close');
+  ok(!ENGLISH.test(logText), '지난 신문 목록에 영어 국가명이 섞이지 않는다');
   await page.click('#btn-undo');
   ok((await page.evaluate(() => window.__game.state.turn)) === 9, '되돌리기');
 
@@ -115,12 +118,18 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   ok(r7.mode.startsWith('Gemini') && r7.outcome === 'success', '코드펜스 JSON 응답 파싱');
   ok(r7.rejected.length >= 2, `엔진이 잘못된 제안 거부 ${r7.rejected.length}건`);
   ok(s7.stats.KOR.military === Math.min(100, before.mil + 10) && (s7.relations['KOR|TWN'] ?? 0) === Math.min(100, before.rel + 40), '능력치 ±10, 관계 ±40 제한');
-  ok(!(await page.innerHTML('#g-log')).includes('<img'), 'AI 출력 HTML 이스케이프');
+  ok(lastPaper.open && lastPaper.html.includes('np-hl') && !lastPaper.html.includes('<img'), 'AI 출력 HTML 이스케이프(신문)');
   await page.unroute('https://generativelanguage.googleapis.com/**');
   await page.route('https://generativelanguage.googleapis.com/**', (r) => r.fulfill({ status: 429, contentType: 'application/json', body: '{"error":{"message":"quota"}}' }));
   const tb = await page.evaluate(() => window.__game.state.turn);
   await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
-  ok(/한도/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === tb, '429: 턴 소모 없이 안내');
+  await page.evaluate(() => window.__game.setRetry([20, 20]));
+  const tb2 = await page.evaluate(() => window.__game.state.turn);
+  let gcalls = 0; await page.unroute('https://generativelanguage.googleapis.com/**');
+  await page.route('https://generativelanguage.googleapis.com/**', (r) => { gcalls++; return r.fulfill({ status: 429, contentType: 'application/json', body: '{"error":{"message":"quota"}}' }); });
+  await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
+  const lg = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(gcalls === 3 && (await page.evaluate(() => window.__game.state.turn)) === tb2 + 1 && /붐벼서/.test(lg.mode) && /붐벼서/.test(await page.textContent('#g-msg')), `429: 기다렸다 3번 시도한 뒤 간이 판정으로 진행(턴이 멈추지 않음): 호출 ${gcalls}번, 턴 ${tb2}→${await page.evaluate(() => window.__game.state.turn)}, ${lg.mode}, 메시지 "${await page.textContent('#g-msg')}"`);
 
   // ---- Claude (모의 서버) ----
   let claudeReq = null;
@@ -171,7 +180,57 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.route('https://api.openai.com/v1/chat/completions', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"Incorrect API key"}}' }));
   const t11 = await page.evaluate(() => window.__game.state.turn);
   await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
-  ok(/OpenAI API 키가 올바르지 않습니다/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t11, 'ChatGPT 401: 턴 소모 없이 키 안내');
+  ok(/OpenAI API 키가 올바르지 않/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t11, 'ChatGPT 401: 턴 소모 없이 키 안내');
+
+  // ---- 붐빌 때: 키를 넣어 둔 다른 AI로 자동 대체 ----
+  let claudeCalls = 0;
+  await page.route('https://api.anthropic.com/**', async (route) => { claudeCalls++;
+    const adj = { interpretation: '대체 판정', feasibility: 100, reasoning: 't', if_success: { narrative: 'Claude가 대신 판정', headlines: ['대체'] }, if_failure: {}, world_events: {} };
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'msg_2', type: 'message', role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text: JSON.stringify(adj) }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 } }) });
+  });
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=gemini]'); await page.click('#ov-apply');
+  gcalls = 0; await page.route('https://generativelanguage.googleapis.com/**', (r) => { gcalls++; return r.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"message":"overloaded"}}' }); });
+  await turn('교역을 늘린다');
+  const rf = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(gcalls === 3 && rf.mode.startsWith('Claude') && rf.narrative.includes('Claude가 대신'), `Gemini가 붐비면 키를 넣어 둔 Claude가 대신 판정: ${rf.mode} (Gemini ${gcalls}번, Claude ${claudeCalls}번, 설정 ${await page.evaluate(() => { const c = JSON.parse(localStorage.getItem('althist-config-v1')); return [c.provider, !!c.geminiKey, !!c.claudeKey, !!c.openaiKey].join('/'); })}, 메시지 "${await page.textContent('#g-msg')}")`);
+  await page.unroute('https://api.anthropic.com/**'); await page.unroute('https://generativelanguage.googleapis.com/**');
+
+  // ---- 무료 AI (키 없이: Pollinations) ----
+  let freeReq = []; let first400 = true;
+  const okBody = (txt) => JSON.stringify({ choices: [{ message: { role: 'assistant', content: txt }, finish_reason: 'stop' }] });
+  const adjTxt = (n) => JSON.stringify({ interpretation: n, feasibility: 100, reasoning: 't', if_success: { narrative: n + ' 서술', headlines: [n] }, if_failure: {}, world_events: {} });
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { const r = route.request(); freeReq.push({ h: r.headers(), body: JSON.parse(r.postData()) }); return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('폴리네이션스')) }); });
+  await page.route('https://text.pollinations.ai/openai/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data: [{ id: 'openai-fast' }, { id: 'tts-1' }] }) }));
+  await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=free]');
+  ok(await page.isVisible('#ov-free') && (await page.inputValue('#ov-fp')) === 'pollinations' && await page.isHidden('#ov-fkeyrow'), '무료 AI 카드: 기본은 Pollinations, 키 입력칸 없음');
+  await page.click('#ov-ftest'); await page.waitForFunction(() => /모델 \d+개/.test(document.getElementById('ov-note').textContent), null, { timeout: 10000 });
+  ok(JSON.stringify(await page.$$eval('#ov-fsel option', (os) => os.map((o) => o.value))) === '["openai-fast","__custom"]', '모델 불러오기: 채팅 모델만 목록에(tts 제외)');
+  await page.click('#ov-apply'); await turn('외교 사절을 보낸다');
+  const rp = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(freeReq.length === 1 && !freeReq[0].h['authorization'] && freeReq[0].body.model === 'openai-fast' && freeReq[0].body.response_format?.type === 'json_object' && freeReq[0].body.max_tokens > 0 && rp.mode === 'Pollinations (openai-fast)' && rp.narrative.includes('폴리네이션스'), '키 없이 Pollinations로 판정: ' + rp.mode);
+
+  // ---- 무료 AI: 키가 필요한 서비스(OpenRouter), 서비스별 키·모델 기억, response_format 미지원 서버 ----
+  let orReq = [];
+  await page.route('https://openrouter.ai/api/v1/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'vendor/paid-model' }, { id: 'google/gemma-4-31b-it:free' }, { id: 'nvidia/nemotron-3-nano:free' }] }) }));
+  await page.route('https://openrouter.ai/api/v1/chat/completions', (route) => { const r = route.request(); const body = JSON.parse(r.postData()); orReq.push({ h: r.headers(), body });
+    if (body.response_format && first400) { first400 = false; return route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":{"message":"response_format is not supported by this model"}}' }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('오픈라우터')) }); });
+  await page.click('#btn-menu'); await page.selectOption('#ov-fp', 'openrouter');
+  ok(await page.isVisible('#ov-fkeyrow') && /free|무료/.test(await page.textContent('#ov-fnote')), 'OpenRouter 선택: 키 입력칸과 무료 모델 안내');
+  await page.fill('#ov-fkey', 'sk-or-TEST'); await page.click('#ov-ftest');
+  await page.waitForFunction(() => /모델 \d+개/.test(document.getElementById('ov-note').textContent), null, { timeout: 10000 });
+  const fo = await page.$$eval('#ov-fsel option', (os) => os.map((o) => o.value));
+  ok(fo.includes('google/gemma-4-31b-it:free') && !fo.includes('vendor/paid-model'), '"모델 불러오기": 무료(:free) 모델만: ' + fo.join(','));
+  await page.selectOption('#ov-fsel', 'nvidia/nemotron-3-nano:free');
+  await page.selectOption('#ov-fp', 'pollinations'); await page.selectOption('#ov-fp', 'openrouter');
+  ok((await page.inputValue('#ov-fkey')) === 'sk-or-TEST' && (await page.inputValue('#ov-fsel')) === 'nvidia/nemotron-3-nano:free', '서비스를 바꿨다 돌아와도 그 서비스의 키·모델을 기억');
+  await page.click('#ov-apply'); await turn('무역 협정을 맺는다');
+  const ro = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(orReq.length === 2 && orReq[0].h['authorization'] === 'Bearer sk-or-TEST' && orReq[0].body.model === 'nvidia/nemotron-3-nano:free' && orReq[0].body.response_format && !orReq[1].body.response_format && ro.mode === 'OpenRouter (nvidia/nemotron-3-nano:free)', 'response_format을 모르는 서버(400)는 빼고 다시 요청: ' + ro.mode);
+  await page.route('https://openrouter.ai/api/v1/chat/completions', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"No auth"}}' }));
+  const t12 = await page.evaluate(() => window.__game.state.turn);
+  await page.fill('#g-cmd', '군비를 증강한다'); await page.click('#btn-go'); await idle();
+  ok(/OpenRouter API 키가 올바르지 않/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === t12, '무료 서비스 키 오류는 대체 없이 그대로 안내(턴 소모 없음)');
 
   // ---- Qwen 오류 ----
   await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=webllm]');

@@ -6,8 +6,11 @@ import type { GameState } from '../engine/state';
 import type { Army } from '../engine/state';
 import { armiesOf, cloneState, controlledBy, fmtDate, getRel, isAlive, isAtWar, newGame, ownedBy, totalTroops, warsOf } from '../engine/state';
 import { buildArmies, reachWithin } from '../engine/armies';
-import { DEFAULT_CLAUDE_MODEL, DEFAULT_OPENAI_MODEL, LlmError, adjudicate, listOpenAiModels, providerLabel, testClaude, testGemini } from '../llm/providers';
+import { DEFAULT_CLAUDE_MODEL, DEFAULT_OPENAI_MODEL, FREE_PRESETS, LlmError, adjudicate, freePreset, listFreeModels, listOpenAiModels, providerLabel, retryPolicy, testClaude, testGemini } from '../llm/providers';
 import { Thumbs } from '../ui/thumbs';
+import { headlineOf, renderPaper } from '../ui/paper';
+import { DIFFICULTIES, diffOf } from '../engine/difficulty';
+import type { Difficulty } from '../engine/difficulty';
 import type { LlmConfig, ProviderId } from '../llm/providers';
 import { MapView } from '../map/MapView';
 import type { ArmyMarker } from '../map/MapView';
@@ -93,7 +96,7 @@ export async function startApp(opts: GameOptions) {
   }
   const view = await MapView.create({ container: 'map', workerUrl: opts.workerUrl, data: opts.data });
 
-  let cfg: LlmConfig = { provider: 'gemini', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, openaiKey: '', openaiModel: DEFAULT_OPENAI_MODEL, webllmModel: DEFAULT_QWEN, ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
+  let cfg: LlmConfig = { provider: 'free', difficulty: 'normal', freePreset: 'pollinations', freeKeys: {}, freeModels: {}, freeBase: '', geminiKey: '', geminiModel: 'gemini-flash-latest', claudeKey: '', claudeModel: DEFAULT_CLAUDE_MODEL, openaiKey: '', openaiModel: DEFAULT_OPENAI_MODEL, webllmModel: DEFAULT_QWEN, ...(loadJson<Partial<LlmConfig>>(CFG_KEY) ?? {}) };
   if (cfg.provider === 'local') cfg.provider = 'gemini'; // 예전 "규칙 모드" 설정은 AI 선택으로 옮긴다
   const thumbs = new Thumbs(world, view.geometries());
   let eraFilter = '전체';
@@ -106,8 +109,7 @@ export async function startApp(opts: GameOptions) {
   let selCountry: CountryId | null = null;
   let selProv: ProvinceId | null = null;
   let fromStudio = false;
-  let tab: 'log' | 'army' = 'log';
-  let focusArmy: string | null = null;
+    let focusArmy: string | null = null;
 
   const applyPadding = () => {
     const wide = window.innerWidth > 900;
@@ -118,6 +120,7 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- AI 선택 (시작 화면과 메뉴에서 같은 모양을 재사용) ----------
   const AIS: { id: ProviderId; name: string; maker: string; desc: string }[] = [
+    { id: 'free', name: '무료 AI', maker: 'Pollinations · Groq · OpenRouter 등', desc: '키 없이 바로 · GPU 필요 없음' },
     { id: 'gemini', name: 'Gemini', maker: 'Google', desc: '무료 API 키로 시작' },
     { id: 'claude', name: 'Claude', maker: 'Anthropic', desc: '내 API 키 · 사용량만큼 과금' },
     { id: 'openai', name: 'ChatGPT', maker: 'OpenAI', desc: '내 API 키 · 사용량만큼 과금' },
@@ -126,6 +129,14 @@ export async function startApp(opts: GameOptions) {
   function mountAi(container: HTMLElement, p: string) {
     container.innerHTML = `<div class="ai-cards">${AIS.map((a) => `<label class="ai-card" data-ai="${a.id}"><input type="radio" name="${p}-prov" value="${a.id}" />
         <span class="ai-logo ai-${a.id}">${a.id === 'openai' ? 'GPT' : a.name[0]}</span><span class="ai-txt"><b>${a.name}</b><span>${a.maker}</span><small>${a.desc}</small></span></label>`).join('')}</div>
+      <div class="ai-key" id="${p}-free">
+        <label for="${p}-fp">무료 AI 서비스 고르기</label>
+        <div class="row"><select id="${p}-fp">${FREE_PRESETS.map((x) => `<option value="${x.id}">${x.name}</option>`).join('')}</select></div>
+        <div class="row" id="${p}-fbaserow"><input id="${p}-fbase" placeholder="https://…/v1 (OpenAI 호환 주소)" autocomplete="off" /></div>
+        <div class="row" id="${p}-fkeyrow"><input id="${p}-fkey" type="password" placeholder="API 키" autocomplete="off" /></div>
+        <div class="row">${picker(`${p}-fsel`, `${p}-fmodel`, [])}<button type="button" id="${p}-ftest" class="ghost small">모델 불러오기</button></div>
+        <div class="hint" id="${p}-fnote"></div>
+      </div>
       <div class="ai-key" id="${p}-gemini">
         <label for="${p}-key">Gemini API 키 · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">무료 발급</a></label>
         <div class="row"><input id="${p}-key" type="password" placeholder="AIza…" autocomplete="off" /><input id="${p}-model" class="model" placeholder="gemini-flash-latest" title="모델" /><button type="button" id="${p}-test" class="ghost small">키 확인</button></div>
@@ -144,18 +155,38 @@ export async function startApp(opts: GameOptions) {
         <label for="${p}-wsel">Qwen 모델 고르기 <span class="hint">(처음 한 번 내려받음 · 괄호는 WebLLM이 밝힌 필요 GPU 메모리, 내려받는 크기도 대략 비슷)</span></label>
         <div class="row">${picker(`${p}-wsel`, `${p}-wmodel`, QWEN_GROUPS)}</div>
       </div>
+      <div class="ai-diff"><label>난이도 <span class="hint">(게임 중에도 메뉴에서 바꿀 수 있어요)</span></label>
+        <div class="diff-cards">${DIFFICULTIES.map((d) => `<label class="diff-card" data-d="${d.id}"><input type="radio" name="${p}-diff" value="${d.id}" /><b>${d.name}</b><small>${d.desc}</small></label>`).join('')}</div></div>
       <div class="ai-note" id="${p}-note"></div>`;
     const sync = () => {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value;
       container.querySelectorAll<HTMLElement>('.ai-card').forEach((el) => el.classList.toggle('on', el.dataset.ai === v));
-      for (const k of ['w', 'c', 'o']) $(`${p}-${k}model`).hidden = $<HTMLSelectElement>(`${p}-${k}sel`).value !== '__custom';
-      for (const id of ['gemini', 'claude', 'openai', 'webllm']) $(`${p}-${id}`).hidden = v !== id;
-      const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim()) || (v === 'openai' && !$<HTMLInputElement>(`${p}-okey`).value.trim());
+      const dv = (container.querySelector(`input[name=${p}-diff]:checked`) as HTMLInputElement | null)?.value;
+      container.querySelectorAll<HTMLElement>('.diff-card').forEach((el) => el.classList.toggle('on', el.dataset.d === dv));
+      for (const k of ['w', 'c', 'o', 'f']) $(`${p}-${k}model`).hidden = $<HTMLSelectElement>(`${p}-${k}sel`).value !== '__custom';
+      for (const id of ['free', 'gemini', 'claude', 'openai', 'webllm']) $(`${p}-${id}`).hidden = v !== id;
+      const keyless = (v === 'gemini' && !$<HTMLInputElement>(`${p}-key`).value.trim()) || (v === 'claude' && !$<HTMLInputElement>(`${p}-ckey`).value.trim()) || (v === 'openai' && !$<HTMLInputElement>(`${p}-okey`).value.trim())
+        || (v === 'free' && freePreset(fp()).needKey && !$<HTMLInputElement>(`${p}-fkey`).value.trim());
+      if (v === 'free' && !keyless) { $(`${p}-note`).textContent = fp() === 'pollinations' ? '키 없이 바로 쓰는 무료 서버입니다. 명령 내용은 Pollinations로 전송됩니다.' : '키는 이 기기에만 저장되고 그 서비스로만 보내집니다.'; return; }
       $(`${p}-note`).textContent = keyless ? '키를 넣기 전에는 AI 대신 간이 판정으로 진행됩니다. 키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.' : '키는 이 기기에만 저장되고 그 AI 서비스로만 보내집니다.';
     };
-    container.querySelectorAll(`input[name=${p}-prov]`).forEach((r) => r.addEventListener('change', sync));
+    container.querySelectorAll(`input[name=${p}-prov], input[name=${p}-diff]`).forEach((r) => r.addEventListener('change', sync));
     container.addEventListener('input', sync);
     container.addEventListener('change', sync);
+    // 무료 AI: 서비스마다 키·모델을 따로 기억한다
+    const fKeys: Record<string, string> = { ...cfg.freeKeys }, fModels: Record<string, string> = { ...cfg.freeModels };
+    let curFree = cfg.freePreset;
+    const fp = () => $<HTMLSelectElement>(`${p}-fp`).value;
+    const freeOptions = (ids: string[]) => { $<HTMLSelectElement>(`${p}-fsel`).innerHTML = `${ids.length ? `<optgroup label="모델">${ids.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`).join('')}</optgroup>` : ''}<option value="__custom">직접 입력…</option>`; };
+    const fillFree = (id: string) => {
+      const pr = freePreset(id);
+      $(`${p}-fnote`).innerHTML = `${esc(pr.note)}${pr.keyUrl ? ` <a href="${pr.keyUrl}" target="_blank" rel="noopener">키 발급</a>` : ''}`;
+      $(`${p}-fbaserow`).hidden = id !== 'custom'; $(`${p}-fkeyrow`).hidden = id === 'pollinations';
+      $<HTMLInputElement>(`${p}-fkey`).value = fKeys[id] ?? '';
+      const cur = fModels[id] || pr.defaultModel;
+      freeOptions([...new Set([pr.defaultModel, fModels[id]].filter(Boolean))]);
+      put('f', cur);
+    };
     const pick = (k: string) => ($<HTMLSelectElement>(`${p}-${k}sel`).value === '__custom' ? $<HTMLInputElement>(`${p}-${k}model`).value.trim() : $<HTMLSelectElement>(`${p}-${k}sel`).value);
     const put = (k: string, v: string) => {
       const sel = $<HTMLSelectElement>(`${p}-${k}sel`); const known = [...sel.options].some((o) => o.value === v && v !== '__custom');
@@ -165,19 +196,25 @@ export async function startApp(opts: GameOptions) {
       const v = (container.querySelector(`input[name=${p}-prov]:checked`) as HTMLInputElement | null)?.value as ProviderId | undefined;
       cfg = {
         provider: v ?? 'gemini',
+        difficulty: ((container.querySelector(`input[name=${p}-diff]:checked`) as HTMLInputElement | null)?.value ?? 'normal') as Difficulty,
         geminiKey: $<HTMLInputElement>(`${p}-key`).value.trim(), geminiModel: $<HTMLInputElement>(`${p}-model`).value.trim() || 'gemini-flash-latest',
         claudeKey: $<HTMLInputElement>(`${p}-ckey`).value.trim(), claudeModel: pick('c') || DEFAULT_CLAUDE_MODEL,
         openaiKey: $<HTMLInputElement>(`${p}-okey`).value.trim(), openaiModel: pick('o') || DEFAULT_OPENAI_MODEL,
         webllmModel: pick('w') || DEFAULT_QWEN,
+        freePreset: fp(), freeBase: $<HTMLInputElement>(`${p}-fbase`).value.trim(),
+        freeKeys: (fKeys[fp()] = $<HTMLInputElement>(`${p}-fkey`).value.trim(), { ...fKeys }), freeModels: (fModels[fp()] = pick('f'), { ...fModels }),
       };
       saveJson(CFG_KEY, cfg);
     };
     const write = () => {
       (container.querySelector(`input[name=${p}-prov][value=${cfg.provider === 'local' ? 'gemini' : cfg.provider}]`) as HTMLInputElement).checked = true;
+      (container.querySelector(`input[name=${p}-diff][value=${cfg.difficulty ?? 'normal'}]`) as HTMLInputElement).checked = true;
       $<HTMLInputElement>(`${p}-key`).value = cfg.geminiKey; $<HTMLInputElement>(`${p}-model`).value = cfg.geminiModel;
       $<HTMLInputElement>(`${p}-ckey`).value = cfg.claudeKey; put('c', cfg.claudeModel);
       $<HTMLInputElement>(`${p}-okey`).value = cfg.openaiKey ?? ''; put('o', cfg.openaiModel ?? DEFAULT_OPENAI_MODEL);
       put('w', cfg.webllmModel);
+      $<HTMLSelectElement>(`${p}-fp`).value = cfg.freePreset; curFree = cfg.freePreset; $<HTMLInputElement>(`${p}-fbase`).value = cfg.freeBase ?? '';
+      Object.assign(fKeys, cfg.freeKeys); Object.assign(fModels, cfg.freeModels); fillFree(cfg.freePreset);
       sync();
     };
     const test = (btn: string, fn: (c: LlmConfig) => Promise<string>) => $(btn).addEventListener('click', async () => {
@@ -185,6 +222,21 @@ export async function startApp(opts: GameOptions) {
       try { await fn(cfg); out.textContent = '✔ 키가 동작합니다.'; } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
     });
     test(`${p}-test`, testGemini); test(`${p}-ctest`, testClaude);
+    // 무료 AI: 서비스를 바꾸면 그 서비스의 키·모델을 불러오고, "모델 불러오기"로 지금 쓸 수 있는 모델 목록을 받는다
+    $(`${p}-fp`).addEventListener('change', () => {
+      fKeys[curFree] = $<HTMLInputElement>(`${p}-fkey`).value.trim(); fModels[curFree] = pick('f');
+      curFree = fp(); fillFree(curFree); sync();
+    });
+    $(`${p}-ftest`).addEventListener('click', async () => {
+      read(); const out = $(`${p}-note`); out.textContent = '모델 목록을 불러오는 중…';
+      try {
+        const ids = await listFreeModels(cfg);
+        if (!ids.length) throw new LlmError('지금 쓸 수 있는 모델이 없습니다. 잠시 뒤 다시 시도하거나 다른 서비스를 고르세요.');
+        const pr = freePreset(cfg.freePreset), want = fModels[pr.id] || pr.defaultModel;
+        freeOptions(ids); put('f', ids.includes(want) ? want : ids[0]); read(); sync();
+        out.textContent = `✔ 모델 ${ids.length}개를 불러왔습니다. 마음에 드는 것을 고르세요.`;
+      } catch (e) { out.textContent = `✖ ${(e as Error).message}`; }
+    });
     // ChatGPT: 키 확인 = 이 키로 쓸 수 있는 모델 목록을 받아 선택 창을 채운다
     $(`${p}-otest`).addEventListener('click', async () => {
       read(); const out = $(`${p}-note`); out.textContent = '키 확인 중…';
@@ -334,12 +386,12 @@ export async function startApp(opts: GameOptions) {
     const sc = world.scenarios.find((x) => x.id === s.scenarioId);
     if (!sc) { introMsg(`이 저장 파일의 템플릿(${s.scenarioId})을 찾을 수 없습니다. 템플릿 파일을 먼저 불러오세요.`, true); return; }
     if (!s.armies) { world.useScenario(sc); buildArmies(world, s, sc); }
-    state = s; undoSnap = null; lastDelta = {}; tab = 'log'; focusArmy = null;
+    state = s; undoSnap = null; lastDelta = {}; focusArmy = null; cfg.difficulty = diffOf(s); saveJson(CFG_KEY, cfg);
     templateId = sc.id;
     world.useScenario(sc); countStatus(); view.setColors(world.countryList); view.setMicro(!world.isHistorical);
     view.setControl(s.owner, s.controller);
     view.setPlayer(s.playerId); view.setHighlightCountry(null); view.setSelectedProvince(null);
-    selCountry = s.playerId; selProv = null; setTab('log');
+    selCountry = s.playerId; selProv = null;
     setPhase('play');
     view.fitCountry(s.playerId);
     renderCard(); renderGame();
@@ -350,6 +402,7 @@ export async function startApp(opts: GameOptions) {
     if (!selCountry || !world.country(selCountry) || world.country(selCountry)?.neutral) return;
     const fresh = newGame(world, selCountry, (Date.now() ^ (Math.random() * 4294967296)) >>> 0, scenario);
     buildArmies(world, fresh, scenario);
+    fresh.difficulty = cfg.difficulty ?? 'normal';
     adoptState(fresh);
     persist();
   }
@@ -364,6 +417,7 @@ export async function startApp(opts: GameOptions) {
   $('ov-close').addEventListener('click', () => { $('overlay').hidden = true; });
   $('ov-apply').addEventListener('click', () => {
     aiMenu.read();
+    if (state) { state.difficulty = cfg.difficulty; persist(); }
     $('overlay').hidden = true; renderGame();
   });
   $('ov-newgame').addEventListener('click', () => {
@@ -444,14 +498,15 @@ export async function startApp(opts: GameOptions) {
     renderCard();
   };
 
-  // ---------- 군대·장군 ----------
+  // ---------- 명령 · 군대·장군 (일반 명령과 군대 명령을 한 곳에서) ----------
   const armyCard = (a: Army, mine: boolean) => {
-    const sk = a.general.skill;
-    return `<div class="ac ${focusArmy === a.id ? 'focus' : ''}" data-id="${esc(a.id)}">
-      <div class="ac-h"><span>${a.navy ? '⚓' : '⚔'} <b>${esc(a.name)}</b></span><span class="ac-t">${a.troops}천 명</span></div>
+    const sk = a.general.skill, open = focusArmy === a.id;
+    const head = `<div class="ac-h" data-act="focus"><span>${a.navy ? '⚓' : '⚔'} <b>${esc(a.name)}</b> <span class="hint">${esc(a.general.name)}${mine ? '' : ` · ${esc(world.label(a.owner))}`}</span></span><span class="ac-t">${a.troops}천</span></div>`;
+    if (!open) return `<div class="ac" data-id="${esc(a.id)}">${head}</div>`;
+    return `<div class="ac focus" data-id="${esc(a.id)}">${head}
       <div class="ac-g">${esc(a.general.name)} <span class="sk sk${sk >= 8 ? 'h' : sk >= 5 ? 'm' : 'l'}">능력 ${sk}/10</span>${a.general.status === 'wounded' ? ' <span class="hurt">🩹 부상</span>' : ''}${a.general.trait ? ` <span class="hint">· ${esc(a.general.trait)}</span>` : ''}</div>
-      <div class="ac-m"><div class="bar"><i style="width:${a.morale}%"></i></div><span class="hint">사기 ${a.morale} · 📍 ${esc(world.provLabel(a.at))}${mine ? '' : ` · ${esc(world.label(a.owner))}`}</span></div>
-      <div class="ac-b"><button type="button" class="ghost small" data-act="cmd">${mine ? '명령에 넣기' : '대상으로'}</button><button type="button" class="ghost small" data-act="view">지도에서 보기</button></div></div>`;
+      <div class="ac-m"><div class="bar"><i style="width:${a.morale}%"></i></div><span class="hint">사기 ${a.morale} · 📍 ${esc(world.provLabel(a.at))} · ${a.troops}천 명</span></div>
+      <div class="ac-b">${mine ? `<button type="button" class="ghost small" data-act="mv">이동</button><button type="button" class="ghost small" data-act="atk">공격·점령</button><button type="button" class="ghost small" data-act="hold">방어</button>` : ''}<button type="button" class="ghost small" data-act="cmd">${mine ? '이름만 넣기' : '대상으로'}</button><button type="button" class="ghost small" data-act="view">지도에서 보기</button></div></div>`;
   };
   function renderArmies() {
     const box = $('g-army');
@@ -460,9 +515,9 @@ export async function startApp(opts: GameOptions) {
     const mine = armiesOf(s, pid).sort((a, b) => b.troops - a.troops);
     const atWar = new Set(warsOf(s, pid));
     const foes = s.armies.filter((a) => a.troops > 0 && atWar.has(a.owner)).sort((a, b) => b.troops - a.troops).slice(0, 12);
-    box.innerHTML = `<div class="ac-sum"><b>내 군대 ${mine.length}개</b> · 총 병력 ${Math.round(totalTroops(s, pid) * 10) / 10}천 명 <span class="hint">· 점령은 군대가 합니다. 군대를 전선 가까이 보낸 뒤 공격하세요.</span></div>`
-      + (mine.length ? mine.map((a) => armyCard(a, true)).join('') : '<div class="hint">군대가 없습니다. "군대를 신편한다"로 병력을 모으세요.</div>')
-      + (foes.length ? `<div class="ac-sum foe"><b>교전국 군대</b></div>${foes.map((a) => armyCard(a, false)).join('')}` : '');
+    box.innerHTML = `<div class="ac-sum"><b>내 군대 ${mine.length}개</b> · 병력 ${Math.round(totalTroops(s, pid) * 10) / 10}천 명<button type="button" class="ghost small" data-act="levy">＋ 신편</button></div>`
+      + `<div class="ac-list">${mine.length ? mine.map((a) => armyCard(a, true)).join('') : '<div class="hint">군대가 없습니다. "신편"으로 병력을 모으세요.</div>'}</div>`
+      + (foes.length ? `<details class="ac-foes"><summary>교전국 군대 ${foes.length}개</summary>${foes.map((a) => armyCard(a, false)).join('')}</details>` : '');
   }
   function refreshArmyMarkers() {
     if (!state) { view.setArmies([]); return; }
@@ -477,29 +532,35 @@ export async function startApp(opts: GameOptions) {
     }));
     view.setArmies(list);
   }
-  const setTab = (t: 'log' | 'army') => {
-    tab = t;
-    document.querySelectorAll('.g-tabs button').forEach((b) => b.classList.toggle('on', (b as HTMLElement).dataset.tab === t));
-    $('g-log').hidden = t !== 'log'; $('g-army').hidden = t !== 'army';
+  /** 명령창에 문장을 덧붙인다(여러 명령은 " / "로 이어 붙인다). */
+  const addToCmd = (t: string) => {
+    const ta = $<HTMLTextAreaElement>('g-cmd'); const cur = ta.value.trim();
+    ta.value = cur ? `${cur} / ${t}` : t; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   };
-  document.querySelector('.g-tabs')!.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b) setTab(b.dataset.tab as 'log' | 'army'); });
   $('g-army').addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('button'); const card = (e.target as HTMLElement).closest('.ac') as HTMLElement | null;
-    if (!btn || !card || !state) return;
+    const t = e.target as HTMLElement; const btn = t.closest('button') as HTMLElement | null; const card = t.closest('.ac') as HTMLElement | null;
+    if (!state) return;
+    if (btn?.dataset.act === 'levy') { addToCmd('군대를 신편한다'); return; }
+    if (!card) return;
     const a = state.armies.find((x) => x.id === card.dataset.id);
     if (!a) return;
-    if (btn.dataset.act === 'view') { view.fitProvince(a.at); selProv = a.at; selCountry = state.controller[a.at]; view.setSelectedProvince(a.at); renderCard(); }
-    if (btn.dataset.act === 'cmd') {
-      const ta = $<HTMLTextAreaElement>('g-cmd'); const name = a.owner === state.playerId ? a.general.name : world.label(a.owner);
-      ta.value = `${ta.value}${ta.value && !/\s$/.test(ta.value) ? ' ' : ''}${name}`; ta.focus();
-    }
+    const act = (btn ?? (t.closest('.ac-h') as HTMLElement | null))?.dataset.act;
+    if (act === 'focus') { focusArmy = focusArmy === a.id ? null : a.id; if (focusArmy) { selProv = a.at; selCountry = state.controller[a.at]; view.setSelectedProvince(a.at); renderCard(); } renderArmies(); return; }
+    if (act === 'view') { view.fitProvince(a.at); selProv = a.at; selCountry = state.controller[a.at]; view.setSelectedProvince(a.at); renderCard(); return; }
+    if (act === 'cmd') { addToCmd(a.owner === state.playerId ? `${a.name}(${a.general.name})` : world.label(a.owner)); return; }
+    // 군대 명령 문장: 지도에서 고른 주를 목표로 쓴다(없으면 ○○)
+    const target = selProv && selProv !== a.at ? world.provLabel(selProv) : '○○';
+    if (act === 'mv') addToCmd(`${P(a.name, '을/를')} ${P(target, '으로/로')} 이동시킨다`);
+    if (act === 'atk') addToCmd(`${P(a.name, '으로/로')} ${P(target, '을/를')} 공격해 점령한다`);
+    if (act === 'hold') addToCmd(`${P(a.name, '은/는')} 현재 위치를 사수한다`);
+    if ((act === 'mv' || act === 'atk') && target === '○○') gmsg('지도에서 목표 주를 누른 뒤 같은 버튼을 다시 누르면 ○○가 목표 이름으로 채워집니다.');
   });
   view.onArmyClick = (id) => {
     if (!state) return;
     const a = state.armies.find((x) => x.id === id);
     if (!a) return;
     focusArmy = id; selProv = a.at; selCountry = state.controller[a.at];
-    view.setSelectedProvince(a.at); renderCard(); setTab('army'); renderArmies();
+    view.setSelectedProvince(a.at); renderCard(); renderArmies();
     $('g-army').querySelector(`.ac[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' });
   };
 
@@ -526,16 +587,9 @@ export async function startApp(opts: GameOptions) {
       wars.length ? `<div class="war">⚔ 전쟁: ${wars.map((c) => esc(world.label(c))).join(', ')}</div>` : '<div>⚔ 전쟁 없음</div>',
       good.length ? `<div class="good">우호: ${good.join(' · ')}</div>` : '', bad.length ? `<div class="bad">적대: ${bad.join(' · ')}</div>` : '',
     ].join('');
-    $('g-log').innerHTML = s.log.length ? [...s.log].reverse().map((r) => {
-      const badge = r.outcome === 'pass' ? '<span class="badge pass">넘김</span>' : `<span class="badge ${r.outcome === 'success' ? 'ok' : 'bad'}">${r.outcome === 'success' ? '성공' : '실패'} · 확률 ${r.feasibility}% · 굴림 ${r.roll}</span>`;
-      return `<div class="turn"><div class="th"><span><b>${esc(fmtDate(r.date))}</b> · 턴 ${r.turn}</span>${badge}</div>
-        ${r.command ? `<div class="cmd">▶ ${esc(r.command)}</div>` : ''}${r.interpretation ? `<div class="interp">해석: ${esc(r.interpretation)}</div>` : ''}
-        ${r.narrative ? `<p>${esc(r.narrative)}</p>` : ''}
-        ${r.headlines.length ? `<ul class="hl">${r.headlines.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
-        ${r.notes.length ? `<ul class="notes">${r.notes.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
-        ${r.rejected.length ? `<ul class="rej">${r.rejected.map((h) => `<li>엔진이 거부: ${esc(h)}</li>`).join('')}</ul>` : ''}
-        <div class="mode">판정: ${esc(r.mode)}</div></div>`;
-    }).join('') : '<div class="hint">아직 기록이 없습니다.</div>';
+    const last = s.log.at(-1);
+    $('g-latest').textContent = last ? headlineOf(last) : '아직 발행된 신문이 없습니다';
+    $<HTMLButtonElement>('btn-paper').disabled = !last; $<HTMLButtonElement>('btn-archive').disabled = !s.log.length;
     $<HTMLButtonElement>('btn-undo').disabled = !undoSnap || busy;
     $<HTMLButtonElement>('btn-go').disabled = busy || dead;
     $<HTMLButtonElement>('btn-pass').disabled = busy || dead;
@@ -543,6 +597,40 @@ export async function startApp(opts: GameOptions) {
     renderArmies(); refreshArmyMarkers();
   }
   const gmsg = (t: string, kind: '' | 'err' | 'ok' = '') => { const m = $('g-msg'); m.textContent = t; m.className = `g-msg ${kind}`; };
+
+  // ---------- 신문 ----------
+  let paperIdx = -1;
+  const paperAuto = (): boolean => { try { return localStorage.getItem('althist-paper-auto') !== '0'; } catch { return true; } };
+  function openPaper(i: number) {
+    if (!state || !state.log[i]) return;
+    paperIdx = i;
+    const sc = world.scenarios.find((x) => x.id === state!.scenarioId);
+    $('paper-sheet').innerHTML = renderPaper(state.log[i], { world, state, playerName: world.label(state.playerId), scenario: sc?.name ?? '', era: sc?.era ?? '' });
+    $('paper-pos').textContent = `${i + 1} / ${state.log.length}호`;
+    $<HTMLButtonElement>('paper-prev').disabled = i <= 0; $<HTMLButtonElement>('paper-next').disabled = i >= state.log.length - 1;
+    $<HTMLInputElement>('paper-auto').checked = paperAuto();
+    $('paper').hidden = false; $('paper-scroll').scrollTop = 0;
+  }
+  const closePaper = () => { $('paper').hidden = true; paperIdx = -1; };
+  $('btn-paper').addEventListener('click', () => { if (state?.log.length) openPaper(state.log.length - 1); });
+  $('paper-close').addEventListener('click', closePaper);
+  $('paper').addEventListener('click', (e) => { if (e.target === $('paper')) closePaper(); });
+  $('paper-prev').addEventListener('click', () => openPaper(paperIdx - 1));
+  $('paper-next').addEventListener('click', () => openPaper(paperIdx + 1));
+  $('paper-auto').addEventListener('change', () => { try { localStorage.setItem('althist-paper-auto', $<HTMLInputElement>('paper-auto').checked ? '1' : '0'); } catch { /* 무시 */ } });
+  $('btn-archive').addEventListener('click', () => {
+    if (!state) return;
+    $('archive-list').innerHTML = [...state.log].map((r, i) => ({ r, i })).reverse().map(({ r, i }) =>
+      `<button type="button" class="arch-row" data-i="${i}"><span class="arch-n">제 ${r.turn}호</span><span class="arch-d">${esc(fmtDate(r.date))}</span><span class="arch-h">${esc(headlineOf(r))}</span>`
+      + `<span class="badge ${r.outcome === 'pass' ? 'pass' : r.outcome === 'success' ? 'ok' : 'bad'}">${r.outcome === 'pass' ? '넘김' : r.outcome === 'success' ? '성공' : '실패'}</span></button>`).join('') || '<div class="hint">아직 발행된 신문이 없습니다.</div>';
+    $('archive').hidden = false;
+  });
+  $('archive-list').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('.arch-row') as HTMLElement | null; if (b) { $('archive').hidden = true; openPaper(Number(b.dataset.i)); } });
+  $('archive-close').addEventListener('click', () => { $('archive').hidden = true; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { if (!$('paper').hidden) closePaper(); else if (!$('archive').hidden) $('archive').hidden = true; }
+    else if (!$('paper').hidden && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) openPaper(paperIdx + (e.key === 'ArrowRight' ? 1 : -1));
+  });
 
   // ---------- 턴 진행 ----------
   async function submit(pass: boolean) {
@@ -561,9 +649,10 @@ export async function startApp(opts: GameOptions) {
       if (mapChanged) view.setControl(state.owner, state.controller);
       persist();
       $<HTMLTextAreaElement>('g-cmd').value = '';
-      gmsg(record.rejected.length ? `일부 항목을 엔진이 거부했습니다 (${record.rejected.length}건) — 연대기 참고` : '', record.rejected.length ? '' : 'ok');
+      gmsg(record.rejected.length ? `일부 항목을 엔진이 거부했습니다 (${record.rejected.length}건) — 연대기 참고` : mode.includes('붐벼서') ? 'AI가 붐벼서 이번 턴은 간이 판정으로 처리했습니다. 되돌리기로 취소하고 다시 시도할 수도 있습니다.' : '', record.rejected.length ? '' : 'ok');
       if (selProv) selCountry = state.controller[selProv];
       renderCard();
+      if (paperAuto()) openPaper(state.log.length - 1);
     } catch (e) {
       gmsg(e instanceof LlmError ? e.message : `오류: ${(e as Error).message}`, 'err');
     } finally { busy = false; renderGame(); }
@@ -673,9 +762,11 @@ export async function startApp(opts: GameOptions) {
 
   // 테스트/디버그용 훅
   (window as unknown as Record<string, unknown>).__game = {
-    world, view, get state() { return state; }, get phase() { return phase; }, get tab() { return tab; }, get cfg() { return cfg; }, setCfg(c: Partial<LlmConfig>) { cfg = { ...cfg, ...c }; },
+    world, view, get state() { return state; }, get phase() { return phase; }, get cfg() { return cfg; }, setCfg(c: Partial<LlmConfig>) { cfg = { ...cfg, ...c }; },
     start(cid: string, tpl?: string) { if (tpl) templateId = tpl; selCountry = cid; phase = 'pick'; startNew(); },
     studio, openStudio, importRaw,
+    setRetry: (ms: number[]) => { retryPolicy.delaysMs = ms; },
+    paperOpen: () => !$('paper').hidden,
     submit: (cmd: string) => { $<HTMLTextAreaElement>('g-cmd').value = cmd; return submit(false); },
   };
   (window as unknown as Record<string, unknown>).__map = view.map;
