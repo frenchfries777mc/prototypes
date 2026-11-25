@@ -312,7 +312,8 @@ export function buildTown(scene, assets, mark = () => {}) {
 
   // ---------- 마을 밖: 길과 다리, 지구별 구조물, 자연물 ----------
   const docks = [{ id: 'pier', name: '항구 잔교', x: PIER.x, z: PIER.z1 - 1.5, y: SLAB_Y }];
-  const extraBoats = [], boatSpots = [{ x: 78.4, z: -24, yaw: Math.PI }, { x: 84.2, z: -45, yaw: Math.PI / 2, m: 'watercraft/boat-tug-a' }];
+  const extraBoats = [], boatSpots = [{ x: 78.4, z: -24, yaw: Math.PI }, { x: 84.2, z: -45, yaw: Math.PI / 2, m: 'watercraft/boat-tug-a' },
+    { x: 80.5, z: -12, yaw: Math.PI, m: 'craft/jetski' }, { x: 81.5, z: -17, yaw: Math.PI, m: 'craft/jetski' }, { x: 80.5, z: -33, yaw: Math.PI, m: 'craft/jetski' }];
   bucket('roads', 66, 48);
   mark('town.grid');
   buildRoads({ scene, addBox, casters });

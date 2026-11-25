@@ -3,6 +3,7 @@
 import { JOB_CARS } from './mapdata.js';
 import { Panel } from './panel.js';
 import { Vehicle } from './vehicles.js';
+import { rep } from './reputation.js';
 import { stats } from './stats.js';
 import { BUILDINGS, CELL } from './mapdata.js';
 import { Character, randomLook } from './character.js';
@@ -25,6 +26,7 @@ export class Jobs {
     this.money = 0;
     try { this.money = parseInt(localStorage.getItem('boxtown.money') || '0', 10) || 0; } catch (e) { /* 저장소를 못 쓰는 환경 */ }
     this.active = null;
+    rep.setNames(Object.fromEntries(Object.entries(DEFS).map(([k, v]) => [k, { name: v.name, color: v.color }])));
     this.target = null; // { x, y, z, label }
     this.toastT = 0;
     this._prompt = '';
@@ -75,14 +77,28 @@ export class Jobs {
   // ---------- 공용 도구 ----------
   renderMoney() { $('money').textContent = won(this.money); }
   // 벌이는 전체적으로 낮춰 잡는다(옷과 집, 무기를 사려면 일을 꾸준히 해야 하게).
-  pay(n, text) {
-    n = Math.max(10, Math.round((n * 0.6) / 10) * 10);
+  pay(n, text, kind) {
+    kind = kind || (this.active && this.active.id) || null; // 어느 일의 벌이인지(평판이 일마다 쌓인다)
+    const base = Math.max(10, Math.round((n * 0.6) / 10) * 10);
+    n = Math.max(10, Math.round((base * rep.bonus(kind)) / 10) * 10); // 평판 단계마다 벌이가 늘어난다
+    let tip = 0;
+    if (kind && Math.random() < rep.tipChance(kind)) { tip = Math.max(10, Math.round((base * 0.25) / 10) * 10); n += tip; text += '  🧑‍🤝‍🧑 단골 팁'; }
+    const lv = rep.add(kind, 1 + (base >= 240 ? 1 : 0));
+    if (lv) setTimeout(() => this.levelUp(kind, lv), 900);
     this.money += n;
     stats.bump('earned', n); stats.bump('jobs');
     try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
     this.renderMoney();
     this.toast(`${text}  +${won(n)}원`, true);
     $('moneyBox').classList.remove('pop'); void $('moneyBox').offsetWidth; $('moneyBox').classList.add('pop');
+  }
+  // 평판 단계가 올랐다.
+  levelUp(kind, lv) {
+    const d = rep.names[kind] || { name: kind }, bonus = rep.levelUpReward(lv);
+    this.money += bonus; stats.bump('earned', bonus);
+    try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
+    this.renderMoney();
+    this.toast(`🏅 ${d.name} 평판 ${lv}단계 「${rep.title(kind)}」  승급 보너스 +${won(bonus)}원`, true);
   }
   // 돈을 쓴다. 모자라면 false.
   spend(n) {

@@ -35,21 +35,26 @@ function build(scene, pal) {
 }
 
 export class Heli {
-  constructor(scene, x, y, z, yaw, addShadow, pal = HELI_PAL.civ) {
-    this.scene = scene; this.key = 'heli'; this.isHeli = true;
-    this.spec = { mass: 900, vmax: 30 };
+  // kit: 헬리콥터가 아닌 날탈것(열기구)이 같은 조종·물리를 쓰되 모양과 수치만 바꿔 끼울 때 쓴다.
+  constructor(scene, x, y, z, yaw, addShadow, pal = HELI_PAL.civ, kit = null) {
+    this.scene = scene; this.key = kit ? kit.key : 'heli'; this.isHeli = true;
+    this.kit = kit || {};
+    this.climb = this.kit.climb || { up: 8, down: -7, idle: -3.2 }; // 상승·하강·놓았을 때 목표 오르내림 속도
+    this.spec = this.kit.spec || { mass: 900, vmax: 30 };
     this.root = new B.TransformNode('heli', scene);
     this.root.position.set(x, y + 0.1, z);
     this.root.rotationQuaternion = B.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
     this.home = { pos: this.root.position.clone(), rot: this.root.rotationQuaternion.clone() };
-    const m = build(scene, pal);
+    const m = (this.kit.build || build)(scene, pal);
     this.tilt = new B.TransformNode('heliTilt', scene); this.tilt.parent = this.root; // 기울어 보이는 것은 겉모습만
-    m.body.parent = this.tilt; m.rotor.parent = this.tilt; m.rotor.position.set(0, 2.5, 0.2); m.tail.parent = this.tilt; m.tail.position.set(0.14, 2.0, -4.4);
+    m.body.parent = this.tilt; m.rotor.parent = this.tilt; m.rotor.position.set(...(this.kit.rotorPos || [0, 2.5, 0.2])); m.tail.parent = this.tilt; m.tail.position.set(...(this.kit.tailPos || [0.14, 2.0, -4.4]));
     this.rotor = m.rotor; this.tailRotor = m.tail;
     this.parts = { body: m.body, wheels: [{ mesh: m.rotor }, { mesh: m.tail }] };
     if (addShadow) addShadow([m.body, m.rotor]);
-    this.width = 2.2; this.length = 6.4; this.height = 2.5; this.zc = -1.0;
-    const shape = new B.PhysicsShapeBox(new B.Vector3(0, 1.1, -0.2), B.Quaternion.Identity(), new B.Vector3(2.0, 2.2, 4.4), scene);
+    const sh = this.kit.shape || { c: [0, 1.1, -0.2], s: [2.0, 2.2, 4.4] };
+    const dm = this.kit.dims || { w: 2.2, l: 6.4, h: 2.5, zc: -1.0 };
+    this.width = dm.w; this.length = dm.l; this.height = dm.h; this.zc = dm.zc;
+    const shape = new B.PhysicsShapeBox(new B.Vector3(...sh.c), B.Quaternion.Identity(), new B.Vector3(...sh.s), scene);
     shape.filterMembershipMask = CAR_MASK; shape.material = { friction: 0.8, restitution: 0.05 };
     this.body = new B.PhysicsBody(this.root, B.PhysicsMotionType.DYNAMIC, false, scene);
     this.body.shape = shape;
@@ -71,13 +76,13 @@ export class Heli {
     const f = new B.Vector3(this.fwd.x, 0, this.fwd.z).normalize();
     this.speed = v.x * f.x + v.z * f.z;
     const on = !!input && !this.dead;
-    this.rpm = damp(this.rpm, on ? 1 : 0, on ? 1.6 : 0.5, dt);
+    this.rpm = damp(this.rpm, on ? 1 : this.kit.minRpm || 0, on ? 1.6 : 0.5, dt);
     let th = 0, st = 0, lift = 0;
     if (on) { th = input.throttle; st = input.steer; lift = input.lift || 0; }
     if (this.rpm > 0.25 && !this.dead) {
       // 날개가 도는 동안은 중력을 이기고, 오르내리는 속도와 앞뒤 속도를 목표에 맞춘다. 조종사가 없으면 천천히 내려앉는다.
-      const wantY = on ? (lift > 0 ? 8 : lift < 0 ? -7 : 0) : -3.2;
-      const wantF = th * (th > 0 ? this.spec.vmax : 10);
+      const wantY = on ? (lift > 0 ? this.climb.up : lift < 0 ? this.climb.down : this.climb.hold || 0) : this.climb.idle;
+      const wantF = th * (th > 0 ? this.spec.vmax : this.kit.back || 10);
       const side = v.x * this.right.x + v.z * this.right.z;
       const imp = new B.Vector3(0, (G + clamp((wantY - v.y) * 3.2, -G * 0.9, 16)) * M * dt * this.rpm, 0);
       imp.addInPlace(f.scale(clamp((wantF - this.speed) * 1.4, -14, 14) * M * dt * this.rpm));
@@ -88,7 +93,7 @@ export class Heli {
     const tx = Math.asin(clamp(this.fwd.y, -1, 1)), tz = Math.asin(clamp(this.right.y, -1, 1));
     const loc = new B.Vector3(tx * 6, 0, -tz * 6);
     const world = this.right.scale(loc.x).add(this.fwd.scale(loc.z));
-    body.setAngularVelocity(new B.Vector3(damp(w.x, world.x, 8, dt), damp(w.y, st * 1.7 * this.rpm, 6, dt), damp(w.z, world.z, 8, dt)));
+    body.setAngularVelocity(new B.Vector3(damp(w.x, world.x, 8, dt), damp(w.y, st * (this.kit.turn || 1.7) * this.rpm, 6, dt), damp(w.z, world.z, 8, dt)));
     this.pitch = damp(this.pitch, clamp(this.speed / this.spec.vmax, -1, 1) * 0.3, 4, dt); this.roll = damp(this.roll, -st * 0.25 * this.rpm, 4, dt);
     // 물에 3초 잠기면 가라앉은 것으로 본다.
     this.sunkT = p.y < SEA - 0.6 ? this.sunkT + dt : 0;
@@ -105,7 +110,7 @@ export class Heli {
   }
   frame() {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
-    this.rotor.rotation.y += this.rpm * 26 * dt; this.tailRotor.rotation.x += this.rpm * 34 * dt;
+    if (this.kit.frame) this.kit.frame(this, dt); else { this.rotor.rotation.y += this.rpm * 26 * dt; this.tailRotor.rotation.x += this.rpm * 34 * dt; }
     this.tilt.rotation.x = this.pitch; this.tilt.rotation.z = this.roll;
   }
 }
