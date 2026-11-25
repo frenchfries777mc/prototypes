@@ -1,6 +1,7 @@
 // 로비: 게임을 켜면 먼저 보이는 화면. 마을을 배경으로 내 캐릭터가 서 있고, 왼쪽에 차림표, 오른쪽에 쪽지(오늘의 일거리, 내 기록), 아래에 속보 자막.
 import { Panel } from './panel.js';
 import { stats } from './stats.js';
+import { rep } from './reputation.js';
 const B = window.BABYLON;
 const $ = (id) => document.getElementById(id);
 const won = (n) => Math.round(n).toLocaleString('ko-KR');
@@ -121,6 +122,20 @@ export class Lobby {
     else { this.wardrobe.close(); this.panel = this.panel === a ? null : a; this.wipeArmed = false; this.copied = false; }
     this.render();
   }
+  // 평판 목록: 쌓은 일이 위로 온다.
+  repRows() {
+    const keys = Object.keys(rep.names).sort((a, b) => rep.pts(b) - rep.pts(a));
+    return `<div class="reps">${keys.map((k) => {
+      const p = rep.progress(k), n = rep.names[k];
+      return `<div class="rp ${rep.pts(k) ? '' : 'zero'}"><span>${n.name} <small>${rep.title(k)}</small></span><i><u style="width:${Math.round(p.ratio * 100)}%;background:${n.color}"></u></i><em>${p.lv ? p.lv + '단계' : '—'}</em></div>`;
+    }).join('')}</div>`;
+  }
+  raceRows() {
+    const R = window.__game && window.__game.race;
+    if (!R || !R.courses.length) return '';
+    const rows = R.courses.map((c) => { const b = R.data[c.id]; const m = b ? { gold: '🥇', silver: '🥈', bronze: '🥉', '': '' }[R.medalOf(c, b.t)] : ''; const f = (t) => { const mm = Math.floor(t / 60); return `${mm}:${(t - mm * 60) < 10 ? '0' : ''}${(t - mm * 60).toFixed(1)}`; }; return `<span>${c.name}</span><b>${b ? f(b.t) + ' ' + m : '—'}</b>`; }).join('');
+    return `<div class="text"><b>🏁 서킷 레이스 최고 기록</b></div><div class="text rec">${rows}</div>`;
+  }
   render() {
     const q = stats.quests(), s = (k) => stats.get(k), view = ['3인칭', '1인칭', '2인칭'][this.player.view];
     const quest = q.map((x) => `<li class="${x.done ? 'done' : ''}">${x.done ? '✅' : '▫️'} ${x.text} <em>(${won(x.now)}/${won(x.goal)})</em> <b>+${won(x.reward)}원</b></li>`).join('');
@@ -151,7 +166,10 @@ export class Lobby {
     else if (this.panel === 'records') panel = `<div class="sheet"><h3>🏆 내 기록</h3><div class="text rec">
       <span>지금까지 번 돈</span><b>${won(s('earned'))}원</b><span>해낸 일</span><b>${won(s('jobs'))}번</b><span>혼내 준 불량배</span><b>${won(s('kos'))}명</b>
       <span>경찰 따돌리기</span><b>${won(s('escapes'))}번</b><span>붙잡힘</span><b>${won(s('arrests'))}번</b><span>병원 신세</span><b>${won(s('downs'))}번</b>
-      <span>기차 탄 횟수</span><b>${won(s('rides'))}번</b><span>가진 치장품</span><b>${this.wardrobe.owned.size}개</b><span>내 집</span><b>${this.interiors.owned.size}채</b></div>
+      <span>기차 탄 횟수</span><b>${won(s('rides'))}번</b><span>가진 치장품</span><b>${this.wardrobe.owned.size}개</b><span>내 집</span><b>${this.interiors.owned.size}채</b>
+      <span>레이스 완주</span><b>${won(s('races'))}번</b><span>레이스 금메달</span><b>${won(s('golds'))}개</b></div>
+      <div class="text"><b>🏅 일 평판 <small>(단계마다 벌이 +5%, 2단계부터 단골 팁)</small></b>${this.repRows()}</div>
+      ${this.raceRows()}
       <button data-act="back" class="back">닫기</button></div>`;
     const news = NEWS.slice().sort(() => Math.random() - 0.5).map((n) => '📢 ' + n).join('　·　');
     this.el.innerHTML = `<div class="shade"></div>

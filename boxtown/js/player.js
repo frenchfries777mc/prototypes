@@ -232,7 +232,7 @@ export class Player {
     this.vehicle = car;
     this.input.setDriving(true);
     document.body.classList.toggle('flying', !!car.isHeli);
-    this.chr.setVisible(false);
+    this.chr.setVisible(!!car.rider && this.view !== 1); // 자전거·킥보드·수상스키는 타고 있는 모습이 보인다
     this.cc.setPosition(new B.Vector3(car.pos.x, car.pos.y + 400, car.pos.z)); // 캐릭터 충돌체는 멀리 치워 둔다
     this.cc.setVelocity(B.Vector3.Zero());
     this.input.jumpQueued = false;
@@ -288,6 +288,15 @@ export class Player {
       else {
         this.feet.copyFrom(car.pos);
         this.nearCar = null;
+        if (car.rider) { // 탄 모습: 발판(안장) 위치에 선다
+          const r = car.rider, vis = this.view !== 1;
+          if (this.chr.root.isEnabled() !== vis) this.chr.setVisible(vis);
+          if (vis) {
+            this.riderPos = this.riderPos || new B.Vector3(); this.riderVel = this.riderVel || new B.Vector3();
+            this.riderPos.set(car.pos.x + car.fwd.x * r.z + car.up.x * r.y, car.pos.y + car.fwd.y * r.z + car.up.y * r.y, car.pos.z + car.fwd.z * r.z + car.up.z * r.y);
+            this.chr.update(dt, { pos: this.riderPos, vel: this.riderVel, grounded: true, wishHeading: car.yaw, landed: 0, jumped: false });
+          }
+        }
         return;
       }
     }

@@ -32,6 +32,8 @@ export const SPECS = {
   'cars/garbage-truck': { mass: 2000, engine: 6.5, vmax: 18, grip: 11, steer: 0.36 },
   'cars/firetruck': { mass: 1900, engine: 8, vmax: 24, grip: 11, steer: 0.38 },
   'cars/tractor': { mass: 1100, engine: 7, vmax: 13, grip: 15, steer: 0.62 },
+  'bike/bicycle': { mass: 140, engine: 3.4, vmax: 9.5, grip: 14, steer: 0.5, L: 2.0, rider: { y: 0.34, z: -0.05 } },
+  'bike/scooter': { mass: 210, engine: 6, vmax: 17, grip: 15, steer: 0.45, L: 2.0, rider: { y: 0.27, z: -0.08 } },
 };
 
 const tmp = { a: new B.Vector3(), b: new B.Vector3(), c: new B.Vector3() };
@@ -41,6 +43,7 @@ export class Vehicle {
     this.scene = scene;
     this.key = key;
     this.spec = SPECS[key] || SPECS.default;
+    this.rider = this.spec.rider || null; // 타고 있는 동안 캐릭터가 보이는 탈것(자전거·킥보드)
     const parts = assets.spawnCar(key);
     this.root = new B.TransformNode('car_' + key, scene);
     this.root.position.set(x, y + 0.05, z);
@@ -154,7 +157,7 @@ export class Vehicle {
       const hand = input && input.handbrake;
       let wy = w.y;
       if (!hand) {
-        const L = Math.max(2.2, this.length * 0.62);
+        const L = this.spec.L || Math.max(2.2, this.length * 0.62);
         const want = (this.speed * Math.tan(this.steer)) / L; // 자전거 모델이 말하는 돌아야 할 속도
         wy = damp(w.y, want, input ? 5.5 : 3, dt);
       }
@@ -198,18 +201,20 @@ export class Vehicle {
 }
 
 // 배: 차와 같은 방식으로 타고 내린다. 네 귀퉁이의 부력으로 물에 뜨고, 뒤에서 미는 힘과 물의 저항으로 움직인다.
-const BOAT_SPECS = { default: { mass: 600, thrust: 12.5, vmax: 19 }, 'watercraft/boat-tug-a': { mass: 900, thrust: 6, vmax: 11 } };
+const BOAT_SPECS = { default: { mass: 600, thrust: 12.5, vmax: 19 }, 'craft/jetski': { mass: 320, thrust: 22, vmax: 27, lift: 0.42, rider: { y: 1.1, z: -0.5 } }, 'watercraft/boat-tug-a': { mass: 900, thrust: 6, vmax: 11 } };
 export class Boat {
   constructor(scene, assets, key, x, z, yaw) {
     this.scene = scene; this.key = key; this.isBoat = true;
     this.spec = BOAT_SPECS[key] || BOAT_SPECS.default;
-    const mesh = assets.spawn(key);
-    const bb = assets.bounds(key);
+    this.rider = this.spec.rider || null;
+    const custom = assets.carTemplates.get(key); // 상자로 조립한 배(수상스키)는 불러온 모델이 아니라 만들어 둔 틀에서 복제한다
+    const mesh = custom ? assets.spawnCar(key).body : assets.spawn(key);
+    const bb = custom ? (() => { const b = custom.body.getBoundingInfo().boundingBox; return { min: b.minimum.clone(), max: b.maximum.clone() }; })() : assets.bounds(key);
     this.root = new B.TransformNode('boat_' + key, scene);
     this.root.position.set(x, SEA - 0.3, z);
     this.root.rotationQuaternion = B.Quaternion.RotationYawPitchRoll(yaw, 0, 0);
     this.home = { pos: this.root.position.clone(), rot: this.root.rotationQuaternion.clone() };
-    mesh.parent = this.root;
+    mesh.parent = this.root; mesh.position.y = this.spec.lift || 0; // 상자로 만든 작은 배는 바닥이 물에 잠기지 않게 선체를 들어 올린다
     this.width = bb.max.x - bb.min.x; this.length = bb.max.z - bb.min.z; this.height = 1.1; this.zc = (bb.max.z + bb.min.z) / 2;
     const shape = new B.PhysicsShapeBox(new B.Vector3(0, 0.55, this.zc), B.Quaternion.Identity(), new B.Vector3(this.width * 0.9, 1.1, this.length * 0.95), scene);
     shape.filterMembershipMask = CAR_MASK;

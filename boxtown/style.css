@@ -324,3 +324,19 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 @media (max-width: 520px) { #lobby .left { width: min(300px, 78vw); } #lobby .n2 { display: none; } #lobby .n1 { width: min(200px, 52vw); right: 10px; font-size: 11px; top: 56px; } #lobby nav { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { #lobby .left { width: min(240px, 62vw); } #lobby nav button { font-size: 14px; padding: 7px 12px; } }
 #lobby.still { background-size: cover; background-position: center; background-repeat: no-repeat; }
+
+/* 서킷 레이스 */
+#raceHud { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 46px); transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: 94vw; padding: 7px 14px; border-radius: 14px; background: rgba(22, 34, 58, .82); color: #fff; font-size: 14px; pointer-events: none; }
+#raceHud b { color: #ffd84a; font-size: 15px; } #raceHud span { font-weight: 700; font-variant-numeric: tabular-nums; } #raceHud small { opacity: .8; font-size: 12px; }
+#raceHud button { pointer-events: auto; border: 0; border-radius: 9px; padding: 4px 10px; background: #e5553f; color: #fff; font-weight: 800; font-size: 12px; cursor: pointer; }
+#raceBig { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 7; text-align: center; color: #fff; font-weight: 900; font-size: min(26vw, 150px); text-shadow: 0 6px 0 rgba(0, 0, 0, .35), 0 0 30px rgba(255, 216, 74, .6); pointer-events: none; }
+#raceBig.go { color: #7dff9b; } #raceBig.done { font-size: min(10vw, 56px); line-height: 1.25; } #raceBig.done span { display: block; font-size: .55em; color: #ffd84a; }
+
+#lobby .sheet .reps { display: grid; gap: 7px; margin-top: 4px; }
+#lobby .sheet .rp { display: grid; grid-template-columns: 1fr 74px 46px; gap: 8px; align-items: center; font-size: 13px; }
+#lobby .sheet .rp small { opacity: .65; font-size: 11px; margin-left: 3px; }
+#lobby .sheet .rp i { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .16); overflow: hidden; }
+#lobby .sheet .rp u { display: block; height: 100%; border-radius: 4px; }
+#lobby .sheet .rp em { font-style: normal; text-align: right; color: #ffd84a; font-weight: 800; font-size: 12px; }
+#lobby .sheet .rp.zero { opacity: .45; }
+#lobby .sheet .text b small { font-size: 11px; opacity: .7; font-weight: 600; margin-left: 4px; }

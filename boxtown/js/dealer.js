@@ -3,14 +3,17 @@
 import { SITES } from './world.js';
 import { Vehicle, SPECS } from './vehicles.js';
 import { Heli } from './heli.js';
+import { makeBalloon } from './rides.js';
 import { NAV } from './police.js';
 import { Panel } from './panel.js';
+import { rep, CAR_REQ } from './reputation.js';
 import { flatMat } from './util.js';
 const B = window.BABYLON;
 const won = (n) => n.toLocaleString('ko-KR');
 
 // [모델, 이름, 값]
 export const CARS = [
+  ['bike/bicycle', '자전거', 400], ['bike/scooter', '전동 킥보드', 900],
   ['cars/tractor', '트랙터', 1500], ['cars/kart-oobi', '카트', 2500], ['cars/sedan', '승용차', 3000], ['cars/taxi', '택시', 3500], ['cars/van', '승합차', 4000],
   ['cars/suv', 'SUV', 5000], ['cars/truck', '트럭', 5000], ['cars/truck-flat', '짐칸 트럭', 5500], ['cars/tractor-shovel', '삽 트랙터', 6000], ['cars/ambulance', '구급차', 7000],
   ['cars/sedan-sports', '스포츠 세단', 8000], ['cars/hatchback-sports', '스포츠 해치백', 9000], ['cars/suv-luxury', '고급 SUV', 12000], ['cars/firetruck', '소방차', 15000],
@@ -45,9 +48,13 @@ export class Dealer {
     });
     // 착륙장과 헬리콥터
     put(11, 0.3, 11, 9, -0.13, 6, '#3a3d4d', true); put(6, 0.02, 1, 9, 0.04, 6, '#ffd84a'); put(1, 0.02, 6, 9, 0.045, 6, '#ffd84a');
+    put(8, 0.3, 8, 21, -0.13, 6, '#8fa86a', true); put(8.4, 0.05, 0.4, 21, 0.05, 2, '#ffd84a'); // 열기구 자리
     col.done();
     this.heli = new Heli(scene, S.x + 9, y + 0.3, S.z + 6, Math.PI, addShadow);
     garage.cars.push(this.heli);
+    // 열기구: 착륙장 옆 풀밭에서 누구나 탈 수 있다(Space 올라가고 Shift 내려가요).
+    this.balloon = makeBalloon(scene, S.x + 21, y + 0.45, S.z + 6, 0, addShadow);
+    garage.cars.push(this.balloon);
     this.desk = { x: S.x - 8, z: S.z + 4.6 };
     addEventListener('keydown', (e) => { if (e.code === 'KeyV' && !e.repeat) this.summon(); });
     document.getElementById('btnCar').addEventListener('click', () => this.summon());
@@ -69,6 +76,12 @@ export class Dealer {
       { label: '묵직함', ratio: S.mass / mx((s) => s.mass), text: `${S.mass} kg` },
     ];
   }
+  // 평판으로 풀리는 차: 아직 모자라면 '택시 기사 2단계' 같은 문구를, 열려 있으면 빈 문자열을 돌려준다.
+  need(k) {
+    const r = CAR_REQ[k];
+    if (!r || this.owned.has(k) || rep.level(r[0]) >= r[1]) return '';
+    return `${(rep.names[r[0]] || { name: r[0] }).name} ${r[1]}단계`;
+  }
   // shop: 판매장(살 수 있다) / 차고(가진 차 중에서 고른다)
   open(shop) {
     this.note = '';
@@ -76,17 +89,17 @@ export class Dealer {
     Panel.show({
       title: shop ? '박스 자동차' : '내 차고', sel: first,
       note: () => this.note || (shop ? '차를 눌러 성능을 보고 사세요. 어디서든 V로 불러요' : this.owned.size ? '탈 차를 고르세요. V로 불러와요' : '아직 차가 없어요. 항구 동쪽 판매장에서 사세요'),
-      items: () => CARS.filter(([k]) => shop || this.owned.has(k)).map(([k, name, price]) => ({ id: k, label: name, sub: this.active === k ? '타는 중' : this.owned.has(k) ? '보유' : won(price) + '원', state: this.active === k ? 'on' : this.owned.has(k) ? '' : 'buy' })),
+      items: () => CARS.filter(([k]) => shop || this.owned.has(k)).map(([k, name, price]) => ({ id: k, label: name, sub: this.active === k ? '타는 중' : this.owned.has(k) ? '보유' : this.need(k) ? '🔒 ' + this.need(k) : won(price) + '원', state: this.active === k ? 'on' : this.owned.has(k) ? '' : this.need(k) ? 'lock' : 'buy' })),
       detail: (k) => {
         const item = CARS.find((c) => c[0] === k);
         if (!item) return null;
-        const own = this.owned.has(k);
-        return { name: `${item[1]}${own ? '' : ' · ' + won(item[2]) + '원'}`, bars: this.stats(k), action: { label: this.active === k ? '타는 중' : own ? '이 차로 정하기' : `${won(item[2])}원에 사기`, state: this.active === k ? 'on' : own ? '' : 'buy' } };
+        const own = this.owned.has(k), lock = this.need(k);
+        return { name: `${item[1]}${own ? '' : ' · ' + won(item[2]) + '원'}`, bars: this.stats(k), action: { label: this.active === k ? '타는 중' : own ? '이 차로 정하기' : lock ? `🔒 ${lock}이 되면 살 수 있어요` : `${won(item[2])}원에 사기`, state: this.active === k ? 'on' : own ? '' : lock ? 'lock' : 'buy' } };
       },
       pick: (k) => {
         const item = CARS.find((c) => c[0] === k);
         if (!item || this.active === k) return;
-        if (!this.owned.has(k)) { if (!shop) return; if (!this.jobs.spend(item[2])) { this.note = '돈이 모자라요'; return; } this.owned.add(k); }
+        if (!this.owned.has(k)) { if (!shop) return; if (this.need(k)) { this.note = `${this.need(k)}이 되면 살 수 있어요`; return; } if (!this.jobs.spend(item[2])) { this.note = '돈이 모자라요'; return; } this.owned.add(k); }
         this.note = ''; this.active = k; this.save();
         if (shop) this.place(this.x + 4, this.y + 0.7, this.z - 17, Math.PI / 2); else if (this.car && this.car !== this.player.vehicle) this.drop();
       },
