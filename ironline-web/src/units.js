@@ -1,6 +1,7 @@
 // 병사 모델, 1인칭 무기, 거점 깃발·구역·빛기둥. 전부 코드로 만든 형상이라 이미지가 필요 없다.
 import * as THREE from 'three';
 import { NPOINTS, POINT_R } from './world.js';
+import { mergeGeometries } from '../vendor/utils/BufferGeometryUtils.js';
 import { clothTexture, toonGradient } from './gfx.js';
 
 export const COL_A = new THREE.Color(0.33, 0.56, 1.0), COL_B = new THREE.Color(1.0, 0.78, 0.24), COL_N = new THREE.Color(0.75, 0.75, 0.75);
@@ -8,39 +9,76 @@ const std = (c, r = 0.9, m = 0) => new THREE.MeshStandardMaterial({ color: c, ro
 const box = (w, h, d, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); return m; };
 
 const TEAM = [
-  { coat: 0x3a62b8, pants: 0x2a3f7a, helmet: 0x5a78c0, band: 0xbcd0ff },
-  { coat: 0xb8923a, pants: 0x7a5a28, helmet: 0xc9a850, band: 0xfff0b0 },
+  { coat: 0x3d68c4, pants: 0x2c4482, helmet: 0x5a6a8a, band: 0xffffff },
+  { coat: 0xc79a3c, pants: 0x80602c, helmet: 0x8a7a50, band: 0xff6a3a },
 ];
 const tn = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: toonGradient() });
 const mats = TEAM.map((t) => ({ coat: tn(t.coat), pants: tn(t.pants), helmet: tn(t.helmet), band: new THREE.MeshBasicMaterial({ color: t.band }) }));
 const skinT = tn(0xe0ac80), inkMat = new THREE.MeshBasicMaterial({ color: 0x14100c, side: THREE.BackSide });
 const skin = std(0xd9a77e, 1), gunMat = std(0x3a2e22, 0.6, 0.1), metal = std(0x6a7078, 0.45, 0.3);
 
+// ---- 병사: 둥근 카툰 체형. 부위별로 지오메트리를 하나로 합쳐 병사 한 명이 8번(윤곽선 포함)만 그려지게 한다. ----
+const SK = 0xe3b08a, DARK = 0x2b2622, WOODC = 0x7a4f2c, STEEL = 0x6c727a, KHAKI = 0x6a6a46, BELT = 0x5a3e22;
+const toonMat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonGradient() });
+const inkOutline = new THREE.ShaderMaterial({
+  side: THREE.BackSide, fog: false,
+  vertexShader: 'void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * 0.022, 1.0); }',
+  fragmentShader: 'void main(){ gl_FragColor = vec4(0.08, 0.06, 0.04, 1.0); }',
+});
+function part(items) {
+  const geos = items.map(({ g, c, p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1] }) => {
+    g = g.clone(); g.scale(s[0], s[1], s[2]); g.rotateX(r[0]); g.rotateY(r[1]); g.rotateZ(r[2]); g.translate(p[0], p[1], p[2]);
+    const col = new THREE.Color(c), n = g.attributes.position.count, a = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { a[i * 3] = col.r; a[i * 3 + 1] = col.g; a[i * 3 + 2] = col.b; }
+    g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+    for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(k)) g.deleteAttribute(k);
+    return g;
+  });
+  return mergeGeometries(geos, false);
+}
+const SPH = new THREE.SphereGeometry(1, 14, 10), CAP = (r, l) => new THREE.CapsuleGeometry(r, l, 4, 10), CYL = (r, h) => new THREE.CylinderGeometry(r, r, h, 12), BOX = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+const soldierGeo = TEAM.map((t) => {
+  const body = part([
+    { g: CAP(0.2, 0.3), c: t.coat, p: [0, 1.12, 0], s: [1.05, 1, 0.8] },                 // 몸통
+    { g: CYL(0.215, 0.07), c: BELT, p: [0, 0.86, 0], s: [1.05, 1, 0.8] },                  // 허리띠
+    { g: new THREE.TorusGeometry(0.15, 0.05, 8, 16), c: t.band, p: [0, 1.38, 0], r: [Math.PI / 2, 0, 0] },   // 목도리
+    { g: BOX(0.3, 0.36, 0.14), c: KHAKI, p: [0, 1.15, 0.2] },                              // 배낭
+    { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [-0.13, 0.9, -0.17] }, { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [0.13, 0.9, -0.17] },   // 탄입대
+    { g: SPH, c: SK, p: [0, 1.62, 0], s: [0.17, 0.18, 0.17] },                             // 머리
+    { g: SPH, c: DARK, p: [-0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] }, { g: SPH, c: DARK, p: [0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] },
+    { g: new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), c: t.helmet, p: [0, 1.64, 0], s: [0.2, 0.19, 0.205] },   // 철모
+    { g: CYL(0.235, 0.03), c: t.helmet, p: [0, 1.665, 0] },                                // 챙
+    { g: BOX(0.06, 0.035, 0.22), c: t.band, p: [0, 1.835, -0.01] },                        // 철모 줄무늬
+  ]);
+  const leg = part([
+    { g: CYL(0.1, 0.62), c: t.pants, p: [0, -0.31, 0] },
+    { g: SPH, c: DARK, p: [0, -0.72, -0.045], s: [0.125, 0.09, 0.19] },                    // 군화
+  ]);
+  const arms = part([
+    { g: CAP(0.066, 0.34), c: t.coat, p: [0.2, -0.1, -0.2], r: [-Math.PI / 2 + 0.08, 0, 0] },   // 방아쇠 쪽 팔
+    { g: CAP(0.066, 0.4), c: t.coat, p: [-0.2, -0.07, -0.26], r: [-Math.PI / 2 + 0.05, 0, 0] }, // 받치는 팔
+    { g: SPH, c: SK, p: [0.2, -0.1, -0.44], s: [0.075, 0.075, 0.075] }, { g: SPH, c: SK, p: [-0.2, -0.07, -0.5], s: [0.075, 0.075, 0.075] },
+    { g: CYL(0.02, 0.62), c: STEEL, p: [0.0, -0.08, -0.78], r: [Math.PI / 2, 0, 0] },       // 총열
+    { g: BOX(0.065, 0.1, 0.5), c: WOODC, p: [0.0, -0.1, -0.34] },                          // 개머리·몸체
+    { g: BOX(0.05, 0.12, 0.1), c: WOODC, p: [0.0, -0.17, -0.12], r: [0.5, 0, 0] },
+  ]);
+  return { body, leg, arms };
+});
+
 export function makeSoldier(team) {
-  const M = mats[team];
+  const G = soldierGeo[team];
   const g = new THREE.Group();
-  const body = new THREE.Group(); g.add(body);
-  const dark = tn(0x2a2622), eye = new THREE.MeshBasicMaterial({ color: 0x16120e });
-  // 몸통·머리·철모: 전부 상자
-  body.add(box(0.52, 0.66, 0.28, M.coat, 0, 1.12, 0), box(0.54, 0.1, 0.3, tn(0x5a4026), 0, 0.84, 0), box(0.3, 0.12, 0.03, M.band, 0, 1.32, -0.15));
-  const head = box(0.32, 0.32, 0.32, skinT, 0, 1.62, 0); body.add(head);
-  body.add(box(0.07, 0.07, 0.02, eye, -0.08, 1.64, -0.165), box(0.07, 0.07, 0.02, eye, 0.08, 1.64, -0.165));
-  body.add(box(0.36, 0.14, 0.36, M.helmet, 0, 1.82, 0), box(0.4, 0.04, 0.4, M.helmet, 0, 1.75, 0), box(0.12, 0.04, 0.1, M.band, 0, 1.87, -0.19));
+  const mk = (geo) => {
+    const m = new THREE.Mesh(geo, toonMat); m.castShadow = true; m.frustumCulled = false;
+    const o = new THREE.Mesh(geo, inkOutline); o.frustumCulled = false; m.add(o);
+    return m;
+  };
+  const body = new THREE.Group(); g.add(body); body.add(mk(G.body));
   const legL = new THREE.Group(), legR = new THREE.Group();
-  legL.position.set(-0.13, 0.82, 0); legR.position.set(0.13, 0.82, 0);
-  for (const l of [legL, legR]) l.add(box(0.22, 0.58, 0.24, M.pants, 0, -0.29, 0), box(0.23, 0.24, 0.25, dark, 0, -0.7, -0.01));
+  legL.position.set(-0.12, 0.82, 0); legR.position.set(0.12, 0.82, 0);
+  legL.add(mk(G.leg)); legR.add(mk(G.leg));
   g.add(legL, legR);
-  // 팔: 총을 앞으로 겨눈 모양
-  const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms);
-  arms.add(box(0.16, 0.16, 0.5, M.coat, -0.22, -0.06, -0.22), box(0.16, 0.16, 0.46, M.coat, 0.2, -0.1, -0.32), box(0.15, 0.15, 0.12, skinT, -0.22, -0.06, -0.52), box(0.15, 0.15, 0.12, skinT, 0.2, -0.1, -0.58));
-  const gun = new THREE.Group(); gun.position.set(0.0, -0.08, -0.36); arms.add(gun);
-  gun.add(box(0.07, 0.09, 0.7, tn(0x4a3a2a), 0, 0, 0), box(0.04, 0.04, 0.5, tn(0x6a7078), 0, 0.01, -0.55));
-  const meshes = []; g.traverse((o) => { if (o.isMesh) meshes.push(o); });
-  for (const o of meshes) {
-    o.castShadow = true;
-    if (o.material === eye || o.material === M.band) continue;
-    const ol = new THREE.Mesh(o.geometry, inkMat); ol.scale.setScalar(1.09); o.add(ol);   // 뒤집은 껍데기 윤곽선
-  }
+  const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms); arms.add(mk(G.arms));
   g.userData = { body, legL, legR, arms };
   return g;
 }
@@ -50,23 +88,27 @@ export class UnitViews {
     this.sim = sim; this.group = new THREE.Group(); scene.add(this.group);
     this.views = sim.units.map((u) => { const v = makeSoldier(u.team); v.visible = false; this.group.add(v); return v; });
   }
-  update(dt, localId, thirdPerson = false) {
+  // alpha: 직전 틱과 현재 틱 사이의 진행도(0~1). 30Hz 시뮬레이션을 부드럽게 보여 준다.
+  update(dt, localId, thirdPerson = false, alpha = 1) {
     for (const u of this.sim.units) {
       const v = this.views[u.id], ud = v.userData;
       const hide = (u.id === localId && u.alive && !thirdPerson) || (!u.alive && u.deathAge > 8);
       v.visible = !hide;
       if (hide) continue;
-      v.position.set(u.x, u.y, u.z);
-      v.rotation.y = u.yaw;
+      const a = u.alive && u.deathAge === 0 || u.alive ? alpha : 1;
+      let dy = u.yaw - u.pyaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      v.position.set(u.px + (u.x - u.px) * a, u.py + (u.y - u.py) * a, u.pz + (u.z - u.pz) * a);
+      v.rotation.y = u.pyaw + dy * a;
       if (u.alive) {
         const sp = Math.min(u.speedNow / 4.8, 1.3), ph = u.walkDist * 2.1;
         ud.legL.rotation.x = Math.sin(ph) * 0.85 * sp; ud.legR.rotation.x = -Math.sin(ph) * 0.85 * sp;
         ud.body.position.y = Math.abs(Math.sin(ph)) * 0.04 * sp;
         ud.arms.rotation.x = u.pitch * 0.9;
-        ud.body.rotation.x = 0; v.rotation.x = 0; v.position.y = u.y;
+        v.rotation.x = 0;
       } else {
         const f = Math.min(u.deathAge * 3.2, 1);
-        v.rotation.x = -Math.PI / 2 * f; v.position.y = u.y + 0.18 * f;
+        v.position.set(u.x, u.y + 0.18 * f, u.z); v.rotation.y = u.yaw;
+        v.rotation.x = -Math.PI / 2 * f;
         ud.legL.rotation.x = ud.legR.rotation.x = 0;
       }
     }

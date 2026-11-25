@@ -20,6 +20,7 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hud.on{display:block}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
 #mini{position:absolute;left:14px;top:14px;width:240px;height:134px;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:#1a1e18}
+#netinfo{position:absolute;left:16px;top:154px;font-size:13px;color:#fff;background:var(--panel);padding:3px 10px;border-radius:4px}
 #top{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;align-items:flex-start;gap:12px}
 .tix{display:flex;align-items:center;gap:8px;font-size:30px}
 .tix i{display:block;width:210px;height:12px;border-radius:6px;background:rgba(0,0,0,.55);border:2px solid #14171a;overflow:hidden}
@@ -123,12 +124,40 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 .stats div{background:#fff8e6;border:2px solid var(--ink);border-radius:10px}
 #res h2{text-shadow:3px 3px 0 var(--ink)}
 @media (max-width:760px){#overlay{padding-left:0;place-items:center}}
+
+/* ---- 로비(풀스크린) ---- */
+#overlay{place-items:center;padding:0;background:none}
+#overlay.lob{background:none}
+#menu.lobby{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:clamp(18px,4vw,56px);color:#fff;text-align:left;
+  background:linear-gradient(90deg,rgba(18,12,6,.66) 0%,rgba(18,12,6,.22) 52%,rgba(18,12,6,0) 100%),linear-gradient(0deg,rgba(18,12,6,.82) 0%,rgba(18,12,6,0) 42%)}
+.lb-tag{display:inline-block;background:var(--sun);color:var(--ink);border:3px solid var(--ink);border-radius:999px;padding:4px 18px;font-weight:700;box-shadow:3px 3px 0 var(--ink);transform:rotate(-2deg)}
+.lobby h1{font-family:"IL-Gothic",system-ui,sans-serif;font-weight:700;font-style:italic;margin:14px 0 0;font-size:clamp(64px,14vw,160px);line-height:.95;color:#fff;letter-spacing:.03em;text-shadow:3px 0 0 var(--ink),-3px 0 0 var(--ink),0 3px 0 var(--ink),0 -3px 0 var(--ink),2px 2px 0 var(--ink),-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),8px 8px 0 var(--ink)}
+.lobby h1 span{color:var(--orange)}
+.lb-sub{margin:16px 0 0;max-width:30em;font-size:clamp(15px,1.6vw,20px);line-height:1.6;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.7)}
+.lb-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.lb-chips span{background:rgba(18,12,6,.62);border:2px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 14px;font-size:13px}
+.lb-bottom{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.lb-weapons{display:flex;gap:14px;flex-wrap:wrap}
+.lobby .wp{flex:0 0 auto;width:clamp(150px,19vw,230px);padding:12px 14px 14px;background:var(--cream);border:3px solid var(--ink);border-radius:14px;box-shadow:5px 5px 0 var(--ink);color:var(--ink)}
+.lobby .wp svg{display:block;width:100%;height:46px;margin-bottom:6px}
+.lobby .wp b{font-size:17px}
+.lobby .wp .st{display:grid;grid-template-columns:34px 1fr;gap:3px 8px;align-items:center;margin-top:8px;font-size:11px;color:#5a4a36}
+.lobby .wp .st i{display:block;height:7px;border-radius:4px;background:#d8c9a4;overflow:hidden}
+.lobby .wp .st i b{display:block;height:100%;background:var(--ink)}
+.lobby .wp.on{background:var(--sun);transform:translate(-2px,-4px);box-shadow:7px 9px 0 var(--ink)}
+.lobby .wp.on .st i{background:#e7b934}
+.lb-go{text-align:center}
+.lobby .btn{font-size:clamp(28px,3.4vw,40px);padding:18px clamp(40px,6vw,84px)}
+.lb-note{margin-top:12px;font-size:13px;color:#ffe9c0;text-shadow:0 2px 6px #000}
+canvas#view.lobbyfx{filter:saturate(1.25) contrast(1.06)}
+@media (max-width:760px){.lb-bottom{flex-direction:column;align-items:stretch}.lb-go{width:100%}.lobby .btn{width:100%}.lobby .wp{width:calc(33% - 10px);min-width:96px}}
 </style>
 </head>
 <body>
 <canvas id="view"></canvas>
 <div id="hud">
   <canvas id="mini" width="480" height="268"></canvas>
+  <div id="netinfo"></div>
   <div id="top"><div class="tix a num"><span id="ta">250</span><i><b id="tab"></b></i></div><div id="pts"></div><div class="tix b num"><i><b id="tbb"></b></i><span id="tb">250</span></div><div id="timer" class="num">8:00</div></div>
   <div id="feed"></div><div id="msg" class="num"></div>
   <div id="cross"></div><div id="hitm"></div>
@@ -141,23 +170,30 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
   <div id="score" class="panel"></div>
   <div id="dbg"></div>
 </div>
-<div id="overlay"><div class="box panel" id="menu">
-  <h1 class="num">IRON<span>LINE</span></h1>
-  <p>거점 5개를 앞에서부터 차례로 점령해 적 본진까지 밀어붙이는 1인칭 점령전.<br>아군 봇과 함께 싸웁니다.</p>
-  <div class="row" id="wps"></div>
+<div id="overlay"><div id="menu" class="lobby">
+  <div class="lb-top">
+    <div class="lb-tag">대규모 1인칭 점령전</div>
+    <h1 class="num">IRON<span>LINE</span></h1>
+    <p class="lb-sub">수십 명이 맞붙는 전선. 거점 5개를 차례로 점령해 적 본진까지 밀어붙여라.</p>
+    <div class="lb-chips"><span>팀당 최대 48명</span><span>거점 5개 순차 점령</span><span>온라인 자동 매칭</span></div>
+  </div>
+  <div class="lb-bottom">
+    <div class="lb-weapons" id="wps"></div>
+    <div class="lb-go"><button class="btn num" id="go">출격</button><div class="lb-note" id="lbnote">누르면 자동으로 전장에 합류합니다</div></div>
+  </div>
+  <div id="opts" style="display:none">
   <div class="row">
-    <label class="opt">팀당 인원 <select id="per"><option value="10">10</option><option value="16" selected>16</option><option value="24">24</option><option value="32">32</option></select></label>
+    <label class="opt">팀당 인원 <select id="per"><option value="16">16 (총 32명)</option><option value="24">24 (총 48명)</option><option value="32" selected>32 (총 64명)</option><option value="48">48 (총 96명)</option></select></label>
     <label class="opt">지형 <select id="tstyle"><option value="block">블록</option><option value="lowpoly">로우폴리</option><option value="toon">카툰</option><option value="paint">수채화</option><option value="real">사실적</option><option value="ps1">레트로 PS1</option></select></label>
     <label class="opt">그래픽 <select id="qual"><option value="0">낮음</option><option value="1" selected>보통</option><option value="2">높음</option></select></label>
     <label class="opt">감도 <input id="sens" type="range" min="1" max="10" value="5"></label>
     <label class="opt">소리 <select id="snd"><option value="1" selected>켜짐</option><option value="0">꺼짐</option></select></label>
   </div>
-  <div class="keys"><div><b>WASD</b>이동</div><div><b>Shift</b>달리기</div><div><b>Space</b>점프</div><div><b>마우스</b>조준·발사</div><div><b>우클릭</b>정조준</div><div><b>R</b>장전</div><div><b>1 2 3</b>무기 교체</div><div><b>Tab</b>점수판</div></div>
-  <button class="btn num" id="go">출격</button>
 </div>
 <div class="box panel" id="pause" style="display:none"><h2 class="num" style="margin:0;font-size:40px">일시정지</h2><p>마우스를 다시 잡으려면 아래 버튼을 누르세요.</p><div class="row"><button class="btn num" id="resume">계속</button><button class="btn sec" id="quit">메뉴로</button></div></div>
 <div class="box panel" id="res" style="display:none"><h2 class="num" id="resh"></h2><p id="resp"></p><div class="stats" id="resst"></div><div class="row"><button class="btn num" id="again">다시 출격</button><button class="btn sec" id="tomenu">메뉴로</button></div></div>
 </div>
+<script src="vendor/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

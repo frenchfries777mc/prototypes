@@ -10,13 +10,14 @@ const mmss = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60
 export class Hud {
   constructor() {
     this.el = {};
-    for (const id of ['hud', 'ta', 'tb', 'tab', 'tbb', 'timer', 'pts', 'feed', 'msg', 'cross', 'hitm', 'hpn', 'hpb', 'wn', 'am', 'mg', 'ammo', 'capbox', 'capwarn', 'captxt', 'capb', 'low', 'dmg', 'death', 'dcard', 'dspec', 'dring', 'score', 'mini', 'dbg']) this.el[id] = $(id);
+    for (const id of ['hud', 'ta', 'tb', 'tab', 'tbb', 'timer', 'pts', 'feed', 'msg', 'cross', 'hitm', 'hpn', 'hpb', 'wn', 'am', 'mg', 'ammo', 'capbox', 'capwarn', 'captxt', 'capb', 'low', 'dmg', 'death', 'dcard', 'dspec', 'dring', 'score', 'mini', 'dbg', 'netinfo']) this.el[id] = $(id);
     this.hx = [];
     for (let i = 0; i < NPOINTS; i++) { const d = document.createElement('div'); d.className = 'hx'; d.innerHTML = hexSvg('#444', '#999') + `<span class="num">${'ABCDE'[i]}</span><small></small>`; this.el.pts.appendChild(d); this.hx.push(d); }
     this.mm = this.el.mini.getContext('2d');
     this.msgT = 0; this.hitT = 0; this.dmgT = 0; this.last = {};
     this.mmBase = null;
   }
+  net(t) { this.text('netinfo', t); }
   show(on) { this.el.hud.classList.toggle('on', on); }
   set(id, key, html) { if (this.last[id + key] !== html) { this.last[id + key] = html; this.el[id].innerHTML = html; } }
   text(id, v) { if (this.last[id] !== v) { this.last[id] = v; this.el[id].textContent = v; } }
