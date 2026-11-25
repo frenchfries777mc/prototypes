@@ -56,11 +56,11 @@ export function buildTown(scene, assets, mark = () => {}) {
   // 고정 충돌 상자 추가. (cx,cy,cz)는 상자 중심.
   // 상자 모양은 하나만 만들고, 위치·회전·크기만 달리해서 여러 번 넣는다(모양을 수천 개 따로 만들면 로딩이 몇 초씩 걸린다).
   const unitBox = new B.PhysicsShapeBox(B.Vector3.Zero(), B.Quaternion.Identity(), new B.Vector3(1, 1, 1), scene);
-  const addBox = (cx, cy, cz, sx, sy, sz, yaw = 0) => {
+  const addBox = (cx, cy, cz, sx, sy, sz, yaw = 0, pitch = 0) => {
     const key = Math.floor(cx / 192) + ',' + Math.floor(cz / 192);
     let c = colliders.get(key);
     if (!c) colliders.set(key, (c = new B.PhysicsShapeContainer(scene)));
-    c.addChild(unitBox, new B.Vector3(cx, cy, cz), B.Quaternion.RotationYawPitchRoll(yaw, 0, 0), new B.Vector3(sx, sy, sz));
+    c.addChild(unitBox, new B.Vector3(cx, cy, cz), B.Quaternion.RotationYawPitchRoll(yaw, pitch, 0), new B.Vector3(sx, sy, sz));
   };
   // 모델 경계 상자 그대로 충돌 상자를 만든다. shrink로 가로·세로를 줄일 수 있다.
   const collideModel = (key, x, y, z, yaw, scale = 1, shrink = 1) => {
