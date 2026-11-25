@@ -288,7 +288,7 @@ async function boot() {
     garage.frame();
     const car = player.vehicle;
     const hd = dt;
-    {
+    if (!inLobby || net.on) {
     residents.update(hd, { pos: player.feet, vel: car ? car.body.getLinearVelocity() : player.vel, active: !car && !player.inside, car: car && !car.isBoat && !player.inside ? car : null, wanted: police.level }, garage.cars);
     train.update(hd);
     player.syncRide(); // 열차가 움직인 직후에 카메라를 맞춘다(한 프레임 늦으면 흔들려 보인다)
@@ -380,7 +380,7 @@ async function boot() {
   await Promise.race([scene.whenReadyAsync(), new Promise((r) => setTimeout(r, 15000))]);
   mark('shaders');
   timing.total = Math.round(performance.now() - t0);
-  loop.run();
+  loop.run(); window.__game.ready0 = true;
   // 게임이 뜬 뒤에 마저 하는 일: 먼 땅의 충돌 처리를 프레임마다 몇 개씩, 그다음 화면 효과.
   // 그 사이에 먼 곳의 차가 땅 밑으로 떨어지지 않도록, 충돌이 준비될 때까지 붙들어 둔다.
   { const f = player.feet; for (let k = farChunks.length - 1; k >= 0; k--) { const bb = farChunks[k].getBoundingInfo().boundingBox.centerWorld; if (Math.hypot(bb.x - f.x, bb.z - f.z) < 300) solid(farChunks.splice(k, 1)[0]); } } // 내 집 앞에서 시작하는 경우

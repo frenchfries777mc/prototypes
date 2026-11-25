@@ -100,7 +100,8 @@ export class Vehicle {
     const throttle = input ? input.throttle : 0;
     const speedAbs = Math.abs(this.speed);
     // 빠를수록 핸들이 덜 꺾인다.
-    const maxSteer = (this.spec.steer || 0.5) / (1 + speedAbs / 14); // 고속에서도 코너를 돌 수 있게(전에는 9)
+    // 사람이 모는 차는 속도가 붙을수록 핸들이 확 줄어, 도는 빠르기가 늘 0.7~1 rad/s 안팎에 머문다(고속에서 살짝만 눌러도 핑 돌던 것). 컴퓨터가 모는 차는 예전 값을 쓴다.
+    const maxSteer = input && input.human ? (this.spec.steer || 0.5) / (1 + Math.pow(speedAbs / 12, 1.5)) : (this.spec.steer || 0.5) / (1 + speedAbs / 14);
     this.steer = damp(this.steer, input ? input.steer * maxSteer : 0, input && Math.abs(input.steer) > 0.05 ? 8 : 12, dt); // 놓으면 빨리 곧게 돌아온다
     const phys = this.scene.getPhysicsEngine();
     const pointVel = (pt) => v.add(B.Vector3.Cross(w, pt.subtract(comW)));
