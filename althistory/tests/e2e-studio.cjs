@@ -94,7 +94,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#tpl-actions button[data-act=export]')]);
   const fp = OUT + '/my-template.json'; await dl.saveAs(fp);
   const exp = JSON.parse(require('fs').readFileSync(fp, 'utf8'));
-  ok(exp.schema === 1 && exp.owners.length === 4604 && exp.polities.length === 4 && exp.armies.length >= 1, `내보낸 템플릿 JSON (국가 ${exp.polities.length}, 영토 ${exp.owners.length}, 군대 ${exp.armies.length})`);
+  ok(exp.schema === 1 && exp.owners.length === (await page.evaluate(() => window.__game.world.provinces.length)) && exp.polities.length === 4 && exp.armies.length >= 1, `내보낸 템플릿 JSON (국가 ${exp.polities.length}, 영토 ${exp.owners.length}, 군대 ${exp.armies.length})`);
   await page.screenshot({ path: `${OUT}/st3_intro_custom.png` });
 
   // 새로고침 후에도 유지 + 삭제 + 파일로 다시 불러오기

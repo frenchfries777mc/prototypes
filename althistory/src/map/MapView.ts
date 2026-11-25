@@ -99,21 +99,32 @@ export class MapView {
     // 점령지: 소유국 색의 점선 테두리
     map.addLayer({ id: 'occupied-line', type: 'line', source: 'provinces', filter: ['!=', ['get', 'owner'], ['get', 'controller']],
       paint: { 'line-color': ['get', 'ownerColor'], 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 1.2, 6, 3], 'line-dasharray': [2, 1.2] } });
-    map.addLayer({ id: 'hover-line', type: 'line', source: 'provinces', filter: ['==', ['get', 'id'], ''], paint: { 'line-color': '#ffffff', 'line-width': 1.8 } });
-    map.addLayer({ id: 'select-line', type: 'line', source: 'provinces', filter: ['==', ['get', 'id'], ''], paint: { 'line-color': '#ffd24d', 'line-width': 2.6 } });
+    // 호버·선택 테두리는 필터가 아니라 feature-state 로 켠다: setFilter 는 타일을 다시 계산해서 커서보다 늦게
+    // 따라오며 중간 주들을 거쳐 오는 것처럼 보이지만, feature-state 는 즉시 반영된다.
+    const stateLine = (key: string, color: string, width: number) => ({ id: `${key}-line`, type: 'line' as const, source: 'provinces',
+      paint: { 'line-color': color, 'line-width': ['case', ['boolean', ['feature-state', key], false], width, 0] as never, 'line-opacity': ['case', ['boolean', ['feature-state', key], false], 1, 0] as never, 'line-opacity-transition': { duration: 0 }, 'line-width-transition': { duration: 0 } } });
+    map.addLayer(stateLine('hover', '#ffffff', 1.8));
+    map.addLayer(stateLine('select', '#ffd24d', 2.6));
     map.addLayer({ id: 'micro-dots', type: 'circle', source: 'micro', paint: {
       'circle-color': ['get', 'color'], 'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 6, 6],
       'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1 } });
     this.ready = true;
     this.refreshGeometryLayers();
 
+    // 커서가 있는 주에 테두리를 바로 켠다(이전 주는 바로 끈다)
     let hover = '';
-    map.on('mousemove', 'prov-fill', (e: MapMouseEvent & { features?: { properties: unknown }[] }) => {
-      const id = (e.features?.[0]?.properties as Props | undefined)?.id ?? '';
-      if (id !== hover) { hover = id; map.setFilter('hover-line', ['==', ['get', 'id'], id]); }
-      map.getCanvas().style.cursor = 'pointer';
+    const setHover = (id: string) => {
+      if (id === hover) return;
+      if (hover) map.setFeatureState({ source: 'provinces', id: hover }, { hover: false });
+      hover = id;
+      if (id) map.setFeatureState({ source: 'provinces', id }, { hover: true });
+    };
+    map.on('mousemove', (e: MapMouseEvent) => {
+      const f = map.queryRenderedFeatures(e.point, { layers: ['prov-fill'] })[0];
+      setHover(f ? (f.properties as Props).id : '');
+      map.getCanvas().style.cursor = f ? 'pointer' : '';
     });
-    map.on('mouseleave', 'prov-fill', () => { hover = ''; map.setFilter('hover-line', ['==', ['get', 'id'], '']); map.getCanvas().style.cursor = ''; });
+    map.on('mouseout', () => { setHover(''); map.getCanvas().style.cursor = ''; });
     map.on('click', (e: MapMouseEvent) => {
       const f = map.queryRenderedFeatures(e.point, { layers: ['micro-dots'] })[0] ?? map.queryRenderedFeatures(e.point, { layers: ['prov-fill'] })[0];
       if (f) this.onProvinceClick((f.properties as Props).id);
@@ -197,7 +208,12 @@ export class MapView {
 
   setPlayer(cid: CountryId | null): void { this.map.setFilter('player-fill', ['==', ['get', 'controller'], cid ?? '']); }
   setHighlightCountry(cid: CountryId | null): void { this.map.setFilter('owner-highlight', ['==', ['get', 'controller'], cid ?? '']); }
-  setSelectedProvince(id: ProvinceId | null): void { this.map.setFilter('select-line', ['==', ['get', 'id'], id ?? '']); }
+  private selected = '';
+  setSelectedProvince(id: ProvinceId | null): void {
+    if (this.selected) this.map.setFeatureState({ source: 'provinces', id: this.selected }, { select: false });
+    this.selected = id ?? '';
+    if (this.selected) this.map.setFeatureState({ source: 'provinces', id: this.selected }, { select: true });
+  }
 
   /** 국가 본토 쪽 영역으로 이동(해외 영토가 멀리 있어도 본토 위주). */
   fitCountry(cid: CountryId, animate = true): void {

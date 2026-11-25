@@ -27,9 +27,9 @@ export function w19({ italy = 'split', year = 1853 } = {}) {
   const paint = [
     ['GCF', 'DEU', 'LUX'],
     ['USA', 'USA'],
-    ['SPA', 'ESP', 'CUB', 'PRI', 'PHL'],
+    ['SPA', 'ESP', 'CUB', 'PRI'],
     ['POR', 'PRT', 'AGO', 'MOZ', 'CPV', 'GNB', 'STP', 'TLS'],
-    ['NET', 'NLD', 'IDN', 'SUR'],
+    ['NET', 'NLD', 'SUR'],
     ['BEL', 'BEL'],
     ['SWE', 'SWE', 'NOR'],
     ['DEN', 'DNK', 'ISL'],

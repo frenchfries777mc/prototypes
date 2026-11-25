@@ -2,7 +2,7 @@
 // build(연도, 템플릿) 가 { polities, paint } 를 돌려준다.
 // - 국가 ID 는 thirty-years-1618 / imjin-1592 템플릿의 ID 와 같은 역할이면 같은 ID 를 쓴다(SPA, OTT, MIN ...).
 //   템플릿에 이미 있는 ID 는 정의를 빼고, 남은 땅만 그 템플릿 국가로 칠한다.
-// - 1618년에는 부왕령(NES, PEV)과 브라질(BRZ)을 템플릿의 SPA, POR 로 합친다.
+// - 스페인·포르투갈 식민지는 부왕령·아우디엔시아·총독령 단위의 별도 국가로 칠한다.
 import { BOX } from '../_common.mjs';
 
 const N = (adm0, ...names) => ({ adm0, names });
@@ -317,8 +317,25 @@ function table(Y) {
 
     // ---- 아메리카 ----
     NES: ['누에바 에스파냐 부왕령', 'Viceroyalty of New Spain', [56, 66, 40, 50], ['누에바 에스파냐', '멕시코', '필리핀']],
-    PEV: ['페루 부왕령', 'Viceroyalty of Peru', [54, 72, 44, 52], ['페루', '포토시', '누에바 그라나다']],
-    BRZ: ['포르투갈령 브라질', 'Portuguese Brazil', [50, 52, 24, 24], ['브라질']],
+    PEV: E ? ['페루 부왕령', 'Viceroyalty of Peru', [54, 72, 44, 52], ['페루', '포토시', '누에바 그라나다']]
+      : ['페루 부왕령 (리마 아우디엔시아)', 'Viceroyalty of Peru (Audiencia of Lima)', [54, 64, 40, 48], ['페루', '리마']],
+    CHC: ['차르카스 아우디엔시아 (포토시)', 'Audiencia of Charcas', [52, 70, 30, 34], ['차르카스', '포토시', '알토페루']],
+    QUI: ['키토 아우디엔시아', 'Audiencia of Quito', [54, 44, 22, 22], ['키토']],
+    NGR: ['누에바 그라나다 신왕국 (산타페 아우디엔시아)', 'New Kingdom of Granada', [52, 50, 28, 28], ['누에바 그라나다', '산타페 데 보고타', '카르타헤나']],
+    TFI: ['티에라 피르메 (파나마 아우디엔시아)', 'Tierra Firme (Audiencia of Panama)', [50, 48, 22, 24], ['티에라 피르메', '파나마', '포르토벨로']],
+    GUA: ['과테말라 아우디엔시아', 'Audiencia of Guatemala', [52, 40, 22, 24], ['과테말라', '중앙아메리카']],
+    STD: ['산토도밍고 아우디엔시아', 'Audiencia of Santo Domingo', [44, 30, 16, 18], ['산토도밍고', '에스파뇰라', '자메이카']],
+    PRC: ['푸에르토리코 총독령', 'Governorate of Puerto Rico', [48, 24, 18, 10], ['푸에르토리코', '산후안']],
+    CUB: ['쿠바 총독령 (아바나)', 'Captaincy of Cuba (Havana)', [52, 40, 26, 22], ['쿠바', '아바나']],
+    VZL: ['베네수엘라 총독령 (카라카스)', 'Province of Venezuela (Caracas)', [48, 32, 18, 16], ['베네수엘라', '카라카스']],
+    CHI: ['칠레 총독령', 'Captaincy General of Chile', [40, 30, 40, 22], ['칠레', '산티아고']],
+    TUC: ['투쿠만 총독령', 'Governorate of Tucumán', [48, 28, 22, 14], ['투쿠만', '산티아고델에스테로']],
+    RPL: ['리오데라플라타 총독령 (부에노스아이레스)', 'Governorate of the Río de la Plata', [48, 30, 14, 14], ['리오데라플라타', '부에노스아이레스']],
+    PRG: ['파라과이 총독령 (아순시온·과이라)', 'Governorate of Paraguay (Guairá)', [46, 22, 18, 14], ['파라과이', '아순시온', '과이라']],
+    CHG: ['치리과노·치키타노', 'Chiriguano and Chiquitano', [52, 10, 30, 6], ['치리과노', '치키타노']],
+    FIL: ['스페인령 필리핀 (필리핀 총독령)', 'Spanish Philippines (Captaincy General)', [52, 52, 30, 36], ['필리핀', '마닐라', '루손']],
+    BRZ: E ? ['포르투갈령 브라질', 'Portuguese Brazil', [50, 52, 24, 24], ['브라질']]
+      : ['포르투갈령 브라질 (브라질·마라냥 해안)', 'Portuguese Brazil (State of Brazil, Maranhão)', [52, 56, 26, 26], ['브라질', '바이아', '페르남부쿠']],
     ITZ: ['이차 왕국 (노흐페텐)', 'Itza Kingdom (Nojpetén)', [56, 24, 24, 10], ['이차', '노흐페텐', '마야']],
     MIS: ['미스키토·페치 해안 민족', 'Miskito coast peoples', [50, 10, 14, 4], ['미스키토', '모스키토']],
     TAL: ['탈라망카 (브리브리·카베카르)', 'Talamanca (Bribri, Cabécar)', [52, 8, 12, 4], ['탈라망카', '브리브리']],
@@ -496,7 +513,7 @@ function rules(Y) {
       ['TUS', N('ITA', 'Florence', 'Siena', 'Arezzo', 'Grosseto')],
       ['GEN', N('ITA', 'Savona'), B('FRA', BOX.CORSICA)],
       ['SAV', N('ITA', 'Aosta', 'Turin', 'Cuneo', 'Asti', 'Vercelli', 'Biella'), N('FRA', 'Savoie', 'Alpes-Maritimes', 'Ain')],
-      ['VEN', N('ITA', 'Venice', 'Padua', 'Treviso', 'Belluno', 'Udine', 'Pordenone', 'Bergamo', 'Brescia'), N('HRV', 'Istria', 'Zadar', 'Split'), N('GRC', 'Ionian'), B('GRC', BOX.CRETE), B('SVN', [13.4, 45.4, 14.0, 45.62])],
+      ['VEN', N('ITA', 'Venice', 'Padua', 'Treviso', 'Belluno', 'Udine', 'Pordenone', 'Bergamo', 'Brescia'), N('HRV', 'Istria', 'Zadar', 'Split'), N('GRC', 'Ionian'), B('GRC', BOX.CRETE)],
       ['HAB', N('ITA', 'Gorizia', 'Trieste')],
       ['SPA', N('ITA', 'Milan', 'Varese', 'Como', 'Lecco', 'Monza', 'Lodi', 'Pavia', 'Cremona', 'Novara', 'Verbano', 'Alessandria', 'Aquila', 'Teramo', 'Isernia', 'Campobasso'), B('ITA', BOX.S_ITALY), B('ITA', BOX.SICILY), B('ITA', BOX.SARDINIA), 'GIB', N('DZA', 'Oran')],
       // 프랑스와 그 주변
@@ -625,12 +642,12 @@ function rules(Y) {
     ['POR', N('MYS', 'Melaka')],
     ['BRU', N('MYS', 'Sabah', 'Sarawak', 'Labuan'), 'BRN', 'PGA'],
     ['JOH', 'MYS', 'SGP'],
-    ...only(E, [
+    ...[
       ['SUL', N('PHL', 'Sulu', 'Tawi-Tawi', 'Basilan')],
       ['BRU', N('PHL', 'Palawan', 'Puerto Princesa')],
-      ['NES', N('PHL', 'Surigao', 'Agusan', 'Dinagat', 'Butuan', 'Siquijor')],
+      [E ? 'NES' : 'FIL', N('PHL', 'Surigao', 'Agusan', 'Dinagat', 'Butuan', 'Siquijor')],
       ['MAG', B('PHL', [121.5, 4.5, 127, 9.35])],
-      ['NES', 'PHL'],
+      [E ? 'NES' : 'FIL', 'PHL'],
       ['ACE', N('IDN', 'Aceh', 'North Sumatra')],
       ['PAG', N('IDN', 'West Sumatra')],
       ['JOH', N('IDN', 'Riau')],
@@ -643,7 +660,8 @@ function rules(Y) {
       ['GEL', N('IDN', 'Bali')],
       ['BIM', N('IDN', 'West Nusa')],
       ['TER', N('IDN', 'North Maluku', 'North Sulawesi', 'Gorontalo', 'Central Sulawesi')],
-      ['POR', N('IDN', 'East Nusa', 'Maluku')],
+      ['POR', N('IDN', 'East Nusa')],
+      [E ? 'POR' : 'NET', N('IDN', 'Maluku')],
       ['BUT', N('IDN', 'Southeast Sulawesi')],
       ['GOW', N('IDN', 'South Sulawesi', 'West Sulawesi')],
       ['TID', N('IDN', 'West Papua')],
@@ -651,8 +669,8 @@ function rules(Y) {
       ['BJM', N('IDN', 'Central Kalimantan', 'South Kalimantan')],
       ['KUT', N('IDN', 'East Kalimantan')],
       ['TPU', N('IDN', 'West Kalimantan')],
-    ]),
-    ...only(!E, [['NET', 'IOA'], ['OTT', 'CNM', 'CYN']]),
+    ],
+    ...only(!E, [['OTT', 'CNM', 'CYN']]),
     ['WEH', 'TLS'],
 
     // ================= 오세아니아 =================
@@ -662,8 +680,8 @@ function rules(Y) {
     ['FIJ', 'FJI'],
     ['TNG', 'TON', 'WSM', 'ASM', 'WLF', 'NIU', 'TUV', N('NZL', 'Tokelau')],
     ['TAH', 'PYF', 'COK', ...(E ? ['PCN'] : [])],
-    ['HAW', N('USA', 'Hawaii'), B('UMI', [-180, -5, -150, 30]), 'KIR'],
-    ['SDL', 'FSM', 'MHL', 'NRU', B('UMI', [150, 0, 180, 30])],
+    ['HAW', N('USA', 'Hawaii'), 'UMI', 'KIR'],
+    ['SDL', 'FSM', 'MHL', 'NRU'],
     ['CHM', 'GUM', 'MNP', 'PLW'],
     ['MRR', N('NZL', 'Chatham')],
     ['MAO', 'NZL', 'NFK'],
@@ -672,7 +690,7 @@ function rules(Y) {
     ['AQL', N('AUS', 'Queensland'), 'CSI'],
     ['AKR', N('AUS', 'South Australia')],
     ['AKL', N('AUS', 'Victoria')],
-    ['ATS', N('AUS', 'Tasmania', 'Macquarie'), 'HMD', B('ATF', [50, -60, 90, -35])],
+    ['ATS', N('AUS', 'Tasmania', 'Macquarie'), 'HMD', 'ATF'],
     ['ANS', 'AUS'],
 
     // ================= 아프리카 =================
@@ -727,7 +745,7 @@ function rules(Y) {
     ['BAM', B('CMR', [9.9, 5.4, 11.5, 7.5])],
     ['DUA', B('CMR', [8.4, 3.5, 10.5, 5.4])],
     ['BET', 'CMR', N('GNQ', 'Litoral', 'Kié-Ntem', 'Centro Sur', 'Wele-Nzas')],
-    ['POR', 'GNQ', 'STP', 'CPV', ...(E ? ['SHN'] : []), 'MUS', 'SYC', N('FRA', 'Réunion'), B('ATF', [30, -30, 50, -10])],
+    ['POR', 'GNQ', 'STP', 'CPV', ...(E ? ['SHN'] : []), 'MUS', 'SYC', N('FRA', 'Réunion')],
     ['MPO', 'GAB'],
     ['BAG', N('TCD', 'Chari-Baguirmi', "N'Djamena", 'Guéra', 'Mayo-Kebbi')],
     ['DAR', N('TCD', 'Ouaddaï', 'Sila', 'Wadi Fira', 'Batha', 'Salamat'), N('SDN', 'Darfur', 'West Soudan')],
@@ -834,7 +852,7 @@ function rules(Y) {
     ['CNK', { adm0: 'USA' }],
     ['KAL', 'ATG', 'DMA', 'LCA', 'VCT', 'GRD', 'BRB', 'KNA', 'MAF', 'SXM', 'BLM', 'VIR', N('FRA', 'Martinique', 'Guadeloupe'), N('NLD', 'Sint Eustatius', 'Saba')],
     ...only(E, [['KAL', 'VGB', 'AIA', 'MSR']]),
-    ['NES', 'HTI', 'PRI', 'JAM', 'BHS', 'TTO', 'ABW', 'CUW', N('NLD', 'Bonaire'), 'UMI', 'CLP', 'SER', 'BJN', 'SCR'],
+    ...only(E, [['NES', 'HTI', 'PRI', 'JAM', 'BHS', 'TTO', 'ABW', 'CUW', N('NLD', 'Bonaire'), 'CLP', 'SER', 'BJN', 'SCR']]),
     ['ITZ', 'BLZ'],
     ['KRN', 'GUY', 'SUR', N('FRA', 'French Guiana')],
     ...only(E, [
@@ -881,13 +899,65 @@ function rules(Y) {
       ['BRR', N('BRA', 'Mato Grosso')],
       ['BRZ', 'BRA'],
     ]),
-    ...only(!E, [['NES', 'BRI', 'SPI']]),
+    ...only(!E, [
+      ['PRC', 'PRI'],
+      ['STD', 'DOM', 'HTI', 'JAM', 'TTO'],
+      ['CUB', 'CUB', 'BHS', 'SER', 'BJN'],
+      ['VZL', N('NLD', 'Bonaire'), 'ABW', 'CUW'],
+      ['FIL', 'SCR'],
+      ['NES', 'CLP'],
+      ['YAQ', N('MEX', 'Sonora')],
+      ['COC', N('MEX', 'Baja California')],
+      ['RAR', N('MEX', 'Chihuahua')],
+      ['COA', N('MEX', 'Tamaulipas')],
+      ['ITZ', N('GTM', 'Petén')],
+      ['MIS', N('HND', 'Gracias a Dios'), N('NIC', 'Caribbean')],
+      ['TAL', N('CRI', 'Limón')],
+      ['GUA', N('MEX', 'Chiapas'), 'GTM', 'SLV', 'HND', 'NIC', 'CRI'],
+      ['NES', 'MEX'],
+      ['GUN', N('PAN', 'Guna', 'Emberá', 'Darién'), N('COL', 'Chocó')],
+      ['TFI', 'PAN'],
+      ['WAY', N('COL', 'Guajira')],
+      ['ACG', N('COL', 'Arauca', 'Casanare', 'Vichada'), N('VEN', 'Apure', 'Guárico')],
+      ['TUK', N('COL', 'Guainía', 'Vaupés', 'Amazonas', 'Guaviare', 'Caquetá', 'Putumayo')],
+      ['NGR', 'COL'],
+      ['WAR', N('VEN', 'Delta Amacuro')],
+      ['YAN', N('VEN', 'Amazonas'), N('BRA', 'Roraima')],
+      ['KRN', N('VEN', 'Bolívar', 'Anzoátegui', 'Monagas'), N('BRA', 'Amapá')],
+      ['VZL', 'VEN'],
+      ['SHU', N('ECU', 'Sucumbíos', 'Orellana', 'Pastaza', 'Morona', 'Zamora')],
+      ['QUI', 'ECU'],
+      ['OMG', N('PER', 'Loreto'), N('BRA', 'Amazonas')],
+      ['SPB', N('PER', 'Ucayali', 'Madre de Dios'), N('BRA', 'Acre', 'Rondônia')],
+      ['PEV', 'PER', N('CHL', 'Arica', 'Tarapacá')],
+      ['MOX', N('BOL', 'Beni', 'Pando')],
+      ['CHG', N('BOL', 'Santa Cruz')],
+      ['CHC', 'BOL', N('CHL', 'Antofagasta')],
+      ['MAP', N('CHL', 'Araucanía', 'Los Ríos'), N('ARG', 'Neuquén')],
+      ['TEH', N('CHL', 'Aysén', 'Magellan'), N('ARG', 'Santa Cruz', 'Chubut', 'Río Negro'), 'SPI'],
+      ['SKN', N('ARG', 'Tierra del Fuego')],
+      ['CHI', 'CHL', N('ARG', 'Mendoza', 'San Juan', 'San Luis')],
+      ['PUL', N('ARG', 'La Pampa'), B('ARG', [-63, -41, -56, -35.5])],
+      ['DIA', N('ARG', 'Catamarca')],
+      ['GYC', N('ARG', 'Chaco', 'Formosa'), N('PRY', 'Boquerón', 'Presidente Hayes', 'Alto Paraguay'), N('BRA', 'Mato Grosso do Sul')],
+      ['GUR', N('ARG', 'Misiones'), N('PRY', 'Alto Paraná', 'Canindeyú', 'Amambay'), N('BRA', 'Santa Catarina', 'Rio Grande do Sul')],
+      ['CRU', N('ARG', 'Entre Ríos'), 'URY', 'BRI'],
+      ['TUC', N('ARG', 'Córdoba', 'Santiago del Estero', 'Tucumán', 'Salta', 'Jujuy', 'La Rioja')],
+      ['RPL', 'ARG'],
+      ['PRG', 'PRY', N('BRA', 'Paraná')],
+      ['TPN', N('BRA', 'Pará')],
+      ['JEP', N('BRA', 'Piauí')],
+      ['KAY', N('BRA', 'Goiás', 'Federal', 'Tocantins')],
+      ['AIM', N('BRA', 'Minas Gerais')],
+      ['BRR', N('BRA', 'Mato Grosso')],
+      ['BRZ', 'BRA'],
+    ]),
   ];
 }
 
 export function build(Y, tpl) {
   const tplIds = new Set(Object.keys(tpl.polities));
-  const alias = Y > 1600 ? { NES: 'SPA', PEV: 'SPA', BRZ: 'POR' } : {};
+  const alias = {};
   const defs = table(Y);
   const paint = rules(Y).map(([id, ...sels]) => [alias[id] ?? id, ...sels]);
   const used = new Set(paint.map((r) => r[0]));

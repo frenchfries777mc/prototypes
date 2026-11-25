@@ -32,10 +32,9 @@ export default {
   paint: [
     ['HRE', 'DEU'],
     ['FRA', { adm0: 'FRA', box: BOX.FRANCE }],
-    ['SPA', { adm0: 'FRA', box: [5, 46.2, 7.2, 47.7] }, { adm0: 'ESP', box: BOX.IBERIA }, 'BEL', 'LUX', { adm0: 'ITA', box: [8, 44.7, 10.7, 46.2] }, { adm0: 'ITA', box: BOX.S_ITALY }, { adm0: 'ITA', box: BOX.SICILY }, { adm0: 'ITA', box: BOX.SARDINIA },
-      ['MEX', 'GTM', 'HND', 'SLV', 'NIC', 'CRI', 'PAN', 'COL', 'VEN', 'ECU', 'PER', 'BOL', 'CHL', 'ARG', 'URY', 'PRY', 'CUB', 'DOM', 'PHL']],
-    ['POR', { adm0: 'PRT', box: BOX.IBERIA }, 'BRA', 'AGO', 'MOZ'],
-    ['NET', { adm0: 'NLD', box: [3, 51.6, 7.3, 53.7] }, 'IDN'],
+    ['SPA', { adm0: 'FRA', box: [5, 46.2, 7.2, 47.7] }, { adm0: 'ESP', box: BOX.IBERIA }, 'BEL', 'LUX', { adm0: 'ITA', box: [8, 44.7, 10.7, 46.2] }, { adm0: 'ITA', box: BOX.S_ITALY }, { adm0: 'ITA', box: BOX.SICILY }, { adm0: 'ITA', box: BOX.SARDINIA }],
+    ['POR', { adm0: 'PRT', box: BOX.IBERIA }, 'AGO', 'MOZ'],
+    ['NET', { adm0: 'NLD', box: [3, 51.6, 7.3, 53.7] }],
     ['SPA', { adm0: 'NLD', box: [3, 50.7, 6.2, 51.6] }],
     ['ENG', 'GBR', 'IRL'],
     ['DEN', 'DNK', 'NOR', 'ISL', { adm0: 'DEU', names: ['Schleswig'] }],

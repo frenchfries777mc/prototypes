@@ -15,6 +15,7 @@ const OUT = path.join(ROOT, 'public/data');
 const DRY = !!process.env.HIST_DRY, ONLY = process.env.HIST_ONLY || '', GAPS = !!process.env.HIST_GAPS;
 const TMP = path.join(ROOT, DRY ? `data/.tmp-${process.pid}` : 'data/.tmp');
 fs.mkdirSync(OUT, { recursive: true });
+for (const d of fs.readdirSync(path.join(ROOT, 'data'))) if (/^\.tmp-\d+$/.test(d)) { try { const dp = path.join(ROOT, 'data', d); if (Date.now() - fs.statSync(dp).mtimeMs > 3600e3) fs.rmSync(dp, { recursive: true, force: true }); } catch { /* 무시 */ } } // 1시간 넘은 것만(동시에 도는 검사의 폴더는 건드리지 않는다)
 fs.mkdirSync(TMP, { recursive: true });
 
 const SIMPLIFY = process.env.SIMPLIFY ?? '5%';
@@ -176,13 +177,90 @@ if (problems.length) {
   process.exit(1);
 }
 
+// ---- 3b. 너무 잘게 쪼개진 나라의 작은 주를 이웃에 합치기 -----------------------------------
+// 원본(admin-1)이 시·군 단위인 나라(슬로베니아 193개, 몰타 68개, 마케도니아 84개, 영국 232개 …)는 지도에서 주가 점처럼 작다.
+// 주 면적의 "중앙값"이 MERGE_MEDIAN 미만인 나라에서만, MERGE_MIN(km²) 미만 주를 공유 경계가 가장 긴 이웃에 합친다.
+// 서울·부산처럼 특별시가 작을 뿐인 정상적인 나라(중앙값이 큼)는 건드리지 않는다. 합쳐진 주는 가장 큰 구성원의 id·이름을 쓴다.
+const MERGE_MEDIAN = 700, MERGE_MIN = 1500;
+const ringKm = (r) => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a) / 2; };
+const areaKm2 = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let t = 0, lat = 0, n = 0;
+  for (const pl of polys) { t += ringKm(pl[0]) - pl.slice(1).reduce((x, h) => x + ringKm(h), 0); for (const pt of pl[0]) { lat += pt[1]; n++; } }
+  return t * Math.cos(((lat / Math.max(n, 1)) * Math.PI) / 180) * 111.32 * 111.32; };
+const mergeReport = [];
+(function mergeOversplit() {
+  const byA = new Map();
+  provinces.forEach((f, i) => { if (!f.geometry) return; const k = f.properties.adm0; if (!byA.has(k)) byA.set(k, []); byA.get(k).push(i); });
+  const vkey = (pt) => `${Math.round(pt[0] * 1e4)},${Math.round(pt[1] * 1e4)}`;
+  const cen = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let x = 0, y = 0, n = 0; for (const pl of polys) for (const pt of pl[0]) { x += pt[0]; y += pt[1]; n++; } return [x / n, y / n]; };
+  for (const [adm0, idxs] of byA) {
+    if (idxs.length < 3) continue;
+    const area = new Map(idxs.map((i) => [i, areaKm2(provinces[i].geometry)]));
+    const sorted = [...area.values()].sort((a, b) => a - b);
+    if (sorted[Math.floor(sorted.length / 2)] >= MERGE_MEDIAN) continue;
+    // 이웃: 꼭짓점을 공유하는 정도(= 경계 길이의 대략치)
+    const owner = new Map(); // vertex -> [idx]
+    for (const i of idxs) {
+      const g = provinces[i].geometry, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates, seenV = new Set();
+      for (const pl of polys) for (const ring of pl) for (const pt of ring) { const k = vkey(pt); if (seenV.has(k)) continue; seenV.add(k); if (!owner.has(k)) owner.set(k, []); owner.get(k).push(i); }
+    }
+    const adj = new Map(idxs.map((i) => [i, new Map()]));
+    for (const list of owner.values()) if (list.length > 1) for (const a of list) for (const b of list) if (a !== b) adj.get(a).set(b, (adj.get(a).get(b) ?? 0) + 1);
+    const cc = new Map(idxs.map((i) => [i, cen(provinces[i].geometry)]));
+    const parent = new Map(idxs.map((i) => [i, i])); // 합쳐진 묶음의 대표
+    const find = (i) => { while (parent.get(i) !== i) i = parent.get(i); return i; };
+    const total = new Map(idxs.map((i) => [i, area.get(i)])); const members = new Map(idxs.map((i) => [i, [i]]));
+    const nb = new Map(idxs.map((i) => [i, new Map(adj.get(i))])); // 묶음 간 이웃(대표 기준)
+    let guard = idxs.length * 4; const skip = new Set();
+    while (guard-- > 0) {
+      const live = [...new Set(idxs.map(find))];
+      if (live.length <= 1) break;
+      const small = live.filter((r) => total.get(r) < MERGE_MIN && !skip.has(r)).sort((a, b) => total.get(a) - total.get(b))[0];
+      if (small === undefined) break;
+      // 합칠 대상: 공유 경계가 가장 긴 이웃. 육지 이웃이 없는 섬은 "같은 처지의 섬"(이웃 없는 묶음)끼리만, 가장 가까운 것과 합친다
+      // (오크니·셰틀랜드가 본토 주에 딸려 들어가지 않게). 짝이 없으면 그대로 둔다.
+      let best = -1, bw = 0;
+      for (const [o, w] of nb.get(small)) { const ro = find(o); if (ro !== small && w > bw) { bw = w; best = ro; } }
+      if (best < 0) {
+        let bd = Infinity; const c0 = cc.get(small);
+        for (const r of live) {
+          if (r === small || [...nb.get(r).keys()].some((o) => find(o) !== r)) continue; // 육지 이웃이 있는 묶음은 제외
+          const c1 = cc.get(r); const d = (c0[0] - c1[0]) ** 2 + (c0[1] - c1[1]) ** 2; if (d < bd && d <= 64) { bd = d; best = r; } // 약 8도(≈900km) 안의 섬끼리만
+        }
+      }
+      if (best < 0) { skip.add(small); continue; }
+      parent.set(small, best); total.set(best, total.get(best) + total.get(small)); members.get(best).push(...members.get(small));
+      for (const [o, w] of nb.get(small)) { const ro = find(o); if (ro === best) continue; nb.get(best).set(ro, (nb.get(best).get(ro) ?? 0) + w); }
+    }
+    const groups = new Map();
+    for (const i of idxs) { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(i); }
+    if (groups.size === idxs.length) continue;
+    for (const list of groups.values()) {
+      const lead = list.reduce((a, b) => (area.get(b) > area.get(a) ? b : a), list[0]);
+      const lp = provinces[lead].properties;
+      const label = list.length > 1 && lp.nameKo ? `${lp.nameKo} 일대` : lp.nameKo;
+      for (const i of list) { const pr = provinces[i].properties; pr.gid = lp.id; if (i !== lead) { pr.id = lp.id; pr.name = lp.name; } pr.nameKo = label; }
+    }
+    mergeReport.push(`${adm0} ${idxs.length}→${groups.size}`);
+  }
+})();
+provinces.forEach((f) => { if (f.properties.gid === undefined) f.properties.gid = f.properties.id; });
+
 // ---- 4. 단순화 + TopoJSON (mapshaper) ---------------------------------------
-const tmpIn = path.join(TMP, 'provinces.geojson');
-fs.writeFileSync(tmpIn, JSON.stringify({ type: 'FeatureCollection', features: provinces }));
+// 합치기(-dissolve)는 합쳐지는 묶음에만 적용한다. 전체에 적용하면 비르 타윌 같은 특이한 주가 사라진다.
+const gcount = {}; for (const f of provinces) gcount[f.properties.gid] = (gcount[f.properties.gid] ?? 0) + 1;
+const slim = (f) => ({ type: 'Feature', geometry: f.geometry, properties: { id: f.properties.id, name: f.properties.name, nameKo: f.properties.nameKo ?? null, adm0: f.properties.adm0, owner: f.properties.owner, gid: f.properties.gid } });
+const fcOf = (features) => JSON.stringify({ type: 'FeatureCollection', features });
+const tmpMerged = path.join(TMP, 'merged.geojson'), tmpOthers = path.join(TMP, 'others.geojson');
+fs.writeFileSync(tmpMerged, fcOf(provinces.filter((f) => gcount[f.properties.gid] > 1).map(slim)));
+fs.writeFileSync(tmpOthers, fcOf(provinces.filter((f) => gcount[f.properties.gid] === 1).map(slim)));
 const outTopo = path.join(DRY ? TMP : OUT, 'world.topo.json');
+const mergedOnly = provinces.some((f) => gcount[f.properties.gid] > 1);
 execFileSync(
   path.join(ROOT, 'node_modules/.bin/mapshaper'),
-  [tmpIn, '-simplify', SIMPLIFY, 'keep-shapes', '-rename-layers', 'provinces',
+  ['-i', ...(mergedOnly ? [tmpMerged] : []), tmpOthers, 'combine-files',
+   ...(mergedOnly ? ['-dissolve', 'gid', 'copy-fields=id,name,nameKo,adm0,owner', 'target=1'] : []),
+   '-merge-layers', 'target=*', 'name=provinces', '-filter-fields', 'id,name,nameKo,adm0,owner',
+   '-simplify', SIMPLIFY, 'keep-shapes',
    '-o', outTopo, 'format=topojson', `quantization=${QUANT}`, 'id-field=id', 'force'],
   { stdio: 'inherit' },
 );
@@ -464,6 +542,7 @@ const kb = (f) => (fs.statSync(f).size / 1024).toFixed(0) + ' KB';
 console.log('\n=== build-map 결과 ===');
 console.log(`주(province): ${geoms.length}  (admin-0 단일 주: ${singleProvince}, 수작업 패치: ${worldview.patches?.length ?? 0})`);
 console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c.neutral).length})`);
+console.log(`작은 주 합침(${mergeReport.length}개국): ${mergeReport.join(', ')}`);
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
 console.log(`시나리오 템플릿: 현대 ${scenarios.length}개 + 역사 ${historical.length}개`);

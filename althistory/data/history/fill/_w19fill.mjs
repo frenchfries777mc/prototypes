@@ -154,6 +154,25 @@ export function w19fill({ year = 1853 } = {}) {
     SIA: { n: '시암', e: 'Kingdom of Siam', c: '#c79a3e', s: [58, 36, 34, 30], a: ['시암', '태국', '라따나꼬신'] },
     NGU: { n: '응우옌 왕조 (대남)', e: 'Nguyễn Dynasty (Đại Nam)', s: y66 ? [40, 32, 30, 20] : [48, 34, 32, 22], a: ['대남', '베트남', '안남'] },
     CAM: { n: y66 ? '캄보디아 왕국 (프랑스 보호국)' : '캄보디아 왕국', e: 'Kingdom of Cambodia', s: [38, 16, 12, 8], a: ['캄보디아', '크메르', y66 ? '노로돔' : '앙두옹'] },
+    ACE: { n: '아체 술탄국', e: 'Sultanate of Aceh', s: [50, 30, 30, 16], a: ['아체', '아쩨'] },
+    BAT: { n: '바탁족', e: 'Batak lands (with Nias)', s: [46, 10, 16, 4], a: ['바탁', '시상아망아라자', '니아스'] },
+    SIK: { n: y53 ? '시악 술탄국' : '시악 술탄국 (네덜란드 보호국)', e: 'Sultanate of Siak', s: [40, 20, 12, 8], a: ['시악', '델리'] },
+    RLG: { n: '리아우-링가 술탄국', e: 'Riau-Lingga Sultanate', s: [42, 22, 8, 8], a: ['리아우', '링가'] },
+    JMB: { n: '잠비 술탄국', e: 'Sultanate of Jambi', s: y53 ? [42, 18, 14, 6] : [34, 16, 16, 6], a: ['잠비', '타하 사이푸딘'] },
+    BAL: { n: '발리 왕국들', e: 'Balinese kingdoms (Klungkung, Karangasem, Badung)', s: [46, 22, 20, 8], a: ['발리', '클룽쿵'] },
+    LMB: { n: '롬복 (마타람 왕국)', e: 'Lombok (Mataram) and Sumbawa sultanates', s: [48, 20, 18, 8], a: ['롬복', '마타람', '비마'] },
+    SNB: { n: '손바이 왕국 (티모르)', e: 'Sonbai and Timor-Flores native kingdoms', s: [40, 10, 10, 4], a: ['손바이', '티모르', '플로레스'] },
+    PTK: { n: '폰티아낙 술탄국', e: 'Sultanate of Pontianak (with Sambas and the kongsis)', s: [42, 20, 12, 8], a: ['폰티아낙', '삼바스', '란팡 공사'] },
+    BJR: { n: '반자르 술탄국', e: 'Sultanate of Banjar', s: [40, 24, 16, 8], a: ['반자르', '반자르마신'] },
+    DYK: { n: '다야크족', e: 'Dayak peoples (Ngaju)', s: [46, 8, 14, 4], a: ['다야크', '응아주'] },
+    KUT: { n: '쿠타이 술탄국', e: 'Sultanate of Kutai Kartanegara', s: [46, 18, 10, 6], a: ['쿠타이', '불룽안'] },
+    BONE: { n: '보네 왕국', e: 'Kingdom of Bone (with Gowa)', s: [44, 22, 22, 10], a: ['보네', '고와', '부기스'] },
+    BUT: { n: '부톤 술탄국', e: 'Sultanate of Buton', s: [48, 12, 8, 4], a: ['부톤', '볼리오'] },
+    TERN: { n: '테르나테 술탄국', e: 'Sultanate of Ternate (with Tidore)', s: [44, 18, 10, 8], a: ['테르나테', '티도레', '방가이'] },
+    TIDO: { n: '티도레 술탄국 (파푸아 연안)', e: 'Sultanate of Tidore claims (Raja Ampat, Bird\'s Head)', s: [42, 10, 8, 4], a: ['티도레', '라자암팟'] },
+    SUL: { n: '술루 술탄국', e: 'Sultanate of Sulu', s: [48, 22, 22, 12], a: ['술루', '타우숙'] },
+    MAG: { n: '마긴다나오 술탄국', e: 'Sultanate of Maguindanao (with Lanao)', s: [44, 16, 20, 8], a: ['마긴다나오', '라나오', '모로'] },
+    IGO: { n: '코르디예라 이고로트족', e: 'Igorot peoples of the Cordillera', s: [48, 6, 12, 2], a: ['이고로트', '이푸가오'] },
     BRU: { n: '브루나이 술탄국', e: 'Sultanate of Brunei', s: [40, 14, 6, 6], a: ['브루나이'] },
     MLD: { n: '몰디브 술탄국', e: 'Sultanate of the Maldives', s: [48, 12, 4, 4], a: ['몰디브'] },
     // ── 태평양 ──
@@ -251,6 +270,17 @@ export function w19fill({ year = 1853 } = {}) {
   add(['BHU', 'BTN'], ['BRU', 'BRN'], ['MLD', 'MDV']);
   add(['GBR', A('MMR', 'Rakhine', 'Tanintharyi', 'Mon', 'Kayin', 'Ayeyarwady', 'Yangon', 'Bago')], ['KON', 'MMR']);
   add(['SIA', 'THA', 'LAO', A('KHM', 'Battambang', 'Siem Reap', 'Banteay', 'Oddar', 'Pailin', 'Preah Vihear', 'Stung Treng', 'Ratanakiri')], ['CAM', 'KHM'], ['NGU', 'VNM']);
+  // 네덜란드령 동인도: 실제 통치(자와·마두라, 서·남수마트라, 방카, 암본·반다, 미나하사·고론탈로), 나머지는 토후국·부족
+  const I = (...n) => A('IDN', ...n);
+  add(['ACE', I('Aceh')], ['BAT', I('North Sumatra')], ['RLG', I('Riau Islands')], ['SIK', I('Riau')], ['JMB', I('Jambi')],
+    ['NET', I('West Sumatra', 'South Sumatra', 'Bengkulu', 'Lampung', 'Bangka', 'Banten', 'Jakarta', 'Java', 'Yogyakarta', 'North Sulawesi', 'Gorontalo'), { adm0: 'IDN', names: ['Maluku'], box: [125, -9, 135, -2] }],
+    ['BAL', I('Bali')], ['LMB', I('West Nusa Tenggara')], ['SNB', I('East Nusa Tenggara')], ['PTK', I('West Kalimantan')], ['DYK', I('Central Kalimantan')],
+    [y66 ? 'NET' : 'BJR', I('South Kalimantan')], ['KUT', I('East Kalimantan')], ['BONE', I('South Sulawesi', 'West Sulawesi')], ['BUT', I('Southeast Sulawesi')],
+    ['TERN', I('North Maluku', 'Central Sulawesi')], ['TIDO', I('West Papua')], ['MEL', 'IDN']);
+  // 스페인령 필리핀: 루손·비사야·민다나오 북·동부 연안. 남부는 술루·마긴다나오, 코르디예라 산지는 이고로트
+  const H = (...n) => A('PHL', ...n);
+  add(['SUL', H('Sulu', 'Tawi', 'Palawan', 'Puerto Princesa')], ['IGO', H('Ifugao', 'Mountain', 'Kalinga', 'Apayao')],
+    ['SPA', H('Zamboanga Peninsula', 'Basilan')], ['MAG', H('Maguindanao', 'Cotabato', 'Sultan Kudarat', 'Sarangani', 'General Santos', 'Davao del Sur', 'Lanao', 'Zamboanga', 'Bukidnon')], ['SPA', 'PHL']);
   add(['SPA', 'SCR', 'PGA']);
   // ── 태평양 ──
   add(['FIJ', 'FJI'], ['TGA', 'TON'], ['SAM', 'WSM'], ['MEL', 'PNG', 'SLB', 'VUT'], ['MIC', 'FSM', 'PLW', 'MHL', 'KIR', 'NRU', 'TUV']);
