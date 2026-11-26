@@ -83,12 +83,13 @@ export class Dealer {
     return `${(rep.names[r[0]] || { name: r[0] }).name} ${r[1]}단계`;
   }
   // shop: 판매장(살 수 있다) / 차고(가진 차 중에서 고른다)
-  open(shop) {
+  // fromLobby: 로비의 차고 버튼에서 열었을 때. 판매장까지 가지 않고 여기서 바로 사고 고른다.
+  open(shop, fromLobby) {
     this.note = '';
     const first = shop ? undefined : this.active || undefined;
     Panel.show({
-      title: shop ? '박스 자동차' : '내 차고', sel: first,
-      note: () => this.note || (shop ? '차를 눌러 성능을 보고 사세요. 어디서든 V로 불러요' : this.owned.size ? '탈 차를 고르세요. V로 불러와요' : '아직 차가 없어요. 항구 동쪽 판매장에서 사세요'),
+      title: fromLobby ? '내 차고 · 차 사기' : shop ? '박스 자동차' : '내 차고', sel: fromLobby ? this.active || undefined : first,
+      note: () => this.note || (fromLobby ? '여기서 바로 사고 고르세요. 게임에서 V를 누르면 내 차가 와요' : shop ? '차를 눌러 성능을 보고 사세요. 어디서든 V로 불러요' : this.owned.size ? '탈 차를 고르세요. V로 불러와요' : '아직 차가 없어요. 항구 동쪽 판매장에서 사세요'),
       items: () => CARS.filter(([k]) => shop || this.owned.has(k)).map(([k, name, price]) => ({ id: k, label: name, sub: this.active === k ? '타는 중' : this.owned.has(k) ? '보유' : this.need(k) ? '🔒 ' + this.need(k) : won(price) + '원', state: this.active === k ? 'on' : this.owned.has(k) ? '' : this.need(k) ? 'lock' : 'buy' })),
       detail: (k) => {
         const item = CARS.find((c) => c[0] === k);
@@ -101,7 +102,7 @@ export class Dealer {
         if (!item || this.active === k) return;
         if (!this.owned.has(k)) { if (!shop) return; if (this.need(k)) { this.note = `${this.need(k)}이 되면 살 수 있어요`; return; } if (!this.jobs.spend(item[2])) { this.note = '돈이 모자라요'; return; } this.owned.add(k); }
         this.note = ''; this.active = k; this.save();
-        if (shop) this.place(this.x + 4, this.y + 0.7, this.z - 17, Math.PI / 2); else if (this.car && this.car !== this.player.vehicle) this.drop();
+        if (shop && !fromLobby) this.place(this.x + 4, this.y + 0.7, this.z - 17, Math.PI / 2); else if (this.car && this.car !== this.player.vehicle) this.drop();
       },
     });
   }
