@@ -163,7 +163,7 @@ iframe{flex:1;width:100%;height:100%;border:0;background:#000;min-height:0}
 </section>
 <script>
 (function(){
-  var APPS={ironline:{t:'Ironline',u:'ironline-web/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},kitchendefense:{t:'주방 사수대',u:'kitchendefense/'},trilantern:{t:'삼원의 등불',u:'trilantern/'},boxtown:{t:'박스타운',u:'boxtown/'}};
+  var APPS={ironline:{t:'Ironline',u:'ironline-web/'},ffscript:{t:'FF Script',u:'ffscript/'},lodestar:{t:'로드스타',u:'lodestar/'},resonance:{t:'잔향의 탑',u:'resonance/'},kitchendefense:{t:'주방 사수대',u:'/games/prototypes/kitchendefense/'},trilantern:{t:'삼원의 등불',u:'trilantern/'},boxtown:{t:'박스타운',u:'boxtown/'}};
   var frame=document.getElementById('frame'),load=document.getElementById('load'),cur='';
   document.getElementById('cnt').textContent=Object.keys(APPS).length;
   frame.addEventListener('load',function(){if(!frame.getAttribute('src'))return;load.classList.add('off');try{frame.focus();}catch(e){}});
