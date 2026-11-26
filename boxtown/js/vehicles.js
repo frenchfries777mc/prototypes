@@ -103,8 +103,12 @@ export class Vehicle {
     const throttle = input ? input.throttle : 0;
     const speedAbs = Math.abs(this.speed);
     // 빠를수록 핸들이 덜 꺾인다.
-    // 사람이 모는 차는 속도가 붙을수록 핸들이 확 줄어, 도는 빠르기가 늘 0.7~1 rad/s 안팎에 머문다(고속에서 살짝만 눌러도 핑 돌던 것). 컴퓨터가 모는 차는 예전 값을 쓴다.
-    const maxSteer = input && input.human ? (this.spec.steer || 0.5) / (1 + Math.pow(speedAbs / 12, 1.5)) : (this.spec.steer || 0.5) / (1 + speedAbs / 14);
+    // 사람이 모는 차: 꺾이는 정도를 '도는 빠르기'로 정한다. 느릴 때는 반경 4.5m쯤으로 바짝 돌고, 빨라질수록 옆으로 받는 힘이 일정하도록
+    // 도는 빠르기가 줄어든다(속도 7m/s에서 약 1.6 rad/s, 12m/s에서 1.0, 25m/s에서 0.5). 컴퓨터가 모는 차는 예전 값을 쓴다.
+    const Lw = this.spec.L || Math.max(2.2, this.length * 0.62);
+    const maxSteer = input && input.human
+      ? Math.min((this.spec.steer || 0.5) * 1.3, Math.atan((Math.min(speedAbs / 4.5, 20 / Math.max(speedAbs, 1)) * Lw) / Math.max(speedAbs, 0.5)))
+      : (this.spec.steer || 0.5) / (1 + speedAbs / 14);
     this.steer = damp(this.steer, input ? input.steer * maxSteer : 0, input && Math.abs(input.steer) > 0.05 ? 8 : 12, dt); // 놓으면 빨리 곧게 돌아온다
     const phys = this.scene.getPhysicsEngine();
     const pointVel = (pt) => v.add(B.Vector3.Cross(w, pt.subtract(comW)));
@@ -145,7 +149,7 @@ export class Vehicle {
           const top2 = throttle > 0 ? this.spec.vmax : 9;
           Fl = throttle * this.spec.engine * M4 * Math.max(0, 1 - Math.pow(Math.abs(vf) / top2, 2));
         }
-      } else Fl = -vf * M4 * 0.9;
+      } else Fl = input.human ? -(vf * 0.12 + Math.sign(vf) * Math.min(1.5, Math.abs(vf) * 3)) * M4 : -vf * M4 * 0.9; // 사람이 모는 차: 가속을 놓아도 급정거하듯 서지 않고 서서히 줄어든다
       // 힘을 무게중심 높이 근처에 줘서 가속·선회 때 차가 과하게 쏠리지 않게 한다.
       const at = hit.add(this.up.scale(0.32));
       body.applyImpulse(f.scale(Fl * dt).add(s.scale(Fs * dt)), at);

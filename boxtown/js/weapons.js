@@ -364,8 +364,9 @@ export class Weapons {
       const burning = c.hp < 35 && !c.dead;
       const dark = c.hp < 35 ? 0.12 : 0.55;
       fx.smoke.color1 = new B.Color4(dark, dark, dark + 0.02, 0.65); fx.smoke.color2 = new B.Color4(dark * 0.7, dark * 0.7, dark * 0.7, 0.5);
-      fx.smoke.emitRate = c.dead ? 16 : c.hp < 35 ? 34 : c.hp < 65 ? 14 : 0;
-      fx.fire.emitRate = c.dead ? (c.respawnT > 8 ? 60 : 0) : burning ? 60 + (35 - c.hp) * 3 : 0;
+      // 연기와 불은 내구도가 다 떨어져 터졌을 때만 난다(망가져 가는 중에는 나지 않는다).
+      fx.smoke.emitRate = c.dead ? 16 : 0;
+      fx.fire.emitRate = c.dead ? (c.respawnT > 8 ? 60 : 0) : 0;
       if (c.dead) {
         c.respawnT -= dt;
         if (c.respawnT <= 0) {

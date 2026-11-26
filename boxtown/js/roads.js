@@ -1,7 +1,7 @@
 // 마을 밖 길. 점 몇 개로 그린 선을 매끄럽게 이어 띠 모양 도로를 만들고, 지형을 길 높이에 맞춰 다진다.
 // 물 위를 지나는 구간은 다리가 된다(상판, 난간, 교각, 충돌 상자).
 import { ROADS, JUNCTIONS, STATIONS, SITES, CITY_HALF } from './world.js';
-import { baseHeight, height, setRoadMod, SEA } from './terrain.js';
+import { baseHeight, height, setRoadMod, setRoadSink, SEA } from './terrain.js';
 import { clamp, lerp, smoothstep, flatMat } from './util.js';
 const B = window.BABYLON;
 
@@ -345,6 +345,13 @@ setRoadMod((x, z, h) => {
   for (const s of STATION_PADS) { const d = Math.hypot(x - s.x, z - s.z); if (d < s.r + 26) h = lerp(h, s.y - 0.05, 1 - smoothstep(s.r, s.r + 26, d)); }
   const flat = n.half + 6;
   return lerp(h, n.y + 0.055, 1 - smoothstep(flat, flat + 30, n.d)); // 아스팔트 윗면(+0.1) 바로 밑: 발이 묻히지 않고, 땅이 길 위로 삐져나오지도 않는다 // 길 옆 비탈은 30m에 걸쳐 완만하게 이어진다
+});
+
+// 보이는 땅은 길 밑에서 살짝 낮춘다(길 면은 땅 높이 + 2cm에 얹히므로, 4m 격자의 볼록한 곳이 길 위로 삐져나오지 않게).
+setRoadSink((x, z) => {
+  const n = nearest(x, z);
+  if (!n.hit || n.water) return 0;
+  return 0.22 * (1 - smoothstep(n.half + 0.4, n.half + 2.6, n.d));
 });
 
 // h: { scene, addBox, casters }
