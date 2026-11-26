@@ -155,7 +155,7 @@ export class Input {
     const k = this.keys;
     // 키보드 핸들: 누르는 동안 천천히 꺾이고(톡 치면 살짝만 돈다), 떼면 빨리 돌아온다. 화면 핸들은 그대로 쓴다.
     const key = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-    const cur = this.steerKey || 0, rate = key === 0 ? 7 : (Math.sign(key) !== Math.sign(cur) && cur !== 0 ? 9 : 3.2);
+    const cur = this.steerKey || 0, rate = key === 0 ? 7 : (Math.sign(key) !== Math.sign(cur) && cur !== 0 ? 10 : 4.6);
     this.steerKey = key === 0 ? (Math.abs(cur) <= rate * dt ? 0 : cur - Math.sign(cur) * rate * dt) : Math.max(-1, Math.min(1, cur + Math.sign(key - cur) * rate * dt));
     const x = this.steerKey + this.wheel;
     const y = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.gas - this.pedalBrake;

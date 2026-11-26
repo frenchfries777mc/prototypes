@@ -54,7 +54,7 @@ export class Traffic {
   }
 
   put(c, L, s, dir) {
-    c.L = L; c.s = s; c.dir = dir; c.v = 0; c.dead = false; c.wait = 0;
+    c.L = L; c.s = s; c.dir = dir; c.v = 0; c.dead = false; c.wait = 0; c.ut = undefined;
     c.lane = L.town ? 1.25 : L.city ? [1.5, 4.5, 7.5][Math.floor(r2(c) * 3) % 3] : r2(c) < 0.5 ? 1.75 : 4.75; // 시가지는 한쪽 세 차선
     const q = this.at(L, s);
     c.yaw = Math.atan2(q.tx * dir, q.tz * dir);
@@ -69,6 +69,18 @@ export class Traffic {
     while (i < P.length - 2 && P[i + 1].s <= s) i++;
     const a = P[i], b = P[i + 1], t = (s - a.s) / (b.s - a.s || 1);
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, tx: a.tx, tz: a.tz, k: L.town ? 1 : halfAt(L, a) / L.half };
+  }
+  // 유턴: 차선 폭을 지름으로 하는 반원(앞쪽으로는 조금만 부풀린다). 끝나면 반대 방향 차선 위치와 정확히 이어진다.
+  uturn(c, dt) {
+    c.ut += dt * (Math.PI / 3.6); c.v = 1.8;
+    const phi = Math.min(Math.PI, c.ut), q = this.at(c.L, c.s);
+    const fx = q.tx * c.dir, fz = q.tz * c.dir, rx = q.tz * c.dir, rz = -q.tx * c.dir; // 가는 방향, 그 오른쪽
+    const R = c.lane * q.k, A = Math.min(R, 3.6), co = Math.cos(phi), si = Math.sin(phi);
+    c.pos.set(q.x + rx * R * co + fx * A * si, q.y + 0.12, q.z + rz * R * co + fz * A * si);
+    c.root.position.copyFrom(c.pos);
+    c.yaw = Math.atan2(-rx * R * si + fx * A * co, -rz * R * si + fz * A * co);
+    c.root.rotation.y = c.yaw; c.fx = Math.sin(c.yaw); c.fz = Math.cos(c.yaw);
+    if (c.ut >= Math.PI) { c.ut = undefined; c.dir = -c.dir; c.v = 0; }
   }
   pose(c) {
     const q = this.at(c.L, c.s), off = c.lane * q.k * c.dir;
@@ -248,9 +260,10 @@ export class Traffic {
       c.blocked = hardBlock && c.v < 0.3 ? c.blocked + dt : 0;
       if (c.blocked > 7) { c.ghost = 3; c.blocked = 0; }
       c.ghost -= dt;
-      c.s += c.dir * c.v * dt;
-      if (toEnd < 1.6) { c.dir = -c.dir; c.s = clamp(c.s, 1.7, L.len - 1.7); }
-      this.pose(c);
+      // 길 끝에서는 방향만 뒤집지 않고(옆 차선으로 순간 이동해 보인다) 반원을 그리며 천천히 유턴한다.
+      if (c.ut === undefined && toEnd < 1.6 && c.v < 2.5) { c.ut = 0; c.s = clamp(c.s, 1.7, L.len - 1.7); }
+      if (c.ut !== undefined) this.uturn(c, dt);
+      else { c.s += c.dir * c.v * dt; this.pose(c); }
       for (const w of c.parts.wheels) w.mesh.rotation.x += (c.v / Math.max(0.2, w.pos.y)) * dt;
 
       // 플레이어의 차가 가까이 오면 진짜 차로 바꿔서 부딪힐 수 있게 한다.

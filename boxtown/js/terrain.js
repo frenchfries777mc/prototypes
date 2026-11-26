@@ -114,6 +114,9 @@ export function baseHeight(x, z) {
 // 길이 지형을 다지는 함수는 roads.js가 나중에 끼운다(서로 불러오는 순서 문제를 피하려고).
 let roadMod = null;
 export function setRoadMod(fn) { roadMod = fn; }
+// 길 밑 땅의 '보이는 면'만 살짝 낮춘다(충돌·높이 계산은 그대로). 4m 격자라 길 면 사이로 땅이 볼록하게 삐져나와 길이 끊겨 보이는 것을 막는다.
+let roadSink = null;
+export function setRoadSink(fn) { roadSink = fn; }
 function analytic(x, z) { const h = baseHeight(x, z); return roadMod ? roadMod(x, z, h) : h; }
 
 // 높이 격자. 한 번 계산해 두면 지형 메시, 물, 배치가 모두 같은 값을 본다.
@@ -194,7 +197,11 @@ export function buildTerrain(scene) {
       };
       for (let j = cj * chunk; j < (cj + 1) * chunk; j++) {
         for (let i = ci * chunk; i < (ci + 1) * chunk; i++) {
-          const h00 = hgrid[j * W + i], h10 = hgrid[j * W + i + 1], h01 = hgrid[(j + 1) * W + i], h11 = hgrid[(j + 1) * W + i + 1];
+          let h00 = hgrid[j * W + i], h10 = hgrid[j * W + i + 1], h01 = hgrid[(j + 1) * W + i], h11 = hgrid[(j + 1) * W + i + 1];
+          if (roadSink) {
+            const xa0 = x0 + i * cell, za0 = z0 + j * cell;
+            h00 -= roadSink(xa0, za0); h10 -= roadSink(xa0 + cell, za0); h01 -= roadSink(xa0, za0 + cell); h11 -= roadSink(xa0 + cell, za0 + cell);
+          }
           if (Math.max(h00, h10, h01, h11) < SEA - 7.5) continue; // 깊은 바다 밑은 만들지 않는다
           const xa = x0 + i * cell, xb = xa + cell, za = z0 + j * cell, zb = za + cell;
           if (SLABS.some((r) => xa >= r.x0 && xb <= r.x1 && za >= r.z0 && zb <= r.z1)) continue;
