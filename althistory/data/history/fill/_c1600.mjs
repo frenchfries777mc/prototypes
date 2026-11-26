@@ -4,6 +4,7 @@
 //   템플릿에 이미 있는 ID 는 정의를 빼고, 남은 땅만 그 템플릿 국가로 칠한다.
 // - 스페인·포르투갈 식민지는 부왕령·아우디엔시아·총독령 단위의 별도 국가로 칠한다.
 import { BOX } from '../_common.mjs';
+import { germanStates } from './_german.mjs';
 
 const N = (adm0, ...names) => ({ adm0, names });
 const B = (adm0, box) => ({ adm0, box });
@@ -20,7 +21,6 @@ function table(Y) {
     SCO: ['스코틀랜드 왕국 (제임스 6세)', 'Kingdom of Scotland (James VI)', [50, 32, 32, 24], ['스코틀랜드']],
     NET: ['네덜란드 공화국 (7주 연합)', 'Dutch Republic', [56, 72, 54, 42], ['네덜란드', '홀란트']],
     HAB: ['오스트리아', 'Habsburg Monarchy (Rudolf II)', [52, 62, 60, 64], ['오스트리아', '합스부르크', '황제', '보헤미아'], '#d9a441'],
-    HRE: ['신성 로마 제국 제후국들', 'Holy Roman Empire (German princes)', [44, 56, 36, 32], ['독일', '신성 로마 제국', '제국 도시']],
     BAV: ['바이에른 공국', 'Duchy of Bavaria', [60, 50, 42, 34], ['바이에른']],
     SAX: ['작센 선제후국', 'Electorate of Saxony', [58, 52, 40, 32], ['작센']],
     BRA: ['브란덴부르크 선제후국', 'Electorate of Brandenburg', [52, 40, 34, 24], ['브란덴부르크']],
@@ -488,7 +488,8 @@ function rules(Y) {
     ['RAG', N('HRV', 'Dubrovnik')],
     ['GRI', N('ITA', 'Sondrio'), N('CHE', 'Grisons')],
     ['SWI', 'CHE'],
-    ['HRE', 'LIE'],
+    // 독일 땅: 시대별 실제 나라(작센·바이에른·팔츠·브란덴부르크·헤센·함부르크 …)
+    ...germanStates(Y, Y === 1618 ? ['PFZ', 'POM'] : []).rows,
     ['HAB', N('ITA', 'Trentino')],
     ...only(E, [['MOD', N('ITA', 'Ferrara')]]),
     ['GEN', N('ITA', 'Imperia', 'Liguria', 'Spezia')],
@@ -519,7 +520,7 @@ function rules(Y) {
       // 프랑스와 그 주변
       ['SPA', N('FRA', 'Nord', 'Pas-de-Calais', 'Doubs', 'Jura', 'Haute-Saône', 'Pyrénées-Orientales')],
       ['HAB', N('FRA', 'Haut-Rhin', 'Belfort')],
-      ['HRE', N('FRA', 'Bas-Rhin')],
+      ['HAB', N('FRA', 'Bas-Rhin')],
       ['LOR', N('FRA', 'Moselle', 'Meurthe', 'Vosges', 'Meuse')],
       ['FRA', B('FRA', BOX.FRANCE)],
       // 저지대
@@ -528,12 +529,7 @@ function rules(Y) {
       ['LGE', N('BEL', 'Liège', 'Limburg')],
       ['SPA', 'BEL', 'LUX'],
       // 독일·중부 유럽
-      ['DEN', N('DEU', 'Schleswig')],
-      ['BAV', N('DEU', 'Bavaria')],
-      ['SAX', B('DEU', [12.2, 50.2, 15.1, 51.6])],
-      ['BRA', N('DEU', 'Brandenburg', 'Berlin'), N('POL', 'Lubusz')],
-      ['PAL', N('DEU', 'Rhineland-Palatinate')],
-      ['HRE', { adm0: 'DEU' }, N('POL', 'West Pomeranian')],
+      ['BRA', N('POL', 'Lubusz')],
       ['HAB', N('POL', 'Silesian', 'Opole'), 'AUT', 'CZE', 'SVK', 'SVN',
         N('HRV', 'Zagreb', 'Varaždin', 'Krapina', 'Međimurje', 'Karlovac', 'Primorje', 'Sisak', 'Koprivnica', 'Lika'),
         N('HUN', 'Győr', 'Sopron', 'Vas', 'Szombathely', 'Zala', 'Nagykanizsa', 'Veszprém', 'Komárom', 'Tatabánya', 'Borsod', 'Miskolc', 'Eger', 'Szabolcs', 'Nyíregyháza')],
@@ -958,7 +954,7 @@ function rules(Y) {
 export function build(Y, tpl) {
   const tplIds = new Set(Object.keys(tpl.polities));
   const alias = {};
-  const defs = table(Y);
+  const defs = { ...germanStates(Y, Y === 1618 ? ['PFZ', 'POM'] : []).defs, ...table(Y) };
   const paint = rules(Y).map(([id, ...sels]) => [alias[id] ?? id, ...sels]);
   const used = new Set(paint.map((r) => r[0]));
   const polities = {};

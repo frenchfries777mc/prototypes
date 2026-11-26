@@ -1,7 +1,7 @@
 // 1756년 7년 전쟁 템플릿의 빈 땅 채우기. 국가 정의와 칠하기 규칙은 _c1700.mjs 공용.
 import { paintFor, pick } from './_c1700.mjs';
 
-const TEMPLATE = ['PRU', 'HAB', 'FRA', 'RUS', 'GBR', 'SPA', 'SWE', 'SAX', 'HRE', 'POL', 'DEN', 'NET', 'POR', 'OTT', 'NAP', 'SAV', 'PAP', 'PER'];
+const TEMPLATE = ['PRU', 'HAB', 'FRA', 'RUS', 'GBR', 'SPA', 'SWE', 'SAX', 'POL', 'DEN', 'NET', 'POR', 'OTT', 'NAP', 'SAV', 'PAP', 'PER'];
 const paint = paintFor(1756);
 
 export default {

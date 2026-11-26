@@ -1,6 +1,7 @@
 // 1700~1760년대(스페인 왕위 계승 전쟁 1701, 7년 전쟁 1756) 채우기용 공용 국가 정의와 선택자 도우미.
 // s: [안정, 경제, 군사, 영향력] — 두 템플릿의 척도(유럽 열강 50~90, 소국 20~40)에 맞춤.
 
+import { germanStates } from './_german.mjs';
 export const N = (adm0, ...names) => ({ adm0, names });
 export const B = (adm0, box) => ({ adm0, box });
 export const NB = (adm0, box, ...names) => ({ adm0, box, names });
@@ -394,6 +395,9 @@ export const P = {
   VNZ: { n: '베네치아 공화국', e: 'Republic of Venice', s: [52, 52, 30, 30], a: ['베네치아'] },
 };
 
+// 독일 땅은 시대별 실제 나라로(공용 _german.mjs): 두 해의 정의를 P에 합쳐 둔다
+for (const y of [1701, 1756]) for (const [k, [n, e, st, a]] of Object.entries(germanStates(y).defs)) if (!P[k]) P[k] = { n, e, s: st, a };
+
 /** 칠하기 목록에 쓰인 국가만 골라 polities를 만든다(템플릿 국가 ID는 제외). over: 이 템플릿 전용 덮어쓰기. */
 export function pick(paint, templateIds, over = {}) {
   const out = {};
@@ -418,7 +422,8 @@ export function paintFor(y) {
   return [
     // ===== 유럽 =====
     ...L(A, ['SWI', 'CHE', N('ITA', 'Sondrio')]),
-    ['HRE', 'LIE'],
+    ...germanStates(y).rows,
+    ...L(!A, ['SWI', 'CHE']),
     ['FRA', 'AND', 'MCO', N('FRA', 'French Guiana', 'Martinique', 'Guadeloupe', 'Réunion'), 'SPM', 'BLM', 'MAF', 'HTI', 'GRD', 'LCA',
       N('IND', 'Puducherry'), ...(A ? [N('VIR', 'Saint Croix')] : ['MUS', 'SYC'])],
     ...L(A,

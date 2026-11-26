@@ -375,7 +375,7 @@ function compileHistory(def) {
       const sel = normSel(raw); let n = 0;
       for (const c of [...(sel.adm0 ?? []), ...(sel.any ?? [])]) if (!adm0Set.has(c) && !ownerSet.has(c)) histWarnings.push(`[${tag}] fill ${pid}: 알 수 없는 국가 코드 ${c}`);
       for (let i = 0; i < geoms.length; i++) if (owner[i] < 0 && matchSel(i, sel)) { owner[i] = idxOf.get(pid); n++; }
-      if (n === 0) histWarnings.push(`[${tag}] fill ${pid}: 빈 땅을 하나도 잡지 못함 ${JSON.stringify(raw)}`);
+      if (n === 0 && !sel.soft) histWarnings.push(`[${tag}] fill ${pid}: 빈 땅을 하나도 잡지 못함 ${JSON.stringify(raw)}`);
     }
   }
   if (GAPS) {

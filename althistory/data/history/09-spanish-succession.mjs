@@ -16,7 +16,6 @@ export default {
     BAV: { n: '바이에른 선제후국', e: 'Bavaria', c: '#5b9bd5', s: [54, 46, 50, 30], a: ['바이에른'] },
     SAV: { n: '사보이 공국', e: 'Savoy', c: '#d46a9a', s: [56, 40, 48, 28], a: ['사보이'] },
     POR: { n: '포르투갈 왕국', e: 'Portugal', c: '#5f8f3a', s: [54, 52, 38, 36], a: ['포르투갈'] },
-    HRE: { n: '독일 제후국들', e: 'German states', c: '#9a6b3d', s: [50, 56, 44, 30], a: ['독일'] },
     SWE: { n: '스웨덴 제국', e: 'Swedish Empire', c: '#2e9d8f', s: [66, 44, 74, 54], a: ['스웨덴'] },
     RUS: { n: '러시아 차르국', e: 'Tsardom of Russia', c: '#6fa8c7', s: [56, 48, 64, 46], a: ['러시아'] },
     POL: { n: '폴란드-리투아니아', e: 'Poland-Lithuania', c: '#c872b4', s: [44, 46, 50, 38], a: ['폴란드'] },
@@ -26,7 +25,6 @@ export default {
     PAP: { n: '교황령', e: 'Papal States', c: '#e8e0c8', s: [58, 40, 18, 56], a: ['교황'] },
   },
   paint: [
-    ['HRE', 'DEU'],
     ['FRA', { adm0: 'FRA', box: BOX.FRANCE }],
     ['SPA', { adm0: 'ESP', box: BOX.IBERIA }, 'BEL', 'LUX', { adm0: 'ITA', box: [8, 44.7, 10.7, 46.2] }, { adm0: 'ITA', box: BOX.S_ITALY }, { adm0: 'ITA', box: BOX.SICILY }, { adm0: 'ITA', box: BOX.SARDINIA }],
     ['POR', { adm0: 'PRT', box: BOX.IBERIA }, 'AGO', 'MOZ'],

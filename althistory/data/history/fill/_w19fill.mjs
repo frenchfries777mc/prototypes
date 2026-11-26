@@ -2,6 +2,8 @@
 // w19fill({ year }) → { polities, paint }. 연도별 차이(오만·잔지바르 분리, 아프가니스탄 통합, 투쿨로르 팽창 등)는 여기서 처리하고,
 // 템플릿 파일(fill/<id>.mjs)은 그 해에만 있는 앞선 규칙(paint 앞부분)을 덧붙인다.
 
+import { germanStates } from './_german.mjs';
+
 const A = (adm0, ...names) => ({ adm0, names });
 
 export function w19fill({ year = 1853 } = {}) {
@@ -192,7 +194,11 @@ export function w19fill({ year = 1853 } = {}) {
 
   // ── 유럽 소국·분쟁 소지 ──
   if (year < 1861) add(['SAR', 'ITA']); // 사르데냐령 오솔라 등 템플릿 상자 밖에 남은 주
-  add(['ANDR', 'AND'], ['MNC', 'MCO'], ['SMA', 'SMR'], ['PAP', 'VAT'], ['GCF', 'LIE'], ['OTT', 'CNM', 'CYN', 'BRT']);
+  add(['ANDR', 'AND'], ['MNC', 'MCO'], ['SMA', 'SMR'], ['PAP', 'VAT'], ['OTT', 'CNM', 'CYN', 'BRT']);
+  // ── 독일 연방의 나라들(작센·바이에른·하노버·뷔르템베르크·헤센·메클렌부르크·튀링겐·자유시)과 룩셈부르크·리히텐슈타인 ──
+  { const g = germanStates(year), tplHas = year >= 1863 ? ['SAX', 'BAV', 'HAN'] : [];
+    add(...g.rows.filter(([id]) => id !== 'PRU'));
+    for (const [k, [n, e, st, a]] of Object.entries(g.defs)) if (!P[k] && !tplHas.includes(k)) P[k] = { n, e, s: st, a }; }
   // ── 아메리카 ──
   if (year < 1860) add(['MSQ', A('HND', 'Gracias a Dios'), A('NIC', 'Caribbean Coast')], ['GBR', A('HND', 'Bay Islands')]);
   if (year < 1860) P.MSQ = { n: '모스키토 왕국', e: 'Mosquito Kingdom (British protectorate)', s: [40, 10, 8, 6], a: ['모스키토', '미스키토'] };

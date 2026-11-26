@@ -30,6 +30,6 @@ export default {
     ['FRA', '프랑스군', '마크마옹', 6, '돌파형', 100, at(2.35, 48.85)],
   ],
   wars: [],
-  rel: [['PRU', 'HAB', -70], ['PRU', 'ITA', 55], ['HAB', 'ITA', -80], ['FRA', 'PRU', -25], ['BAV', 'HAB', 40], ['SAX', 'HAB', 50], ['HAN', 'HAB', 40], ['GCF', 'HAB', 25], ['RUS', 'PRU', 40], ['GBR', 'PRU', 10], ['FRA', 'HAB', 5], ['FRA', 'ITA', 20], ['DEN', 'PRU', -50]],
+  rel: [['PRU', 'HAB', -70], ['PRU', 'ITA', 55], ['HAB', 'ITA', -80], ['FRA', 'PRU', -25], ['BAV', 'HAB', 40], ['SAX', 'HAB', 50], ['HAN', 'HAB', 40], ['RUS', 'PRU', 40], ['GBR', 'PRU', 10], ['FRA', 'HAB', 5], ['FRA', 'ITA', 20], ['DEN', 'PRU', -50]],
   alliances: [{ name: '독일 연방(오스트리아파)', members: ['HAB', 'BAV', 'SAX', 'HAN'] }],
 };

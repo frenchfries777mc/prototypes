@@ -24,6 +24,15 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
       'hundred-years-1337': { FRA: '프랑스 왕국' }, 'seven-years-1756': { FRA: '프랑스 왕국', GBR: '그레이트브리튼 왕국' } };
     const wrong = Object.entries(want).flatMap(([id, m]) => Object.entries(m).filter(([k, v]) => nm[id]?.[k] !== v).map(([k, v]) => `${id}/${k}: ${nm[id]?.[k]} (기대 ${v})`));
     ok(wrong.length === 0, `시대별 나라 이름(대영제국·프랑스 제n 공화국/제국·독일 제국·나치 독일) ${wrong.join(' ; ')}`);
+    // 독일 땅은 "독일 제후국들" 같은 하나의 묶음이 아니라 시대별 실제 나라들로 나뉜다
+    const ger = await page.evaluate(() => { const w = window.__game.world, out = {};
+      for (const sc of w.scenarios.filter((x) => x.polities && x.owners)) { const owners = new Set(); w.provinces.forEach((p, i) => { if (p.id.startsWith('DEU-')) owners.add(sc.polities[sc.owners[i]].nameKo); }); out[sc.id] = [...owners]; }
+      return out; });
+    const gerWant = { 'imjin-1592': 12, 'thirty-years-1618': 11, 'spanish-succession-1701': 12, 'seven-years-1756': 11, 'crimean-1853': 9, 'italian-1859': 9, 'german-1866': 9 };
+    const gerBad = Object.entries(gerWant).filter(([id, n]) => (ger[id] ?? []).length < n).map(([id, n]) => `${id}: ${(ger[id] ?? []).length}개(기대 ${n}개 이상)`);
+    ok(gerBad.length === 0, `독일 땅이 여러 실제 나라로 나뉨 ${gerBad.join(' ; ') || Object.entries(gerWant).map(([id]) => `${id.split('-')[0]} ${ger[id].length}개`).join(', ')}`);
+    ok(!Object.values(nm).some((ps) => Object.values(ps).some((n) => /독일 제후국들|독일 연방 군소국|신성 로마 제국 제후국들/.test(n))), '"독일 제후국들"·"독일 연방 군소국" 같은 묶음 이름이 없음');
+    ok(ger['seven-years-1756'].includes('하노버 선제후국') && ger['seven-years-1756'].includes('뷔르템베르크 공국') && ger['crimean-1853'].includes('바이에른 왕국') && ger['crimean-1853'].includes('작센 왕국'), '시대에 맞는 이름(1756 하노버 선제후국·뷔르템베르크 공국 / 1853 바이에른 왕국·작센 왕국)');
     const modern = await page.evaluate(() => window.__game.world.modernCountry('FRA')?.nameKo);
     ok(modern === '프랑스', `오늘날(현대 템플릿)의 프랑스는 그냥 "프랑스": ${modern}`);
     await page.close();
