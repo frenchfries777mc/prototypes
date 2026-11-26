@@ -19,7 +19,7 @@ function table(Y) {
     ENG: ['잉글랜드 왕국 (엘리자베스 1세)', 'Kingdom of England (Elizabeth I)', [62, 58, 52, 56], ['잉글랜드', '영국', '아일랜드'], '#c0443a'],
     SCO: ['스코틀랜드 왕국 (제임스 6세)', 'Kingdom of Scotland (James VI)', [50, 32, 32, 24], ['스코틀랜드']],
     NET: ['네덜란드 공화국 (7주 연합)', 'Dutch Republic', [56, 72, 54, 42], ['네덜란드', '홀란트']],
-    HAB: ['합스부르크 군주국 (루돌프 2세)', 'Habsburg Monarchy (Rudolf II)', [52, 62, 60, 64], ['오스트리아', '합스부르크', '황제', '보헤미아'], '#d9a441'],
+    HAB: ['오스트리아', 'Habsburg Monarchy (Rudolf II)', [52, 62, 60, 64], ['오스트리아', '합스부르크', '황제', '보헤미아'], '#d9a441'],
     HRE: ['신성 로마 제국 제후국들', 'Holy Roman Empire (German princes)', [44, 56, 36, 32], ['독일', '신성 로마 제국', '제국 도시']],
     BAV: ['바이에른 공국', 'Duchy of Bavaria', [60, 50, 42, 34], ['바이에른']],
     SAX: ['작센 선제후국', 'Electorate of Saxony', [58, 52, 40, 32], ['작센']],
@@ -86,7 +86,7 @@ function table(Y) {
 
     // ---- 동아시아·중앙아시아 ----
     JOS: ['조선 (광해군)', 'Joseon (Gwanghaegun)', [44, 46, 38, 40], ['조선', '광해군'], '#3b7dd8'],
-    JPN: ['에도 막부 (도쿠가와 히데타다)', 'Tokugawa Shogunate', [78, 66, 78, 58], ['일본', '막부', '도쿠가와']],
+    JPN: ['일본', 'Tokugawa Shogunate', [78, 66, 78, 58], ['일본', '막부', '도쿠가와']],
     MIN: ['명나라 (만력제)', 'Ming China (Wanli)', [42, 86, 48, 80], ['명', '중국', '명나라']],
     JUR: ['후금 (누르하치)', 'Later Jin (Nurhaci)', [72, 38, 72, 42], ['후금', '여진', '누르하치', '만주']],
     RYU: ['류큐 왕국 (사쓰마 종속)', 'Ryukyu Kingdom (Satsuma vassal)', [40, 30, 8, 12], ['류큐']],

@@ -73,7 +73,7 @@ export default {
     LIA: { n: '양 (梁)', e: 'Liang dynasty', c: '#d9893b', s: [62, 66, 50, 58], a: ['양', '남조 양', '양 무제'] },
     TUY: { n: '토욕혼', e: 'Tuyuhun', s: [52, 30, 48, 30], a: ['토욕혼', '아시'] },
     ZHZ: { n: '상슝 왕국', e: 'Zhangzhung', s: [52, 24, 34, 20], a: ['상슝', '샹슝', '야룽 이전 티베트'] },
-    CUA: { n: '찬씨 정권 (남중)', e: 'Cuan clan of Nanzhong', s: [50, 22, 26, 14], a: ['찬씨', '爨氏', '남중'] },
+    CUA: { n: '남중', e: 'Cuan clan of Nanzhong', s: [50, 22, 26, 14], a: ['찬씨', '爨氏', '남중'] },
     LIP: { n: '리족 (하이난)', e: 'Li people', s: PEOPLE, a: ['리족', '黎族'] },
     GSZ: { n: '고산족', e: 'Taiwanese Austronesian peoples', s: PEOPLE, a: ['고산족', '오스트로네시아계 원주민'] },
     GGR: { n: '고구려', e: 'Goguryeo', c: '#a84a6e', s: [62, 50, 62, 48], a: ['고구려', '안장왕'] },

@@ -9,7 +9,7 @@ export const P = {
   // ---- 동아시아 ----
   QIN: { n: '청', e: 'Qing Empire', s: [72, 80, 78, 80], a: ['청나라', '대청', '강희제'] },
   JOS: { n: '조선', e: 'Joseon', s: [62, 50, 36, 34], a: ['조선 왕조', '숙종'] },
-  EDO: { n: '에도 막부', e: 'Tokugawa Shogunate', s: [76, 70, 48, 42], a: ['도쿠가와 막부', '일본'] },
+  EDO: { n: '일본', e: 'Tokugawa Shogunate', s: [76, 70, 48, 42], a: ['도쿠가와 막부', '일본'] },
   RYU: { n: '류큐 왕국', e: 'Ryukyu Kingdom', s: [60, 30, 8, 12], a: ['류큐', '중산'] },
   AIN: { n: '아이누 (에조치)', e: 'Ainu (Ezochi)', s: [50, 12, 12, 6], a: ['아이누', '에조'] },
   DZU: { n: '준가르 칸국', e: 'Dzungar Khanate', s: [58, 36, 62, 44], a: ['준가르', '체왕 랍탄'] },
@@ -366,7 +366,7 @@ export const P = {
   BNT: { n: '반텐 술탄국', e: 'Banten Sultanate', s: [38, 30, 12, 12], a: ['반텐', '반탐'] },
   CRN: { n: '치르본 술탄국들', e: 'Sultanates of Cirebon', s: [44, 20, 6, 8], a: ['치르본', '카스푸한', '카노만'] },
   MTR: { n: '마타람 술탄국', e: 'Mataram Sultanate', s: [32, 40, 32, 28], a: ['마타람', '아망쿠랏'] },
-  SRP: { n: '수라파티 정권 (파수루안)', e: 'Untung Surapati (Pasuruan)', s: [50, 18, 22, 10], a: ['수라파티', '파수루안'] },
+  SRP: { n: '파수루안', e: 'Untung Surapati (Pasuruan)', s: [50, 18, 22, 10], a: ['수라파티', '파수루안'] },
   SKT: { n: '수라카르타 순나국', e: 'Surakarta Sunanate', s: [46, 34, 18, 18], a: ['수라카르타', '파쿠부워노'] },
   YGY: { n: '욕야카르타 술탄국', e: 'Yogyakarta Sultanate', s: [54, 30, 24, 18], a: ['욕야카르타', '하멩쿠부워노'] },
   KLG: { n: '클룽쿵 왕국 (발리)', e: 'Klungkung (Bali)', s: [48, 24, 18, 12], a: ['클룽쿵', '발리', '데와 아궁'] },

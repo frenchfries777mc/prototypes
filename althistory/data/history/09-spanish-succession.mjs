@@ -9,7 +9,7 @@ export default {
   polities: {
     FRA: { n: '프랑스 왕국', e: 'Kingdom of France', c: '#4a78c2', s: [58, 84, 84, 90], a: ['프랑스', '루이'] },
     SPA: { n: '스페인 왕국', e: 'Spain', c: '#c46a3a', s: [40, 56, 40, 60], a: ['스페인'] },
-    HAB: { n: '오스트리아 합스부르크', e: 'Habsburg Austria', c: '#d9a441', s: [56, 66, 72, 72], a: ['오스트리아', '합스부르크'] },
+    HAB: { n: '오스트리아', e: 'Habsburg Austria', c: '#d9a441', s: [56, 66, 72, 72], a: ['오스트리아', '합스부르크'] },
     ENG: { n: '잉글랜드 왕국', e: 'Kingdom of England', c: '#c0443a', s: [60, 78, 66, 72], a: ['영국', '잉글랜드'] },
     NET: { n: '네덜란드 공화국', e: 'Dutch Republic', c: '#e0b84f', s: [62, 80, 58, 58], a: ['네덜란드'] },
     PRU: { n: '프로이센 왕국', e: 'Prussia', c: '#7da13a', s: [62, 46, 62, 38], a: ['프로이센', '브란덴부르크'] },

@@ -8,7 +8,7 @@ export default {
   start: [1592, 5], turn: 1, focus: [118, 28, 140, 45],
   polities: {
     JOS: { n: '조선', e: 'Joseon', c: '#3b7dd8', s: [46, 54, 40, 50], a: ['조선', '이순신'] },
-    JPN: { n: '도요토미 정권', e: 'Japan (Toyotomi)', c: '#c0443a', s: [72, 62, 90, 62], a: ['일본', '왜', '도요토미'] },
+    JPN: { n: '일본', e: 'Japan (Toyotomi)', c: '#c0443a', s: [72, 62, 90, 62], a: ['일본', '왜', '도요토미'] },
     MIN: { n: '명나라', e: 'Ming China', c: '#e0b84f', s: [50, 92, 58, 88], a: ['명', '중국', '명나라'] },
     JUR: { n: '건주 여진', e: 'Jianzhou Jurchens', c: '#2e9d8f', s: [64, 34, 58, 28], a: ['여진', '누르하치'] },
     RYU: { n: '류큐 왕국', e: 'Ryukyu Kingdom', c: '#8a7fd1', s: [50, 36, 14, 18], a: ['류큐'] },

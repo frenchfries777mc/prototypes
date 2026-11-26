@@ -74,7 +74,7 @@ export default {
     LIO: { n: '요', e: 'Liao dynasty', c: '#5a6fb0', s: [56, 54, 66, 58], a: ['요', '거란', '도종'] },
     XIA: { n: '서하', e: 'Western Xia', c: '#b07a4a', s: [56, 40, 52, 36], a: ['서하', '대하', '탕구트'] },
     DLI: { n: '대리국', e: 'Dali Kingdom', s: [58, 40, 34, 28], a: ['대리', '후리국', '단씨'] },
-    TSK: { n: '청당 정권 (각시라)', e: 'Tsongkha (Gusiluo regime)', s: [48, 30, 38, 24], a: ['청당', '각시라', '종카'] },
+    TSK: { n: '청당', e: 'Tsongkha (Gusiluo regime)', s: [48, 30, 38, 24], a: ['청당', '각시라', '종카'] },
     UTS: { n: '위짱 제후국들 (티베트 분열기)', e: 'U-Tsang principalities', s: [50, 26, 24, 22], a: ['위짱', '티베트 분열기', '구게'] },
     MRL: { n: '마율 (응아리 왕국)', e: 'Maryul (Ngari)', s: [52, 18, 16, 10], a: ['마율', '라다크', '응아리'] },
     GSZ: { n: '고산족', e: 'Taiwanese Austronesian peoples', s: PEOPLE, a: ['고산족'] },

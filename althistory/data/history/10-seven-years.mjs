@@ -8,7 +8,7 @@ export default {
   start: [1756, 8], turn: 3, focus: [-12, 34, 40, 62],
   polities: {
     PRU: { n: '프로이센 왕국', e: 'Prussia', c: '#7da13a', s: [66, 52, 82, 56], a: ['프로이센', '프리드리히'] },
-    HAB: { n: '오스트리아 합스부르크', e: 'Habsburg Austria', c: '#d9a441', s: [56, 70, 74, 72], a: ['오스트리아', '합스부르크'] },
+    HAB: { n: '오스트리아', e: 'Habsburg Austria', c: '#d9a441', s: [56, 70, 74, 72], a: ['오스트리아', '합스부르크'] },
     FRA: { n: '프랑스 왕국', e: 'Kingdom of France', c: '#4a78c2', s: [52, 82, 78, 82], a: ['프랑스'] },
     RUS: { n: '러시아 제국', e: 'Russian Empire', c: '#6fa8c7', s: [52, 52, 74, 58], a: ['러시아'] },
     GBR: { n: '그레이트브리튼 왕국', e: 'Kingdom of Great Britain', c: '#c0443a', s: [58, 82, 72, 82], a: ['영국', '브리튼'] },
@@ -24,7 +24,7 @@ export default {
     NAP: { n: '양시칠리아 왕국', e: 'Two Sicilies', c: '#e8c26a', s: [52, 44, 40, 30], a: ['나폴리', '시칠리아'] },
     SAV: { n: '사르데냐-피에몬테', e: 'Sardinia-Piedmont', c: '#d46a9a', s: [56, 40, 48, 28], a: ['사르데냐', '피에몬테', '사보이'] },
     PAP: { n: '교황령', e: 'Papal States', c: '#e8e0c8', s: [54, 36, 14, 50], a: ['교황'] },
-    PER: { n: '젠드 왕조 이란', e: 'Iran', c: '#3a9d6b', s: [34, 42, 46, 34], a: ['이란', '페르시아'] },
+    PER: { n: '이란', e: 'Iran', c: '#3a9d6b', s: [34, 42, 46, 34], a: ['이란', '페르시아'] },
   },
   paint: [
     ['HRE', 'DEU', 'CHE'],

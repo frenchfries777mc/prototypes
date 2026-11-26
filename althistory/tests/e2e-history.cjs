@@ -15,6 +15,10 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
     const nm = await page.evaluate(() => { const o = {}; for (const sc of window.__game.world.scenarios) { if (!sc.polities) continue; o[sc.id] = Object.fromEntries(sc.polities.map((p) => [p.id, p.nameKo || p.name])); } return o; });
     const bad = Object.entries(nm).flatMap(([id, ps]) => Object.entries(ps).filter(([, n]) => /[()（）]/.test(n)).map(([k, n]) => `${id}/${k}=${n}`));
     ok(bad.length === 0, `나라 이름에 괄호가 없음 ${bad.slice(0, 4).join(', ')}`);
+    const regime = Object.entries(nm).flatMap(([id, ps]) => Object.entries(ps).filter(([, n]) => /막부|정권|점령|군정|프랑코|일제강점기/.test(n)).map(([k, n]) => `${id}/${k}=${n}`));
+    ok(regime.length === 0, `가문·정권·점령 상태가 아니라 실제 나라 이름을 씀 ${regime.slice(0, 4).join(', ')}`);
+    const jp = Object.fromEntries(['imjin-1592', 'crimean-1853', 'cold-war-1947', 'korean-war-1950'].map((id) => [id, nm[id].JPN]));
+    ok(Object.values(jp).every((n) => n === '일본') && nm['ww2-1939'].SPA === '스페인' && nm['cold-war-1947'].SPA === '스페인', `일본·스페인은 그냥 일본·스페인: ${JSON.stringify(jp)}`);
     const want = { 'crimean-1853': { GBR: '대영제국', FRA: '프랑스 제2제국' }, 'german-1866': { GBR: '대영제국', FRA: '프랑스 제2제국' }, 'belle-epoque-1900': { GBR: '대영제국', FRA: '프랑스 제3공화국', GER: '독일 제국' },
       'ww1-1914': { GBR: '대영제국', FRA: '프랑스 제3공화국', GER: '독일 제국' }, 'ww2-1939': { FRA: '프랑스 제3공화국', GER: '나치 독일' }, 'cold-war-1947': { FRA: '프랑스 제4공화국' }, 'korean-war-1950': { FRA: '프랑스 제4공화국' },
       'hundred-years-1337': { FRA: '프랑스 왕국' }, 'seven-years-1756': { FRA: '프랑스 왕국', GBR: '그레이트브리튼 왕국' } };

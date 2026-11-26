@@ -20,7 +20,7 @@ export function w19({ italy = 'split', year = 1853 } = {}) {
     POR: { n: '포르투갈 왕국', e: 'Portugal', c: '#5f8f3a', s: [50, 40, 30, 30], a: ['포르투갈'] },
     USA: { n: '미국', e: 'United States', c: '#5b9bd5', s: [56, 66, 40, 54], a: ['미국'] },
     QNG: { n: '청나라', e: 'Qing China', c: '#d9825b', s: [38, 80, 44, 62], a: ['청', '중국', '청나라'] },
-    JPN: { n: '에도 막부', e: 'Tokugawa Shogunate', c: '#b88f6a', s: [56, 44, 36, 26], a: ['일본', '막부', '도쿠가와'] },
+    JPN: { n: '일본', e: 'Tokugawa Shogunate', c: '#b88f6a', s: [56, 44, 36, 26], a: ['일본', '막부', '도쿠가와', '에도'] },
     KOR: { n: '조선', e: 'Joseon', c: '#3b7dd8', s: [46, 40, 28, 26], a: ['조선', '한국'] },
     GRE: { n: '그리스 왕국', e: 'Greece', c: '#8a7fd1', s: [46, 28, 30, 20], a: ['그리스'] },
   };
