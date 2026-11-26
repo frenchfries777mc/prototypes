@@ -177,6 +177,36 @@ if (problems.length) {
   process.exit(1);
 }
 
+// ---- 3a. 너무 큰 주를 실제 지역으로 쪼개기 ----
+// 원본 admin-1 에서 한 주가 여러 역사 지역을 한꺼번에 담는 곳(바이에른: 오버바이에른·니더바이에른·오버팔츠·프랑켄·슈바벤)을 상자(box)로 잘라 나눈다.
+// 마지막이 아닌 부분은 box 로 잘라 내고(mapshaper -clip bbox), 첫 부분(원래 id)은 나머지(-erase bbox)로 남긴다.
+const SPLITS = [
+  { id: 'DEU-1591', adm0: 'DEU', parts: [
+    { id: 'DEU-1591', name: 'Upper Bavaria', nameKo: '오버바이에른' },
+    { id: 'DEU-1591-ndb', name: 'Lower Bavaria', nameKo: '니더바이에른', box: [11.9, 48.3, 13.95, 49.05] },
+    { id: 'DEU-1591-opf', name: 'Upper Palatinate', nameKo: '오버팔츠', box: [11.65, 49.05, 13.95, 50.7] },
+    { id: 'DEU-1591-fra', name: 'Franconia', nameKo: '프랑켄', box: [8.8, 49.05, 11.65, 50.7] },
+    { id: 'DEU-1591-sch', name: 'Swabia', nameKo: '슈바벤', box: [9.3, 47.2, 11.0, 49.05] },
+  ] },
+];
+for (const sp of SPLITS) {
+  const at = provinces.findIndex((f) => f.properties.id === sp.id);
+  if (at < 0) { console.warn(`[주 쪼개기] ${sp.id} 를 찾지 못함`); continue; }
+  const base = provinces[at];
+  const dir = path.join(TMP, `split-${sp.id}`); fs.mkdirSync(dir, { recursive: true });
+  const inF = path.join(dir, 'in.geojson'); fs.writeFileSync(inF, JSON.stringify({ type: 'FeatureCollection', features: [base] }));
+  const ms = path.join(ROOT, 'node_modules/.bin/mapshaper');
+  const run = (args, out) => { execFileSync(ms, [inF, ...args, '-o', out, 'format=geojson', 'force'], { stdio: 'ignore' }); const j = JSON.parse(fs.readFileSync(out, 'utf8')); return j.features?.[0]?.geometry ?? null; };
+  const boxes = sp.parts.filter((x) => x.box);
+  const made = sp.parts.map((part, k) => {
+    const out = path.join(dir, `p${k}.geojson`);
+    const geometry = part.box ? run(['-clip', `bbox=${part.box.join(',')}`], out) : run(boxes.flatMap((b) => ['-erase', `bbox=${b.box.join(',')}`]), out);
+    if (!geometry) throw new Error(`[주 쪼개기] ${part.id}: 잘라 낸 모양이 비었다`);
+    return { type: 'Feature', geometry, properties: { ...base.properties, id: part.id, name: part.name, nameKo: part.nameKo } };
+  });
+  provinces.splice(at, 1, ...made);
+}
+
 // ---- 3b. 너무 잘게 쪼개진 나라의 작은 주를 이웃에 합치기 -----------------------------------
 // 원본(admin-1)이 시·군 단위인 나라(슬로베니아 193개, 몰타 68개, 마케도니아 84개, 영국 232개 …)는 지도에서 주가 점처럼 작다.
 // 주 면적의 "중앙값"이 MERGE_MEDIAN 미만인 나라에서만, MERGE_MIN(km²) 미만 주를 공유 경계가 가장 긴 이웃에 합친다.
@@ -308,7 +338,58 @@ const centers = topoFc.features.map((f) => {
   if (f.geometry) { if (f.geometry.type === 'Polygon') visit(f.geometry.coordinates); else for (const p of f.geometry.coordinates) visit(p); }
   return best ? [(best[0] + best[2]) / 2, (best[1] + best[3]) / 2] : [0, 0];
 });
+const provArea = topoFc.features.map((f) => (f.geometry ? areaKm2(f.geometry) : 0));
 const histWarnings = [];
+// ---- 5c. 자잘한 채움 나라를 이웃 큰 나라에 합치기 ----
+// 채우기로 만든 나라 중 땅이 작은 것(아프리카 해안의 소왕국들, 북미 부족들 …)은 땅이 맞닿은 채움 나라 가운데 가장 긴 경계를 가진 나라에 합친다.
+// 유럽은 합치지 않는다(독일·이탈리아의 작은 나라들은 일부러 나눈 것). 시베리아(러시아 동부)는 훨씬 큼직하게 묶는다.
+const FRAG = { min: 200_000, cap: 700_000, sibMin: 1_800_000, sibCap: 3_800_000 };
+const isSiberia = (i) => geoms[i].properties.adm0 === 'RUS' && centers[i][0] > 55 && centers[i][1] > 50;
+const contOf = (i) => (geoms[i].properties.adm0 === 'RUS' && centers[i][0] > 60 ? 'Asia' : countries.get(geoms[i].properties.adm0)?.continent ?? ''); // 러시아는 통째로 유럽으로 분류돼 있어 우랄 동쪽은 아시아로 본다
+function mergeFragments(owner, pol, tag) {
+  const merged = [];
+  for (let pass = 0; pass < 8; pass++) {
+    const mem = new Map();
+    owner.forEach((o, i) => { if (!mem.has(o)) mem.set(o, []); mem.get(o).push(i); });
+    const info = (o) => { const list = mem.get(o) ?? []; const sib = list.length > 0 && list.every(isSiberia); return { list, sib, area: list.reduce((a, i) => a + provArea[i], 0) }; };
+    const movable = (o) => { const p = pol[o], l = mem.get(o) ?? []; return p.filled && !p.neutral && !p.npc && l.length > 0 && l.every((i) => contOf(i) !== 'Europe'); };
+    const cands = [...mem.keys()].filter(movable).map((o) => ({ o, ...info(o) })).filter((c) => c.area < (c.sib ? FRAG.sibMin : FRAG.min)).sort((a, b) => a.area - b.area);
+    let changed = false;
+    for (const t of cands) {
+      if (!movable(t.o) || (mem.get(t.o) ?? []).length === 0) continue;
+      const cur = info(t.o);
+      const border = new Map();
+      for (const i of cur.list) for (const j of nb[i]) { const q = owner[j]; if (q !== t.o) border.set(q, (border.get(q) ?? 0) + 1); }
+      let best = -1, bs = 0;
+      for (const [q, w] of border) {
+        if (!movable(q)) continue;
+        const iq = info(q); if (iq.sib !== cur.sib) continue;
+        if (iq.area + cur.area > (cur.sib ? FRAG.sibCap : FRAG.cap)) continue;
+        const score = w * 1e6 + iq.area / 1e3;
+        if (score > bs) { bs = score; best = q; }
+      }
+      if (best < 0) continue;
+      // 국가다운 이름(칸국·왕국·공국 …)이 부족·민족 이름에 먹히지 않게: 작은 쪽이 국가이고 큰 쪽이 부족이면 역할을 바꿔 국가 이름으로 합친다
+      const stateLike = (o) => /(칸국|왕국|제국|술탄국|공국|에미르국|이맘국|칼리프국|왕조|공화국|선제후국|백국|오르다|연합|연맹|제후국)$/.test(pol[o].nameKo ?? '');
+      let absorber = best, absorbed = t.o, list = cur.list;
+      if (stateLike(t.o) && !stateLike(best) && info(best).area + cur.area <= (cur.sib ? FRAG.sibCap : FRAG.cap)) { absorber = t.o; absorbed = best; list = info(best).list; }
+      for (const i of list) owner[i] = absorber;
+      const into = pol[absorber], from = pol[absorbed];
+      into.aliases = [...new Set([...(into.aliases ?? []), from.nameKo, ...(from.aliases ?? [])])].slice(0, 14);
+      merged.push(`${from.nameKo}→${into.nameKo}`);
+      mem.set(absorber, [...(mem.get(absorber) ?? []), ...list]); mem.set(absorbed, []);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  // 땅이 없어진 채움 나라는 목록에서 뺀다(owner 번호를 다시 매긴다)
+  const alive = new Set(owner);
+  const remap = new Map(); const kept = [];
+  pol.forEach((p, i) => { if (alive.has(i) || !p.filled) { remap.set(i, kept.length); kept.push(p); } });
+  owner.forEach((o, i) => { owner[i] = remap.get(o); });
+  pol.length = 0; pol.push(...kept);
+  return merged;
+}
 const adm0Set = new Set(geoms.map((g) => g.properties.adm0));
 const ownerSet = new Set(geoms.map((g) => g.properties.owner));
 // 어느 시대에도 "국가"로 만들지 않을 단위(분쟁 암초, 완충지대, 당시 없던 초소국/신생국). 남으면 기타 세력.
@@ -426,6 +507,8 @@ function compileHistory(def) {
       owner[i] = idxOf.get(rid);
     } else owner[i] = unc();
   }
+  const mergedFrag = mergeFragments(owner, pol, tag);
+  idxOf.clear(); pol.forEach((p, i) => idxOf.set(p.id, i));
   owner.forEach((o) => { pol[o].provinces++; });
   const check = (id, where) => { if (!idxOf.has(id)) throw new Error(`[${tag}] ${where}: 알 수 없는 국가 ${id}`); };
   for (const [a, b] of def.wars ?? []) { check(a, 'wars'); check(b, 'wars'); }
@@ -471,7 +554,7 @@ function compileHistory(def) {
     id: def.id, name: def.name, year: def.year, era: def.era, tagline: def.tagline, description: def.description,
     briefing: def.briefing, gmNotes: def.gmNotes ?? '', startDate: fmtStart(def.start), turnMonths: def.turn ?? 1, focus: def.focus ?? null,
     alliances: def.alliances ?? [], relations: def.rel ?? [], wars: def.wars ?? [], milMod: def.milMod ?? {}, bonuses: (def.bonuses ?? []).map((b) => ({ country: b.country, words: b.words, bonus: b.bonus, note: b.note })),
-    armies, generals, polities: pol, owners: ownerStr, _unc: owner.filter((o) => pol[o].neutral).length,
+    armies, generals, polities: pol, owners: ownerStr, _unc: owner.filter((o) => pol[o].neutral).length, _merged: mergedFrag.length,
   };
 }
 
@@ -532,7 +615,7 @@ if (fs.existsSync(histDir)) {
     historical.push(compileHistory(def));
   }
 }
-const allScenarios = [...scenarios, ...historical.map(({ _unc, ...h }) => h)];
+const allScenarios = [...scenarios, ...historical.map(({ _unc, _merged, ...h }) => h)];
 
 const countryList = Object.keys(provCount).map((id) => {
   const base = countries.get(id) ?? { id, name: id, nameKo: null };
@@ -559,7 +642,7 @@ console.log(`작은 주 합침(${mergeReport.length}개국): ${mergeReport.join(
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
 console.log(`시나리오 템플릿: 현대 ${scenarios.length}개 + 역사 ${historical.length}개`);
-for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length} (채움 ${h.polities.filter((p) => p.filled).length}, 남은 지역 세력 ${h.polities.filter((p) => p.regional).length}), 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
+for (const h of historical) console.log(`  - ${h.id}: 국가 ${h.polities.length} (채움 ${h.polities.filter((p) => p.filled).length}, 남은 지역 세력 ${h.polities.filter((p) => p.regional).length}, 합친 작은 나라 ${h._merged}), 기타 세력 ${(h._unc / geoms.length * 100).toFixed(0)}%`);
 if (histWarnings.length) console.log('\n[역사 규칙 경고]\n' + histWarnings.join('\n'));
 console.log(`reach 평균 ${(reachTotal / geoms.length).toFixed(1)}개/주`);
 console.log(`world.topo.json ${kb(outTopo)} · reach.json ${kb(path.join(OUT, 'reach.json'))} · countries.json ${kb(path.join(OUT, 'countries.json'))}`);

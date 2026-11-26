@@ -253,7 +253,8 @@ export default {
     ['DUM', { adm0: 'GBR', box: [-2.4, 49.8, -1.65, 51.95] }],
     ['FRK', 'GGY', 'JEY'],
     // ── 게르마니아·스칸디나비아
-    ['THU', nm('DEU', 'Thuringia', 'Anhalt', 'Bavaria'), b('DEU', 12.2, 50.2, 15, 51.6)],
+    ['THU', nm('DEU', 'Thuringia', 'Anhalt', 'Bavaria', 'Upper Palatinate'), b('DEU', 12.2, 50.2, 15, 51.6)],
+    ['FRK', nm('DEU', 'Franconia', 'Swabia')], // 알라만니(슈바벤)는 506년 이후, 프랑켄은 튀링겐 정복(531) 전후로 프랑크 왕국 영향권
     ['SAX', nm('DEU', 'Lower Saxony', 'Bremen', 'Hamburg')],
     ['DNE', nm('DEU', 'Schleswig'), { adm0: 'DNK' }, nm('SWE', 'Skåne', 'Blekinge', 'Halland')],
     ['WAR', nm('DEU', 'Mecklenburg', 'Brandenburg', 'Berlin')],

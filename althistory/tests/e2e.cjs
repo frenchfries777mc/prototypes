@@ -1,13 +1,14 @@
 // Playwright E2E: node tests/e2e.cjs  (npm i -D playwright 필요, 먼저 npm run build:single)
 const { chromium } = require('playwright');
 const OUT = process.env.OUT || '/tmp/althist-shots'; require('fs').mkdirSync(OUT, { recursive: true });
-const URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
+let URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
 let fails = 0;
 const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
 const ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'];
 const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Taiwan|Russia|Ukraine|India|Pakistan|China/;
 
 (async () => {
+  const srv = process.env.URL ? null : await require('./_serve.cjs')(); if (srv) URL = srv.url;
   const browser = await chromium.launch({ args: ARGS });
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 860 } });
   const page = await ctx.newPage();
@@ -95,15 +96,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   ok(!!savedBefore && JSON.parse(savedBefore).turn === 9, '새로고침 전에 자동 저장되어 있음(턴 9)');
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
-  let contTxt = await page.textContent('#btn-continue');
-  // 테스트용 임시 프로필을 헤드리스로 여러 개 동시에 돌리면 새로고침 중 localStorage가 통째로 초기화되는 일이 드물게 있다(앱 버그 아님):
-  // 그럴 때는 같은 저장을 다시 넣고 한 번 더 시도해서 "이어하기" 동작 자체를 검증한다.
-  if (!/이어하기/.test(contTxt) && !(await page.evaluate(() => localStorage.getItem('althist-save-v1')))) {
-    console.log('  (참고) 브라우저가 새로고침 중 저장소를 잃어 저장을 다시 넣고 재시도합니다');
-    await page.evaluate((v) => localStorage.setItem('althist-save-v1', v), savedBefore);
-    await page.reload({ waitUntil: 'load' }); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
-    contTxt = await page.textContent('#btn-continue');
-  }
+  const contTxt = await page.textContent('#btn-continue');
   ok(/이어하기/.test(contTxt) && /대한민국/.test(contTxt), '이어하기 버튼: ' + contTxt);
   await page.click('#btn-continue'); await page.waitForTimeout(500);
   ok((await page.evaluate(() => window.__game.state.turn)) === 9, '이어하기로 복원');

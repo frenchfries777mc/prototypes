@@ -1,8 +1,9 @@
 const { chromium } = require('playwright');
 const OUT = process.env.OUT || '/tmp/althist-shots'; require('fs').mkdirSync(OUT, { recursive: true });
-const URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
+let URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
 let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
 (async () => {
+  const srv = process.env.URL ? null : await require('./_serve.cjs')(); if (srv) URL = srv.url;
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 1500, height: 880 }, acceptDownloads: true });
   const page = await ctx.newPage();
@@ -99,6 +100,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   await page.screenshot({ path: `${OUT}/st3_intro_custom.png` });
 
   // 새로고침 후에도 유지 + 삭제 + 파일로 다시 불러오기
+  ok(!!(await page.evaluate(() => localStorage.getItem('althist-templates-v1'))), '새로고침 전에 내 템플릿이 저장되어 있음');
   await page.reload({ waitUntil: 'load' }); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
   ok(await page.locator('.tpl:has-text("한반도 삼국 가상")').count() === 1, '새로고침 후에도 내 템플릿 유지');
   await page.click('.tpl:has-text("한반도 삼국 가상")'); await page.click('#tpl-actions button[data-act=del]'); await page.waitForTimeout(300);

@@ -4,7 +4,7 @@ import { build, common, africa, N, B } from './_ancient.mjs';
 const rows = [
   // ---- 로마·한·파르티아가 실제로 다스린 자투리 땅 ----
   ['ROM', null, null, null, null, ['VAT', 'SMR', 'MCO', 'AND', 'LIE', 'GIB', 'KOS', 'ESB', 'WSB', 'CNM', 'CYN', N('ESP', 'Ceuta', 'Melilla'), N('GBR', 'Scilly'), N('UKR', 'Odessa'), 'GGY', 'JEY',
-    N('DEU', 'Bavaria'), N('RUS', 'Sevastopol'), N('SAU', 'Tabuk')]],
+    N('DEU', 'Bavaria', 'Swabia'), N('RUS', 'Sevastopol'), N('SAU', 'Tabuk')]],
   ['HAN', null, null, null, null, [N('CHN', 'Liaoning'), 'HKG', 'MAC', B('VNM', [105, 15.3, 109, 19])]],
   ['PAR', null, null, null, null, ['BHR']],
 
@@ -21,7 +21,7 @@ const rows = [
   ['CHAU', '카우키족', 'Chauci', [50, 14, 22, 8], ['카우키'], [N('DEU', 'Bremen', 'Hamburg')]],
   ['CHRU', '케루스키족', 'Cherusci', [46, 16, 22, 10], ['케루스키', '아르미니우스의 부족'], [N('DEU', 'Lower Saxony')]],
   ['LANG', '랑고바르드족', 'Langobardi', [50, 14, 24, 8], ['랑고바르드', '롬바르드 선조'], [N('DEU', 'Saxony-Anhalt')]],
-  ['HERM', '헤르문두리족', 'Hermunduri', [52, 18, 22, 10], ['헤르문두리'], [N('DEU', 'Thuringia', 'Saxony')]],
+  ['HERM', '헤르문두리족', 'Hermunduri', [52, 18, 22, 10], ['헤르문두리'], [N('DEU', 'Thuringia', 'Saxony', 'Franconia', 'Upper Palatinate')]],
   ['SEMN', '셈노네스족 (수에비)', 'Semnones (Suebi)', [50, 14, 24, 10], ['셈노네스', '수에비족'], [N('DEU', 'Brandenburg', 'Berlin')]],
   ['RUGI', '루기족', 'Rugii', [50, 12, 18, 6], ['루기'], [N('DEU', 'Mecklenburg'), N('POL', 'West Pomeranian')]],
   ['MARC', '마르코만니족', 'Marcomanni', [50, 24, 36, 18], ['마르코만니', '보헤미아'], [B('CZE', [12, 48.5, 16.2, 51.1])]],

@@ -33,6 +33,14 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
     ok(gerBad.length === 0, `독일 땅이 여러 실제 나라로 나뉨 ${gerBad.join(' ; ') || Object.entries(gerWant).map(([id]) => `${id.split('-')[0]} ${ger[id].length}개`).join(', ')}`);
     ok(!Object.values(nm).some((ps) => Object.values(ps).some((n) => /독일 제후국들|독일 연방 군소국|신성 로마 제국 제후국들/.test(n))), '"독일 제후국들"·"독일 연방 군소국" 같은 묶음 이름이 없음');
     ok(ger['seven-years-1756'].includes('하노버 선제후국') && ger['seven-years-1756'].includes('뷔르템베르크 공국') && ger['crimean-1853'].includes('바이에른 왕국') && ger['crimean-1853'].includes('작센 왕국'), '시대에 맞는 이름(1756 하노버 선제후국·뷔르템베르크 공국 / 1853 바이에른 왕국·작센 왕국)');
+    // 바이에른은 주 하나가 아니다: 선제후국은 영토 3개, 1853년 이후 왕국은 5개. 프랑켄·슈바벤은 따로
+    const bav = await page.evaluate(() => { const w = window.__game.world, out = {}; for (const sc of w.scenarios.filter((x) => x.polities && x.owners)) { const m = {}; w.provinces.forEach((p, i) => { if (p.id.startsWith('DEU-1591')) { const n = sc.polities[sc.owners[i]].nameKo; m[n] = (m[n] ?? 0) + 1; } }); out[sc.id] = m; } return out; });
+    ok((bav['seven-years-1756']['바이에른 선제후국'] ?? 0) === 3 && bav['seven-years-1756']['뷔르츠부르크 주교령'] === 1 && bav['seven-years-1756']['아우크스부르크 주교령'] === 1 && (bav['crimean-1853']['바이에른 왕국'] ?? 0) === 5, `바이에른이 여러 주: 1756 ${JSON.stringify(bav['seven-years-1756'])} · 1853 ${JSON.stringify(bav['crimean-1853'])}`);
+    // 자잘한 나라를 큼직하게: 서아프리카 해안은 나라 수가 적고, 시베리아는 몇 개의 큰 영토
+    const frag = await page.evaluate(() => { const w = window.__game.world, out = {}; const west = ['GHA', 'CIV', 'SLE', 'LBR', 'GIN', 'GNB', 'SEN', 'GMB', 'TGO', 'BEN', 'BFA', 'MLI', 'NGA'];
+      for (const id of ['seven-years-1756', 'imjin-1592']) { const sc = w.scenarios.find((x) => x.id === id); const wa = new Set(), sib = new Set(); w.provinces.forEach((p, i) => { const o = sc.polities[sc.owners[i]]; if (west.includes(p.id.slice(0, 3))) wa.add(o.id); if (p.id.startsWith('RUS-') && o.filled && /sakha|yakut|krasnoyarsk|irkutsk|chukot|kamchat|magadan|khabarovsk|primor|amur|sakhalin|tyumen|khanty|yamal|novosibirsk|omsk|tomsk|kemerovo|altai|tuva|buryat|zabay|chita|evenk|taymyr|jewish|koryak/i.test(p.name)) sib.add(o.id); }); out[id] = { west: wa.size, sib: sib.size, total: sc.polities.length }; }
+      return out; });
+    ok(frag['seven-years-1756'].west <= 14 && frag['imjin-1592'].sib <= 12 && frag['seven-years-1756'].total <= 230, `자잘한 나라를 합쳐 큼직하게: 1756 서아프리카 ${frag['seven-years-1756'].west}개 나라(전체 ${frag['seven-years-1756'].total}개), 1592 시베리아 ${frag['imjin-1592'].sib}개`);
     const modern = await page.evaluate(() => window.__game.world.modernCountry('FRA')?.nameKo);
     ok(modern === '프랑스', `오늘날(현대 템플릿)의 프랑스는 그냥 "프랑스": ${modern}`);
     await page.close();
