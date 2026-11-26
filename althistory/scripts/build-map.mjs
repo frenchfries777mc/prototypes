@@ -339,7 +339,20 @@ function compileHistory(def) {
   const tag = def.id;
   const fill = def._fill ?? { polities: {}, paint: [] };
   for (const id of Object.keys(fill.polities)) if (def.polities[id]) throw new Error(`[${tag}] fill: 템플릿 국가와 ID 충돌 ${id}`);
-  const pol = Object.entries({ ...def.polities, ...fill.polities }).map(([id, d]) => ({
+  // 나라 이름 뒤에는 "( … )" 설명을 붙이지 않는다: 괄호는 떼고, 괄호 안 말은 명령어 인식용 별칭으로만 남긴다
+  const stripParen = (d) => {
+    const m = /^(.*?)\s*[(（]([^()（）]*)[)）]\s*(.*)$/.exec(d.n ?? '');
+    if (!m) return d;
+    const base = `${m[1]}${m[3] ? ` ${m[3]}` : ''}`.replace(/\s+/g, ' ').trim();
+    const alias = [...(d.a ?? [])]; for (const x of m[2].split(/[·,、]/).map((v) => v.trim())) if (x.length >= 2 && !alias.includes(x)) alias.push(x);
+    return { ...d, n: base || d.n, a: alias, _orig: d.n };
+  };
+  const polyDefs = Object.fromEntries(Object.entries({ ...def.polities, ...fill.polities }).map(([id, d]) => [id, stripParen(d)]));
+  const seenNames = new Map();
+  for (const [id, d] of Object.entries(polyDefs)) {
+    if (seenNames.has(d.n)) { const o = polyDefs[seenNames.get(d.n)]; histWarnings.push(`[${tag}] 이름 겹침 "${d.n}": ${seenNames.get(d.n)}(${o._orig ?? o.n}) / ${id}(${d._orig ?? d.n})`); } else seenNames.set(d.n, id);
+  }
+  const pol = Object.entries(polyDefs).map(([id, d]) => ({
     id, name: d.e ?? d.n, nameKo: d.n, color: d.c ?? (d.neutral ? '#5b6577' : autoColor(id, d.s)), stats: d.neutral ? null : toStats(d.s), aliases: d.a ?? [], provinces: 0, ...(d.neutral ? { neutral: true } : {}),
     ...(d.p === false ? { npc: true } : {}), ...(fill.polities[id] ? { filled: true } : {}),
   }));

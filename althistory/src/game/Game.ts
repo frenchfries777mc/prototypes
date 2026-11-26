@@ -6,6 +6,7 @@ import type { GameState } from '../engine/state';
 import type { Army } from '../engine/state';
 import { armiesOf, cloneState, controlledBy, fmtDate, getRel, isAlive, isAtWar, newGame, ownedBy, totalTroops, warsOf } from '../engine/state';
 import { buildArmies, reachWithin } from '../engine/armies';
+import { promptAt, PROMPT_LEVELS } from '../llm/prompt';
 import { DEFAULT_CLAUDE_MODEL, DEFAULT_OPENAI_MODEL, FREE_PRESETS, LlmError, adjudicate, freePreset, listFreeModels, listOpenAiModels, providerLabel, retryPolicy, testClaude, testGemini } from '../llm/providers';
 import { Thumbs } from '../ui/thumbs';
 import { headlineOf, renderPaper } from '../ui/paper';
@@ -181,7 +182,7 @@ export async function startApp(opts: GameOptions) {
     const fillFree = (id: string) => {
       const pr = freePreset(id);
       $(`${p}-fnote`).innerHTML = `${esc(pr.note)}${pr.keyUrl ? ` <a href="${pr.keyUrl}" target="_blank" rel="noopener">키 발급</a>` : ''}`;
-      $(`${p}-fbaserow`).hidden = id !== 'custom'; $(`${p}-fkeyrow`).hidden = id === 'pollinations';
+      $(`${p}-fbaserow`).hidden = id !== 'custom'; $(`${p}-fkeyrow`).hidden = false; $<HTMLInputElement>(`${p}-fkey`).placeholder = id === 'pollinations' ? 'Pollinations API 키 (선택 사항)' : 'API 키';
       $<HTMLInputElement>(`${p}-fkey`).value = fKeys[id] ?? '';
       const cur = fModels[id] || pr.defaultModel;
       freeOptions([...new Set([pr.defaultModel, fModels[id]].filter(Boolean))]);
@@ -765,8 +766,9 @@ export async function startApp(opts: GameOptions) {
     world, view, get state() { return state; }, get phase() { return phase; }, get cfg() { return cfg; }, setCfg(c: Partial<LlmConfig>) { cfg = { ...cfg, ...c }; },
     start(cid: string, tpl?: string) { if (tpl) templateId = tpl; selCountry = cid; phase = 'pick'; startNew(); },
     studio, openStudio, importRaw,
-    setRetry: (ms: number[]) => { retryPolicy.delaysMs = ms; },
+    setRetry: (ms: number[], paceMs?: number) => { retryPolicy.delaysMs = ms; if (paceMs !== undefined) retryPolicy.paceMs = paceMs; },
     paperOpen: () => !$('paper').hidden,
+    promptSizes: () => (state ? Array.from({ length: PROMPT_LEVELS }, (_, l) => { const q = promptAt(world, state!, '시험 명령', false, l); return q.system.length + q.user.length; }) : []),
     submit: (cmd: string) => { $<HTMLTextAreaElement>('g-cmd').value = cmd; return submit(false); },
   };
   (window as unknown as Record<string, unknown>).__map = view.map;

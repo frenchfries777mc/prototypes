@@ -49,10 +49,18 @@ const RULES = `당신은 실제 세계지도 위에서 진행되는 턴제 대�
 const EXAMPLE = `예시 입력 요약: 플레이어=KOR, 명령="일본과 경제 협력 협정을 추진한다"
 예시 출력: {"interpretation":"한국이 일본과 경제 협력 협정을 추진한다","feasibility":72,"reasoning":"양국 관계가 나쁘지 않고 무역 이해가 크다.","if_success":{"narrative":"서울과 도쿄는 반도체 소재와 물류에 관한 협력 협정에 서명했다. 양국 기업의 투자가 늘고 관계가 한층 개선되었다.","headlines":["한일 경제협력 협정 체결"],"relation_changes":[{"a":"KOR","b":"JPN","delta":10}],"stat_changes":[{"country":"KOR","stat":"economy","delta":2},{"country":"JPN","stat":"economy","delta":2}]},"if_failure":{"narrative":"협상은 역사 문제와 관세 쟁점에서 교착되었고 양국 여론이 악화되었다.","headlines":["한일 협상 결렬"],"relation_changes":[{"a":"KOR","b":"JPN","delta":-4}],"stat_changes":[{"country":"KOR","stat":"stability","delta":-1}]},"world_events":{"narrative":"북한이 단거리 미사일을 시험발사해 동북아 긴장이 높아졌다.","headlines":["북한 미사일 발사"],"relation_changes":[{"a":"PRK","b":"KOR","delta":-5}]},"memory":"한일 경제협력 협상이 진행 중이다."}`;
 
-export function systemPrompt(world: World, compact: boolean): string {
+const sum = (c: { stats?: { stability: number; economy: number; military: number; influence: number } }): number => (c.stats ? c.stats.economy + c.stats.military + c.stats.influence : 0);
+export function systemPrompt(world: World, compact: boolean, opts: { ids?: boolean | 'top' } = {}): string {
   const tm = world.active.turnMonths ?? 1;
   const rules = RULES.replace('한 턴은 1개월이다.', `한 턴은 ${tm}개월이다.`);
   if (compact) return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}`;
+  if (opts.ids === false) return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}\n\n${EXAMPLE}`;
+  if (opts.ids === 'top') {
+    // 길이가 모자랄 때: 이 시대의 주요 나라(능력치 합이 큰 80개)만. 그 밖의 나라 id는 아래 사용자 글의 목록(이웃·전선·군대)에 나온 것을 쓴다
+    const top = [...world.countries.values()].filter((c) => !c.neutral && !c.id.startsWith('R_')).sort((a, b) => sum(b) - sum(a)).slice(0, 80)
+      .map((c) => `${c.id}=${c.name}${c.nameKo && c.nameKo !== c.name ? `(${c.nameKo})` : ''}`).join('; ');
+    return `${rules}\n\n출력 JSON 형식:\n${SCHEMA}\n\n${EXAMPLE}\n\nMAJOR_COUNTRY_IDS (이 목록에 없는 나라는 아래 입력에 나온 id만 써라): ${top}`;
+  }
   const all = [...world.countries.values()].filter((c) => !c.neutral);
   const ids = all.filter((c) => !c.id.startsWith('R_')).map((c) => `${c.id}=${c.name}${c.nameKo && c.nameKo !== c.name ? `(${c.nameKo})` : ''}`).join('; ');
   // 템플릿이 칠하지 않은 땅의 "지역 세력"은 R_<현대 ISO 코드> 규칙으로만 알려 준다(목록이 길어 토큰 절약)
@@ -61,27 +69,29 @@ export function systemPrompt(world: World, compact: boolean): string {
 }
 
 /** 군대 목록: 플레이어 군대 전부 + 교전국/근처 군대. 장군의 능력과 특성을 함께 보여 준다. */
-function armiesBlock(s: GameState, w: World, compact: boolean): string {
+function armiesBlock(s: GameState, w: World, compact: boolean, scale = 1): string {
+  const lim = (c: number, f: number) => Math.max(2, Math.floor((compact ? c : f) * scale));
   const pid = s.playerId;
   const mine = armiesOf(s, pid);
   const atWar = new Set(warsOf(s, pid));
   const near = new Set<number>();
   for (const a of mine) { const i = w.index.get(a.at); if (i !== undefined) reachWithin(w, i, 2).forEach((j) => near.add(j)); }
   const others = s.armies.filter((a) => a.owner !== pid && a.troops > 0 && (atWar.has(a.owner) || near.has(w.index.get(a.at) ?? -1)))
-    .sort((a, b) => (atWar.has(b.owner) ? 1 : 0) - (atWar.has(a.owner) ? 1 : 0) || b.troops - a.troops).slice(0, compact ? 8 : 28);
+    .sort((a, b) => (atWar.has(b.owner) ? 1 : 0) - (atWar.has(a.owner) ? 1 : 0) || b.troops - a.troops).slice(0, lim(8, 28));
   const line = (a: typeof mine[number]) => `${a.id} | ${a.owner} | ${a.name}${a.navy ? ' [함대]' : ''} | ${a.general.name} (${a.general.skill}/10${a.general.trait ? `, ${a.general.trait}` : ''}${a.general.status === 'wounded' ? ', 부상' : ''}) | ${a.troops}천 | 사기 ${a.morale} | ${a.at}(${w.province(a.at)?.name ?? ''})`;
-  return `ARMIES (id | owner | name | general (skill/10, trait) | troops | morale | at)\n${[...mine.slice(0, compact ? 8 : 20), ...others].map(line).join('\n') || '-'}`;
+  return `ARMIES (id | owner | name | general (skill/10, trait) | troops | morale | at)\n${[...mine.slice(0, lim(8, 20)), ...others].map(line).join('\n') || '-'}`;
 }
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
-export function buildUserPrompt(s: GameState, w: World, command: string, pass: boolean, compact: boolean): string {
+export function buildUserPrompt(s: GameState, w: World, command: string, pass: boolean, compact: boolean, scale = 1): string {
+  const lim = (c: number, f: number) => Math.max(2, Math.floor((compact ? c : f) * scale));
   const pid = s.playerId;
   const st = (c: string) => { const x = s.stats[c]; return x ? `stab ${x.stability} econ ${x.economy} mil ${x.military} infl ${x.influence}` : '-'; };
   const nb = [...neighborsOf(s, w, pid).entries()].sort((a, b) => b[1] - a[1]);
   const atWar = new Set(warsOf(s, pid));
 
-  const nbLines = nb.slice(0, compact ? 6 : 14).map(([c]) => `${c} ${w.country(c)?.name} | ${st(c)} | rel ${sign(getRel(s, pid, c))}${atWar.has(c) ? ' | AT WAR' : ''}`);
+  const nbLines = nb.slice(0, lim(6, 14)).map(([c]) => `${c} ${w.country(c)?.name} | ${st(c)} | rel ${sign(getRel(s, pid, c))}${atWar.has(c) ? ' | AT WAR' : ''}`);
   for (const c of atWar) if (!nb.some(([x]) => x === c)) nbLines.push(`${c} ${w.country(c)?.name} | ${st(c)} | rel ${sign(getRel(s, pid, c))} | AT WAR (not adjacent)`);
 
   // 작전 가능 범위의 외국 주: 전쟁 상대/관계 나쁜 순으로 우선
@@ -97,31 +107,51 @@ export function buildUserPrompt(s: GameState, w: World, command: string, pass: b
       front.set(q, (atWar.has(c) ? 1000 : 0) - getRel(s, pid, c));
     }
   }
-  const frontLines = [...front.entries()].sort((a, b) => b[1] - a[1]).slice(0, compact ? 18 : 60).map(([q]) => {
+  const frontLines = [...front.entries()].sort((a, b) => b[1] - a[1]).slice(0, lim(18, 60)).map(([q]) => {
     const p = w.province(q)!;
     return `${q} | ${p.name} | owner ${s.owner[q]}${s.controller[q] !== s.owner[q] ? ` ctrl ${s.controller[q]}` : ''}`;
   });
-  const lost = ownedBy(s, pid).filter((q) => s.controller[q] !== pid).slice(0, compact ? 8 : 25).map((q) => `${q} | ${w.province(q)?.name} | held by ${s.controller[q]}`);
+  const lost = ownedBy(s, pid).filter((q) => s.controller[q] !== pid).slice(0, lim(8, 25)).map((q) => `${q} | ${w.province(q)?.name} | held by ${s.controller[q]}`);
   const notable = Object.entries(s.relations).filter(([k, v]) => k.split('|').includes(pid) && Math.abs(v) >= 35)
-    .map(([k, v]) => `${k.split('|').find((x) => x !== pid)} ${sign(v)}`).slice(0, compact ? 8 : 20);
-  const wars = s.wars.slice(0, compact ? 8 : 25).join(', ') || 'none';
+    .map(([k, v]) => `${k.split('|').find((x) => x !== pid)} ${sign(v)}`).slice(0, lim(8, 20));
+  const wars = s.wars.slice(0, lim(8, 25)).join(', ') || 'none';
   const recent = s.log.slice(-5).flatMap((r) => r.headlines).slice(-8).join(' / ');
 
   return [
     `SCENARIO: ${w.active.name}${w.active.year ? ` (${w.active.year})` : ''}${w.active.era ? ` · ${w.active.era}` : ''}`,
-    w.active.briefing ? `BRIEFING: ${compact ? w.active.briefing.slice(0, 280) : w.active.briefing}` : '',
+    w.active.briefing ? `BRIEFING: ${compact ? w.active.briefing.slice(0, Math.max(120, Math.floor(280 * scale))) : w.active.briefing}` : '',
     !compact && w.active.gmNotes ? `GM_NOTES: ${w.active.gmNotes}` : '',
     `DATE: ${fmtDate(s.date)} (turn ${s.turn}, 1 turn = ${s.turnMonths ?? 1} months)`,
     `PLAYER: ${pid} ${w.country(pid)?.name} | ${st(pid)} | provinces ${mine.size}`,
     `PLAYER_RELATIONS(|rel|>=35): ${notable.join(', ') || '-'}`,
     `WARS: ${wars}`,
     `NEIGHBORS (reachable):\n${nbLines.join('\n') || '-'}`,
-    armiesBlock(s, w, compact),
+    armiesBlock(s, w, compact, scale),
     `FRONT_PROVINCES (foreign land the player can operate against):\n${frontLines.join('\n') || '-'}`,
     lost.length ? `PLAYER_LOST_PROVINCES:\n${lost.join('\n')}` : '',
     `RECENT_HEADLINES: ${recent || '-'}`,
-    `MEMORY:\n${s.memory || '-'}`,
+    `MEMORY:\n${(s.memory || '-').slice(-Math.max(300, Math.floor(1400 * scale)))}`,
     difficultyBrief(s.difficulty ?? 'normal'),
     pass ? 'COMMAND: (PASS — 플레이어는 이번 달 특별한 명령이 없다. world_events만 채워라.)' : `COMMAND: ${command}`,
   ].filter(Boolean).join('\n\n');
+}
+
+/**
+ * 프롬프트를 점점 줄이는 6단계. 0: 전부 · 1: 주요 나라 80개만 + 예시 · 2~5: 간추린 형식에 목록 길이를 1, .6, .35, .2배로.
+ * 입력 길이에 한도가 있는 무료 서버(예: Pollinations 키 없이 16,000자)가 있어서, 한도 안에 들어가는 첫 단계를 쓴다.
+ */
+export const PROMPT_LEVELS = 6;
+export function promptAt(w: World, s: GameState, command: string, pass: boolean, level: number): { system: string; user: string } {
+  if (level <= 0) return { system: systemPrompt(w, false), user: buildUserPrompt(s, w, command, pass, false) };
+  if (level === 1) return { system: systemPrompt(w, false, { ids: 'top' }), user: buildUserPrompt(s, w, command, pass, false) };
+  const scale = [1, 0.6, 0.35, 0.2][Math.min(level, PROMPT_LEVELS - 1) - 2];
+  return { system: systemPrompt(w, true), user: buildUserPrompt(s, w, command, pass, true, scale) };
+}
+export function fitPrompt(w: World, s: GameState, command: string, pass: boolean, limit: number, minLevel = 0): { system: string; user: string; level: number } {
+  let last = { ...promptAt(w, s, command, pass, Math.min(minLevel, PROMPT_LEVELS - 1)), level: Math.min(minLevel, PROMPT_LEVELS - 1) };
+  for (let l = minLevel; l < PROMPT_LEVELS; l++) {
+    last = { ...promptAt(w, s, command, pass, l), level: l };
+    if (!limit || last.system.length + last.user.length <= limit) return last;
+  }
+  return last;
 }

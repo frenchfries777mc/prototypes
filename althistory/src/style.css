@@ -308,11 +308,12 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
   background-image: radial-gradient(ellipse at 15% 8%, rgba(255, 255, 255, .4), transparent 55%), radial-gradient(ellipse at 90% 100%, rgba(120, 90, 40, .16), transparent 55%), repeating-linear-gradient(0deg, rgba(110, 90, 50, .035) 0 2px, transparent 2px 4px);
   color: var(--ink); font-family: "Noto Serif KR", "Nanum Myeongjo", "Batang", "Apple SD Gothic Neo", Georgia, serif; padding: 20px 30px 26px; line-height: 1.62; }
 .np-ancient { --paper: #e8d7a3; } .np-medieval { --paper: #ecdcb4; } .np-modern { --paper: #eee8d4; } .np-now { --paper: #f4f1ea; }
+.np, .np * { overflow-wrap: anywhere; }
+.np-lead, .np-col, .np-body { min-width: 0; }
+.np-lead, .np-col { overflow: hidden; }
 .np-top { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; letter-spacing: .06em; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
 .np-name { text-align: center; font-size: clamp(30px, 6vw, 60px); font-weight: 900; letter-spacing: .14em; margin: 8px 0 4px; padding: 2px 0 10px; border-bottom: 3px double var(--rule); }
 .np-motto { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-style: italic; border-bottom: 1px solid var(--rule); padding: 4px 0; margin-bottom: 14px; }
-.np-main { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(230px, 1fr); gap: 22px; }
-.np-lead { border-right: 1px solid var(--rule); padding-right: 20px; min-width: 0; }
 .np-hl { font-size: clamp(24px, 3.8vw, 40px); line-height: 1.22; margin: 0 0 8px; font-weight: 900; word-break: keep-all; }
 .np-sub { font-size: 14px; font-style: italic; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 4px 0; margin-bottom: 10px; }
 .np-subhl { font-size: 17px; margin: 8px 0; font-weight: 800; }
@@ -320,28 +321,9 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 .np-body.long { column-count: 2; column-gap: 24px; column-rule: 1px solid rgba(45, 38, 26, .35); }
 .np-body p { margin: 0 0 .7em; } .np-body.long p:first-child::first-letter { float: left; font-size: 3.2em; line-height: .86; padding: 4px 7px 0 0; font-weight: 900; }
 .np-none { opacity: .6; }
-.np-analysis { margin-top: 14px; border-top: 1px solid var(--rule); padding-top: 6px; } .np-analysis h4 { margin: 0 0 3px; font-size: 12px; letter-spacing: .22em; } .np-analysis p { margin: 0; font-size: 13.5px; font-style: italic; opacity: .9; word-break: keep-all; }
-.np-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.np-box { position: relative; border: 1px solid var(--rule); padding: 8px 11px 10px; background: rgba(255, 255, 255, .28); }
-.np-box h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .22em; border-bottom: 1px solid var(--rule); padding-bottom: 3px; }
-.np-cmd { font-weight: 700; font-size: 15px; padding-right: 74px; word-break: keep-all; }
-.np-stamp { position: absolute; right: 8px; top: 24px; transform: rotate(-11deg); border: 3px solid; padding: 0 8px; font-weight: 900; letter-spacing: .22em; font-size: 16px; opacity: .88; }
-.np-stamp.success { color: #2a6a35; border-color: #2a6a35; } .np-stamp.failure { color: #9b2218; border-color: #9b2218; }
-.np-odds-bar { position: relative; height: 10px; background: #d9cca6; border: 1px solid var(--rule); margin: 10px 0 5px; } .np-odds-bar i { display: block; height: 100%; background: #6f9650; }
-.np-odds-bar b { position: absolute; top: -4px; width: 3px; height: 16px; background: #9b2218; }
-.np-odds-txt { font-size: 12px; } .np-odds-txt span { opacity: .8; }
-.np-stats { width: 100%; border-collapse: collapse; font-size: 13px; } .np-stats th { text-align: left; font-weight: 600; } .np-stats td { text-align: right; padding-left: 6px; } .np-stats .arr { opacity: .5; }
-.np .up { color: #2a6a35; font-weight: 700; } .np .down { color: #9b2218; font-weight: 700; }
-.np-terr { font-size: 14px; } .np-chips { margin-top: 6px; font-size: 12px; } .np-chips em { font-style: normal; margin-right: 4px; opacity: .7; }
-.np-chip { display: inline-block; border: 1px solid var(--rule); padding: 0 6px; margin: 2px 3px 2px 0; font-size: 12px; } .np-chip.gain { background: #d9e8c9; } .np-chip.loss { background: #ecc9c4; } .np-chip.more { opacity: .7; }
-.np-bottom { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; margin-top: 16px; border-top: 3px double var(--rule); padding-top: 12px; }
-.np-col h3 { margin: 0 0 6px; font-size: 15px; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
-.np-col p { margin: 0 0 .6em; font-size: 14px; text-align: justify; word-break: keep-all; }
 .np-flash { margin: 0 0 8px; padding-left: 18px; font-weight: 700; font-size: 14px; }
 .np-notes { margin: 0; padding: 0; list-style: none; font-size: 13px; } .np-notes li { margin: 4px 0; }
-.np-rels { margin: 0; padding: 0; list-style: none; font-size: 13px; } .np-rels li { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted rgba(45, 38, 26, .4); padding: 2px 0; } .np-rels .war { color: #9b2218; }
-.np-rej { margin-top: 14px; font-size: 12px; border-top: 1px solid var(--rule); padding-top: 6px; opacity: .85; }
-@media (max-width: 860px) { .np-main { grid-template-columns: 1fr; } .np-lead { border-right: 0; padding-right: 0; } .np-body.long { column-count: 1; } .np { padding: 14px 16px 20px; } }
+@media (max-width: 860px) { .np-body.long { column-count: 1; } .np-bottom { grid-template-columns: 1fr; } .np-col { padding: 8px 0 0; border-left: 0; border-top: 1px solid rgba(45, 38, 26, .4); } .np-col:first-child { border-top: 0; } .np { padding: 14px 16px 20px; } }
 
 /* ---- 지난 신문 ---- */
 .arch-list { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
@@ -360,3 +342,12 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 .modal .diff-cards { grid-template-columns: 1fr 1fr; } .modal .diff-card { background: #0e1a2c; border-color: var(--panel-border); } .modal .diff-card.on { border-color: var(--accent); }
 .modal .diff-card b { color: var(--text); } .modal .diff-card small { color: var(--muted); }
 @media (max-width: 900px) { .diff-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 신문: 소식만 싣는 전폭 지면 */
+.np-lead { margin-bottom: 4px; }
+.np-motto { justify-content: center; letter-spacing: .5em; }
+.np-bottom { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); margin-top: 18px; border-top: 3px double var(--rule); padding-top: 14px; }
+.np-col { margin: 0 0 14px; padding: 0 18px; border-left: 1px solid rgba(45, 38, 26, .4); } .np-col:first-child { padding-left: 0; border-left: 0; } .np-col:last-child { padding-right: 0; }
+.np-col h3 { margin: 0 0 6px; font-size: 15px; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
+.np-col p { margin: 0 0 .6em; font-size: 14px; text-align: justify; word-break: keep-all; }
+.np-notes li { line-height: 1.55; }

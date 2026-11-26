@@ -2,7 +2,7 @@ import type { World } from '../data/world';
 import type { Adjudication } from '../engine/diff';
 import { normalizeAdjudication } from '../engine/diff';
 import type { GameState } from '../engine/state';
-import { buildUserPrompt, systemPrompt } from './prompt';
+import { PROMPT_LEVELS, fitPrompt } from './prompt';
 import { localAdjudicate } from './local';
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -17,10 +17,10 @@ export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiMode
   difficulty: Difficulty }
 
 /** OpenAI 호환 API(채팅 완성)를 쓰는 무료 서비스들. 브라우저에서 직접 호출할 수 있는(CORS 허용) 곳만 넣었다. */
-export interface FreePreset { id: string; name: string; base: string; needKey: boolean; keyUrl: string; defaultModel: string; note: string }
+export interface FreePreset { id: string; name: string; base: string; needKey: boolean; keyUrl: string; defaultModel: string; note: string; /** 키 없이 쓸 때 요청 사이에 둘 최소 간격(ms) */ freeIntervalMs?: number; /** 키 없이 쓸 때 요청 전체(시스템+사용자 글자 수) 한도 */ maxPromptChars?: number }
 export const FREE_PRESETS: FreePreset[] = [
-  { id: 'pollinations', name: 'Pollinations (키 없이)', base: 'https://text.pollinations.ai/openai', needKey: false, keyUrl: '', defaultModel: 'openai-fast',
-    note: '가입도 키도 필요 없습니다. 명령 내용이 Pollinations 서버로 전송되고, 붐비거나 정책이 바뀌면 느려지거나 막힐 수 있습니다.' },
+  { id: 'pollinations', name: 'Pollinations (키 없이)', base: 'https://text.pollinations.ai/openai', needKey: false, keyUrl: 'https://enter.pollinations.ai', defaultModel: 'openai-fast', freeIntervalMs: 45000, maxPromptChars: 14500,
+    note: '가입도 키도 필요 없지만 키 없이는 IP당 45초에 한 번만 답하고 요청 길이가 16,000자까지입니다(게임이 알아서 간격을 두고 내용을 줄입니다). 명령 내용이 Pollinations 서버로 전송됩니다. Pollinations 키가 있으면 아래에 넣으세요(제한이 풀린다고 안내되는데, 이 게임에서 직접 확인하지는 못했습니다).' },
   { id: 'groq', name: 'Groq (무료 키)', base: 'https://api.groq.com/openai/v1', needKey: true, keyUrl: 'https://console.groq.com/keys', defaultModel: 'llama-3.3-70b-versatile',
     note: '아주 빠릅니다. 무료 키에는 분당·하루 사용 한도가 있습니다(한도는 Groq 정책).' },
   { id: 'openrouter', name: 'OpenRouter (무료 모델)', base: 'https://openrouter.ai/api/v1', needKey: true, keyUrl: 'https://openrouter.ai/keys', defaultModel: '',
@@ -50,9 +50,19 @@ export const providerLabel = (cfg: LlmConfig): string => {
 export interface Hooks { onProgress?: (msg: string) => void }
 
 /** busy: 서버가 붐벼서 잠깐 기다리면 될 수 있는 오류(429, 503 …). 키 오류 같은 것과 구분해 자동 재시도·대체에 쓴다. */
-export class LlmError extends Error { busy = false; retryAfterMs = 0; }
+export class LlmError extends Error { busy = false; retryAfterMs = 0; /** 입력이 너무 길어 거절됨(413 등): 프롬프트를 줄여 다시 보내면 된다 */ tooLong = false; }
 const busyError = (msg: string, retryAfterMs = 0): LlmError => { const e = new LlmError(msg); e.busy = true; e.retryAfterMs = retryAfterMs; return e; };
-const retryAfterOf = (res: Response): number => { const v = Number(res.headers.get('retry-after')); return Number.isFinite(v) && v > 0 ? Math.min(v * 1000, 15000) : 0; };
+const MAX_WAIT_MS = 60_000;
+const retryAfterOf = (res: Response): number => { const v = Number(res.headers.get('retry-after')); return Number.isFinite(v) && v > 0 ? Math.min(v * 1000, MAX_WAIT_MS) : 0; };
+/** 오류 문구에서 "Retry after 14s"·"try again in 2 minutes" 같은 대기 시간을 읽는다. */
+const retryFromText = (t: string): number => {
+  const m = /(?:retry|try again)[^0-9]{0,12}(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s\b|sec\w*|m\b|min\w*)/i.exec(t);
+  if (!m) return 0;
+  const n = Number(m[1]), u = m[2].toLowerCase();
+  return Math.min(Math.round(u.startsWith('ms') || u.startsWith('milli') ? n : u.startsWith('m') ? n * 60_000 : n * 1000), MAX_WAIT_MS);
+};
+/** "한도에 걸렸으니 잠깐 뒤 다시"라는 뜻의 문구(크레딧·결제 문제와 구분한다). */
+const RATE_TEXT = /free limit|rate.?limit|reply every|every \d+ ?(?:sec|min|s\b)|retry after|too many requests|slow down|try again (?:in|later)/i;
 
 type Msg = { role: 'user' | 'assistant'; text: string };
 
@@ -125,8 +135,13 @@ async function epFetch(ep: Endpoint, path: string, init: RequestInit): Promise<R
     let detail = '';
     try { detail = ((await res.json()) as { error?: { message?: string } | string }).error as string ?? ''; if (typeof detail !== 'string') detail = (detail as { message?: string }).message ?? ''; } catch { /* 무시 */ }
     if (res.status === 401 || res.status === 403) throw new LlmError(`${ep.label} API 키가 올바르지 않거나 이 키로는 쓸 수 없습니다(${res.status}). 메뉴에서 키를 확인하세요. ${detail.slice(0, 120)}`);
-    if (res.status === 402 || (res.status === 429 && /quota|billing|credit/i.test(detail))) throw new LlmError(`${ep.label} 크레딧(사용 한도)이 부족합니다. ${detail.slice(0, 120)}`);
-    if (res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) throw busyError(`${ep.label}가 붐빕니다(${res.status}).`, retryAfterOf(res));
+    const wait = Math.max(retryAfterOf(res), retryFromText(detail));
+    const rateLimited = RATE_TEXT.test(detail) || wait > 0;
+    // 상태 코드가 402·429 어느 쪽이든 "잠깐 기다리면 된다"는 문구가 있으면 붐빔으로 본다(Pollinations 무료 한도 등)
+    if (rateLimited) throw busyError(`${ep.label}: ${detail.slice(0, 140) || '요청이 몰려 잠시 기다려야 합니다'}`, wait);
+    if (res.status === 402 || (res.status === 429 && /quota|billing|credit|insufficient/i.test(detail))) throw new LlmError(`${ep.label} 크레딧(사용 한도)이 부족합니다. ${detail.slice(0, 160)}`);
+    if (res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) throw busyError(`${ep.label}가 붐빕니다(${res.status}).`, wait);
+    if (res.status === 413 || /prompt too long|too long|context length|max(?:imum)? context|characters max/i.test(detail)) { const e = new LlmError(`입력이 너무 깁니다(${res.status}): ${detail.slice(0, 160)}`); e.tooLong = true; throw e; }
     if (res.status === 404) throw new LlmError(`모델 "${ep.model}"을(를) 쓸 수 없습니다. "모델 불러오기"로 지금 쓸 수 있는 모델 목록을 받아 고르세요.`);
     const e = new LlmError(`${ep.label} 오류 ${res.status}: ${detail.slice(0, 200)}`); (e as LlmError & { status?: number }).status = res.status; throw e;
   }
@@ -247,7 +262,8 @@ async function callWebLlm(cfg: LlmConfig, system: string, msgs: Msg[], hooks: Ho
 }
 
 /** 붐빌 때 같은 AI에 다시 시도하기 전에 기다리는 시간(ms). 테스트에서 줄일 수 있다. */
-export const retryPolicy = { delaysMs: [3000, 8000] };
+export const retryPolicy = { delaysMs: [3000, 8000], /** 키 없는 무료 서버 요청 사이 간격을 덮어쓴다(테스트용). null이면 서비스별 기본값 */ paceMs: null as number | null };
+const lastFreeCall = new Map<string, number>();
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((res, rej) => {
   const t = setTimeout(res, ms); signal.addEventListener('abort', () => { clearTimeout(t); rej(new LlmError('중단했습니다.')); }, { once: true });
 });
@@ -270,17 +286,32 @@ function fallbackProviders(cfg: LlmConfig, primary: ProviderId): ProviderId[] {
 /** 한 AI에게 판정을 시킨다. 붐비면 기다렸다 다시, 형식이 틀리면 오류를 알려 주고 한 번 다시 시도한다. */
 async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, w: World, command: string, pass: boolean, hooks: Hooks): Promise<{ adj: Adjudication; mode: string }> {
   const cfg = { ...cfg0, provider };
-  const compact = provider === 'webllm';
-  const system = systemPrompt(w, compact);
-  const msgs: Msg[] = [{ role: 'user', text: buildUserPrompt(s, w, command, pass, compact) }];
+  // 입력 길이에 한도가 있는 무료 서버(키 없이 쓰는 Pollinations 등)는 한도 안에 들어가는 단계까지 프롬프트를 줄인다.
+  // 서버가 그래도 413으로 거절하면 한 단계씩 더 줄여 다시 보낸다.
+  const limit = provider === 'free' && !freeEndpoint(cfg).key ? freePreset(cfg.freePreset).maxPromptChars ?? 0 : 0;
+  let level = provider === 'webllm' ? 2 : 0;
+  let system = '', msgs: Msg[] = [];
+  const rebuild = () => { const p = fitPrompt(w, s, command, pass, limit, level); level = p.level; system = p.system; msgs = [{ role: 'user', text: p.user }]; };
+  rebuild();
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 90_000 + retryPolicy.delaysMs.reduce((a, b) => a + b, 0));
+  const timer = setTimeout(() => ctl.abort(), 90_000 + (retryPolicy.delaysMs.length + 1) * MAX_WAIT_MS);
+  // 키 없는 무료 서버(Pollinations 등)는 요청 사이에 일정 간격이 필요하다: 미리 기다려서 한도에 걸리지 않게 한다
+  const pace = async () => {
+    if (provider !== 'free') return;
+    const pr = freePreset(cfg.freePreset), ep = freeEndpoint(cfg), gap = retryPolicy.paceMs ?? pr.freeIntervalMs ?? 0;
+    if (!gap || ep.key) return;
+    const wait = (lastFreeCall.get(pr.id) ?? 0) + gap - Date.now();
+    if (wait > 300) { hooks.onProgress?.(`${pr.name.replace(/ \(.*\)$/, '')} 무료 이용은 ${Math.round(gap / 1000)}초에 한 번만 답해서 ${Math.ceil(wait / 1000)}초 기다립니다…`); await sleep(wait, ctl.signal); }
+    lastFreeCall.set(pr.id, Date.now());
+  };
   const call = async (): Promise<string> => {
     for (let i = 0; ; i++) {
       try {
+        await pace();
         return provider === 'gemini' ? await callGemini(cfg, system, msgs, ctl.signal) : provider === 'claude' ? await callClaude(cfg, system, msgs, ctl.signal)
           : provider === 'openai' ? await callOpenAi(cfg, system, msgs, ctl.signal) : provider === 'free' ? await callFree(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
       } catch (e) {
+        if (e instanceof LlmError && e.tooLong && level < PROMPT_LEVELS - 1) { level += 1; rebuild(); hooks.onProgress?.('요청이 길어서 내용을 줄여 다시 보냅니다…'); i = -1; continue; }
         if (!(e instanceof LlmError) || !e.busy || i >= retryPolicy.delaysMs.length) throw e;
         const wait = Math.max(e.retryAfterMs, retryPolicy.delaysMs[i]);
         hooks.onProgress?.(`${providerLabel(cfg)}가 붐벼서 ${Math.round(wait / 1000)}초 뒤 다시 시도합니다… (${i + 1}/${retryPolicy.delaysMs.length})`);
@@ -298,8 +329,12 @@ async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, 
         if (parsed.ok) return { adj: parsed.value, mode: modeOf(cfg, provider) };
         lastErr = parsed.error;
       } catch (e) { lastErr = (e as Error).message; }
-      msgs.push({ role: 'assistant', text: text.slice(0, 6000) });
-      msgs.push({ role: 'user', text: `직전 출력이 형식에 맞지 않았다: ${lastErr}. 위 JSON 형식에 정확히 맞춰 JSON 객체 하나만 다시 출력하라.` });
+      const fix = `직전 출력이 형식에 맞지 않았다: ${lastErr}. 위 JSON 형식에 정확히 맞춰 JSON 객체 하나만 다시 출력하라.`;
+      const used = system.length + msgs.reduce((n, m) => n + m.text.length, 0) + fix.length;
+      // 길이 한도가 있으면 이전 출력은 한도가 허락하는 만큼만 되돌려 보낸다
+      const echo = limit ? Math.max(0, Math.min(1200, limit + 1500 - used)) : 6000;
+      if (echo > 200) msgs.push({ role: 'assistant', text: text.slice(0, echo) });
+      msgs.push({ role: 'user', text: fix });
     }
     throw new LlmError(`AI가 올바른 형식으로 답하지 못했습니다 (${lastErr}). 다시 시도하거나 명령을 단순하게 바꿔 보세요.`);
   } finally { clearTimeout(timer); }

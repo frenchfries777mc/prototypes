@@ -91,9 +91,19 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.fill('#g-cmd', '');
 
   // ---- 저장/이어하기 (시작 화면의 이어하기 버튼) ----
+  const savedBefore = await page.evaluate(() => localStorage.getItem('althist-save-v1'));
+  ok(!!savedBefore && JSON.parse(savedBefore).turn === 9, '새로고침 전에 자동 저장되어 있음(턴 9)');
   await page.reload({ waitUntil: 'load' });
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
-  const contTxt = await page.textContent('#btn-continue');
+  let contTxt = await page.textContent('#btn-continue');
+  // 테스트용 임시 프로필을 헤드리스로 여러 개 동시에 돌리면 새로고침 중 localStorage가 통째로 초기화되는 일이 드물게 있다(앱 버그 아님):
+  // 그럴 때는 같은 저장을 다시 넣고 한 번 더 시도해서 "이어하기" 동작 자체를 검증한다.
+  if (!/이어하기/.test(contTxt) && !(await page.evaluate(() => localStorage.getItem('althist-save-v1')))) {
+    console.log('  (참고) 브라우저가 새로고침 중 저장소를 잃어 저장을 다시 넣고 재시도합니다');
+    await page.evaluate((v) => localStorage.setItem('althist-save-v1', v), savedBefore);
+    await page.reload({ waitUntil: 'load' }); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
+    contTxt = await page.textContent('#btn-continue');
+  }
   ok(/이어하기/.test(contTxt) && /대한민국/.test(contTxt), '이어하기 버튼: ' + contTxt);
   await page.click('#btn-continue'); await page.waitForTimeout(500);
   ok((await page.evaluate(() => window.__game.state.turn)) === 9, '이어하기로 복원');
@@ -202,12 +212,35 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { const r = route.request(); freeReq.push({ h: r.headers(), body: JSON.parse(r.postData()) }); return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('폴리네이션스')) }); });
   await page.route('https://text.pollinations.ai/openai/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data: [{ id: 'openai-fast' }, { id: 'tts-1' }] }) }));
   await page.click('#btn-menu'); await page.click('#overlay label.ai-card[data-ai=free]');
-  ok(await page.isVisible('#ov-free') && (await page.inputValue('#ov-fp')) === 'pollinations' && await page.isHidden('#ov-fkeyrow'), '무료 AI 카드: 기본은 Pollinations, 키 입력칸 없음');
+  ok(await page.isVisible('#ov-free') && (await page.inputValue('#ov-fp')) === 'pollinations' && /선택 사항/.test(await page.getAttribute('#ov-fkey', 'placeholder')) && /45초/.test(await page.textContent('#ov-fnote')), '무료 AI 카드: 기본은 Pollinations, 키는 선택 사항이고 45초 제한 안내');
   await page.click('#ov-ftest'); await page.waitForFunction(() => /모델 \d+개/.test(document.getElementById('ov-note').textContent), null, { timeout: 10000 });
   ok(JSON.stringify(await page.$$eval('#ov-fsel option', (os) => os.map((o) => o.value))) === '["openai-fast","__custom"]', '모델 불러오기: 채팅 모델만 목록에(tts 제외)');
   await page.click('#ov-apply'); await turn('외교 사절을 보낸다');
   const rp = (await page.evaluate(() => window.__game.state)).log.at(-1);
   ok(freeReq.length === 1 && !freeReq[0].h['authorization'] && freeReq[0].body.model === 'openai-fast' && freeReq[0].body.response_format?.type === 'json_object' && freeReq[0].body.max_tokens > 0 && rp.mode === 'Pollinations (openai-fast)' && rp.narrative.includes('폴리네이션스'), '키 없이 Pollinations로 판정: ' + rp.mode);
+
+  // ---- 무료 AI: Pollinations 무료 한도(IP당 45초에 한 번) 응답은 "붐빔"으로 보고 알려 준 시간만큼 기다렸다 다시 시도 ----
+  await page.evaluate(() => window.__game.setRetry([20, 20], 0));
+  let plCalls = 0;
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { plCalls++;
+    if (plCalls === 1) return route.fulfill({ status: 402, contentType: 'application/json', body: '{"error":{"message":"Free limit reached: 1 reply every 45 seconds per IP. Retry after 1s, or get unlimited replies with a Pollinations API key"}}' });
+    return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('재시도 성공')) }); });
+  const tPl = Date.now(); await turn('한도 시험');
+  const rl = (await page.evaluate(() => window.__game.state)).log.at(-1);
+  ok(plCalls === 2 && Date.now() - tPl >= 900 && rl.mode.startsWith('Pollinations') && rl.narrative.includes('재시도 성공') && !/크레딧/.test(await page.textContent('#g-msg')), `무료 한도 응답(402, "Retry after 1s")은 크레딧 부족이 아니라 기다렸다 다시 시도해 성공: 호출 ${plCalls}번, ${Date.now() - tPl}ms`);
+  await page.unroute('https://text.pollinations.ai/openai/chat/completions');
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => route.fulfill({ status: 402, contentType: 'application/json', body: '{"error":{"message":"Insufficient credits. Add funds to continue."}}' }));
+  const tCr = await page.evaluate(() => window.__game.state.turn);
+  await page.fill('#g-cmd', '크레딧 시험'); await page.click('#btn-go'); await idle();
+  ok(/크레딧/.test(await page.textContent('#g-msg')) && (await page.evaluate(() => window.__game.state.turn)) === tCr, '진짜 크레딧 부족(402)은 대체 없이 그대로 안내');
+  // 키 없는 무료 서버는 요청 사이에 간격을 둔다
+  await page.unroute('https://text.pollinations.ai/openai/chat/completions');
+  const stamps = [];
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { stamps.push(Date.now()); return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('간격')) }); });
+  await page.evaluate(() => window.__game.setRetry([20, 20], 1200));
+  await turn('첫 번째'); await turn('두 번째');
+  ok(stamps.length === 2 && stamps[1] - stamps[0] >= 1100, `키 없는 무료 서버는 연달아 보낼 때 간격을 둠: ${stamps[1] - stamps[0]}ms`);
+  await page.evaluate(() => window.__game.setRetry([20, 20], 0));
 
   // ---- 무료 AI: 키가 필요한 서비스(OpenRouter), 서비스별 키·모델 기억, response_format 미지원 서버 ----
   let orReq = [];

@@ -7,28 +7,28 @@ export function wpost(year) {
   const y39 = year === 1939, y47 = year === 1947, y50 = year === 1950;
   const polities = {
     USA: { n: '미국', e: 'United States', c: '#5b9bd5', s: [66, 96, 62, 84], a: ['미국'] },
-    GBR: { n: y39 ? '영국 (대영제국)' : '영국', e: 'United Kingdom', c: '#c0443a', s: [y39 ? 68 : 52, y39 ? 88 : 58, y39 ? 80 : 66, y39 ? 92 : 78], a: ['영국', '브리튼'] },
-    FRA: { n: '프랑스', e: 'France', c: '#4a78c2', s: [y39 ? 52 : 42, y39 ? 76 : 50, y39 ? 76 : 50, y39 ? 78 : 60], a: ['프랑스'] },
+    GBR: { n: y39 ? '대영제국' : '영국', e: 'United Kingdom', c: '#c0443a', s: [y39 ? 68 : 52, y39 ? 88 : 58, y39 ? 80 : 66, y39 ? 92 : 78], a: ['영국', '대영제국', '브리튼'] },
+    FRA: { n: y39 ? '프랑스 제3공화국' : '프랑스 제4공화국', e: 'France', c: '#4a78c2', s: [y39 ? 52 : 42, y39 ? 76 : 50, y39 ? 76 : 50, y39 ? 78 : 60], a: ['프랑스'] },
     SOV: { n: '소련', e: 'Soviet Union', c: '#a83232', s: [58, 66, 90, 82], a: ['소련', '소비에트', '러시아'] },
-    JPN: { n: y39 ? '일본 제국' : '일본 (연합군 점령)', e: 'Japan', c: '#b88f6a', s: y39 ? [70, 70, 86, 66] : [38, 28, 6, 10], a: ['일본'] },
-    CHN: { n: y50 ? '중화인민공화국' : '중화민국 (국민당 정부)', e: y50 ? "People's Republic of China" : 'Republic of China', c: '#d9825b', s: y50 ? [56, 40, 62, 50] : [30, 44, 56, 46], a: ['중국', y50 ? '중공' : '국민당'] },
-    BEL: { n: '벨기에', e: 'Belgium', c: '#e8c26a', s: [60, 52, 30, 30], a: ['벨기에'] },
-    NET: { n: '네덜란드', e: 'Netherlands', c: '#e0b84f', s: [60, 52, 28, 32], a: ['네덜란드'] },
-    POR: { n: '포르투갈', e: 'Portugal', c: '#5f8f3a', s: [58, 36, 26, 26], a: ['포르투갈'] },
-    SPA: { n: '스페인 (프랑코)', e: 'Spain', c: '#c46a3a', s: [44, 34, 40, 26], a: ['스페인'] },
-    YUG: { n: '유고슬라비아', e: 'Yugoslavia', c: '#8a63d2', s: [48, 34, 48, 28], a: ['유고슬라비아', '유고'] },
-    ROM: { n: '루마니아', e: 'Romania', c: '#a3a55a', s: [46, 36, 44, 24], a: ['루마니아'] },
-    KOR: { n: y39 ? '일제강점기 조선' : y47 ? '남조선 (미군정)' : '대한민국', e: 'South Korea', c: '#3b7dd8', s: [36, 24, 16, 16], a: ['한국', '대한민국', '남한', '남조선'] },
-    PRK: { n: y47 ? '북조선 (소련군정)' : '북한', e: 'North Korea', c: '#6b7bd8', s: [42, 20, 28, 12], a: ['북한', '북조선', '조선인민'] },
+    JPN: { n: y39 ? '일본 제국' : '연합군 점령 일본', e: 'Japan', c: '#b88f6a', s: y39 ? [70, 70, 86, 66] : [38, 28, 6, 10], a: ['일본'] },
+    CHN: { n: y50 ? '중화인민공화국' : '중화민국', e: y50 ? "People's Republic of China" : 'Republic of China', c: '#d9825b', s: y50 ? [56, 40, 62, 50] : [30, 44, 56, 46], a: ['중국', y50 ? '중공' : '국민당'] },
+    BEL: { n: '벨기에 왕국', e: 'Belgium', c: '#e8c26a', s: [60, 52, 30, 30], a: ['벨기에'] },
+    NET: { n: '네덜란드 왕국', e: 'Netherlands', c: '#e0b84f', s: [60, 52, 28, 32], a: ['네덜란드'] },
+    POR: { n: '포르투갈 공화국', e: 'Portugal', c: '#5f8f3a', s: [58, 36, 26, 26], a: ['포르투갈'] },
+    SPA: { n: '프랑코 스페인', e: 'Spain', c: '#c46a3a', s: [44, 34, 40, 26], a: ['스페인'] },
+    YUG: { n: y39 ? '유고슬라비아 왕국' : '유고슬라비아', e: 'Yugoslavia', c: '#8a63d2', s: [48, 34, 48, 28], a: ['유고슬라비아', '유고'] },
+    ROM: { n: y50 ? '루마니아 인민공화국' : '루마니아 왕국', e: 'Romania', c: '#a3a55a', s: [46, 36, 44, 24], a: ['루마니아'] },
+    KOR: { n: y39 ? '일제강점기 조선' : y47 ? '남조선 미군정' : '대한민국', e: 'South Korea', c: '#3b7dd8', s: [36, 24, 16, 16], a: ['한국', '대한민국', '남한', '남조선'] },
+    PRK: { n: y47 ? '북조선 소련군정' : '북한', e: 'North Korea', c: '#6b7bd8', s: [42, 20, 28, 12], a: ['북한', '북조선', '조선인민'] },
   };
   const paint = [];
   const rest = { rest: 'modern', restScale: 0.7 };
 
   if (y39) {
     Object.assign(polities, {
-      GER: { n: '독일 (제3제국)', e: 'Nazi Germany', c: '#7d8590', s: [72, 84, 96, 86], a: ['독일', '나치'] },
+      GER: { n: '나치 독일', e: 'Nazi Germany', c: '#7d8590', s: [72, 84, 96, 86], a: ['독일', '나치'] },
       ITA: { n: '이탈리아 왕국', e: 'Kingdom of Italy', c: '#d46a9a', s: [58, 60, 66, 58], a: ['이탈리아'] },
-      POL: { n: '폴란드', e: 'Poland', c: '#c872b4', s: [58, 38, 52, 34], a: ['폴란드'] },
+      POL: { n: '폴란드 제2공화국', e: 'Poland', c: '#c872b4', s: [58, 38, 52, 34], a: ['폴란드'] },
     });
     delete polities.KOR; delete polities.PRK;
     paint.push(
@@ -67,10 +67,10 @@ export function wpost(year) {
     );
     if (y47) {
       Object.assign(polities, {
-        CCP: { n: '중국 공산당 (인민해방군)', e: 'Chinese Communists', c: '#e8574a', s: [58, 22, 54, 24], a: ['공산당', '마오쩌둥', '중공'] },
-        WGE: { n: '서독 점령지 (미·영·프)', e: 'Western Germany (occupied)', c: '#9a6b3d', s: [34, 34, 8, 14], a: ['서독'] },
-        EGE: { n: '동독 점령지 (소련)', e: 'Eastern Germany (occupied)', c: '#b8795a', s: [32, 24, 8, 8], a: ['동독'] },
-        DRV: { n: '베트남 민주공화국 (베트민)', e: 'Viet Minh', c: '#d6a03a', s: [56, 14, 40, 14], a: ['베트남', '베트민', '호찌민'] },
+        CCP: { n: '중국 공산당', e: 'Chinese Communists', c: '#e8574a', s: [58, 22, 54, 24], a: ['공산당', '마오쩌둥', '중공'] },
+        WGE: { n: '서독 점령지', e: 'Western Germany (occupied)', c: '#9a6b3d', s: [34, 34, 8, 14], a: ['서독'] },
+        EGE: { n: '동독 점령지', e: 'Eastern Germany (occupied)', c: '#b8795a', s: [32, 24, 8, 8], a: ['동독'] },
+        DRV: { n: '베트남 민주공화국', e: 'Viet Minh', c: '#d6a03a', s: [56, 14, 40, 14], a: ['베트남', '베트민', '호찌민'] },
         IDN: { n: '인도네시아 공화국', e: 'Indonesia', c: '#c96a4a', s: [48, 16, 30, 12], a: ['인도네시아'] },
       });
       paint.push(
@@ -84,9 +84,9 @@ export function wpost(year) {
     }
     if (y50) {
       Object.assign(polities, {
-        TWN: { n: '중화민국 (대만)', e: 'Republic of China (Taiwan)', c: '#2e9d8f', s: [40, 36, 40, 24], a: ['대만', '타이완', '중화민국', '국민당'] },
+        TWN: { n: '중화민국', e: 'Republic of China (Taiwan)', c: '#2e9d8f', s: [40, 36, 40, 24], a: ['대만', '타이완', '중화민국', '국민당'] },
         TIB: { n: '티베트', e: 'Tibet', c: '#e8d28a', s: [50, 8, 10, 6], a: ['티베트'] },
-        DRV: { n: '베트남 민주공화국 (베트민)', e: 'Viet Minh', c: '#d6a03a', s: [56, 14, 44, 16], a: ['베트남', '베트민', '호찌민'] },
+        DRV: { n: '베트남 민주공화국', e: 'Viet Minh', c: '#d6a03a', s: [56, 14, 44, 16], a: ['베트남', '베트민', '호찌민'] },
         FRG: { n: '서독', e: 'West Germany', c: '#9a6b3d', s: [46, 54, 14, 28], a: ['서독'] },
         GDR: { n: '동독', e: 'East Germany', c: '#b8795a', s: [42, 38, 24, 16], a: ['동독'] },
       });

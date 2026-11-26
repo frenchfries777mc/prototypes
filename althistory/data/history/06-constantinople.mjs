@@ -12,7 +12,7 @@ export default {
     VEN: { n: '베네치아 공화국', e: 'Republic of Venice', c: '#e0b84f', s: [62, 78, 58, 60], a: ['베네치아'] },
     GEN: { n: '제노바 공화국', e: 'Republic of Genoa', c: '#5b9bd5', s: [50, 66, 46, 48], a: ['제노바'] },
     HUN: { n: '헝가리 왕국', e: 'Kingdom of Hungary', c: '#c0443a', s: [56, 50, 66, 50], a: ['헝가리'] },
-    ALB: { n: '알바니아 (스칸데르베그)', e: 'Albania (Skanderbeg)', c: '#d6697c', s: [62, 20, 52, 26], a: ['알바니아', '스칸데르베그'] },
+    ALB: { n: '스칸데르베그 알바니아', e: 'Albania (Skanderbeg)', c: '#d6697c', s: [62, 20, 52, 26], a: ['알바니아', '스칸데르베그'] },
     SER: { n: '세르비아 전제군주국', e: 'Serbian Despotate', c: '#8a63d2', s: [40, 30, 40, 22], a: ['세르비아'] },
     WAL: { n: '왈라키아 공국', e: 'Wallachia', c: '#a3a55a', s: [44, 26, 42, 18], a: ['왈라키아'] },
     PAP: { n: '교황청', e: 'Papal States', c: '#e8e0c8', s: [60, 42, 14, 74], a: ['교황'] },

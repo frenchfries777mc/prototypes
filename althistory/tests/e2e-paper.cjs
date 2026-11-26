@@ -54,8 +54,8 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   let rec = (await S()).log.at(-1);
   ok(rec.base === 70 && rec.feasibility === 53 && rec.difficulty === 'brutal', `지옥: AI 확률 70% → 53%로 보정 (${rec.base} → ${rec.feasibility})`);
   ok(reqs.at(-1).contents[0].parts[0].text.includes('DIFFICULTY: BRUTAL'), 'AI 요청에 난이도 지침이 들어감');
-  const hardTxt = await page.textContent('.np-odds-txt');
-  ok(/AI 판단 70%/.test(hardTxt) && /지옥/.test(hardTxt), '신문에 보정 내역 표시: ' + hardTxt.replace(/\s+/g, ' '));
+  const hardSheet = await page.textContent('#paper-sheet');
+  ok(!/성공 확률|굴림|판정|난이도|정정 보도|성 공|실 패/.test(hardSheet) && (await page.locator('.np-stamp, .np-odds-bar, .np-side, .np-stats').count()) === 0, '신문에는 판정(성패 도장·확률·굴림·난이도·판정 AI) 정보가 없고 소식만 실림');
   await page.keyboard.press('Escape');
 
   // 메뉴에서 난이도를 바꾸면 이어서 적용
@@ -77,8 +77,9 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   // ---- 신문 내용 ----
   const sheet = await page.textContent('#paper-sheet'), html = await page.innerHTML('#paper-sheet');
   ok(/대한민국 일보/.test(await page.textContent('.np-name')) && (await page.textContent('.np-hl')) === '한일 포괄 협력 협정 체결', '큰 제호와 대표 제목');
-  ok((await page.locator('.np-stats tr').count()) === 4 && /국정 지표/.test(sheet) && /영토/.test(sheet) && /세계 소식/.test(sheet) && /북한 미사일 발사/.test(sheet), '국정 지표 4줄, 영토, 세계 소식 기사');
-  ok(/성 공/.test(await page.textContent('.np-stamp')) && (await page.locator('.np-odds-bar').count()) === 1 && /외교·관계/.test(sheet) && /편집부 분석/.test(sheet), '성패 도장, 확률 막대, 외교·관계, 편집부 분석');
+  const [ea, eb] = r1.report.stats.economy, [ia, ib] = r1.report.stats.influence;
+  ok(/세계 소식/.test(sheet) && /북한 미사일 발사/.test(sheet) && new RegExp(`경제 지표가 ${ea}에서 ${eb}(으로|로) 올랐다`).test(sheet) && new RegExp(`영향력이 ${ia}에서 ${ib}(으로|로) 올랐다`).test(sheet) && /국정 동향/.test(sheet), `능력치 변화는 표가 아니라 기사 문장으로: ${(sheet.match(/경제 지표가[^.]*\./) ?? [''])[0]}`);
+  ok(/외교 소식/.test(sheet) && /일본과의 관계가 뚜렷이 가까워졌다/.test(sheet), '관계 변화도 문장으로(일본과의 관계가 뚜렷이 가까워졌다)');
   ok(html.includes('np-body long'), '긴 기사는 2단 조판');
   ok((await page.textContent('#g-latest')) !== '아직 발행된 신문이 없습니다', '패널의 신문 띠에 최신 제목');
   await page.keyboard.press('Escape'); ok(await page.isHidden('#paper'), 'Esc로 신문 닫기');
@@ -86,7 +87,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
 
   // ---- 명령 없이 넘기기 / 이전·다음 호 / 보관함 ----
   await page.click('#btn-pass'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle();
-  ok(/명령 없음|이번 달/.test(await page.textContent('.np-order')) && (await page.locator('.np-stamp').count()) === 0, '명령 없는 호: 도장 없이 "특별한 명령 없음"');
+  ok(/명령 없이 시간이 흘렀다/.test(await page.textContent('.np-sub')) && (await page.locator('.np-stamp').count()) === 0, '명령 없는 호: 소식만("명령 없이 시간이 흘렀다")')
   const n = (await S()).log.length;
   ok((await page.textContent('#paper-pos')) === `${n} / ${n}호` && await page.isDisabled('#paper-next'), `호수 표시와 마지막 호에서 다음 호 비활성: ${await page.textContent('#paper-pos')}`);
   await page.click('#paper-prev'); ok((await page.textContent('#paper-pos')) === `${n - 1} / ${n}호` && /제 3호|제 \d+호/.test(await page.textContent('.np-top')), '이전 호로 넘어감');
@@ -112,11 +113,49 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   ok(/뜻대로|성공했다/.test(await page.textContent('.np-body')), '서술이 비면 해석·이유로 채워 기사가 비지 않음');
   await page.click('#paper-close');
 
+  // ---- 긴 글이 칸(세로 구분선)을 넘어 옆 칸과 겹치지 않음 ----
+  const longTxt = '대한민국정부는이번협정을통해반도체소재공급망을안정화하고동시에해상안보협력체계를확대하기로합의하였으며'.repeat(2);
+  adj = mk({ interpretation: longTxt, if_success: { narrative: `${longTxt}\n짧은 문단 https://example.com/very/long/url/${'x'.repeat(80)}`, headlines: ['한일 ' + longTxt.slice(0, 70)] }, world_events: { narrative: longTxt, headlines: [longTxt.slice(0, 40)] } });
+  for (const w of [1500, 1000, 700]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.fill('#g-cmd', '긴 글 시험'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle();
+    const over = await page.evaluate(() => { const bad = [];
+      for (const el of document.querySelectorAll('.np *')) { if (getComputedStyle(el).display === 'inline') continue; const r = el.getBoundingClientRect(); if (!r.width) continue;
+        const box = (el.closest('.np-col') ?? el.closest('.np-lead') ?? document.querySelector('.np')).getBoundingClientRect();
+        if (el.scrollWidth > el.clientWidth + 1 || r.right > box.right + 1 || r.left < box.left - 1) bad.push(el.className || el.tagName); }
+      return bad.slice(0, 5); });
+    ok(over.length === 0, `${w}px: 긴 글이 칸 밖으로 넘치거나 옆 칸과 겹치지 않음 ${over.join(',')}`);
+    await page.click('#paper-close');
+  }
+  await page.setViewportSize({ width: 1500, height: 900 });
+
   // ---- 저장 후 불러와도 난이도 유지 ----
   await page.reload(); await page.waitForFunction(() => window.__ready === true, null, { timeout: 40000 });
   await page.click('#btn-continue'); await page.waitForTimeout(500);
   ok((await S()).difficulty === 'easy', '저장·이어하기 후에도 난이도 유지');
   await page.click('#btn-menu'); ok((await page.inputValue('#ov-ai input[name=ov-diff]:checked')) === 'easy', '메뉴를 열면 현재 난이도가 선택되어 있음');
+
+  // ---- 입력 길이 한도: 키 없는 Pollinations는 요청 전체 16,000자까지 ----
+  await page.keyboard.press('Escape'); await page.click('#ov-close').catch(() => {});
+  await page.evaluate(() => { window.__game.setRetry([20, 20], 0); window.__game.setCfg({ provider: 'free', freePreset: 'pollinations', freeKeys: {}, freeModels: {} }); window.__game.start('HAB', 'thirty-years-1618'); });
+  await page.waitForTimeout(700);
+  const sz = (b) => b.messages.reduce((n, m) => n + m.content.length, 0);
+  const okBody = (t) => JSON.stringify({ choices: [{ message: { role: 'assistant', content: t }, finish_reason: 'stop' }] });
+  let plReqs = [], want413 = false;
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { const b = JSON.parse(route.request().postData()); plReqs.push({ size: sz(b), auth: route.request().headers()['authorization'], sys: b.messages[0].content });
+    if (want413) { want413 = false; return route.fulfill({ status: 413, contentType: 'application/json', body: '{"error":{"message":"Prompt too long for the free Classic API: 16,000 characters max (about 4,000 tokens), counting messages and tools."}}' }); }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(JSON.stringify(mk({}))) }); });
+  const sizes = await page.evaluate(() => window.__game.promptSizes());
+  ok(sizes[0] > 16000 && sizes[1] <= 14500, `큰 템플릿(1618년)은 전체 프롬프트가 한도를 넘고(${sizes[0]}자) 줄인 단계는 한도 안(${sizes[1]}자)`);
+  await page.fill('#g-cmd', '시험'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
+  ok(plReqs.length === 1 && plReqs[0].size <= 16000 && plReqs[0].sys.includes('MAJOR_COUNTRY_IDS'), `키 없이 보낼 때 요청이 16,000자 이하(${plReqs[0]?.size}자)이고 주요 나라 목록은 유지`);
+  plReqs = []; want413 = true;
+  await page.fill('#g-cmd', '시험 둘'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
+  ok(plReqs.length === 2 && plReqs[1].size < plReqs[0].size && (await S()).log.at(-1).mode.startsWith('Pollinations'), `서버가 413을 주면 한 단계 줄여 다시 보내 성공: ${plReqs.map((r) => r.size).join(' → ')}`);
+  plReqs = [];
+  await page.evaluate(() => window.__game.setCfg({ freeKeys: { pollinations: 'pk-TEST' } }));
+  await page.fill('#g-cmd', '시험 셋'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
+  ok(plReqs.length === 1 && plReqs[0].size > 16000 && plReqs[0].auth === 'Bearer pk-TEST', `Pollinations 키가 있으면 줄이지 않고 전체 프롬프트를 보냄: ${plReqs[0]?.size}자`);
 
   console.log('페이지 오류:', errs.length ? errs.join(' ; ') : '없음'); if (errs.length) fail++;
   await browser.close(); console.log(fail ? `\n실패 ${fail}건` : '\n모두 통과'); process.exit(fail ? 1 : 0);

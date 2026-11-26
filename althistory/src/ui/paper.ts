@@ -2,10 +2,9 @@ import type { World } from '../data/world';
 import { STAT_KEYS, STAT_LABEL } from '../data/types';
 import type { GameState, TurnRecord } from '../engine/state';
 import { fmtDate } from '../engine/state';
-import { diffName } from '../engine/difficulty';
+import { P } from '../util/josa';
 
 const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const sign = (n: number): string => (n > 0 ? `+${n}` : `${n}`);
 const paras = (t: string): string[] => t.split(/\n+/).map((x) => x.trim()).filter(Boolean);
 
 /** 이번 호의 대표 제목. */
@@ -14,75 +13,74 @@ export function headlineOf(rec: TurnRecord): string {
   return mainHl[0] ?? worldHl[0] ?? (rec.outcome === 'pass' ? '이번 달은 조용히 지나갔다' : rec.interpretation || rec.command);
 }
 
-/** 신문에 실리는 기사거리: 이번 호의 모든 정보를 한 장에 모은다. */
+/**
+ * 신문 한 호. 소식만 싣는다: 성패 도장·확률·굴림·난이도·판정 AI·엔진 거부 같은 게임 판정 정보는 싣지 않는다.
+ * 수치 변화(능력치·영토·관계)는 숫자 표가 아니라 기사 문장으로 풀어 쓴다.
+ */
 export function renderPaper(rec: TurnRecord, ctx: { world: World; state: GameState; playerName: string; scenario: string; era: string }): string {
-  const { world: w, state: s } = ctx;
-  const L = (c: string) => esc(w.label(c));
+  const w = ctx.world;
+  const L = (c: string) => w.label(c);
   const r = rec.report;
   const mainNarr = rec.main?.narrative ?? rec.narrative;
   const worldNarr = rec.world ? rec.world.narrative : '';
   const mainHl = rec.main ? rec.main.headlines : rec.headlines;
   const worldHl = rec.world ? rec.world.headlines : [];
-  const headline = headlineOf(rec);
   const sub = rec.outcome === 'pass' ? '명령 없이 시간이 흘렀다' : rec.interpretation || rec.command;
-  const stamp = rec.outcome === 'pass' ? '' : `<div class="np-stamp ${rec.outcome}">${rec.outcome === 'success' ? '성 공' : '실 패'}</div>`;
-  const adjusted = rec.base !== undefined && rec.base !== rec.feasibility;
   const era = ({ 고대: 'ancient', 중세: 'medieval', 근세: 'early', 근대: 'modern', 현대: 'now' } as Record<string, string>)[ctx.era] ?? 'early';
 
-  const chance = rec.outcome === 'pass' ? '' : `<div class="np-odds">
-      <div class="np-odds-bar" title="굴림 ${rec.roll} / 성공 확률 ${rec.feasibility}%"><i style="width:${rec.feasibility}%"></i><b style="left:${Math.min(99, rec.roll)}%"></b></div>
-      <div class="np-odds-txt">성공 확률 <b>${rec.feasibility}%</b>${adjusted ? ` <span>(AI 판단 ${rec.base}% → 난이도 ${esc(diffName(rec.difficulty ?? 'normal'))} 보정)</span>` : ''} · 굴림 <b>${rec.roll}</b></div></div>`;
+  const li = (xs: string[]) => `<ul class="np-notes">${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  const section = (title: string, inner: string) => (inner ? `<section class="np-col"><h3>${title}</h3>${inner}</section>` : '');
 
-  const statRows = r ? STAT_KEYS.map((k) => {
-    const [a, b] = r.stats[k] ?? [0, 0], d = b - a;
-    return `<tr><th>${STAT_LABEL[k]}</th><td>${a}</td><td class="arr">→</td><td><b>${b}</b></td><td class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d ? `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}` : '–'}</td></tr>`;
-  }).join('') : '';
-  const terrBox = r ? (() => {
-    const [a, b] = r.terr, d = b - a;
-    const chips = (ids: string[], cls: string) => ids.slice(0, 8).map((id) => `<span class="np-chip ${cls}">${esc(w.provLabel(id))}</span>`).join('') + (ids.length > 8 ? `<span class="np-chip more">외 ${ids.length - 8}곳</span>` : '');
-    return `<section class="np-box"><h4>영토</h4><div class="np-terr"><b>${a}</b>주 → <b>${b}</b>주 <span class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d ? `(${sign(d)})` : '(변동 없음)'}</span></div>
-      ${r.gained.length ? `<div class="np-chips"><em>얻음</em>${chips(r.gained, 'gain')}</div>` : ''}${r.lost.length ? `<div class="np-chips"><em>잃음</em>${chips(r.lost, 'loss')}</div>` : ''}</section>`;
-  })() : '';
-
-  const pairLabel = (k: string) => { const [a, b] = k.split('|'); return `${L(a)} ↔ ${L(b)}`; };
+  // ── 외교 소식: 전쟁·휴전과 관계 변화를 문장으로
   const diplo: string[] = [];
   if (r) {
-    for (const k of r.warsStart) diplo.push(`<li class="war">⚔ ${pairLabel(k)} <b>전쟁 시작</b></li>`);
-    for (const k of r.warsEnd) diplo.push(`<li class="peace">🕊 ${pairLabel(k)} <b>휴전·평화</b></li>`);
-    for (const x of r.rel) diplo.push(`<li><span>${L(x.c)}</span><span class="rel ${x.to > x.from ? 'up' : 'down'}">${sign(x.from)} → <b>${sign(x.to)}</b></span></li>`);
+    const pair = (k: string) => { const [a, b] = k.split('|'); return `${P(L(a), '와/과')} ${L(b)}`; };
+    for (const k of r.warsStart) diplo.push(`${pair(k)} 사이에 전쟁이 시작되었다.`);
+    for (const k of r.warsEnd) diplo.push(`${pair(k)} 사이에 휴전 또는 평화가 이루어졌다.`);
+    for (const x of r.rel) {
+      const d = x.to - x.from, mag = Math.abs(d) >= 20 ? '크게' : Math.abs(d) >= 8 ? '뚜렷이' : '다소';
+      diplo.push(`${P(L(x.c), '와/과')}의 관계가 ${mag} ${d > 0 ? '가까워졌다' : '멀어졌다'}.`);
+    }
   }
-  // 엔진이 남긴 소식을 이모지로 나눈다: 전선(군대·장군·점령) / 그 밖
+  // ── 전선 소식: 군대·장군·점령 소식(엔진이 남긴 소식)과 영토 변동
   const front = rec.notes.filter((n) => /^(🚩|📍|🏳|🗺|📜|🩹|🛡|⚰|⛓|☠|🪖|💀)/u.test(n));
+  const terr: string[] = [];
+  if (r) {
+    const names = (ids: string[]) => ids.slice(0, 5).map((id) => w.provLabel(id)).join(', ') + (ids.length > 5 ? ` 등 ${ids.length}곳` : '');
+    if (r.gained.length) terr.push(`${names(r.gained)} 지역을 새로 확보했다.`);
+    if (r.lost.length) terr.push(`${names(r.lost)} 지역을 잃었다.`);
+  }
+  // ── 국정 동향: 능력치 변화를 문장으로
+  const home: string[] = [];
+  if (r) {
+    const word: Record<string, string> = { stability: '정국 안정도', economy: '경제 지표', military: '군사력', influence: '국제적 영향력' };
+    for (const k of STAT_KEYS) {
+      const [a, b] = r.stats[k] ?? [0, 0]; const d = b - a;
+      if (d) home.push(`${P(word[k] ?? STAT_LABEL[k], '이/가')} ${a}에서 ${P(String(b), '으로/로')} ${d > 0 ? '올랐다' : '내려앉았다'}.`);
+    }
+  }
   const others = rec.notes.filter((n) => !front.includes(n));
 
-  const worldBox = (worldNarr || worldHl.length) ? `<section class="np-col"><h3>🌍 세계 소식</h3>${worldHl.length ? `<ul class="np-flash">${worldHl.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}${paras(worldNarr).map((t) => `<p>${esc(t)}</p>`).join('')}</section>` : '';
-  const frontBox = front.length ? `<section class="np-col"><h3>⚔ 전선 소식</h3><ul class="np-notes">${front.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></section>` : '';
-  const diploBox = diplo.length ? `<section class="np-col"><h3>🤝 외교·관계</h3><ul class="np-rels">${diplo.join('')}</ul></section>` : '';
-  const otherBox = others.length ? `<section class="np-col"><h3>📋 기타</h3><ul class="np-notes">${others.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></section>` : '';
-  const bottom = [worldBox, frontBox, diploBox, otherBox].filter(Boolean).join('');
+  const worldBox = section('🌍 세계 소식', (worldHl.length ? `<ul class="np-flash">${worldHl.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : '') + paras(worldNarr).map((t) => `<p>${esc(t)}</p>`).join(''));
+  const frontBox = section('⚔ 전선 소식', front.length || terr.length ? li([...front, ...terr]) : '');
+  const diploBox = section('🤝 외교 소식', diplo.length ? li(diplo) : '');
+  const homeBox = section('🏛 국정 동향', home.length || others.length ? li([...home, ...others]) : '');
+  const boxes = [worldBox, frontBox, diploBox, homeBox].filter(Boolean);
+  const bottom = boxes.join('');
+
   const subHeads = mainHl.slice(1).map((h) => `<h3 class="np-subhl">${esc(h)}</h3>`).join('');
   const body = paras(mainNarr).map((t) => `<p>${esc(t)}</p>`).join('') || '<p class="np-none">전해진 소식이 없다.</p>';
 
   return `<article class="np np-${era}">
     <div class="np-top"><span>제 ${rec.turn}호</span><span>${esc(fmtDate(rec.date))}</span><span>${esc(ctx.scenario)}</span></div>
     <h1 class="np-name">${esc(ctx.playerName)} 일보</h1>
-    <div class="np-motto"><span>국정 속보판</span><span>난이도 ${esc(diffName(rec.difficulty ?? s.difficulty ?? 'normal'))}</span><span>판정 ${esc(rec.mode)}</span></div>
-    <div class="np-main">
-      <div class="np-lead">
-        <h2 class="np-hl">${esc(headline)}</h2>
-        <div class="np-sub">${esc(sub)}</div>
-        ${subHeads}
-        <div class="np-body ${mainNarr.length >= 60 ? 'long' : ''}">${body}</div>
-        ${rec.reasoning ? `<section class="np-analysis"><h4>편집부 분석</h4><p>${esc(rec.reasoning)}</p></section>` : ''}
-      </div>
-      <aside class="np-side">
-        <section class="np-box np-order"><h4>${rec.outcome === 'pass' ? '이번 달' : `${esc(ctx.playerName)}의 명령`}</h4>${stamp}
-          <div class="np-cmd">${rec.command ? `“${esc(rec.command)}”` : '특별한 명령 없음'}</div>${chance}</section>
-        ${r ? `<section class="np-box"><h4>국정 지표</h4><table class="np-stats">${statRows}</table></section>` : ''}
-        ${terrBox}
-      </aside>
+    <div class="np-motto"><span>국정 속보판</span></div>
+    <div class="np-lead">
+      <h2 class="np-hl">${esc(headlineOf(rec))}</h2>
+      <div class="np-sub">${esc(sub)}</div>
+      ${subHeads}
+      <div class="np-body ${mainNarr.length >= 60 ? 'long' : ''}">${body}</div>
     </div>
-    ${bottom ? `<div class="np-bottom">${bottom}</div>` : ''}
-    ${rec.rejected.length ? `<div class="np-rej"><b>정정 보도</b> · ${rec.rejected.map((h) => esc(h)).join(' / ')}</div>` : ''}
+    ${bottom ? `<div class="np-bottom" style="--n:${boxes.length}">${bottom}</div>` : ''}
   </article>`;
 }

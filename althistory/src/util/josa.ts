@@ -7,7 +7,7 @@ function finalConsonant(word: string): { has: boolean; rieul: boolean } {
   if (!ch) return { has: false, rieul: false };
   const code = ch.charCodeAt(0);
   if (code >= 0xac00 && code <= 0xd7a3) { const f = (code - 0xac00) % 28; return { has: f !== 0, rieul: f === 8 }; }
-  if (/[0-9]/.test(ch)) return { has: '013678'.includes(ch), rieul: ch === '1' || ch === '8' };
+  if (/[0-9]/.test(ch)) return { has: '013678'.includes(ch), rieul: '178'.includes(ch) };
   if (/[a-z]/i.test(ch)) return { has: /[lmnr]/i.test(ch), rieul: /l/i.test(ch) };
   return { has: false, rieul: false };
 }
