@@ -19,6 +19,8 @@ export interface TurnRecord {
   /** 플레이어 명령의 결과와 세계 사건을 나눠 담는다(신문의 기사 구분). 옛 저장 파일에는 없다. */
   main?: { narrative: string; headlines: string[] }; world?: { narrative: string; headlines: string[] };
   report?: TurnReport;
+  /** 세력 AI·주변국의 행동과 반응 소식(신문의 외교 소식 맨 앞). alert: 호외를 낼 만한 큰 사건 */
+  diplo?: string[]; alert?: boolean;
 }
 
 export interface General { name: string; skill: number; trait: string; status: 'active' | 'wounded'; hurtUntil?: number }

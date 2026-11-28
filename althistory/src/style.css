@@ -351,3 +351,13 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 .np-col h3 { margin: 0 0 6px; font-size: 15px; border-bottom: 1px solid var(--rule); padding-bottom: 2px; }
 .np-col p { margin: 0 0 .6em; font-size: 14px; text-align: justify; word-break: keep-all; }
 .np-notes li { line-height: 1.55; }
+
+/* 호외 */
+.np-extra-bar { display: flex; justify-content: space-between; align-items: center; background: #9b2218; color: #fff; padding: 4px 14px; margin: -4px -8px 10px; letter-spacing: .4em; font-weight: 900; font-size: 15px; }
+.np-extra-bar span { letter-spacing: .08em; font-weight: 600; font-size: 13px; }
+.np-extra .np-hl { color: #8a1b12; font-size: clamp(30px, 5vw, 50px); border-left: 8px solid #9b2218; padding-left: 12px; }
+
+/* 명령 자동 완성 */
+.g-suggest { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; } .g-suggest[hidden] { display: none; }
+.g-suggest .sg { border: 1px solid var(--panel-border); background: #12233a; color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.g-suggest .sg small { color: var(--muted); margin-left: 3px; } .g-suggest .sg:hover, .g-suggest .sg.on { border-color: var(--accent); background: #17304f; }

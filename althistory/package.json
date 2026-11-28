@@ -10,7 +10,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "build:single": "node -e \"const f=require('fs');f.writeFileSync('standalone.html',f.readFileSync('index.html','utf8').replace('/src/main.ts','/src/standalone.ts'))\" && vite build --config vite.standalone.config.ts && node -e \"require('fs').copyFileSync('dist-single/standalone.html','althist.html')\"",
-    "test:e2e": "node tests/e2e.cjs && node tests/e2e-armies.cjs && node tests/e2e-studio.cjs && node tests/e2e-history.cjs && node tests/e2e-paper.cjs"
+    "test:e2e": "node tests/e2e.cjs && node tests/e2e-armies.cjs && node tests/e2e-studio.cjs && node tests/e2e-history.cjs && node tests/e2e-paper.cjs && node tests/e2e-ai.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",

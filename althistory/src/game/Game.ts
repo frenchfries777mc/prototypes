@@ -660,6 +660,49 @@ export async function startApp(opts: GameOptions) {
   }
   $('g-form').addEventListener('submit', (e) => { e.preventDefault(); void submit(false); });
   $('btn-pass').addEventListener('click', () => void submit(true));
+  // ---------- 명령 자동 완성: 나라·내 군대 이름 ----------
+  const sug = $('g-suggest'); let sugItems: { text: string; hint: string; cut?: number }[] = [], sugIdx = -1;
+  const hideSug = () => { sug.hidden = true; sugItems = []; sugIdx = -1; };
+  const tokenAt = (ta: HTMLTextAreaElement) => /[^\s,./·()「」"'…]+$/.exec(ta.value.slice(0, ta.selectionStart))?.[0] ?? '';
+  const showSug = () => {
+    sug.innerHTML = sugItems.map((x, i) => `<button type="button" class="sg${i === sugIdx ? ' on' : ''}" data-i="${i}">${esc(x.text)}${x.hint ? ` <small>${esc(x.hint)}</small>` : ''}</button>`).join('');
+    sug.hidden = sugItems.length === 0;
+  };
+  const updateSug = () => {
+    const ta = $<HTMLTextAreaElement>('g-cmd'), tok = tokenAt(ta).toLowerCase();
+    if (!state || !tok) { hideSug(); return; }
+    const items: { text: string; hint: string; cut?: number }[] = [];
+    // 군대 이름은 띄어쓰기가 있어서(대한민국 제1군) 입력한 글 끝이 이름 앞부분과 일치하는 만큼을 후보로 삼는다
+    const before = ta.value.slice(0, ta.selectionStart).toLowerCase();
+    for (const a of armiesOf(state, state.playerId)) {
+      const nm = a.name.toLowerCase();
+      for (let n = Math.min(nm.length - 1, before.length); n >= 1; n--) if (before.endsWith(nm.slice(0, n))) { if (items.length < 2) items.push({ text: a.name, hint: '내 군대', cut: n }); break; }
+    }
+    const seen = new Set<string>(), cs: { text: string; hint: string }[] = [];
+    for (const [name, id] of world.countryNames) {
+      if (!name.startsWith(tok) || seen.has(id) || !isAlive(state, id)) continue;
+      seen.add(id); const lab = world.label(id); if (lab.toLowerCase() === tok) continue;
+      cs.push({ text: lab, hint: name === lab.toLowerCase() ? '' : name });
+    }
+    cs.sort((a, b) => a.text.length - b.text.length);
+    sugItems = [...items, ...cs].slice(0, 6); sugIdx = -1; showSug();
+  };
+  const acceptSug = (i: number) => {
+    const ta = $<HTMLTextAreaElement>('g-cmd'), it = sugItems[i]; if (!it) return;
+    const head = ta.value.slice(0, ta.selectionStart), tail = ta.value.slice(ta.selectionStart);
+    const pre = head.slice(0, head.length - (it.cut ?? tokenAt(ta).length));
+    ta.value = `${pre}${it.text} ${tail}`; const at = pre.length + it.text.length + 1; ta.setSelectionRange(at, at); ta.focus(); hideSug();
+  };
+  $('g-cmd').addEventListener('input', updateSug);
+  $('g-cmd').addEventListener('blur', () => setTimeout(hideSug, 150));
+  $('g-cmd').addEventListener('keydown', (e) => {
+    if (sug.hidden) return; const k = (e as KeyboardEvent).key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') { e.preventDefault(); sugIdx = (sugIdx + (k === 'ArrowDown' ? 1 : -1) + sugItems.length) % sugItems.length; showSug(); }
+    else if (k === 'Tab') { e.preventDefault(); acceptSug(sugIdx < 0 ? 0 : sugIdx); }
+    else if (k === 'Escape') hideSug();
+  });
+  sug.addEventListener('mousedown', (e) => { e.preventDefault(); const b = (e.target as HTMLElement).closest('.sg') as HTMLElement | null; if (b) acceptSug(Number(b.dataset.i)); });
+
   $('g-cmd').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter' && ((e as KeyboardEvent).ctrlKey || (e as KeyboardEvent).metaKey)) { e.preventDefault(); void submit(false); } });
   $('btn-undo').addEventListener('click', () => {
     if (!undoSnap || busy) return;

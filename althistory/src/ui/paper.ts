@@ -32,7 +32,7 @@ export function renderPaper(rec: TurnRecord, ctx: { world: World; state: GameSta
   const section = (title: string, inner: string) => (inner ? `<section class="np-col"><h3>${title}</h3>${inner}</section>` : '');
 
   // ── 외교 소식: 전쟁·휴전과 관계 변화를 문장으로
-  const diplo: string[] = [];
+  const diplo: string[] = [...(rec.diplo ?? [])]; // 세력 AI·주변국의 행동과 반응이 맨 앞
   if (r) {
     const pair = (k: string) => { const [a, b] = k.split('|'); return `${P(L(a), '와/과')} ${L(b)}`; };
     for (const k of r.warsStart) diplo.push(`${pair(k)} 사이에 전쟁이 시작되었다.`);
@@ -71,7 +71,8 @@ export function renderPaper(rec: TurnRecord, ctx: { world: World; state: GameSta
   const subHeads = mainHl.slice(1).map((h) => `<h3 class="np-subhl">${esc(h)}</h3>`).join('');
   const body = paras(mainNarr).map((t) => `<p>${esc(t)}</p>`).join('') || '<p class="np-none">전해진 소식이 없다.</p>';
 
-  return `<article class="np np-${era}">
+  return `<article class="np np-${era}${rec.alert ? ' np-extra' : ''}">
+    ${rec.alert ? '<div class="np-extra-bar"><b>호 외</b><span>큰 사건이 일어났습니다</span><b>호 외</b></div>' : ''}
     <div class="np-top"><span>제 ${rec.turn}호</span><span>${esc(fmtDate(rec.date))}</span><span>${esc(ctx.scenario)}</span></div>
     <h1 class="np-name">${esc(ctx.playerName)} 일보</h1>
     <div class="np-motto"><span>국정 속보판</span></div>

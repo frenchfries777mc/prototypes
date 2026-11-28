@@ -1,8 +1,9 @@
 // 신문 화면, 난이도, 명령(군대+일반) 통합 UI 검사
 const { chromium } = require('playwright');
-const URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
+let URL = process.env.URL || 'file://' + require('path').resolve(__dirname, '../althist.html');
 let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail++; };
 (async () => {
+  const srv = process.env.URL ? null : await require('./_serve.cjs')(); if (srv) URL = srv.url; // file:// 대신 로컬 HTTP(헤드리스 file:// 저장소 소실 회피)
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1500, height: 900 } })).newPage();
   const errs = []; page.on('pageerror', (e) => errs.push(e.message));

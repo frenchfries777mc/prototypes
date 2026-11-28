@@ -5,6 +5,7 @@ import type { GameState, TurnRecord, TurnReport } from './state';
 import { addMonths, fmtDate } from './state';
 import { STAT_KEYS } from '../data/types';
 import { adjustFeasibility, diffOf, scaleDiff } from './difficulty';
+import { aiTurn } from './ai';
 import { makeRng } from './rng';
 import { healGenerals } from './armies';
 
@@ -39,7 +40,11 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
     notes: [...r1.notes, ...r2.notes], rejected: [...r1.rejected, ...r2.rejected], mapChanged: r1.mapChanged || r2.mapChanged,
   };
 
-  const headlines = [...(main.headlines ?? []), ...(worldEv.headlines ?? [])].slice(0, 6);
+  // 세력 AI: 다른 나라들의 선전포고·휴전, 내가 시작한 전쟁에 대한 반응
+  const playerWars = s.wars.filter((k) => !before.wars.has(k) && k.split('|').includes(pid));
+  const ai = aiTurn(s, w, rng, level, playerWars);
+  const worldHl = [...(worldEv.headlines ?? []), ...ai.headlines];
+  const headlines = [...(main.headlines ?? []), ...worldHl].slice(0, 6);
   // 작은 AI는 서술을 빠뜨리기도 한다: 플레이어 명령 쪽 서술이 비면 해석과 이유로 한 줄을 채워 기사가 비지 않게 한다
   let mainNarr = (main.narrative ?? '').trim();
   if (!mainNarr && !pass) mainNarr = `${adj.interpretation || command} — ${success ? '성공했다' : '뜻대로 되지 않았다'}.${adj.reasoning ? ` ${adj.reasoning}` : ''}`.trim();
@@ -52,13 +57,15 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
     rel: Object.keys(s.relations).concat(Object.keys(before.relations)).filter((k, i, a) => a.indexOf(k) === i && k.split('|').includes(pid))
       .map((k) => ({ c: k.split('|').find((x) => x !== pid)!, from: before.relations[k] ?? 0, to: s.relations[k] ?? 0 }))
       .filter((r) => r.from !== r.to).sort((a, b) => Math.abs(b.to - b.from) - Math.abs(a.to - a.from)).slice(0, 8),
-    warsStart: s.wars.filter((k) => !before.wars.has(k)), warsEnd: [...before.wars].filter((k) => !s.wars.includes(k)),
+    warsStart: s.wars.filter((k) => !before.wars.has(k) && !ai.warKeys.includes(k)), warsEnd: [...before.wars].filter((k) => !s.wars.includes(k) && !ai.peaceKeys.includes(k)),
   };
   const record: TurnRecord = {
     turn: s.turn, date: s.date, command, interpretation: adj.interpretation, feasibility, roll,
     outcome: pass ? 'pass' : success ? 'success' : 'failure', narrative, headlines, notes: merged.notes, rejected: merged.rejected, mode,
     base: adj.feasibility, difficulty: level, report, reasoning: pass ? '' : (adj.reasoning ?? '').slice(0, 400),
-    main: { narrative: mainNarr, headlines: main.headlines ?? [] }, world: { narrative: worldEv.narrative ?? '', headlines: worldEv.headlines ?? [] },
+    main: { narrative: mainNarr, headlines: main.headlines ?? [] }, world: { narrative: worldEv.narrative ?? '', headlines: worldHl },
+    diplo: ai.news,
+    alert: ai.againstPlayer || playerWars.length > 0 || merged.notes.some((n) => n.startsWith('💀')) || report.lost.length >= 2 || report.gained.length >= 3,
   };
 
   s.rng = rng.state();
