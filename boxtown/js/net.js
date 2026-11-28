@@ -95,7 +95,7 @@ class Remote {
     this.chr.setVisible(false); this.tag.setEnabled(false);
   }
   drawTag() {
-    const c = this.tex.getContext(), text = this.say ? this.say : (this.pvp ? '⚔ ' : '') + this.name, two = !!this.say;
+    const c = this.tex.getContext(), text = this.say ? this.say : this.name, two = !!this.say;
     c.clearRect(0, 0, 512, 160);
     c.font = '800 46px "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
     const draw = (str, y, bg, fg, size) => {
@@ -105,7 +105,7 @@ class Remote {
       c.fillStyle = bg; c.beginPath(); c.roundRect(256 - w / 2, y - h / 2, w, h, 16); c.fill();
       c.fillStyle = fg; c.fillText(s, 256, y + 2);
     };
-    const nameBg = this.pvp ? 'rgba(190,40,36,.9)' : 'rgba(22,34,58,.8)', nm = (this.pvp ? '⚔ ' : '') + this.name;
+    const nameBg = 'rgba(22,34,58,.8)', nm = this.name;
     if (two) { draw(text, 44, 'rgba(255,255,255,.95)', '#16223a', 40); draw(nm, 120, nameBg, '#fff', 34); } else draw(text, 112, nameBg, '#fff', 42);
     this.tex.update();
   }
@@ -157,7 +157,7 @@ class Remote {
     let dh = (b.h - a.h) % (Math.PI * 2); if (dh > Math.PI) dh -= Math.PI * 2; if (dh < -Math.PI) dh += Math.PI * 2;
     this.heading = a.h + dh * Math.min(1, k);
     this.flags = b.f;
-    const pv = !!(b.f & 32); if (pv !== !!this.pvp) { this.pvp = pv; this.drawTag(); } // PvP를 켠 친구는 이름표가 붉다
+    this.pvp = !!(b.f & 32); // 친구도 PvP 상태인지(방에 들어와 있으면 늘 켜져 있다)
     const stale = now - S[S.length - 1].t > 4; // 한동안 소식이 없으면 숨긴다
     const inside = !!(b.f & 1), hidden = stale || !!(b.f & 16) || (inside && hideInside);
     // 탈것
@@ -353,7 +353,7 @@ export class Net {
   }
   // 주먹·방망이가 닿는 곳에 있는 다른 플레이어들
   near(x, y, z, range) { const out = []; for (const r of this.remotes.values()) { if (r.hidden || !r.seen) continue; const p = r.car ? r.car.root.position : r.pos; if (Math.abs(p.y - y) < 2.5 && Math.hypot(p.x - x, p.z - z) < range + (r.car ? 1.6 : 0)) out.push(r); } return out; }
-  // PvP: 나도 상대도 PvP를 켜 둔 때만 피해가 간다.
+  // PvP: 방 안에서는 늘 켜져 있다(둘 다 PvP 상태일 때만 피해가 간다).
   hit(r, dmg, dx, dz) {
     if (!this.pvpOn || !r.pvp) return;
     const m = { t: 'hit', to: r.id, d: Math.round(dmg), x: r2(dx), z: r2(dz) };
@@ -368,7 +368,7 @@ export class Net {
     const P = this.player, d = Math.max(0, Math.min(150, +m.d || 0)), l = Math.hypot(+m.x || 0, +m.z || 0) || 1, dx = (+m.x || 0) / l, dz = (+m.z || 0) / l;
     if (!d || P.inside || P.jailed) return; // 건물 안이나 감옥에서는 맞지 않는다
     const from = this.remotes.get(m.i);
-    if (!this.pvpOn || !from || !from.pvp) return; // 내가 PvP를 끄고 있거나, 쏜 사람이 켜 두지 않았으면 무시
+    if (!this.pvpOn || !from || !from.pvp) return; // 방 밖이거나, 쏜 사람이 PvP 상태가 아니면 무시
     if (this.pvp && this.pvp.shielded()) return; // 막 일어난 뒤 3초는 보호
     if (P.vehicle) { P.vehicle.hp -= d * 0.5; P.shake = Math.max(P.shake, 0.4); if (this.pvp) this.pvp.combatT = 8; return; }
     if (this.pvp) this.pvp.hurtBy(m.i, d, dx, dz); else this.health.hurt(d * 0.8, dx, dz, 'player', 3);

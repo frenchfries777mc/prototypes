@@ -365,11 +365,7 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 #raceHud[hidden], #raceBig[hidden], #eventHud[hidden], #bowlHud[hidden], #arcade[hidden], #arcMenu[hidden], #arcPlay[hidden], #arcPad[hidden], #bowlHud .meter[hidden] { display: none !important; }
 
 /* PvP */
-#btnPvp { position: absolute; right: 62px; top: calc(max(12px, env(safe-area-inset-top)) + 390px); width: 42px; height: 42px; border: 0; border-radius: 12px; background: rgba(22, 34, 58, .68); font-size: 20px; color: #fff; z-index: 5; }
-body.touch #btnPvp { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
-#btnPvp.on { background: rgba(200, 40, 34, .9); box-shadow: 0 0 10px rgba(255, 80, 60, .8); }
-#btnPvp[hidden] { display: none !important; }
-#pvpFeed { position: absolute; right: 14px; top: calc(max(10px, env(safe-area-inset-top)) + 182px); z-index: 6; display: grid; gap: 4px; justify-items: end; pointer-events: none; max-width: 60vw; }
+body.touch #pvpFeed { position: absolute; right: 14px; top: calc(max(10px, env(safe-area-inset-top)) + 182px); z-index: 6; display: grid; gap: 4px; justify-items: end; pointer-events: none; max-width: 60vw; }
 #pvpFeed div { padding: 4px 10px; border-radius: 8px; background: rgba(22, 34, 58, .82); color: #fff; font-size: 13px; font-weight: 700; } #pvpFeed div.me { background: rgba(190, 40, 36, .9); }
 #arenaHud { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 100px); transform: translateX(-50%); z-index: 6; min-width: 200px; display: grid; gap: 2px; padding: 8px 14px; border-radius: 12px; background: rgba(150, 30, 28, .88); color: #fff; pointer-events: none; }
 #arenaHud b { font-size: 16px; } #arenaHud small { opacity: .85; font-size: 12px; } #arenaHud div { display: flex; justify-content: space-between; gap: 14px; font-size: 13px; font-weight: 700; } #arenaHud div.me { color: #ffd84a; } #arenaHud em { font-style: normal; opacity: .9; }

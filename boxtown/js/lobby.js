@@ -140,7 +140,7 @@ export class Lobby {
       panel = `<div class="sheet multi"><h3>👥 같이 하기</h3>
         <label>내 이름<input id="mpName" maxlength="12" value="${esc(N.name)}" ${N.mode ? 'disabled' : ''}></label>
         ${N.on ? `<div class="code"><small>방 코드 (친구에게 알려 주세요)</small><b>${N.code}</b><button data-act="mcopy">${this.copied ? '복사됨!' : '복사'}</button></div><ul class="who">${who}</ul>
-          <p class="tip">게임 중 T 또는 Enter로 채팅해요. 주민·경찰·일거리는 각자 따로 돌아가요. P(또는 ⚔ 버튼)로 PvP를 켜면 켜 둔 친구끼리 겨룰 수 있고, 판매장 동쪽 투기장에서는 경기를 열 수 있어요.</p><button data-act="mleave" class="danger">방 나가기</button>`
+          <p class="tip">게임 중 T 또는 Enter로 채팅해요. 주민·경찰·일거리는 각자 따로 돌아가요. 방 안에서는 늘 PvP가 켜져 있어서 친구끼리 서로 공격할 수 있어요(건물 안과 막 일어난 뒤 3초는 안전). 판매장 동쪽 투기장에서는 경기를 열 수 있어요.</p><button data-act="mleave" class="danger">방 나가기</button>`
         : N.mode ? `<p class="tip">${esc(N.status || '연결하는 중…')}</p><button data-act="mleave" class="danger">그만두기</button>`
         : `<button data-act="mhost" class="primary">방 만들기</button>
           <div class="join"><input id="mpCode" maxlength="5" placeholder="방 코드" value="${esc(this.codeDraft || '')}" autocapitalize="characters" autocomplete="off"><button data-act="mjoin" class="primary">들어가기</button></div>

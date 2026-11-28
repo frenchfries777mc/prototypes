@@ -1,5 +1,5 @@
 // PvP: 같은 방 친구끼리 겨루기.
-// - 개인 PvP 스위치(P 키 또는 ⚔ 버튼): 둘 다 켜져 있을 때만 서로 다친다. 끄려면 전투가 끝나고 8초가 지나야 한다.
+// - PvP는 방에 들어가 있는 동안 늘 켜져 있다(끄는 스위치는 없다). 건물 안, 감옥, 얻어 탄 차 안, 막 일어난 뒤 3초 동안은 다치지 않는다.
 // - 쓰러뜨리면 현상금(연속 처치 보너스, 같은 사람 반복은 40초 쿨타임, 하루 한도), 쓰러지면 병원에서 깨어나고 3초 동안 보호받는다.
 // - 투기장: 판매장 동쪽의 벽으로 둘러싼 경기장. 방 안 누구나 경기를 열 수 있고, 5분 안에 먼저 10킬을 하면 이긴다.
 //   경기장 안에서는 PvP가 강제로 켜지고, 들어갈 때 권총을 받으며, 곳곳의 무기 상자로 무기를 바꿀 수 있다. 나오면 원래대로 돌아간다.
@@ -25,7 +25,7 @@ const HALF = 24;
 export class Pvp {
   constructor({ scene, player, jobs, health, weapons, net, interiors, groundY, lazyCollider }) {
     Object.assign(this, { scene, player, jobs, health, weapons, net, interiors, groundY });
-    this.on = false; this.shield = 0; this.combatT = 0; this.lastHit = null; this.streak = 0; this.cool = new Map(); this.lobby = null;
+    this.shield = 0; this.combatT = 0; this.lastHit = null; this.streak = 0; this.cool = new Map(); this.lobby = null;
     this.down = 0; this.match = null; this.joined = false; this.saved = null; this.day = load();
     const S = SITES.arena; this.S = S;
     // 터가 완전히 평평하지는 않아서, 경기장 바닥은 발자국 안에서 가장 높은 땅에 맞추고 아래는 기초로 받친다.
@@ -72,10 +72,8 @@ export class Pvp {
     this.gate = { x: S.x, z: S.z - HALF - 5.6 };
     // 화면
     const mk = (id) => { const e = document.createElement('div'); e.id = id; e.hidden = true; document.body.appendChild(e); return e; };
-    this.feed = mk('pvpFeed'); this.hud = mk('arenaHud'); this.downEl = mk('pvpDown'); this.btn = $('btnPvp');
-    if (this.btn) this.btn.addEventListener('click', () => this.toggle());
-    addEventListener('keydown', (e) => { if (e.code === 'KeyP' && !e.repeat && !e.target.closest('input,textarea')) this.toggle(); });
-    this.feedL = []; this.paintBtn();
+    this.feed = mk('pvpFeed'); this.hud = mk('arenaHud'); this.downEl = mk('pvpDown');
+    this.feedL = [];
   }
 
   // ----- 내 정보 -----
@@ -83,22 +81,8 @@ export class Pvp {
   nameOf(id) { if (id === this.myId()) return this.net.name || '나'; const r = this.net.remotes.get(id); return r ? r.name : '친구'; }
   sendG(k, data = {}) { const n = this.net; if (!n || !n.on) return; const m = { t: 'g', k, ...data }; if (n.mode === 'host') m.i = 'host'; n.send(m); }
   shielded() { return this.shield > 0; }
-  paintBtn() {
-    if (!this.btn) return;
-    const show = this.net.on; this.btn.hidden = !show;
-    this.btn.classList.toggle('on', this.on); this.btn.textContent = this.shield > 0 ? '🛡' : '⚔';
-    this.btn.title = this.on ? 'PvP 켜짐 (P)' : 'PvP 꺼짐 (P)';
-  }
-  setOn(v, quiet) {
-    this.on = v; this.net.pvpOn = v; this.paintBtn();
-    if (!quiet) this.jobs.notice(v ? '⚔ PvP를 켰어요. 켜 둔 사람끼리만 서로 다쳐요' : '🕊 PvP를 껐어요', v ? 'alert' : '');
-  }
-  toggle() {
-    if (!this.net.on) { this.jobs.notice('PvP는 같은 방 친구가 있어야 해요 (로비 → 같이 하기)'); return; }
-    if (this.joined) { this.jobs.notice('경기 중에는 PvP를 끌 수 없어요. 경기장 밖으로 나가세요'); return; }
-    if (this.on && this.combatT > 0) { this.jobs.notice(`전투 중에는 끌 수 없어요 (${Math.ceil(this.combatT)}초)`, 'alert'); return; }
-    this.setOn(!this.on);
-  }
+  // 방에 들어가 있는 동안은 늘 켜져 있다.
+  get active() { return !!this.net.on; }
 
   // ----- 피해와 처치 -----
   // net.gotHit가 부른다: 조건을 통과한 PvP 피해만 온다.
@@ -125,7 +109,6 @@ export class Pvp {
     this.health.hp = 100; this.shield = 3.2;
     if (this.joined) { const s = this.pickSpawn(); P.teleport(s.x, s.y + 0.4, s.z); this.loadout(); }
     else { this.interiors.send('hospital', -2.6, 1.2); }
-    this.paintBtn();
   }
   // 처치 소식(모두에게 간다). 내가 처치했으면 현상금.
   onKill(victim, by, inArena) {
@@ -197,17 +180,17 @@ export class Pvp {
     const W = this.weapons; W.owned = new Set(['fist', id]); W.renderBar(); W.select(WEAPONS.findIndex((w) => w.id === id));
   }
   join() {
-    this.joined = true; this.saved = { pvp: this.on, owned: new Set(this.weapons.owned) };
-    this.setOn(true, true); this.shield = 3.2; this.loadout();
+    this.joined = true; this.saved = { owned: new Set(this.weapons.owned) };
+    this.shield = 3.2; this.loadout();
     this.jobs.notice('⚔ 경기 참가! 무기 상자로 무기를 바꿀 수 있어요', 'alert');
-    this.paintHud(); this.paintBtn();
+    this.paintHud();
   }
   leave() {
     if (!this.joined) return;
     this.joined = false;
     const s = this.saved; this.saved = null;
-    if (s) { this.weapons.owned = s.owned; this.weapons.renderBar(); this.weapons.select(0); this.setOn(s.pvp, true); }
-    this.paintHud(); this.paintBtn();
+    if (s) { this.weapons.owned = s.owned; this.weapons.renderBar(); this.weapons.select(0); }
+    this.paintHud();
   }
   endMatch() {
     const m = this.match; if (!m) return;
@@ -249,13 +232,16 @@ export class Pvp {
 
   update(dt) {
     const P = this.player;
-    if (!this.net.on) { // 방이 없어지면 PvP도 끝난다
-      if (this.on || this.match) { this.on = false; this.net.pvpOn = false; if (this.joined) this.leave(); this.match = null; this.hud.hidden = true; }
-      this.paintBtn(); return;
+    if (!this.net.on) { // 방이 없어지면 PvP도, 경기도 끝난다
+      this.net.pvpOn = false; this.wasOn = false;
+      if (this.joined) this.leave();
+      if (this.match) { this.match = null; this.hud.hidden = true; }
+      return;
     }
-    if (this.btn && this.btn.hidden) this.paintBtn();
+    if (!this.wasOn) { this.wasOn = true; this.shield = 5; } // 방에 들어온 직후 5초는 보호
+    this.net.pvpOn = true;
     if (this.combatT > 0) this.combatT -= dt;
-    if (this.shield > 0) { this.shield -= dt; if (this.shield <= 0) this.paintBtn(); }
+    if (this.shield > 0) this.shield -= dt;
     if (this.down > 0) { this.down -= dt; if (this.down <= 0) this.respawn(); }
     for (const f of this.feedL) f.t -= dt;
     if (this.feedL.length && this.feedL[0].t <= 0) { this.feedL.shift(); this.paintFeed(); }
