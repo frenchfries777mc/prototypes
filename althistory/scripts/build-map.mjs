@@ -178,7 +178,7 @@ if (problems.length) {
 }
 
 // ---- 3a. 너무 큰 주를 비슷한 크기로 쪼개기 (자연스러운 모양: 면적 가중 k-평균 + 보로노이) ----
-// 사람이 사는 유럽(DENSE)은 주 하나가 약 45,000km², 그 밖의 넓은 땅은 약 150,000km²를 넘지 않게 한다.
+// 사람이 사는 유럽(DENSE)은 주 하나가 약 15,000km², 그 밖의 넓은 땅은 약 150,000km²를 넘지 않게 한다.
 // 바이에른처럼 실제 지방 중심 도시를 알면 그 좌표를 씨앗으로 쓰고(SPLITS), 그 밖에는 주 안의 점들을 k-평균으로 묶어 씨앗을 정한다.
 // 조각의 바깥 경계는 원본 꼭짓점을 그대로 지켜서 이웃 주와 틈·겹침이 생기지 않는다.
 import polygonClipping from 'polygon-clipping';
@@ -186,7 +186,7 @@ const ringKm = (r) => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r
 const areaKm2 = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let t = 0, lat = 0, n = 0;
   for (const pl of polys) { t += ringKm(pl[0]) - pl.slice(1).reduce((x, h) => x + ringKm(h), 0); for (const pt of pl[0]) { lat += pt[1]; n++; } }
   return t * Math.cos(((lat / Math.max(n, 1)) * Math.PI) / 180) * 111.32 * 111.32; };
-const MAX_DENSE = 45000, MAX_WIDE = 150000, DENSE = [-12, 35, 40, 61];
+const MAX_DENSE = 15000, MAX_WIDE = 150000, DENSE = [-12, 35, 40, 61];
 const idAlias = new Map(); // 쪼개지거나 합쳐져 사라진 주 id -> 지금 그 땅을 가진 주 id들(템플릿의 ids 선택자가 계속 맞도록)
 const aliasOf = (id) => idAlias.get(id) ?? [id];
 const SPLITS = [
@@ -227,8 +227,30 @@ function kmeans(pts, k) {
   }
   return cs;
 }
+/** 자르는 선을 자연스럽게 굽힌다: 칸의 변을 잘게 나누고, 모든 점을 같은 매끄러운 변위장으로 옮긴다.
+ *  같은 변은 양쪽 칸에서 똑같은 점들로 나뉘고(끝점 순서를 정해서) 같은 함수로 옮겨지므로 이웃 조각 사이에 틈·겹침이 생기지 않는다. */
+const q6 = (v) => Math.round(v * 1e6) / 1e6;
+function makeWarp(R, seed) {
+  const ph = (k) => ((seed * (k + 3) * 2654435761) % 6283) / 1000;
+  const f1 = (2 * Math.PI) / (0.9 * R), f2 = (2 * Math.PI) / (0.35 * R), a1 = 0.07 * R, a2 = 0.02 * R;
+  return ([x, y]) => [q6(x + a1 * Math.sin(f1 * (x + 0.6 * y) + ph(1)) + a2 * Math.sin(f2 * (y - 0.8 * x) + ph(2))),
+    q6(y + a1 * Math.sin(f1 * (y - 0.5 * x) + ph(3)) + a2 * Math.sin(f2 * (x + 0.9 * y) + ph(4)))];
+}
+function warpPoly(poly, R, seed) {
+  const warp = makeWarp(R, seed), step = 0.12 * R, out = [];
+  const P = poly.map(([x, y]) => [q6(x), q6(y)]);
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length];
+    const swap = a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]); // 점 목록은 항상 작은 끝점에서 큰 끝점 쪽으로 만든다(양쪽 칸이 같은 점을 얻게)
+    const s = swap ? b : a, e = swap ? a : b, n = Math.max(1, Math.min(400, Math.ceil(Math.hypot(e[0] - s[0], e[1] - s[1]) / step)));
+    const pts = []; for (let k = 0; k <= n; k++) pts.push([q6(s[0] + ((e[0] - s[0]) * k) / n), q6(s[1] + ((e[1] - s[1]) * k) / n)]);
+    const seq = swap ? pts.slice(1).reverse() : pts.slice(0, n); // a→b 순서, 끝점 b 는 다음 변이 시작점으로 낸다
+    for (const p of swap ? [...pts.slice(1).reverse()] : seq) out.push(warp(p));
+  }
+  return out;
+}
 /** 씨앗들의 보로노이 칸(볼록 다각형)을 구해 주와 교차시킨다. 반환: 씨앗마다 MultiPolygon 좌표(비면 null). */
-function voronoiPieces(g, seeds, cx) {
+function voronoiPieces(g, seeds, cx, R, hs) {
   const big = [[-1e4, -1e4], [1e4, -1e4], [1e4, 1e4], [-1e4, 1e4]];
   const cut = (poly, a, b) => { // a 쪽(= a 가 b 보다 가까운 쪽)만 남긴다
     const nx = b[0] - a[0], ny = b[1] - a[1], c = (nx * (a[0] + b[0]) + ny * (a[1] + b[1])) / 2, f = (p) => c - (nx * p[0] + ny * p[1]);
@@ -244,6 +266,7 @@ function voronoiPieces(g, seeds, cx) {
   return seeds.map((s, i) => {
     let cell = big; for (let j = 0; j < seeds.length && cell.length > 2; j++) if (j !== i) cell = cut(cell, s, seeds[j]);
     if (cell.length < 3) return null;
+    cell = warpPoly(cell, R, hs);
     const ring = cell.map(([x, y]) => [x / cx, y]); ring.push(ring[0]);
     const res = polygonClipping.intersection(subject, [ring]);
     return res.length ? res : null;
@@ -253,7 +276,8 @@ const DIRS = [['동', 'East'], ['북동', 'Northeast'], ['북', 'North'], ['북�
 function splitProvince(base, k, seedsAt, cx) {
   const g = base.geometry;
   const seeds = seedsAt ? seedsAt.map(([x, y]) => [x * cx, y]) : kmeans(samplePoints(g, cx, Math.max(500, 150 * k)), k);
-  const res = voronoiPieces(g, seeds, cx);
+  const flat0 = polysOf(g).reduce((s, pl) => s + ringArea(pl[0]), 0), R = Math.sqrt((flat0 * cx) / seeds.length), hs = [...String(base.properties.id)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 997 + 1;
+  const res = voronoiPieces(g, seeds, cx, R, hs);
   const pieces = res.map((coords, i) => ({ coords, i })).filter((x) => x.coords);
   // 면적 검사는 위도 보정 없이 평면 넓이로 비교한다(조각마다 평균 위도가 달라 areaKm2 는 합이 어긋난다)
   const flat = (polys) => polys.reduce((s, pl) => s + ringArea(pl[0]) - pl.slice(1).reduce((x, h) => x + ringArea(h), 0), 0);
