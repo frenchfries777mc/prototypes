@@ -26,7 +26,7 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
   const rng = makeRng(s.rng);
   const roll = Math.round(rng.next() * 1000) / 10;
   const level = diffOf(s), pid = s.playerId;
-  const feasibility = pass ? 100 : clamp(adjustFeasibility(adj.feasibility, level) + supportBonus(s), 1, 99);
+  const feasibility = pass ? 100 : clamp(adjustFeasibility(adj.feasibility, level) + supportBonus(s), 1, 100);
   const success = pass ? true : roll < feasibility;
   // 난이도: 플레이어 국가의 능력치 변화에 배율을 곱한다(이득은 쉬울수록 크고, 손실은 어려울수록 크다)
   const main: Diff = pass ? {} : scaleDiff(success ? adj.if_success : adj.if_failure, pid, level);

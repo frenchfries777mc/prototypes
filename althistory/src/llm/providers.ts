@@ -18,10 +18,12 @@ export interface LlmConfig { provider: ProviderId; geminiKey: string; geminiMode
   difficulty: Difficulty }
 
 /** OpenAI 호환 API(채팅 완성)를 쓰는 무료 서비스들. 브라우저에서 직접 호출할 수 있는(CORS 허용) 곳만 넣었다. */
-export interface FreePreset { id: string; name: string; base: string; needKey: boolean; keyUrl: string; defaultModel: string; note: string; /** 키 없이 쓸 때 요청 사이에 둘 최소 간격(ms) */ freeIntervalMs?: number; /** 키 없이 쓸 때 요청 전체(시스템+사용자 글자 수) 한도 */ maxPromptChars?: number }
+export interface FreePreset { id: string; name: string; base: string; needKey: boolean; keyUrl: string; defaultModel: string; note: string; /** 키 없이 쓸 때 요청 사이에 둘 최소 간격(ms) */ freeIntervalMs?: number; /** 키 없이 쓸 때 요청 전체(시스템+사용자 글자 수) 한도 */ maxPromptChars?: number; /** 키 입력칸이 비어 있어도 보내는 형식상의 키(LLM7 은 "unused") */ anonKey?: string; /** 키 없는 무료 서비스끼리 번갈아 쓰기에 참여(한도에 걸리면 기다리지 않고 다른 쪽으로 넘어간다) */ rotate?: boolean }
 export const FREE_PRESETS: FreePreset[] = [
-  { id: 'pollinations', name: 'Pollinations (키 없이)', base: 'https://text.pollinations.ai/openai', needKey: false, keyUrl: 'https://enter.pollinations.ai', defaultModel: 'openai-fast', freeIntervalMs: 45000, maxPromptChars: 14500,
-    note: '가입도 키도 필요 없지만 키 없이는 IP당 45초에 한 번만 답하고 요청 길이가 16,000자까지입니다(게임이 알아서 간격을 두고 내용을 줄입니다). 명령 내용이 Pollinations 서버로 전송됩니다. Pollinations 키가 있으면 아래에 넣으세요(제한이 풀린다고 안내되는데, 이 게임에서 직접 확인하지는 못했습니다).' },
+  { id: 'pollinations', name: 'Pollinations (키 없이)', base: 'https://text.pollinations.ai/openai', needKey: false, keyUrl: 'https://enter.pollinations.ai', defaultModel: 'openai-fast', freeIntervalMs: 45000, maxPromptChars: 14500, rotate: true,
+    note: '가입도 키도 필요 없지만 키 없이는 IP당 45초에 한 번만 답하고(그동안은 LLM7로 자동 전환해 기다리지 않습니다) 요청 길이가 16,000자까지입니다(게임이 알아서 간격을 두고 내용을 줄입니다). 명령 내용이 Pollinations 서버로 전송됩니다. Pollinations 키가 있으면 아래에 넣으세요(제한이 풀린다고 안내되는데, 이 게임에서 직접 확인하지는 못했습니다).' },
+  { id: 'llm7', name: 'LLM7 (키 없이)', base: 'https://api.llm7.io/v1', needKey: false, keyUrl: 'https://token.llm7.io', defaultModel: 'gpt-oss:20b', freeIntervalMs: 3000, anonKey: 'unused', rotate: true,
+    note: '가입도 키도 필요 없습니다. 무료 토큰 한도가 있어서 다 쓰면 한동안(최대 1시간) 막히는데, 그러면 게임이 기다리지 않고 Pollinations로 넘어갑니다. 한도 크기는 제가 직접 확인하지 못했습니다. 모델은 gpt-oss:20b(추론 모델이라 답이 조금 느릴 수 있음). 명령 내용이 LLM7 서버로 전송됩니다. 토큰을 발급받아 아래에 넣으면 한도가 늘어납니다.' },
   { id: 'groq', name: 'Groq (무료 키)', base: 'https://api.groq.com/openai/v1', needKey: true, keyUrl: 'https://console.groq.com/keys', defaultModel: 'llama-3.3-70b-versatile',
     note: '아주 빠릅니다. 무료 키에는 분당·하루 사용 한도가 있습니다(한도는 Groq 정책).' },
   { id: 'openrouter', name: 'OpenRouter (무료 모델)', base: 'https://openrouter.ai/api/v1', needKey: true, keyUrl: 'https://openrouter.ai/keys', defaultModel: '',
@@ -117,19 +119,19 @@ async function callGemini(cfg: LlmConfig, system: string, msgs: Msg[], signal: A
 }
 
 // ---- OpenAI 호환 API (ChatGPT와 무료 서비스들이 같은 방식을 쓴다) ----
-interface Endpoint { label: string; base: string; key: string; model: string; needKey: boolean; openai: boolean }
+interface Endpoint { label: string; base: string; key: string; model: string; needKey: boolean; openai: boolean; anon?: string }
 const openaiEndpoint = (cfg: LlmConfig): Endpoint => ({ label: 'OpenAI', base: 'https://api.openai.com/v1', key: (cfg.openaiKey ?? '').trim(), model: (cfg.openaiModel ?? '').trim() || DEFAULT_OPENAI_MODEL, needKey: true, openai: true });
 function freeEndpoint(cfg: LlmConfig): Endpoint {
   const pr = freePreset(cfg.freePreset);
   const base = (pr.id === 'custom' ? (cfg.freeBase ?? '') : pr.base).trim().replace(/\/+$/, '');
-  return { label: pr.name.replace(/ \(.*\)$/, ''), base, key: (cfg.freeKeys?.[pr.id] ?? '').trim(), model: (cfg.freeModels?.[pr.id] ?? '').trim() || pr.defaultModel, needKey: pr.needKey, openai: false };
+  return { label: pr.name.replace(/ \(.*\)$/, ''), base, key: (cfg.freeKeys?.[pr.id] ?? '').trim(), model: (cfg.freeModels?.[pr.id] ?? '').trim() || pr.defaultModel, needKey: pr.needKey, openai: false, anon: pr.anonKey };
 }
 // 추론 모델(gpt-5 계열, o 계열)은 temperature 를 받지 않고 reasoning_effort 를 받는다. 그 밖의 모델은 반대.
 const isReasoningModel = (m: string) => /^(gpt-5|o\d)/.test(m);
 async function epFetch(ep: Endpoint, path: string, init: RequestInit): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(`${ep.base}/${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(ep.key ? { Authorization: `Bearer ${ep.key}` } : {}) } });
+    res = await fetch(`${ep.base}/${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(ep.key || ep.anon ? { Authorization: `Bearer ${ep.key || ep.anon}` } : {}) } });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw new LlmError('응답 시간이 너무 길어 중단했습니다(90초). 다시 시도하세요.');
     throw new LlmError(`네트워크 오류: ${ep.label}에 연결하지 못했습니다. 인터넷 연결을 확인하세요. 직접 입력한 주소라면 그 서버가 브라우저 호출(CORS)을 허용하는지도 확인하세요. (${(e as Error).message})`);
@@ -177,11 +179,11 @@ async function callEndpoint(ep: Endpoint, system: string, msgs: Msg[], signal: A
 }
 const callOpenAi = (cfg: LlmConfig, system: string, msgs: Msg[], signal: AbortSignal) => callEndpoint(openaiEndpoint(cfg), system, msgs, signal);
 const callFree = (cfg: LlmConfig, system: string, msgs: Msg[], signal: AbortSignal) => callEndpoint(freeEndpoint(cfg), system, msgs, signal);
-async function listModels(ep: Endpoint): Promise<string[]> {
+async function listModels(ep: Endpoint, keep?: (m: { tier?: string }) => boolean): Promise<string[]> {
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 30_000);
   try {
-    const j = (await (await epFetch(ep, 'models', { method: 'GET', signal: ctl.signal })).json()) as { data?: { id?: string; name?: string }[] } | { id?: string; name?: string }[];
-    const ids = (Array.isArray(j) ? j : j.data ?? []).map((m) => m.id ?? m.name ?? '').filter(Boolean);
+    const j = (await (await epFetch(ep, 'models', { method: 'GET', signal: ctl.signal })).json()) as { data?: { id?: string; name?: string; tier?: string }[] } | { id?: string; name?: string; tier?: string }[];
+    const ids = (Array.isArray(j) ? j : j.data ?? []).filter((m) => !keep || keep(m)).map((m) => m.id ?? m.name ?? '').filter(Boolean);
     const chat = ids.filter((id) => !/(audio|realtime|transcribe|tts|whisper|image|embed|moderation|guard|rerank|ocr|vision-preview)/i.test(id));
     return chat.sort((a, b) => b.localeCompare(a, 'en', { numeric: true }));
   } finally { clearTimeout(timer); }
@@ -195,7 +197,7 @@ export async function listFreeModels(cfg: LlmConfig): Promise<string[]> {
   const ep = freeEndpoint(cfg);
   if (!ep.base) throw new LlmError('서비스 주소를 먼저 입력하세요.');
   if (ep.needKey && !ep.key && cfg.freePreset !== 'openrouter') throw new LlmError('키를 먼저 입력하세요.');
-  const ids = await listModels(ep);
+  const ids = await listModels(ep, cfg.freePreset === 'llm7' ? (m) => m.tier !== 'pro' : undefined); // LLM7 은 pro 등급(유료) 모델을 빼고 무료 모델만
   return cfg.freePreset === 'openrouter' ? ids.filter((id) => id.endsWith(':free')) : ids;
 }
 
@@ -267,6 +269,9 @@ async function callWebLlm(cfg: LlmConfig, system: string, msgs: Msg[], hooks: Ho
 /** 붐빌 때 같은 AI에 다시 시도하기 전에 기다리는 시간(ms). 테스트에서 줄일 수 있다. */
 export const retryPolicy = { delaysMs: [3000, 8000], /** 키 없는 무료 서버 요청 사이 간격을 덮어쓴다(테스트용). null이면 서비스별 기본값 */ paceMs: null as number | null };
 const lastFreeCall = new Map<string, number>();
+/** 한도에 걸린 키 없는 무료 서비스가 다시 쓸 수 있게 되는 시각(ms). 번갈아 쓰기에서 그 사이엔 건너뛴다. */
+const coolUntil = new Map<string, number>();
+export const resetFreeCooldowns = (): void => { coolUntil.clear(); lastFreeCall.clear(); };
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((res, rej) => {
   const t = setTimeout(res, ms); signal.addEventListener('abort', () => { clearTimeout(t); rej(new LlmError('중단했습니다.')); }, { once: true });
 });
@@ -291,9 +296,11 @@ async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, 
   const cfg = { ...cfg0, provider };
   // 입력 길이에 한도가 있는 무료 서버(키 없이 쓰는 Pollinations 등)는 한도 안에 들어가는 단계까지 프롬프트를 줄인다.
   // 서버가 그래도 413으로 거절하면 한 단계씩 더 줄여 다시 보낸다.
-  const limit = provider === 'free' && !freeEndpoint(cfg).key ? freePreset(cfg.freePreset).maxPromptChars ?? 0 : 0;
+  const limitOf = () => (provider === 'free' && !freeEndpoint(cfg).key ? freePreset(cfg.freePreset).maxPromptChars ?? 0 : 0);
+  let limit = limitOf();
   // 모델 이름으로 크기를 가늠해 프롬프트 단계·온도·지침을 정한다(작은 모델일수록 간추린 프롬프트 + 예시 + 낮은 온도)
-  const prof = profileFor(modeOf(cfg, provider).replace(/^[^(]*\(|\)$/g, ''));
+  const profOf = () => profileFor(modeOf(cfg, provider).replace(/^[^(]*\(|\)$/g, ''));
+  let prof = profOf();
   reqTemp = prof.temp;
   let level = Math.max(prof.minLevel, provider === 'webllm' ? 2 : 0);
   let system = '', msgs: Msg[] = [];
@@ -306,9 +313,24 @@ async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, 
   rebuild();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 90_000 + (retryPolicy.delaysMs.length + 1) * MAX_WAIT_MS);
-  // 키 없는 무료 서버(Pollinations 등)는 요청 사이에 일정 간격이 필요하다: 미리 기다려서 한도에 걸리지 않게 한다
+  // 키 없는 무료 서비스들(Pollinations·LLM7)은 번갈아 쓴다: 한쪽이 한도에 걸렸거나 간격을 둬야 하면 기다리지 않고 지금 쓸 수 있는 쪽으로 간다.
+  const gapOf = (id: string) => retryPolicy.paceMs ?? freePreset(id).freeIntervalMs ?? 0;
+  const readyAt = (id: string) => Math.max(coolUntil.get(id) ?? 0, (lastFreeCall.get(id) ?? 0) + gapOf(id));
+  const pool: FreePreset[] = provider === 'free' && freePreset(cfg.freePreset).rotate && !freeEndpoint(cfg).key
+    ? [freePreset(cfg.freePreset), ...FREE_PRESETS.filter((x) => x.rotate && x.id !== cfg.freePreset && !freeEndpoint({ ...cfg, freePreset: x.id }).key)] : [];
+  const refit = () => { limit = limitOf(); prof = profOf(); reqTemp = prof.temp; level = Math.max(level, prof.minLevel); rebuild(); };
+  // 키 없는 무료 서버는 요청 사이에 일정 간격이 필요하다: 미리 기다려서 한도에 걸리지 않게 한다
   const pace = async () => {
     if (provider !== 'free') return;
+    if (pool.length) {
+      const now = Date.now();
+      const pick = pool.find((x) => readyAt(x.id) <= now + 300) ?? pool.reduce((m, x) => (readyAt(x.id) < readyAt(m.id) ? x : m));
+      if (pick.id !== cfg.freePreset) { cfg.freePreset = pick.id; refit(); }
+      const wait = readyAt(pick.id) - Date.now();
+      if (wait > 300) { hooks.onProgress?.(`${pick.name.replace(/ \(.*\)$/, '')}가 다시 쓸 수 있을 때까지 ${Math.ceil(wait / 1000)}초 기다립니다…`); await sleep(wait, ctl.signal); }
+      lastFreeCall.set(pick.id, Date.now());
+      return;
+    }
     const pr = freePreset(cfg.freePreset), ep = freeEndpoint(cfg), gap = retryPolicy.paceMs ?? pr.freeIntervalMs ?? 0;
     if (!gap || ep.key) return;
     const wait = (lastFreeCall.get(pr.id) ?? 0) + gap - Date.now();
@@ -323,6 +345,12 @@ async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, 
           : provider === 'openai' ? await callOpenAi(cfg, system, msgs, ctl.signal) : provider === 'free' ? await callFree(cfg, system, msgs, ctl.signal) : await callWebLlm(cfg, system, msgs, hooks);
       } catch (e) {
         if (e instanceof LlmError && e.tooLong && level < PROMPT_LEVELS - 1) { level += 1; rebuild(); hooks.onProgress?.('요청이 길어서 내용을 줄여 다시 보냅니다…'); i = -1; continue; }
+        // 번갈아 쓰는 무료 서비스가 한도에 걸리면 그 서비스는 쉬게 하고, 지금 쓸 수 있는 다른 서비스로 바로 넘어간다(기다리지 않는다)
+        if (pool.length && e instanceof LlmError && e.busy && i < pool.length * 2) {
+          coolUntil.set(cfg.freePreset, Date.now() + (e.retryAfterMs > 0 ? e.retryAfterMs : 3000)); // 서버가 알려 준 시간, 없으면 3초 쉼
+          const other = pool.find((x) => x.id !== cfg.freePreset && readyAt(x.id) <= Date.now() + 300);
+          if (other) { hooks.onProgress?.(`${providerLabel(cfg)}가 붐벼서 ${other.name.replace(/ \(.*\)$/, '')}로 바꿔 다시 시도합니다…`); continue; }
+        }
         if (!(e instanceof LlmError) || !e.busy || i >= retryPolicy.delaysMs.length) throw e;
         const wait = Math.max(e.retryAfterMs, retryPolicy.delaysMs[i]);
         hooks.onProgress?.(`${providerLabel(cfg)}가 붐벼서 ${Math.round(wait / 1000)}초 뒤 다시 시도합니다… (${i + 1}/${retryPolicy.delaysMs.length})`);

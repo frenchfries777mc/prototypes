@@ -215,6 +215,7 @@ const ENGLISH = /South Korea|North Korea|Kyonggi|Gyeonggi|Japan|United States|Ta
   // ---- 무료 AI: Pollinations 무료 한도(IP당 45초에 한 번) 응답은 "붐빔"으로 보고 알려 준 시간만큼 기다렸다 다시 시도 ----
   await page.evaluate(() => window.__game.setRetry([20, 20], 0));
   let plCalls = 0;
+  await page.route('https://api.llm7.io/v1/chat/completions', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":{"message":"overloaded"}}' })); // 다른 무료 서비스도 붐빌 때는 기다렸다 다시
   await page.route('https://text.pollinations.ai/openai/chat/completions', (route) => { plCalls++;
     if (plCalls === 1) return route.fulfill({ status: 402, contentType: 'application/json', body: '{"error":{"message":"Free limit reached: 1 reply every 45 seconds per IP. Retry after 1s, or get unlimited replies with a Pollinations API key"}}' });
     return route.fulfill({ status: 200, contentType: 'application/json', body: okBody(adjTxt('재시도 성공')) }); });

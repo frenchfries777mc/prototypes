@@ -160,6 +160,18 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   await page.fill('#g-cmd', '시험 셋'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
   ok(plReqs.length === 1 && plReqs[0].size > 16000 && plReqs[0].auth === 'Bearer pk-TEST', `Pollinations 키가 있으면 줄이지 않고 전체 프롬프트를 보냄: ${plReqs[0]?.size}자`);
 
+  // ---- 키 없는 무료 서비스 번갈아 쓰기: Pollinations 한도에 걸리면 기다리지 않고 LLM7로 ----
+  await page.evaluate(() => window.__game.setCfg({ provider: 'free', freePreset: 'pollinations', freeKeys: {}, freeModels: {} }));
+  let pl2 = 0, l7 = []; await page.unroute('https://text.pollinations.ai/openai/chat/completions');
+  await page.route('https://text.pollinations.ai/openai/chat/completions', (r) => { pl2++; return r.fulfill({ status: 429, contentType: 'application/json', body: '{"error":{"message":"Free limit reached: 1 reply every 45 seconds per IP. Retry after 40s"}}' }); });
+  await page.route('https://api.llm7.io/v1/chat/completions', (r) => { const b = JSON.parse(r.request().postData()); l7.push({ auth: r.request().headers()['authorization'], model: b.model }); return r.fulfill({ status: 200, contentType: 'application/json', body: okBody(JSON.stringify(mk({}))) }); });
+  const t0 = Date.now();
+  await page.fill('#g-cmd', '번갈아 하나'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
+  const rec1 = (await S()).log.at(-1);
+  ok(pl2 === 1 && l7.length === 1 && rec1.mode.startsWith('LLM7') && l7[0].auth === 'Bearer unused' && l7[0].model === 'gpt-oss:20b' && Date.now() - t0 < 8000, `Pollinations가 한도에 걸리면 기다리지 않고 LLM7로 즉시 전환(${Date.now() - t0}ms, ${rec1.mode})`);
+  await page.fill('#g-cmd', '번갈아 둘'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
+  ok(pl2 === 1 && l7.length === 2, `한도에 걸린 서비스는 쉬는 동안 건너뜀(Pollinations ${pl2}번, LLM7 ${l7.length}번)`);
+
   // 모델별 프롬프트: 작은 모델(flash-lite)은 간추린 프롬프트 + 지침 + 예시, 큰 모델(pro)은 전체
   await page.evaluate(() => window.__game.setCfg({ provider: 'gemini', geminiKey: 'K', geminiModel: 'gemini-2.5-flash-lite' })); reqs = []; adj = mk({ feasibility: 70 });
   await page.fill('#g-cmd', '일본과 대화한다'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.keyboard.press('Escape');
