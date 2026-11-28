@@ -1,5 +1,5 @@
 import type { CountryId, ProvinceId, Scenario, StatKey, Stats, WorldData } from '../data/types';
-import { STAT_KEYS, STAT_LABEL } from '../data/types';
+import { SHOWN_STATS, STAT_LABEL } from '../data/types';
 import { World } from '../data/world';
 import { resolveTurn } from '../engine/turn';
 import type { GameState } from '../engine/state';
@@ -460,7 +460,7 @@ export async function startApp(opts: GameOptions) {
       lines.push(`<div class="cname"><i class="swatch" style="background:${c.color}"></i>${esc(world.label(cid))}</div>
         <div class="sub">${state && !isAlive(state, cid) ? '☠ 멸망 · ' : ''}영토 ${nProv}주${c.pop ? ` · 인구 ${fmtPop(c.pop)}` : ''}</div>`);
       if (st) {
-        lines.push(`<div class="mini">${STAT_KEYS.map((k: StatKey) => `<div class="stat"><div class="lab"><span>${STAT_LABEL[k]}</span><b>${st[k]}</b></div><div class="bar"><i style="width:${st[k]}%"></i></div></div>`).join('')}</div>`);
+        lines.push(`<div class="mini">${SHOWN_STATS.map((k: StatKey) => `<div class="stat"><div class="lab"><span>${STAT_LABEL[k]}</span><b>${st[k]}</b></div><div class="bar"><i style="width:${st[k]}%"></i></div></div>`).join('')}</div>`);
       }
       if (state) {
         if (cid === state.playerId) lines.push('<div class="rel">★ 내가 맡은 나라</div>');
@@ -575,7 +575,7 @@ export async function startApp(opts: GameOptions) {
     const dead = !isAlive(s, pid);
     const tpl = world.scenarios.find((x) => x.id === s.scenarioId)?.name ?? '';
     $('g-date').textContent = `${fmtDate(s.date)} · 턴 ${s.turn} · 영토 ${mine}주${owned !== mine ? ` (소유 ${owned})` : ''} · ${tpl} · ${providerLabel(cfg)}`;
-    $('g-stats').innerHTML = STAT_KEYS.map((k) => {
+    $('g-stats').innerHTML = SHOWN_STATS.map((k) => {
       const v = s.stats[pid]?.[k] ?? 0, d = lastDelta[k] ?? 0;
       return `<div class="stat"><div class="lab"><span>${STAT_LABEL[k]}</span><span><b>${v}</b>${d ? `<span class="${d > 0 ? 'd-up' : 'd-down'}">${sign(d)}</span>` : ''}</span></div><div class="bar"><i style="width:${v}%"></i></div></div>`;
     }).join('');
@@ -646,7 +646,7 @@ export async function startApp(opts: GameOptions) {
       const work = cloneState(state);
       const { record, mapChanged } = resolveTurn(work, world, adj, command, mode, pass);
       state = work; undoSnap = snap;
-      lastDelta = Object.fromEntries(STAT_KEYS.map((k) => [k, (work.stats[work.playerId]?.[k] ?? 0) - before[k]]).filter(([, d]) => d !== 0));
+      lastDelta = Object.fromEntries(SHOWN_STATS.map((k) => [k, (work.stats[work.playerId]?.[k] ?? 0) - before[k]]).filter(([, d]) => d !== 0));
       if (mapChanged) view.setControl(state.owner, state.controller);
       persist();
       $<HTMLTextAreaElement>('g-cmd').value = '';

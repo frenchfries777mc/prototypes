@@ -2,10 +2,12 @@ import type { World } from '../data/world';
 import type { Adjudication, ApplyResult, Diff } from './diff';
 import { applyDiff } from './diff';
 import type { GameState, TurnRecord, TurnReport } from './state';
-import { addMonths, fmtDate } from './state';
+import { addMonths, clamp, fmtDate } from './state';
 import { STAT_KEYS } from '../data/types';
 import { adjustFeasibility, diffOf, scaleDiff } from './difficulty';
 import { aiTurn } from './ai';
+import { aiWarTurn } from './aiwar';
+import { stabilityTurn, supportBonus } from './stability';
 import { makeRng } from './rng';
 import { healGenerals } from './armies';
 
@@ -22,7 +24,7 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
   const rng = makeRng(s.rng);
   const roll = Math.round(rng.next() * 1000) / 10;
   const level = diffOf(s), pid = s.playerId;
-  const feasibility = pass ? 100 : adjustFeasibility(adj.feasibility, level);
+  const feasibility = pass ? 100 : clamp(adjustFeasibility(adj.feasibility, level) + supportBonus(s), 1, 99);
   const success = pass ? true : roll < feasibility;
   // 난이도: 플레이어 국가의 능력치 변화에 배율을 곱한다(이득은 쉬울수록 크고, 손실은 어려울수록 크다)
   const main: Diff = pass ? {} : scaleDiff(success ? adj.if_success : adj.if_failure, pid, level);
@@ -43,6 +45,9 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
   // 세력 AI: 다른 나라들의 선전포고·휴전, 내가 시작한 전쟁에 대한 반응
   const playerWars = s.wars.filter((k) => !before.wars.has(k) && k.split('|').includes(pid));
   const ai = aiTurn(s, w, rng, level, playerWars);
+  // 전쟁 중인 AI 군대의 진군·전투와, 모든 나라의 숨은 안정도(소요·반란)
+  const war = aiWarTurn(s, w, rng, level); const home = stabilityTurn(s, w, rng, false);
+  ai.news.push(...war.news, ...home); ai.headlines.push(...war.headlines); ai.againstPlayer = ai.againstPlayer || war.againstPlayer;
   const worldHl = [...(worldEv.headlines ?? []), ...ai.headlines];
   const headlines = [...(main.headlines ?? []), ...worldHl].slice(0, 6);
   // 작은 AI는 서술을 빠뜨리기도 한다: 플레이어 명령 쪽 서술이 비면 해석과 이유로 한 줄을 채워 기사가 비지 않게 한다

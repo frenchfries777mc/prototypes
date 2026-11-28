@@ -50,6 +50,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   await page.fill('#g-cmd', '');
 
   // ---- 난이도가 판정에 들어감 ----
+  await page.evaluate(() => { const s = window.__game.state; s.stats[s.playerId].stability = 50; }); // 숨은 안정도 보정을 0으로 고정
   adj = mk({ feasibility: 70 });
   await page.fill('#g-cmd', '일본과 협정을 추진한다'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle();
   let rec = (await S()).log.at(-1);
@@ -62,6 +63,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   // 메뉴에서 난이도를 바꾸면 이어서 적용
   await page.click('#btn-menu'); await page.click('#overlay label.diff-card[data-d=easy]'); await page.click('#ov-apply');
   ok((await S()).difficulty === 'easy', '메뉴에서 난이도 변경(쉬움)');
+  await page.evaluate(() => { const s = window.__game.state; s.stats[s.playerId].stability = 50; });
   adj = mk({ feasibility: 70 }); reqs = [];
   await page.fill('#g-cmd', '다시 추진한다'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle();
   rec = (await S()).log.at(-1);
@@ -72,7 +74,7 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   adj = mk({ feasibility: 100 }); const b0 = (await S()).stats.KOR;
   await page.fill('#g-cmd', '확실한 일'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle();
   const s1 = await S(), r1 = s1.log.at(-1);
-  ok(r1.outcome === 'success' && r1.report.stats.economy[1] - r1.report.stats.economy[0] === 6 && r1.report.stats.influence[1] - r1.report.stats.influence[0] === 5 && r1.report.stats.stability[1] - r1.report.stats.stability[0] === -1, '쉬움: 능력치 +4→+6, +3→+5(반올림), -2→-1');
+  ok(r1.outcome === 'success' && r1.report.stats.economy[1] - r1.report.stats.economy[0] === 6 && r1.report.stats.influence[1] - r1.report.stats.influence[0] === 5, '쉬움: 능력치 +4→+6, +3→+5(반올림)');
   ok(s1.stats.KOR.economy === Math.min(100, b0.economy + 6), '배율이 실제 능력치에 반영');
 
   // ---- 신문 내용 ----

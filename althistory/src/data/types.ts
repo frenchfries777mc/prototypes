@@ -4,6 +4,8 @@ export type ProvinceId = string;
 export type StatKey = 'stability' | 'economy' | 'military' | 'influence';
 export type Stats = Record<StatKey, number>;
 export const STAT_KEYS: StatKey[] = ['stability', 'economy', 'military', 'influence'];
+/** 화면에 보이는 능력치. 안정도(stability)는 숨은 변수라 UI·신문에 내지 않는다. */
+export const SHOWN_STATS: StatKey[] = ['economy', 'military', 'influence'];
 export const STAT_LABEL: Record<StatKey, string> = { stability: '안정', economy: '경제', military: '군사', influence: '영향력' };
 
 export interface CountryMeta {

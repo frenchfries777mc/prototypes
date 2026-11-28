@@ -36,6 +36,18 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   for (let i = 0; i < 30 && !seen; i++) { const r = await run('#btn-pass'); if ((await S()).wars.includes('CHN|IND')) seen = r; }
   ok(!!seen && /중국이 인도에 선전포고했다/.test(seen.t), `세력 AI가 스스로 전쟁을 건다: ${seen ? '중국이 인도에 선전포고' : '30턴 동안 없음'}`);
   ok(seen && !/중국과 인도 사이에 전쟁이 시작되었다/.test(seen.t), '같은 전쟁이 "전쟁이 시작되었다"로 이중 보도되지 않음');
+  // (9) AI 군대가 진군·전투한다: 전쟁 중인 중국-인도 사이에서 땅 주인이 바뀌거나 공격 기사가 난다
+  const ctl0 = await page.evaluate(() => JSON.stringify(window.__game.state.controller));
+  let war = null;
+  for (let i = 0; i < 25 && !war; i++) { await page.evaluate(() => { const s = window.__game.state; if (!s.wars.includes('CHN|IND')) s.wars.push('CHN|IND'); s.stats.CHN.stability = 80; }); const r = await run('#btn-pass'); if (/점령했다|격파하고|방어에 막혀/.test(r.t)) war = r; }
+  const ctl1 = await page.evaluate(() => window.__game.state.controller);
+  const moved = Object.keys(ctl1).filter((k) => JSON.parse(ctl0)[k] !== ctl1[k]).length;
+  ok(!!war && moved > 0, `전쟁 중인 AI 군대가 움직여 영토가 바뀜: ${war ? (war.t.match(/[^.]*(점령했다|격파하고|방어에 막혀)[^.]*\./) ?? [''])[0] : '없음'} (주 ${moved}곳)`);
+  // (10) 숨은 안정도: 화면·신문에는 안 나오고, 낮으면 소요·반란 기사가 난다
+  ok(!/안정/.test(await page.textContent('#g-stats')), '상단 능력치에 안정도가 보이지 않음');
+  let unrest = null, shownStab = false;
+  for (let i = 0; i < 40 && !unrest; i++) { await page.evaluate(() => { window.__game.state.stats.KOR.stability = 5; }); const r = await run('#btn-pass'); if (/안정도/.test(r.t)) shownStab = true; if (/폭동|소요|반란/.test(r.t)) unrest = r; }
+  ok(!!unrest && !shownStab, `안정도가 바닥이면 소요·반란 기사가 나고 수치는 안 나옴: ${unrest ? (unrest.t.match(/[^.]*(폭동|소요|반란)[^.]*\./) ?? [''])[0] : '없음'}`);
   console.log('페이지 오류:', errs.length ? errs.join(' ; ') : '없음'); if (errs.length) fail++;
   await browser.close(); console.log(fail ? `\n실패 ${fail}건` : '\n모두 통과'); process.exit(fail ? 1 : 0);
 })();

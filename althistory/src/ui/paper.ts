@@ -1,5 +1,5 @@
 import type { World } from '../data/world';
-import { STAT_KEYS, STAT_LABEL } from '../data/types';
+import { SHOWN_STATS, STAT_LABEL } from '../data/types';
 import type { GameState, TurnRecord } from '../engine/state';
 import { fmtDate } from '../engine/state';
 import { P } from '../util/josa';
@@ -54,7 +54,7 @@ export function renderPaper(rec: TurnRecord, ctx: { world: World; state: GameSta
   const home: string[] = [];
   if (r) {
     const word: Record<string, string> = { stability: '정국 안정도', economy: '경제 지표', military: '군사력', influence: '국제적 영향력' };
-    for (const k of STAT_KEYS) {
+    for (const k of SHOWN_STATS) {
       const [a, b] = r.stats[k] ?? [0, 0]; const d = b - a;
       if (d) home.push(`${P(word[k] ?? STAT_LABEL[k], '이/가')} ${a}에서 ${P(String(b), '으로/로')} ${d > 0 ? '올랐다' : '내려앉았다'}.`);
     }
