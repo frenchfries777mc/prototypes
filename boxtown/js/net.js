@@ -105,7 +105,8 @@ class Remote {
       c.fillStyle = bg; c.beginPath(); c.roundRect(256 - w / 2, y - h / 2, w, h, 16); c.fill();
       c.fillStyle = fg; c.fillText(s, 256, y + 2);
     };
-    if (two) { draw(text, 44, 'rgba(255,255,255,.95)', '#16223a', 40); draw(this.name, 120, 'rgba(22,34,58,.8)', '#fff', 34); } else draw(text, 112, 'rgba(22,34,58,.8)', '#fff', 42);
+    const nameBg = 'rgba(22,34,58,.8)', nm = this.name;
+    if (two) { draw(text, 44, 'rgba(255,255,255,.95)', '#16223a', 40); draw(nm, 120, nameBg, '#fff', 34); } else draw(text, 112, nameBg, '#fff', 42);
     this.tex.update();
   }
   speak(text) { this.say = text; this.sayT = 6; this.drawTag(); }
@@ -156,6 +157,7 @@ class Remote {
     let dh = (b.h - a.h) % (Math.PI * 2); if (dh > Math.PI) dh -= Math.PI * 2; if (dh < -Math.PI) dh += Math.PI * 2;
     this.heading = a.h + dh * Math.min(1, k);
     this.flags = b.f;
+    this.pvp = !!(b.f & 32); // 친구도 PvP 상태인지(방에 들어와 있으면 늘 켜져 있다)
     const stale = now - S[S.length - 1].t > 4; // 한동안 소식이 없으면 숨긴다
     const inside = !!(b.f & 1), hidden = stale || !!(b.f & 16) || (inside && hideInside);
     // 탈것
@@ -351,7 +353,12 @@ export class Net {
   }
   // 주먹·방망이가 닿는 곳에 있는 다른 플레이어들
   near(x, y, z, range) { const out = []; for (const r of this.remotes.values()) { if (r.hidden || !r.seen) continue; const p = r.car ? r.car.root.position : r.pos; if (Math.abs(p.y - y) < 2.5 && Math.hypot(p.x - x, p.z - z) < range + (r.car ? 1.6 : 0)) out.push(r); } return out; }
-  hit(r, dmg, dx, dz) { const m = { t: 'hit', to: r.id, d: Math.round(dmg), x: r2(dx), z: r2(dz) }; if (this.mode === 'host') this.link.sendTo(r.id, m); else this.send(m); }
+  // PvP: 방 안에서는 늘 켜져 있다(둘 다 PvP 상태일 때만 피해가 간다).
+  hit(r, dmg, dx, dz) {
+    if (!this.pvpOn || !r.pvp) return;
+    const m = { t: 'hit', to: r.id, d: Math.round(dmg), x: r2(dx), z: r2(dz) };
+    if (this.mode === 'host') { m.i = 'host'; this.link.sendTo(r.id, m); } else this.send(m);
+  }
   blast(x, y, z, radius) {
     this.send({ t: 'fx', k: 'boom', p: [r2(x), r2(y), r2(z)] });
     for (const r of this.remotes.values()) { if (r.hidden || !r.seen) continue; const p = r.car ? r.car.root.position : r.pos, d = Math.hypot(p.x - x, p.y + 1 - y, p.z - z); if (d < radius + 1) this.hit(r, 110 * (1 - d / (radius + 1)), p.x - x, p.z - z); }
@@ -360,8 +367,11 @@ export class Net {
   gotHit(m) {
     const P = this.player, d = Math.max(0, Math.min(150, +m.d || 0)), l = Math.hypot(+m.x || 0, +m.z || 0) || 1, dx = (+m.x || 0) / l, dz = (+m.z || 0) / l;
     if (!d || P.inside || P.jailed) return; // 건물 안이나 감옥에서는 맞지 않는다
-    if (P.vehicle) { P.vehicle.hp -= d * 0.5; P.shake = Math.max(P.shake, 0.4); return; }
-    this.health.hurt(d * 0.4, dx, dz, 'player', 3); // 친구끼리는 덜 아프게
+    const from = this.remotes.get(m.i);
+    if (!this.pvpOn || !from || !from.pvp) return; // 방 밖이거나, 쏜 사람이 PvP 상태가 아니면 무시
+    if (this.pvp && this.pvp.shielded()) return; // 막 일어난 뒤 3초는 보호
+    if (P.vehicle) { P.vehicle.hp -= d * 0.5; P.shake = Math.max(P.shake, 0.4); if (this.pvp) this.pvp.combatT = 8; return; }
+    if (this.pvp) this.pvp.hurtBy(m.i, d, dx, dz); else this.health.hurt(d * 0.8, dx, dz, 'player', 3);
   }
 
   // ----- 친구 차에 얻어 타기 -----
@@ -419,7 +429,7 @@ export class Net {
       // 내가 모는 차를 남이 붙잡고 있었다면(동시에 탄 경우) 내 쪽이 이긴다.
       if (car && car.netHeld) { car.netHeld = null; car.body.setMotionType(B.PhysicsMotionType.DYNAMIC); }
       const m = { t: 's', p: [r2(f.x), r2(f.y), r2(f.z)], h: r3(chr.heading), v: [r2(P.vel.x), r2(P.vel.y), r2(P.vel.z)], g: P.grounded || P.airT < 0.1 ? 1 : 0,
-        f: (P.inside ? 1 : 0) | (chr.wave > 0.5 ? 2 : 0) | (chr.aim > 0.5 ? 8 : 0) | (hidden ? 16 : 0), n: this.swingN };
+        f: (P.inside ? 1 : 0) | (chr.wave > 0.5 ? 2 : 0) | (chr.aim > 0.5 ? 8 : 0) | (hidden ? 16 : 0) | (this.pvpOn ? 32 : 0), n: this.swingN };
       if (car) { const q = car.root.rotationQuaternion, p = car.root.position; m.c = [car.key, r2(p.x), r2(p.y), r2(p.z), r3(q.x), r3(q.y), r3(q.z), r3(q.w), car.isBoat ? 1 : 0, car.netIndex === undefined ? -1 : car.netIndex]; }
       if (this.mode === 'host') { m.i = 'host'; this.link.all(m); } else this.link.sendTo('host', m);
     }

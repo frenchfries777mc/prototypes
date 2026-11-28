@@ -34,6 +34,7 @@ export class Health {
 
   // 쓰러지면: 경찰에게 당했거나 수배 중이면 감옥, 아니면 병원에서 깨어난다.
   die(cause) {
+    if (cause === 'pvp' && this.pvp) return this.pvp.died(); // PvP로 쓰러지면 감옥에 가지 않고 병원·경기장에서 일어난다
     if (cause === 'cop' || cause === 'police' || this.police.level > 0) return this.jail();
     stats.bump('downs');
     const fee = Math.min(this.jobs.money, 150);
