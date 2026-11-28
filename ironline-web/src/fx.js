@@ -61,6 +61,18 @@ export class Fx {
       for (let k = 0; k < 4; k++) this.emit(x, y, z, (R() - 0.5) * 1.6, R() * 1.4, (R() - 0.5) * 1.6, 0.8, 0.2, 0.55, 0.5, 0.45, 0.45, { drag: 2.2, grow: 0.5 });
     }
   }
+  // 점령 축하: 팀 색 종이조각이 터진다
+  confetti(x, y, z, col) {
+    const R = Math.random, pal = [[col.r, col.g, col.b], [1, 1, 1], [1, 0.85, 0.3], [col.r, col.g, col.b]];
+    for (let k = 0; k < 60; k++) {
+      const a = R() * 6.283, sp = 2 + R() * 5, c = pal[(R() * pal.length) | 0];
+      this.emit(x + Math.cos(a) * 0.6, y, z + Math.sin(a) * 0.6, Math.cos(a) * sp, 6 + R() * 6, Math.sin(a) * sp, 2.4 + R() * 0.8, 0.2, c[0], c[1], c[2], 1, { grav: 9, drag: 0.7 });
+    }
+  }
+  healBurst(x, y, z) {
+    const R = Math.random;
+    for (let k = 0; k < 22; k++) { const a = R() * 6.283, r = R() * 3; this.emit(x + Math.cos(a) * r, y + 0.2, z + Math.sin(a) * r, 0, 1.6 + R() * 1.5, 0, 1.0, 0.26, 0.4, 1, 0.55, 0.9, { additive: true, grow: -0.4 }); }
+  }
   muzzle(x, y, z, big = 1) {
     for (let k = 0; k < 4; k++) this.emit(x, y, z, 0, 0, 0, 0.07, (0.3 + k * 0.12) * big, 1, 0.85 - k * 0.1, 0.4, 1, { additive: true });
     for (let k = 0; k < 5; k++) this.emit(x, y, z, (Math.random() - 0.5) * 3, Math.random() * 2 + 0.5, (Math.random() - 0.5) * 3, 0.18, 0.07 * big, 1, 0.8, 0.4, 1, { additive: true, grav: 4 });

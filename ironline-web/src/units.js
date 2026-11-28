@@ -37,33 +37,43 @@ function part(items) {
   return mergeGeometries(geos, false);
 }
 const SPH = new THREE.SphereGeometry(1, 14, 10), CAP = (r, l) => new THREE.CapsuleGeometry(r, l, 4, 10), CYL = (r, h) => new THREE.CylinderGeometry(r, r, h, 12), BOX = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const soldierGeo = TEAM.map((t) => {
-  const body = part([
-    { g: CAP(0.2, 0.3), c: t.coat, p: [0, 1.12, 0], s: [1.05, 1, 0.8] },                 // 몸통
-    { g: CYL(0.215, 0.07), c: BELT, p: [0, 0.86, 0], s: [1.05, 1, 0.8] },                  // 허리띠
-    { g: new THREE.TorusGeometry(0.15, 0.05, 8, 16), c: t.band, p: [0, 1.38, 0], r: [Math.PI / 2, 0, 0] },   // 목도리
-    { g: BOX(0.3, 0.36, 0.14), c: KHAKI, p: [0, 1.15, 0.2] },                              // 배낭
-    { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [-0.13, 0.9, -0.17] }, { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [0.13, 0.9, -0.17] },   // 탄입대
-    { g: SPH, c: SK, p: [0, 1.62, 0], s: [0.17, 0.18, 0.17] },                             // 머리
-    { g: SPH, c: DARK, p: [-0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] }, { g: SPH, c: DARK, p: [0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] },
-    { g: new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), c: t.helmet, p: [0, 1.64, 0], s: [0.2, 0.19, 0.205] },   // 철모
-    { g: CYL(0.235, 0.03), c: t.helmet, p: [0, 1.665, 0] },                                // 챙
-    { g: BOX(0.06, 0.035, 0.22), c: t.band, p: [0, 1.835, -0.01] },                        // 철모 줄무늬
-  ]);
-  const leg = part([
-    { g: CYL(0.1, 0.62), c: t.pants, p: [0, -0.31, 0] },
-    { g: SPH, c: DARK, p: [0, -0.72, -0.045], s: [0.125, 0.09, 0.19] },                    // 군화
-  ]);
-  const arms = part([
-    { g: CAP(0.066, 0.34), c: t.coat, p: [0.2, -0.1, -0.2], r: [-Math.PI / 2 + 0.08, 0, 0] },   // 방아쇠 쪽 팔
-    { g: CAP(0.066, 0.4), c: t.coat, p: [-0.2, -0.07, -0.26], r: [-Math.PI / 2 + 0.05, 0, 0] }, // 받치는 팔
-    { g: SPH, c: SK, p: [0.2, -0.1, -0.44], s: [0.075, 0.075, 0.075] }, { g: SPH, c: SK, p: [-0.2, -0.07, -0.5], s: [0.075, 0.075, 0.075] },
-    { g: CYL(0.02, 0.62), c: STEEL, p: [0.0, -0.08, -0.78], r: [Math.PI / 2, 0, 0] },       // 총열
-    { g: BOX(0.065, 0.1, 0.5), c: WOODC, p: [0.0, -0.1, -0.34] },                          // 개머리·몸체
-    { g: BOX(0.05, 0.12, 0.1), c: WOODC, p: [0.0, -0.17, -0.12], r: [0.5, 0, 0] },
-  ]);
-  return { body, leg, arms };
-});
+const BRASS = 0xc9a24a, RED = 0xd8402e, WHITE = 0xf4f1e8, YELLOW = 0xf2c230;
+const gunItems = (wp) => {
+  const wood = WOODC;
+  if (wp === 0) return [{ g: CYL(0.02, 0.62), c: STEEL, p: [0, -0.08, -0.78], r: [Math.PI / 2, 0, 0] }, { g: BOX(0.065, 0.1, 0.5), c: wood, p: [0, -0.1, -0.34] }, { g: BOX(0.05, 0.12, 0.1), c: wood, p: [0, -0.17, -0.12], r: [0.5, 0, 0] }];            // 긴 소총
+  if (wp === 1) return [{ g: CYL(0.02, 0.36), c: STEEL, p: [0, -0.08, -0.62], r: [Math.PI / 2, 0, 0] }, { g: BOX(0.07, 0.1, 0.36), c: wood, p: [0, -0.1, -0.3] }, { g: BOX(0.05, 0.2, 0.06), c: DARK, p: [0, -0.22, -0.34] }];                      // 기관단총(탄창)
+  if (wp === 2) return [{ g: CYL(0.025, 0.7), c: STEEL, p: [0, -0.08, -0.84], r: [Math.PI / 2, 0, 0] }, { g: BOX(0.08, 0.12, 0.5), c: DARK, p: [0, -0.1, -0.34] }, { g: BOX(0.02, 0.02, 0.34), c: STEEL, p: [0.06, -0.2, -0.9] }, { g: BOX(0.02, 0.02, 0.34), c: STEEL, p: [-0.06, -0.2, -0.9] }];   // 경기관총(양각대)
+  if (wp === 3) return [{ g: CYL(0.02, 0.44), c: STEEL, p: [0, -0.08, -0.66], r: [Math.PI / 2, 0, 0] }, { g: BOX(0.06, 0.1, 0.42), c: wood, p: [0, -0.1, -0.3] }];                                                                          // 카빈
+  return [{ g: CYL(0.03, 0.5), c: STEEL, p: [0, -0.07, -0.72], r: [Math.PI / 2, 0, 0] }, { g: CYL(0.03, 0.5), c: STEEL, p: [0, -0.13, -0.72], r: [Math.PI / 2, 0, 0] }, { g: BOX(0.09, 0.13, 0.44), c: wood, p: [0, -0.11, -0.28] }];             // 산탄총(쌍열)
+};
+const classExtras = (cl, t) => {
+  if (cl === 2) return [{ g: BOX(0.09, 0.62, 0.05), c: BRASS, p: [0.0, 1.12, -0.17], r: [0, 0, 0.75] }];                                                         // 탄띠
+  if (cl === 3) return [{ g: BOX(0.2, 0.06, 0.03), c: RED, p: [0, 1.18, -0.17] }, { g: BOX(0.06, 0.2, 0.03), c: RED, p: [0, 1.18, -0.17] }, { g: BOX(0.34, 0.07, 0.34), c: WHITE, p: [0, 1.84, 0] }, { g: BOX(0.2, 0.06, 0.03), c: RED, p: [0, 1.84, -0.19] }, { g: BOX(0.06, 0.2, 0.03), c: RED, p: [0.0, 1.45, 0.22] }]; // 적십자
+  if (cl === 4) return [{ g: BOX(0.4, 0.09, 0.4), c: YELLOW, p: [0, 1.86, 0] }, { g: CYL(0.025, 0.6), c: STEEL, p: [0.1, 1.2, 0.29] }, { g: BOX(0.16, 0.2, 0.03), c: STEEL, p: [0.1, 0.86, 0.29] }];   // 안전모와 삽
+  if (cl === 1) return [{ g: BOX(0.2, 0.14, 0.07), c: BELT, p: [0, 0.98, -0.2] }, { g: BOX(0.1, 0.07, 0.3), c: KHAKI, p: [0, 1.88, 0] }];                           // 소총수: 위장 천
+  return [{ g: BOX(0.1, 0.03, 0.31), c: t.band, p: [0, 1.88, 0] }];                                                                                                 // 돌격병
+};
+const bodyItems = (t) => [
+  { g: CAP(0.2, 0.3), c: t.coat, p: [0, 1.12, 0], s: [1.05, 1, 0.8] },
+  { g: CYL(0.215, 0.07), c: BELT, p: [0, 0.86, 0], s: [1.05, 1, 0.8] },
+  { g: new THREE.TorusGeometry(0.15, 0.05, 8, 16), c: t.band, p: [0, 1.38, 0], r: [Math.PI / 2, 0, 0] },
+  { g: BOX(0.3, 0.36, 0.14), c: KHAKI, p: [0, 1.15, 0.2] },
+  { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [-0.13, 0.9, -0.17] }, { g: BOX(0.09, 0.1, 0.06), c: BELT, p: [0.13, 0.9, -0.17] },
+  { g: SPH, c: SK, p: [0, 1.62, 0], s: [0.17, 0.18, 0.17] },
+  { g: SPH, c: DARK, p: [-0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] }, { g: SPH, c: DARK, p: [0.065, 1.63, -0.155], s: [0.022, 0.03, 0.02] },
+  { g: new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), c: t.helmet, p: [0, 1.64, 0], s: [0.2, 0.19, 0.205] },
+  { g: CYL(0.235, 0.03), c: t.helmet, p: [0, 1.665, 0] },
+];
+const armsBase = (t) => [
+  { g: CAP(0.066, 0.34), c: t.coat, p: [0.2, -0.1, -0.2], r: [-Math.PI / 2 + 0.08, 0, 0] },
+  { g: CAP(0.066, 0.4), c: t.coat, p: [-0.2, -0.07, -0.26], r: [-Math.PI / 2 + 0.05, 0, 0] },
+  { g: SPH, c: SK, p: [0.2, -0.1, -0.44], s: [0.075, 0.075, 0.075] }, { g: SPH, c: SK, p: [-0.2, -0.07, -0.5], s: [0.075, 0.075, 0.075] },
+];
+const soldierGeo = TEAM.map((t) => ({
+  leg: part([{ g: CYL(0.1, 0.62), c: t.pants, p: [0, -0.31, 0] }, { g: SPH, c: DARK, p: [0, -0.72, -0.045], s: [0.125, 0.09, 0.19] }]),
+  body: [0, 1, 2, 3, 4].map((cl) => part([...bodyItems(t), ...classExtras(cl, t)])),
+  arms: [0, 1, 2, 3, 4].map((wp) => part([...armsBase(t), ...gunItems(wp)])),
+}));
 
 export function makeSoldier(team) {
   const G = soldierGeo[team];
@@ -73,13 +83,15 @@ export function makeSoldier(team) {
     const o = new THREE.Mesh(geo, inkOutline); o.frustumCulled = false; m.add(o);
     return m;
   };
-  const body = new THREE.Group(); g.add(body); body.add(mk(G.body));
+  const body = new THREE.Group(); g.add(body);
+  const bodyMesh = mk(G.body[0]); body.add(bodyMesh);
   const legL = new THREE.Group(), legR = new THREE.Group();
   legL.position.set(-0.12, 0.82, 0); legR.position.set(0.12, 0.82, 0);
   legL.add(mk(G.leg)); legR.add(mk(G.leg));
   g.add(legL, legR);
-  const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms); arms.add(mk(G.arms));
-  g.userData = { body, legL, legR, arms };
+  const arms = new THREE.Group(); arms.position.set(0, 1.38, 0); body.add(arms);
+  const armsMesh = mk(G.arms[0]); arms.add(armsMesh);
+  g.userData = { body, legL, legR, arms, bodyMesh, armsMesh, team, cls: 0, wpn: 0 };
   return g;
 }
 
@@ -95,7 +107,9 @@ export class UnitViews {
       const hide = (u.id === localId && u.alive && !thirdPerson) || (!u.alive && u.deathAge > 8);
       v.visible = !hide;
       if (hide) continue;
-      const a = u.alive && u.deathAge === 0 || u.alive ? alpha : 1;
+      if (ud.cls !== u.cls) { const gm = soldierGeo[ud.team].body[u.cls]; ud.bodyMesh.geometry = gm; ud.bodyMesh.children[0].geometry = gm; ud.cls = u.cls; }
+      if (ud.wpn !== u.weapon) { const gm = soldierGeo[ud.team].arms[u.weapon]; ud.armsMesh.geometry = gm; ud.armsMesh.children[0].geometry = gm; ud.wpn = u.weapon; }
+      const a = u.alive ? alpha : 1;
       let dy = u.yaw - u.pyaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       v.position.set(u.px + (u.x - u.px) * a, u.py + (u.y - u.py) * a, u.pz + (u.z - u.pz) * a);
       v.rotation.y = u.pyaw + dy * a;
@@ -125,6 +139,12 @@ export function makeViewmodel(weapon) {
   } else if (weapon === 1) {     // 기관단총
     g.add(box(0.05, 0.075, 0.4, wood, 0, -0.01, 0.1), box(0.045, 0.06, 0.34, metal, 0, 0.02, -0.2), box(0.02, 0.02, 0.32, metal, 0, 0.025, -0.5));
     g.add(box(0.04, 0.2, 0.06, gunMat, 0, -0.14, -0.12), box(0.014, 0.03, 0.014, metal, 0, 0.06, -0.62));
+  } else if (weapon === 3) {     // 카빈
+    g.add(box(0.05, 0.08, 0.42, wood, 0, -0.01, 0.1), box(0.035, 0.05, 0.38, metal, 0, 0.02, -0.2), box(0.02, 0.02, 0.4, metal, 0, 0.025, -0.58));
+    g.add(box(0.012, 0.035, 0.012, metal, 0, 0.065, -0.78), box(0.015, 0.03, 0.02, metal, 0, 0.06, -0.02));
+  } else if (weapon === 4) {     // 산탄총
+    g.add(box(0.06, 0.09, 0.46, wood, 0, -0.02, 0.1), box(0.03, 0.03, 0.62, metal, 0.022, 0.03, -0.42), box(0.03, 0.03, 0.62, metal, -0.022, 0.03, -0.42), box(0.07, 0.05, 0.16, wood, 0, -0.02, -0.38));
+    g.add(box(0.012, 0.03, 0.012, metal, 0, 0.065, -0.72));
   } else {                       // 경기관총
     g.add(box(0.06, 0.09, 0.5, wood, 0, -0.01, 0.14), box(0.06, 0.07, 0.5, metal, 0, 0.02, -0.25), box(0.03, 0.03, 0.55, metal, 0, 0.03, -0.75));
     g.add(box(0.14, 0.1, 0.12, gunMat, 0, -0.08, -0.15), box(0.012, 0.012, 0.3, metal, 0.05, -0.08, -0.7), box(0.012, 0.012, 0.3, metal, -0.05, -0.08, -0.7));
@@ -138,7 +158,7 @@ export function makeViewmodel(weapon) {
 // ---- 거점: 깃발, 바닥 구역 표시, 멀리서도 보이는 빛기둥 ----
 export class PointViews {
   constructor(scene, sim) {
-    this.sim = sim; this.items = [];
+    this.sim = sim; this.items = []; this.scene = scene;
     const poleMat = std(0x2a1f15, 0.8), clothTex = clothTexture('#ffffff');
     for (let i = 0; i < NPOINTS; i++) {
       const p = sim.pts[i], grp = new THREE.Group(); grp.position.set(p.x, p.y, p.z);
@@ -157,14 +177,22 @@ export class PointViews {
         fragmentShader: 'uniform vec3 col; varying float vY; void main(){ float t = clamp(vY / 80.0, 0.0, 1.0); gl_FragColor = vec4(col, (1.0 - t) * (1.0 - t) * 0.22); }',
       });
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.8, 80, 12, 1, true), beamMat); beam.position.y = 40;
-      grp.add(pole, flag, ring, fill, beam);
+      const waveMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
+      const wave = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 64), waveMat); wave.rotation.x = -Math.PI / 2; wave.position.y = 0.3; wave.visible = false;
+      grp.add(pole, flag, ring, fill, beam, wave);
       scene.add(grp);
-      this.items.push({ grp, flag, flagMat, ringMat, fillMat, fill, beamMat, base: flagGeo.attributes.position.array.slice() });
+      this.items.push({ grp, flag, flagMat, ringMat, fillMat, fill, beamMat, wave, waveMat, waveT: 9, fy: 6.4, base: flagGeo.attributes.position.array.slice() });
     }
   }
-  update(time) {
+  // 점령 순간: 바닥에서 퍼지는 충격파
+  pulse(i, color) { const it = this.items[i]; it.waveT = 0; it.waveMat.color.copy(color); it.wave.visible = true; }
+  update(time, dt = 0.016) {
     for (let i = 0; i < NPOINTS; i++) {
       const p = this.sim.pts[i], it = this.items[i];
+      // 깃발 높이: 점령 진행도에 따라 올라가고 내려간다(점령되면 꼭대기)
+      const frac = p.owner >= 0 ? 1 : Math.abs(p.cap), ty = 1.7 + 4.7 * frac;
+      it.fy += (ty - it.fy) * Math.min(1, dt * 4); it.flag.position.y = it.fy;
+      if (it.waveT < 1.2) { it.waveT += dt; const t = it.waveT / 1.2; it.wave.scale.setScalar(POINT_R * (0.15 + t * 1.5)); it.waveMat.opacity = Math.max(0, 0.9 * (1 - t)); if (it.waveT >= 1.2) it.wave.visible = false; }
       const oc = p.owner === 0 ? COL_A : p.owner === 1 ? COL_B : COL_N;
       const lead = p.cap > 0 ? COL_A : COL_B;
       it.flagMat.color.copy(oc); it.ringMat.color.copy(oc); it.beamMat.uniforms.col.value.copy(oc);

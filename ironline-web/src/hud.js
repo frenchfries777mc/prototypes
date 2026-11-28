@@ -1,6 +1,6 @@
 // HUD: DOM 요소 갱신과 미니맵. 게임 상태를 읽기만 하고 규칙에는 관여하지 않는다.
 import { NPOINTS, HALF_X, HALF_Z, POINT_R } from './world.js';
-import { WEAPONS, MATCH_TIME } from './sim.js';
+import { WEAPONS, CLASSES, MATCH_TIME } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
 const A = '#5a8cff', B = '#ffc83c', N = '#bdbdbd';
@@ -10,12 +10,17 @@ const mmss = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60
 export class Hud {
   constructor() {
     this.el = {};
-    for (const id of ['hud', 'ta', 'tb', 'tab', 'tbb', 'timer', 'pts', 'feed', 'msg', 'cross', 'hitm', 'hpn', 'hpb', 'wn', 'am', 'mg', 'ammo', 'capbox', 'capwarn', 'captxt', 'capb', 'low', 'dmg', 'death', 'dcard', 'dspec', 'dring', 'score', 'mini', 'dbg', 'netinfo']) this.el[id] = $(id);
+    for (const id of ['hud', 'ta', 'tb', 'tab', 'tbb', 'timer', 'pts', 'feed', 'msg', 'cross', 'hitm', 'hpn', 'hpb', 'wn', 'am', 'mg', 'ammo', 'capbox', 'capwarn', 'captxt', 'capb', 'low', 'dmg', 'death', 'dcard', 'dspec', 'dring', 'score', 'mini', 'dbg', 'netinfo', 'banner', 'abil']) this.el[id] = $(id);
     this.hx = [];
     for (let i = 0; i < NPOINTS; i++) { const d = document.createElement('div'); d.className = 'hx'; d.innerHTML = hexSvg('#444', '#999') + `<span class="num">${'ABCDE'[i]}</span><small></small>`; this.el.pts.appendChild(d); this.hx.push(d); }
     this.mm = this.el.mini.getContext('2d');
     this.msgT = 0; this.hitT = 0; this.dmgT = 0; this.last = {};
     this.mmBase = null;
+  }
+  // 화면 가운데 큰 글자(점령 등). 같은 글자가 연달아 와도 다시 튀어나오게 한다.
+  banner(text, color = '#fff') {
+    const b = this.el.banner; b.textContent = text; b.style.color = color;
+    b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
   }
   net(t) { this.text('netinfo', t); }
   show(on) { this.el.hud.classList.toggle('on', on); }
@@ -45,9 +50,12 @@ export class Hud {
     }
     if (!me.alive) { this.drawMini(sim, me, ctx); return; }
     const w = WEAPONS[me.weapon];
-    this.text('hpn', Math.ceil(me.hp)); e.hpb.style.width = me.hp + '%'; e.hpb.style.background = me.hp > 55 ? 'var(--ok)' : me.hp > 28 ? '#e0b23a' : 'var(--bad)';
+    this.text('hpn', Math.ceil(me.hp)); e.hpb.style.width = Math.min(100, me.hp / me.maxHp * 100) + '%'; e.hpb.style.background = me.hp > 55 ? 'var(--ok)' : me.hp > 28 ? '#e0b23a' : 'var(--bad)';
     e.low.style.opacity = me.hp < 30 ? '1' : '0';
-    this.text('wn', w.name);
+    const cl = CLASSES[me.cls];
+    this.text('wn', `${cl.name} · ${w.name}`);
+    this.text('abil', cl.ability ? `[F] ${cl.abilityName} · ${me.abilityCd > 0 ? Math.ceil(me.abilityCd) + '초' : '준비됨'}` : cl.desc);
+    e.ammo.classList.toggle('ready', !!cl.ability && me.abilityCd <= 0);
     this.text('am', me.reloadT > 0 ? '장전' : me.ammo); this.text('mg', '/ ' + w.mag);
     e.ammo.classList.toggle('low', me.ammo <= Math.ceil(w.mag * 0.25) && me.reloadT <= 0);
     // 점령 중인 거점 안내
@@ -71,7 +79,7 @@ export class Hud {
     if (!on) return;
     const k = killer, w = WEAPONS[me.killW] || WEAPONS[0];
     this.set('dcard', 'h', `<div><small>처치한 적</small><b>${k ? k.label : '?'}</b></div><div style="text-align:right"><small>${w.name}</small><b class="num">${Math.round(me.killDist)}m</b></div>`);
-    this.text('dspec', k ? `관전 중 · ${k.label}` : '');
+    this.set('dspec', 'h', `${k ? `관전 중 · ${k.label}<br>` : ''}<small>1~5 키로 다음 병과 선택 · 지금: ${CLASSES[me.loadout].name}</small>`);
     this.text('dring', Math.max(0, Math.ceil(me.respawnT)));
   }
 

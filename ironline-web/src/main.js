@@ -1,10 +1,10 @@
 // Ironline (web): 게임 루프, 입력, 카메라, 이벤트 → 효과 연결.
 import * as THREE from 'three';
-import { Sim, TICK, WEAPONS, EYE } from './sim.js';
+import { Sim, TICK, WEAPONS, CLASSES, EYE } from './sim.js';
 import { TRENCH_X } from './world.js';
-import { makeSky, buildTerrain, makeBoxProps, makeHouses, textureLoader, sandbagTexture, HAZE } from './gfx.js';
+import { makeSky, buildTerrain, makeBoxProps, makeHouses, textureLoader, sandbagTexture, boxGeo, HAZE } from './gfx.js';
 import { Models, Batch, scatter, modelNames, setDecorStyle } from './decor.js';
-import { UnitViews, PointViews, makeViewmodel } from './units.js';
+import { UnitViews, PointViews, makeViewmodel, COL_A, COL_B } from './units.js';
 import { Fx } from './fx.js';
 import { Audio } from './audio.js';
 import { Hud } from './hud.js';
@@ -76,7 +76,26 @@ const peerCfg = {};
 if (q.get('peerhost')) { const [h, pt] = q.get('peerhost').split(':'); peerCfg.host = h; peerCfg.port = +pt || 443; peerCfg.secure = q.get('secure') !== '0'; }
 const net = new Net(peerCfg);
 const PER = 32;                       // 온라인은 팀당 32명 고정(사람 자리는 봇 자리를 넘겨받는다)
-let role = 'solo', snapT = 0, tickN = 0, endT = 0, orphanScan = 0, myName = '병사' + (100 + Math.floor(Math.random() * 900)), hubHumans = 1;
+// frenchfries777 계정이 로그인되어 있으면 그 닉네임을 쓴다. 로그인하지 않았다면 임시 이름.
+const guestName = '병사' + (100 + Math.floor(Math.random() * 900));
+function accountName() {
+  try { if (window.FFAuth && FFAuth.user()) { const n = String(FFAuth.nickname() || '').replace(/[<>&"'`]/g, '').trim(); if (n) return n.slice(0, 10); } } catch (e) { /* 로그인 스크립트를 못 불러온 경우 */ }
+  return null;
+}
+function refreshAcct() {
+  const a = $('acct'); if (!a) return; const n = accountName();
+  if (n) a.innerHTML = `<span>👤 <b></b></span>`, a.querySelector('b').textContent = n;
+  else { a.innerHTML = '<span>게스트</span><button type="button">로그인</button>'; a.querySelector('button').onclick = () => { try { FFAuth.openLogin(); } catch (e) { /* */ } }; }
+}
+refreshAcct();
+// 로그인 스크립트는 늦게 올 수 있으니 잠깐 기다렸다가 연결한다
+{
+  let tries = 0;
+  const t = setInterval(() => {
+    if (window.FFAuth || ++tries > 40) { clearInterval(t); if (window.FFAuth) { try { FFAuth.ready.then(refreshAcct); FFAuth.onChange(refreshAcct); } catch (e) { /* */ } refreshAcct(); } }
+  }, 250);
+}
+let role = 'solo', snapT = 0, tickN = 0, endT = 0, orphanScan = 0, myName = guestName, hubHumans = 1;
 let vm = null, vmW = -1;
 
 // ---- 상태 ----
@@ -106,25 +125,29 @@ addEventListener('resize', resize);
 $('tstyle').value = TS; $('tstyle').onchange = () => { location.search = '?terrain=' + $('tstyle').value; };
 const wps = $('wps');
 const SIL = [
-  '<path d="M4 30h58l6-4h70l6 3h36v6h-36l-4 2H70l-8 6-4-6H4z"/><rect x="40" y="26" width="26" height="5"/>',                                // 소총
-  '<path d="M10 28h40l6-4h60l4 3h28v6h-28l-3 2H88l-4 14h-9l1-14H56l-6 5-4-5H10z"/>',                                                         // 기관단총
-  '<path d="M4 28h50l6-5h74l4 3h36v6h-36l-4 2H86l-14 10h-5l6-10H54l-6 5-4-5H4z"/><path d="M104 36l-10 14M112 36l10 14" stroke="#1a1208" stroke-width="3" fill="none"/>', // 경기관총
+  '<path d="M10 28h40l6-4h60l4 3h28v6h-28l-3 2H88l-4 14h-9l1-14H56l-6 5-4-5H10z"/>',                                                         // 돌격병: 기관단총
+  '<path d="M4 30h58l6-4h70l6 3h36v6h-36l-4 2H70l-8 6-4-6H4z"/><rect x="40" y="26" width="26" height="5"/>',                                    // 소총수: 볼트액션 소총
+  '<path d="M4 28h50l6-5h74l4 3h36v6h-36l-4 2H86l-14 10h-5l6-10H54l-6 5-4-5H4z"/><path d="M104 36l-10 14M112 36l10 14" stroke="#1a1208" stroke-width="3" fill="none"/>', // 기관총수: 경기관총
+  '<path d="M8 30h50l6-4h58l5 3h30v6h-30l-4 2H76l-8 6-4-6H8z"/><path d="M150 6h14v8h8v14h-8v8h-14v-8h-8V14h8z" fill="#d8402e" transform="translate(-8 -2) scale(.9)"/>',   // 의무병: 카빈 + 적십자
+  '<path d="M4 32h60l6-5h64l5 3h30v7h-30l-4 2H72l-8 6-4-6H4z"/><rect x="150" y="26" width="26" height="4"/><rect x="150" y="34" width="26" height="4"/>',          // 공병: 산탄총
 ];
 const bar = (v) => `<i><b style="width:${Math.round(Math.max(0.06, Math.min(1, v)) * 100)}%"></b></i>`;
-WEAPONS.forEach((w, i) => {
+CLASSES.forEach((c, i) => {
+  const w = WEAPONS[c.weapon];
   const b = document.createElement('button'); b.className = 'wp' + (i === 0 ? ' on' : ''); b.type = 'button';
-  b.innerHTML = `<svg viewBox="0 0 190 56" fill="#1a1208">${SIL[i]}</svg><b>${i + 1}. ${w.name}</b>
-    <div class="st"><span>위력</span>${bar(w.dmg / 70)}<span>연사</span>${bar((1 / w.cd) / 12)}<span>사거리</span>${bar(w.range / 240)}</div>`;
+  b.innerHTML = `<svg viewBox="0 0 190 56" fill="#1a1208">${SIL[i]}</svg><b>${i + 1}. ${c.name}</b><div class="wd">${w.name} · ${c.desc}</div>
+    <div class="st"><span>위력</span>${bar(w.dmg * (w.pellets ? w.pellets * 0.5 : 1) / 70)}<span>연사</span>${bar((1 / w.cd) / 12)}<span>사거리</span>${bar(w.range / 240)}</div>`;
   b.onclick = () => selectWeapon(i);
   wps.appendChild(b);
 });
 function selectWeapon(i) { S.loadout = i; [...wps.children].forEach((c, k) => c.classList.toggle('on', k === i)); }
-addEventListener('keydown', (e) => { if (S.running) return; if (/^Digit[123]$/.test(e.code)) selectWeapon(+e.code[5] - 1); if (e.code === 'Enter' && !$('go').disabled) start(); });
+addEventListener('keydown', (e) => { if (S.running) return; if (/^Digit[1-5]$/.test(e.code)) selectWeapon(+e.code[5] - 1); if (e.code === 'Enter' && !$('go').disabled) start(); });
 function show(id) { for (const k of ['menu', 'pause', 'res']) $(k).style.display = k === id ? '' : 'none'; $('overlay').classList.toggle('on', !!id); canvas.classList.toggle('lobbyfx', id === 'menu'); }
 
 async function start() {
   audio.mute = $('snd').value === '0'; audio.init();
   S.sens = +$('sens').value; setQuality(+$('qual').value);
+  myName = accountName() || guestName;
   const go = $('go'); go.disabled = true; go.textContent = '접속 중…'; $('lbnote').textContent = '전장을 찾는 중…';
   // 한 번 더 누른 경우(결과 화면의 다시 출격)에는 이전 접속을 정리한다
   net.close(); role = 'solo';
@@ -136,11 +159,12 @@ async function start() {
   go.disabled = false; go.textContent = '출격'; $('lbnote').textContent = '누르면 자동으로 전장에 합류합니다';
   role = mode;
   scene.remove(unitViews.group);
+  clearBuildMeshes();
   if (mode === 'client') {
     sim.reset(PER);
     unitViews = new UnitViews(scene, sim);
     applySnap(sim, pendingWel.snap, -1, true); applyScore(pendingWel.sc);
-    me = sim.units[pendingWel.id]; me.isBot = false; me.label = myName; me.weapon = me.loadout = S.loadout; me.remote = false;
+    me = sim.units[pendingWel.id]; me.isBot = false; me.label = myName; me.loadout = S.loadout; me.remote = false; applyBuilds(pendingWel.builds);
     S.sn = me.spawnN; S.rlT = 0; S.lastSnapAt = performance.now(); S.snapGap = 66;
   } else {
     sim.reset(PER);
@@ -156,6 +180,21 @@ async function start() {
   hud.feed('WASD 이동 · Shift 달리기 · 클릭 사격 · 우클릭 정조준 · R 장전 · 1 2 3 무기 · Tab 점수판', '', false);
   $('again').style.display = mode === 'solo' ? '' : 'none';
   requestLock();
+}
+
+// ---- 공병이 놓은 모래주머니 ----
+const buildMeshes = new Map();
+const sandMat = new THREE.MeshStandardMaterial({ map: tex.sand, roughness: 0.95 });
+function addBuildMesh(i) {
+  if (buildMeshes.has(i)) return;
+  const b = world.boxes[i]; if (!b || b.dead) return;
+  const m = new THREE.Mesh(boxGeo(b.mn, b.mx, 1.0), sandMat); m.castShadow = m.receiveShadow = true; scene.add(m); buildMeshes.set(i, m);
+}
+function removeBuildMesh(i) { const m = buildMeshes.get(i); if (m) { scene.remove(m); m.geometry.dispose(); buildMeshes.delete(i); } }
+function clearBuildMeshes() { for (const i of [...buildMeshes.keys()]) removeBuildMesh(i); }
+function applyBuilds(list) {
+  clearBuildMeshes();
+  for (const b of list || []) { world.addDynamic(b.x, b.z, b.sx, b.sz, b.h, 1, b.i); addBuildMesh(b.i); }
 }
 
 // ---- 온라인: 자리 배정과 네트워크 콜백 ----
@@ -182,9 +221,10 @@ function netCallbacks() {
       const id = pickSlot(m.want);
       const u = sim.units[id];
       u.isBot = false; u.remote = true; u.inp = null; u.label = m.name || u.label; u.orphan = 0;
-      u.weapon = u.loadout = m.w || 0; u.ammo = WEAPONS[u.weapon].mag; u.reloadT = 0;
+      const c = Math.max(0, Math.min(CLASSES.length - 1, m.w | 0));
+      u.loadout = u.cls = c; u.weapon = CLASSES[c].weapon; u.maxHp = CLASSES[c].hp; u.hp = Math.min(u.hp, u.maxHp); u.ammo = WEAPONS[u.weapon].mag; u.reloadT = 0;
       if (!u.alive && u.deaths === 0) { u.respawnT = 0.2; }
-      return { id, snap: makeSnap(sim, tickN, net.humans), sc: makeScore(sim), you: u.spawnN };
+      return { id, snap: makeSnap(sim, tickN, net.humans), sc: makeScore(sim), you: u.spawnN, builds: sim.builds };
     },
     input: (id, m) => { const u = sim.units[id]; if (u && u.remote) u.inp = m; },
     leave: (id) => { const u = sim.units[id]; u.remote = false; u.isBot = true; u.inp = null; u.label = (u.team === 0 ? 'A' : 'B') + u.id; },
@@ -225,7 +265,7 @@ async function reconnect() {
       hud.message('연결 복구', 1800);
     } else {
       role = 'client'; applySnap(sim, pendingWel.snap, -1, true); applyScore(pendingWel.sc);
-      me = sim.units[pendingWel.id]; me.isBot = false; me.remote = false; me.label = myName; S.sn = me.spawnN; S.prev = null; S.camY = undefined; S.lastSnapAt = performance.now();
+      me = sim.units[pendingWel.id]; me.isBot = false; me.remote = false; me.label = myName; me.loadout = S.loadout; applyBuilds(pendingWel.builds); S.sn = me.spawnN; S.prev = null; S.camY = undefined; S.lastSnapAt = performance.now();
       hud.message('연결 복구', 1800);
     }
   } catch (e) { role = 'solo'; hud.message('온라인 연결이 끊어졌습니다. 오프라인으로 계속합니다', 4000); }
@@ -233,7 +273,7 @@ async function reconnect() {
 function requestLock() { lockWanted = true; try { const p = canvas.requestPointerLock?.(); p?.catch?.(() => {}); } catch (e) { /* 헤드리스 등 */ } }
 $('go').onclick = start; $('again').onclick = start;
 $('resume').onclick = () => { S.paused = false; show(null); requestLock(); };
-$('quit').onclick = $('tomenu').onclick = () => { net.close(); role = 'solo'; S.running = false; hud.show(false); sim.reset(PER); scene.remove(unitViews.group); unitViews = new UnitViews(scene, sim); show('menu'); try { document.exitPointerLock(); } catch (e) { /* */ } };
+$('quit').onclick = $('tomenu').onclick = () => { net.close(); role = 'solo'; S.running = false; hud.show(false); sim.reset(PER); clearBuildMeshes(); scene.remove(unitViews.group); unitViews = new UnitViews(scene, sim); show('menu'); try { document.exitPointerLock(); } catch (e) { /* */ } };
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (!locked && S.running && !S.over && lockWanted && !q.get('auto')) { S.paused = true; keys.clear(); down.l = down.r = false; show('pause'); }
@@ -245,7 +285,11 @@ addEventListener('keydown', (e) => {
   if (!S.running || S.paused) return;
   keys.add(e.code);
   if (e.code === 'Tab') { e.preventDefault(); }
-  if (/^Digit[123]$/.test(e.code) && me.alive) { const w = +e.code[5] - 1; me.weapon = w; me.loadout = w; me.ammo = WEAPONS[w].mag; me.reloadT = 0; me.fireCd = 0.35; setViewmodel(w); }
+  if (/^Digit[1-5]$/.test(e.code)) {   // 병과는 다음 출격부터 바뀐다
+    const c = +e.code[5] - 1; me.loadout = S.loadout = c;
+    hud.message(`다음 출격: ${CLASSES[c].name}`, 1600);
+  }
+  if (e.code === 'KeyF' && me.alive) { if (role === 'client') S.abT = 3; else me.abil = true; }
   if (e.code === 'KeyR') me.reload = true;
   if (role === 'client' && e.code === 'KeyR') S.rlT = 3;
   if (e.code === 'KeyV') S.thirdPerson = !S.thirdPerson;
@@ -262,7 +306,6 @@ addEventListener('mousemove', (e) => {
 canvas.addEventListener('mousedown', (e) => { if (e.button === 0) down.l = true; if (e.button === 2) down.r = true; if (S.running && !S.paused && document.pointerLockElement !== canvas) requestLock(); });
 addEventListener('mouseup', (e) => { if (e.button === 0) down.l = false; if (e.button === 2) down.r = false; });
 addEventListener('contextmenu', (e) => e.preventDefault());
-addEventListener('wheel', (e) => { if (!S.running || !me?.alive) return; const w = (me.weapon + (e.deltaY > 0 ? 1 : 2)) % 3; keys.add('Digit' + (w + 1)); dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit' + (w + 1) })); keys.delete('Digit' + (w + 1)); });
 
 function applyInput() {
   if (!me.alive) { me.moveX = me.moveY = 0; me.fire = me.jump = me.sprint = me.ads = false; return; }
@@ -278,7 +321,7 @@ function setViewmodel(w) {
   if (vm) vmScene.remove(vm);
   vm = makeViewmodel(w); vmW = w; vmScene.add(vm);
   vmFlash = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), new THREE.MeshBasicMaterial({ map: flashTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  vmFlash.position.set(0, 0.035, [-1.0, -0.68, -1.08][w] || -1); vmFlash.visible = false; vm.add(vmFlash);
+  vmFlash.position.set(0, 0.035, [-1.0, -0.68, -1.08, -0.85, -0.92][w] || -1); vmFlash.visible = false; vm.add(vmFlash);
 }
 
 // ---- 이벤트 → 효과 ----
@@ -301,8 +344,21 @@ function onEvents() {
       hud.feed(`<b class="${k.team ? 'b' : 'a'}">${k.label}</b> ▸ ${WEAPONS[e.w].name}${e.head ? ' ◎' : ''} ▸ <b class="${v.team ? 'b' : 'a'}">${v.label}</b>`, '', k === me || v === me);
       if (k === me) { audio.kill(); hud.message('처치', 900); S.stats.k0++; }
     } else if (e.t === 'cap') {
-      const mine = e.o === 0;
-      if (e.o >= 0) { hud.message(`거점 ${'ABCDE'[e.i]} ${mine ? '점령' : '상실'}`, 2400); audio.cap(mine); }
+      const mine = e.o === 0, L = 'ABCDE'[e.i], p = sim.pts[e.i];
+      if (e.o >= 0) {   // 점령 연출: 큰 글자 + 충격파 + 종이조각
+        const col = e.o === 0 ? COL_A : COL_B;
+        hud.banner(mine ? `거점 ${L} 점령!` : `거점 ${L} 빼앗김!`, mine ? '#8fb4ff' : '#ff8a5a'); audio.cap(mine);
+        pointViews.pulse(e.i, col); fx.confetti(p.x, p.y + 0.4, p.z, col);
+      } else if (e.prev === 0) { hud.banner(`거점 ${L} 위험!`, '#ffd36a'); }
+    } else if (e.t === 'heal') {
+      fx.healBurst(e.x, e.y, e.z); if (Math.hypot(e.x - camera.position.x, e.z - camera.position.z) < 30) audio.heal();
+      if (e.id === me.id) hud.message('치료 팩 사용', 1200);
+    } else if (e.t === 'build') {
+      if (role === 'client') world.addDynamic(e.x, e.z, e.sx, e.sz, e.h, 1, e.i);
+      addBuildMesh(e.i); if (Math.hypot(e.x - camera.position.x, e.z - camera.position.z) < 40) audio.build();
+    } else if (e.t === 'unbuild') {
+      if (role === 'client') world.killBox(e.i);
+      removeBuildMesh(e.i);
     } else if (e.t === 'reload' && e.id === me.id) audio.reload();
     else if (e.t === 'end') endMatch(e);
     else if (e.t === 'new') { S.over = false; if (me) me.killer = -1; show(null); hud.show(true); hud.message('새 경기 시작', 2500); }
@@ -379,11 +435,11 @@ function frame(now) {
     while (demoAcc >= TICK && k++ < 3) { sim.step(TICK); demoAcc -= TICK; if (sim.winner >= 0) sim.reset(32); }
     sim.events.length = 0;
     demoView(now / 1000, dt);
-    unitViews.update(dt, -1, false, demoAcc / TICK); pointViews.update(now / 1000); fx.update(dt);
+    unitViews.update(dt, -1, false, demoAcc / TICK); pointViews.update(now / 1000, dt); fx.update(dt);
     renderer.clear(); renderer.render(scene, camera); return;
   }
   if (S.paused && role === 'solo') { renderer.clear(); renderer.render(scene, camera); return; }   // 온라인에서는 멈추지 않는다(다른 사람의 판이 같이 흐른다)
-  if (role === 'connecting') { placeCamera(1, dt); unitViews.update(dt, me.id, S.thirdPerson, 1); pointViews.update(now / 1000); fx.update(dt); renderer.clear(); renderer.render(scene, camera); return; }
+  if (role === 'connecting') { placeCamera(1, dt); unitViews.update(dt, me.id, S.thirdPerson, 1); pointViews.update(now / 1000, dt); fx.update(dt); renderer.clear(); renderer.render(scene, camera); return; }
   if (vmW !== me.weapon) setViewmodel(me.weapon);
   S.accum += dt;
   let n = 0;
@@ -402,7 +458,7 @@ function frame(now) {
   if (me.alive && me.onGround && me.speedNow > 1.5) { stepSnd += me.speedNow * dt; if (stepSnd > 2.3) { stepSnd = 0; audio.step(); } }
   const t = performance.now() / 1000;
   sky.material.uniforms.time.value = t;
-  unitViews.update(dt, me.id, S.thirdPerson, role === 'client' ? Math.min(1, (performance.now() - S.lastSnapAt) / S.snapGap) : S.accum / TICK); pointViews.update(t); fx.update(dt);
+  unitViews.update(dt, me.id, S.thirdPerson, role === 'client' ? Math.min(1, (performance.now() - S.lastSnapAt) / S.snapGap) : S.accum / TICK); pointViews.update(t, dt); fx.update(dt);
   hud.net(role === 'solo' ? '오프라인' : `온라인 · ${role === 'hub' ? net.humans : hubHumans}명 접속`);
   hud.update(dt, sim, me, { world, trenchX: TRENCH_X });
   hud.death(sim, me, me.killer >= 0 ? sim.units[me.killer] : null);
@@ -439,7 +495,7 @@ function clientStep() {
   me.trigger = me.fire;
   if (me.reload) { S.rlT = 3; me.reload = false; }
   const r2 = (v) => Math.round(v * 100) / 100, r3 = (v) => Math.round(v * 1000) / 1000;
-  net.sendInput({ t: 'in', x: r2(me.x), y: r2(me.y), z: r2(me.z), yaw: r3(me.yaw), pitch: r3(me.pitch), fire: me.fire ? 1 : 0, ads: me.ads ? 1 : 0, sp: me.sprint && me.moveY > 0 ? 1 : 0, og: me.onGround ? 1 : 0, w: me.weapon, rl: S.rlT-- > 0 ? 1 : 0, sn: S.sn });
+  net.sendInput({ t: 'in', x: r2(me.x), y: r2(me.y), z: r2(me.z), yaw: r3(me.yaw), pitch: r3(me.pitch), fire: me.fire ? 1 : 0, ads: me.ads ? 1 : 0, sp: me.sprint && me.moveY > 0 ? 1 : 0, og: me.onGround ? 1 : 0, c: me.loadout, ab: S.abT-- > 0 ? 1 : 0, rl: S.rlT-- > 0 ? 1 : 0, sn: S.sn });
 }
 // 내 사격은 누르는 순간 바로 보이고 들리게 한다(판정은 판을 돌리는 쪽이 한다)
 function localShotFx(w) {

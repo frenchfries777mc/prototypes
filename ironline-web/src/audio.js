@@ -31,8 +31,12 @@ export class Audio {
     const v = Math.max(0.03, 1 / (1 + dist / 18)) * 0.9;
     if (weapon === 0) { this.noise(0.45, 1100, 0.7, v, 0.001, pan); this.tone(120, 0.18, 'sine', v * 0.6, 50); }
     else if (weapon === 1) { this.noise(0.14, 2400, 0.8, v * 0.7, 0.001, pan); this.tone(180, 0.07, 'square', v * 0.2, 90); }
+    else if (weapon === 3) { this.noise(0.3, 1400, 0.8, v * 0.8, 0.001, pan); this.tone(140, 0.12, 'sine', v * 0.5, 60); }
+    else if (weapon === 4) { this.noise(0.5, 800, 0.7, v * 1.0, 0.001, pan); this.tone(70, 0.25, 'sine', v * 0.8, 35); }
     else { this.noise(0.2, 1500, 0.8, v * 0.85, 0.001, pan); this.tone(95, 0.12, 'sine', v * 0.5, 45); }
   }
+  heal() { if (this.ok('heal', 0.3)) { [660, 880, 1100].forEach((x, i) => this.tone(x, 0.14, 'sine', 0.16, 0, i * 0.07)); } }
+  build() { if (this.ok('build', 0.2)) { this.noise(0.18, 600, 0.9, 0.35); this.tone(110, 0.12, 'square', 0.1, 70); } }
   hit() { if (this.ok('hit', 0.04)) this.tone(1500, 0.05, 'triangle', 0.18, 700); }
   head() { if (this.ok('head', 0.04)) { this.tone(2200, 0.08, 'triangle', 0.22, 1200); } }
   hurt() { if (this.ok('hurt', 0.1)) { this.noise(0.18, 400, 0.7, 0.5); this.tone(90, 0.2, 'sawtooth', 0.3, 45); } }
