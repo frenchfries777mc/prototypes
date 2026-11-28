@@ -291,7 +291,7 @@ export class Net {
     m.i = id; // 보낸 사람은 연결로 정한다(남인 척 못 하게)
     if (m.t === 'hit') { if (m.to === 'host') this.gotHit(m); else if (this.remotes.has(m.to)) this.link.sendTo(m.to, m); return; }
     this.apply(m);
-    if (m.t === 's' || m.t === 'look' || m.t === 'chat' || m.t === 'fx') this.link.all(m, id);
+    if (m.t === 's' || m.t === 'look' || m.t === 'chat' || m.t === 'fx' || m.t === 'g') this.link.all(m, id);
   }
   fromHost(m) {
     if (!m || typeof m !== 'object') return;
@@ -313,6 +313,7 @@ export class Net {
     if (!r) return;
     if (m.t === 's') r.push(m, performance.now() / 1000);
     else if (m.t === 'look') r.chr.setLook(cleanLook(m.look));
+    else if (m.t === 'g') { if (this.onGame) this.onGame(m); } // 경주·사건 같은 놀이 소식
     else if (m.t === 'chat' && typeof m.text === 'string') { const text = m.text.replace(/[\u0000-\u001f]/g, ' ').slice(0, 80); if (text.trim()) { r.speak(text); this.say(text, r.name); } }
     else if (m.t === 'fx' && Array.isArray(m.p) && m.p.every(num) && this.weapons) {
       const far = Math.hypot(m.p[0] - this.player.feet.x, m.p[2] - this.player.feet.z);

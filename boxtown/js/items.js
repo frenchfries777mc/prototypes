@@ -35,6 +35,8 @@ export class Bag {
   }
   count() { return Object.values(this.items).reduce((a, b) => a + b, 0); }
   save() { try { localStorage.setItem('boxtown.bag', JSON.stringify(this.items)); } catch (e) { /* 무시 */ } }
+  // 내 가게에서는 20% 싸다.
+  price(shop, k) { return Math.round(ITEMS[k][1] * (this.shops ? this.shops.discount(shop) : 1)); }
   // ----- 가게 -----
   shop() {
     const d = this.interiors.inside, r = d && this.interiors.rooms[d.room];
@@ -50,11 +52,12 @@ export class Bag {
     this.note = '';
     Panel.show({
       title: SHOP_NAME[s], note: () => this.note || `산 것은 가방에 담겨요 (${this.count()}/${BAG_MAX}). B로 꺼내 써요`,
-      items: () => MENUS[s].map((k) => ({ id: k, label: ITEMS[k][0], sub: `${ITEMS[k][4]} · ${won(ITEMS[k][1])}원`, state: 'buy' })),
+      items: () => [...(this.shops ? this.shops.entries(s) : []), ...MENUS[s].map((k) => ({ id: k, label: ITEMS[k][0], sub: `${ITEMS[k][4]} · ${won(this.price(s, k))}원`, state: 'buy' }))],
       pick: (k) => {
+        if (k.startsWith('shop:')) { this.note = (this.shops && this.shops.pick(s, k)) || ''; return; } // 내 가게로 사거나 운영하기
         if (!MENUS[s].includes(k)) return;
         if (this.count() >= BAG_MAX) { this.note = '가방이 가득 찼어요'; return; }
-        if (!this.jobs.spend(ITEMS[k][1])) { this.note = '돈이 모자라요'; return; }
+        if (!this.jobs.spend(this.price(s, k))) { this.note = '돈이 모자라요'; return; }
         this.items[k] = (this.items[k] || 0) + 1; this.save(); this.note = `${ITEMS[k][0]}을(를) 담았어요`;
         if (this.weapons.sfx.ctx) this.weapons.sfx.play('pop');
       },

@@ -83,6 +83,7 @@ export class Jobs {
     n = Math.max(10, Math.round((base * rep.bonus(kind)) / 10) * 10); // 평판 단계마다 벌이가 늘어난다
     let tip = 0;
     if (kind && Math.random() < rep.tipChance(kind)) { tip = Math.max(10, Math.round((base * 0.25) / 10) * 10); n += tip; text += '  🧑‍🤝‍🧑 단골 팁'; }
+    if (kind === 'fish' && this.events) this.events.onFish(base); // 낚시 대회 점수
     const lv = rep.add(kind, 1 + (base >= 240 ? 1 : 0));
     if (lv) setTimeout(() => this.levelUp(kind, lv), 900);
     this.money += n;
@@ -98,7 +99,7 @@ export class Jobs {
     this.money += bonus; stats.bump('earned', bonus);
     try { localStorage.setItem('boxtown.money', String(this.money)); } catch (e) { /* 무시 */ }
     this.renderMoney();
-    this.toast(`🏅 ${d.name} 평판 ${lv}단계 「${rep.title(kind)}」  승급 보너스 +${won(bonus)}원`, true);
+    this.notice(`🏅 ${d.name} 평판 ${lv}단계 「${rep.title(kind)}」 · 승급 보너스 +${won(bonus)}원`, 'good');
   }
   // 돈을 쓴다. 모자라면 false.
   spend(n) {
@@ -110,6 +111,14 @@ export class Jobs {
   }
   // 화면 위쪽에 뜨던 상황 알림은 없앴다(호출하는 쪽은 그대로 두고 아무것도 띄우지 않는다).
   toast() {}
+  // 꼭 알려야 할 때만 쓰는 작은 알림(승급, 큰 사건, 레이스 결과). 일 진행 설명은 여전히 띄우지 않는다.
+  notice(text, tone = '') {
+    let box = document.getElementById('notices');
+    if (!box) { box = document.createElement('div'); box.id = 'notices'; document.body.appendChild(box); }
+    const el = document.createElement('div'); el.className = 'notice ' + tone; el.textContent = text; box.appendChild(el);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => el.classList.add('out'), 4200); setTimeout(() => el.remove(), 4800);
+  }
   setTarget(x, z, label, y) { this.target = { x, z, y: y === undefined ? this.groundY(x, z) : y, label }; }
   panel(title, text, sub = '') {
     $('job').hidden = false;
