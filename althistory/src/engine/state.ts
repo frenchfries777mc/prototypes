@@ -27,6 +27,9 @@ export interface General { name: string; skill: number; trait: string; status: '
 /** 병력 단위는 천 명. navy 는 함대(해상 이동 범위가 넓다). */
 export interface Army { id: string; name: string; owner: CountryId; general: General; troops: number; morale: number; at: ProvinceId; navy?: boolean }
 
+export interface Goal { id: 'expand' | 'wealth' | 'power' | 'survive'; label: string; base: number; target: number; done?: number }
+export interface Ending { kind: 'victory' | 'defeat'; turn: number; title: string; text: string; seen?: boolean }
+
 export interface GameState {
   v: 1; scenarioId: string; turnMonths: number; seed: number; rng: number; turn: number; date: string; playerId: CountryId;
   owner: Record<ProvinceId, CountryId>;
@@ -37,6 +40,10 @@ export interface GameState {
   eliminated: CountryId[];
   log: TurnRecord[];
   memory: string;
+  /** 엔진이 확인한 사실 기록부(전쟁·영토·반란·목표). 프롬프트의 LEDGER 로 들어가 AI 서술이 앞뒤가 맞게 한다. */
+  ledger?: string[]; tally?: { wars: number; gained: number; lost: number; unrest: number };
+  /** 플레이어 목표와 결말. 숨은 안정도가 4턴 연속 바닥이면 정권 붕괴로 끝난다. */
+  goals?: Goal[]; ending?: Ending; lowStab?: number;
   armies: Army[];
   armySeq: number;
   difficulty?: Difficulty;

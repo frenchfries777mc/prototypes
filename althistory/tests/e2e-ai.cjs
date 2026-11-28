@@ -48,6 +48,23 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   let unrest = null, shownStab = false;
   for (let i = 0; i < 40 && !unrest; i++) { await page.evaluate(() => { window.__game.state.stats.KOR.stability = 5; }); const r = await run('#btn-pass'); if (/안정도/.test(r.t)) shownStab = true; if (/폭동|소요|반란/.test(r.t)) unrest = r; }
   ok(!!unrest && !shownStab, `안정도가 바닥이면 소요·반란 기사가 나고 수치는 안 나옴: ${unrest ? (unrest.t.match(/[^.]*(폭동|소요|반란)[^.]*\./) ?? [''])[0] : '없음'}`);
+  // (11) 사실 기록부: 내가 시작한 전쟁이 LEDGER 에 남는다
+  const led = (await S()).ledger ?? [];
+  ok(led.some((l) => /전쟁 개시: .*북한/.test(l)), `기록부에 전쟁 개시가 남음: ${led.find((l) => /전쟁 개시/.test(l)) ?? '없음'}`);
+  // (12) 목표: 4개가 보이고, 3개를 이루면 승리 결말(신문을 닫으면 결말 창)
+  await page.evaluate(() => window.__game.start('KOR', 'modern-2026')); await page.waitForTimeout(500);
+  ok((await page.locator('#g-goals .gl').count()) === 4, `목표 4개 표시: ${(await page.textContent('#g-goals')).slice(0, 60)}`);
+  await page.evaluate(() => { const s = window.__game.state; s.goals[0].target = 1; s.stats.KOR.economy = 100; s.stats.KOR.influence = 100; s.goals[1].target = 50; s.goals[2].target = 50; });
+  await run('#btn-pass'); const e1 = (await S()).ending;
+  ok(e1 && e1.kind === 'victory', `목표 3개를 이루면 승리: ${e1?.title}`);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  ok(await page.isVisible('#ending') && /승리/.test(await page.textContent('#ending-title')), '신문을 닫으면 결말 창이 뜸');
+  await page.click('#ending-ok');
+  // (13) 정권 붕괴: 숨은 안정도가 4턴 연속 바닥이면 패배 결말
+  await page.evaluate(() => window.__game.start('KOR', 'modern-2026')); await page.waitForTimeout(500);
+  let e2 = null;
+  for (let i = 0; i < 24 && !e2; i++) { await page.evaluate(() => { window.__game.state.stats.KOR.stability = 0; }); await run('#btn-pass'); e2 = (await S()).ending; if (!(await page.isHidden('#paper'))) await page.keyboard.press('Escape'); if (await page.isVisible('#ending')) await page.click('#ending-ok'); }
+  ok(e2 && e2.kind === 'defeat' && /붕괴|멸망/.test(e2.title), `안정도가 바닥이면 패배 결말: ${e2 ? e2.title : '없음'}`);
   console.log('페이지 오류:', errs.length ? errs.join(' ; ') : '없음'); if (errs.length) fail++;
   await browser.close(); console.log(fail ? `\n실패 ${fail}건` : '\n모두 통과'); process.exit(fail ? 1 : 0);
 })();

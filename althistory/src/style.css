@@ -361,3 +361,15 @@ body.phase-studio #panel, body.phase-studio #game { display: none; }
 .g-suggest { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; } .g-suggest[hidden] { display: none; }
 .g-suggest .sg { border: 1px solid var(--panel-border); background: #12233a; color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .g-suggest .sg small { color: var(--muted); margin-left: 3px; } .g-suggest .sg:hover, .g-suggest .sg.on { border-color: var(--accent); background: #17304f; }
+
+/* 목표·결말 */
+.g-goals { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 11.5px; }
+.g-goals .gl { padding: 2px 8px; border-radius: 10px; background: #1b2230; color: var(--muted); border: 1px solid #2a3447; }
+.g-goals .gl b { color: var(--text, #e8edf5); font-weight: 600; margin-left: 4px; }
+.g-goals .gl.done { color: #8fd49a; border-color: #3b6b45; }
+.ending { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(5,8,14,.72); padding: 16px; }
+.ending[hidden] { display: none; }
+.ending-box { max-width: 460px; background: #121826; border: 1px solid #2f3b52; border-radius: 12px; padding: 22px 24px; text-align: center; }
+.ending-box h2 { margin: 4px 0 10px; font-size: 26px; } .ending-kind { font-size: 12px; letter-spacing: .2em; color: var(--muted); }
+.ending.victory h2 { color: #8fd49a; } .ending.defeat h2 { color: #ff9a9a; }
+.ending-box p { line-height: 1.7; font-size: 14px; margin: 0 0 16px; } .ending-btns { display: flex; justify-content: center; gap: 8px; }

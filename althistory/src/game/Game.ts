@@ -1,4 +1,5 @@
 import type { CountryId, ProvinceId, Scenario, StatKey, Stats, WorldData } from '../data/types';
+import { goalText, makeGoals } from '../engine/goals';
 import { SHOWN_STATS, STAT_LABEL } from '../data/types';
 import { World } from '../data/world';
 import { resolveTurn } from '../engine/turn';
@@ -583,6 +584,8 @@ export async function startApp(opts: GameOptions) {
     const rels = Object.entries(s.relations).filter(([k]) => k.split('|').includes(pid)).map(([k, v]) => [k.split('|').find((x) => x !== pid)!, v] as [string, number]).filter(([c]) => isAlive(s, c));
     const good = rels.filter(([, v]) => v >= 25).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([c, v]) => `${esc(world.label(c))} ${sign(v)}`);
     const bad = rels.filter(([, v]) => v <= -25).sort((a, b) => a[1] - b[1]).slice(0, 4).map(([c, v]) => `${esc(world.label(c))} ${sign(v)}`);
+    if (!s.goals) s.goals = makeGoals(s); // 새 게임·옛 저장 파일: 처음 그릴 때의 상태가 목표 기준
+    $('g-goals').innerHTML = (s.goals ?? []).map((gl) => `<span class="gl${gl.done !== undefined ? ' done' : ''}" title="목표">${gl.done !== undefined ? '✔' : '🎯'} ${esc(gl.label)}${gl.done !== undefined ? '' : `<b>${goalText(s, gl)}</b>`}</span>`).join('');
     $('g-diplo').innerHTML = [
       dead ? '<div class="war"><b>☠ 당신의 나라는 멸망했습니다.</b> 되돌리기 또는 새 게임을 시작하세요.</div>' : '',
       wars.length ? `<div class="war">⚔ 전쟁: ${wars.map((c) => esc(world.label(c))).join(', ')}</div>` : '<div>⚔ 전쟁 없음</div>',
@@ -612,7 +615,15 @@ export async function startApp(opts: GameOptions) {
     $<HTMLInputElement>('paper-auto').checked = paperAuto();
     $('paper').hidden = false; $('paper-scroll').scrollTop = 0;
   }
-  const closePaper = () => { $('paper').hidden = true; paperIdx = -1; };
+  /** 결말(승리·멸망·정권 붕괴)은 신문을 닫은 뒤 한 번 보여 준다 */
+  const maybeEnding = () => {
+    const e = state?.ending; if (!e || e.seen || !$('paper').hidden) return;
+    e.seen = true; persist();
+    $('ending').className = `ending ${e.kind}`; $('ending-kind').textContent = e.kind === 'victory' ? 'VICTORY' : 'GAME OVER';
+    $('ending-title').textContent = e.title; $('ending-text').textContent = e.text; $('ending').hidden = false;
+  };
+  $('ending-ok').addEventListener('click', () => { $('ending').hidden = true; });
+  const closePaper = () => { $('paper').hidden = true; paperIdx = -1; maybeEnding(); };
   $('btn-paper').addEventListener('click', () => { if (state?.log.length) openPaper(state.log.length - 1); });
   $('paper-close').addEventListener('click', closePaper);
   $('paper').addEventListener('click', (e) => { if (e.target === $('paper')) closePaper(); });
@@ -653,7 +664,7 @@ export async function startApp(opts: GameOptions) {
       gmsg(record.rejected.length ? `일부 항목을 엔진이 거부했습니다 (${record.rejected.length}건) — 연대기 참고` : mode.includes('붐벼서') ? 'AI가 붐벼서 이번 턴은 간이 판정으로 처리했습니다. 되돌리기로 취소하고 다시 시도할 수도 있습니다.' : '', record.rejected.length ? '' : 'ok');
       if (selProv) selCountry = state.controller[selProv];
       renderCard();
-      if (paperAuto()) openPaper(state.log.length - 1);
+      if (paperAuto()) openPaper(state.log.length - 1); else maybeEnding();
     } catch (e) {
       gmsg(e instanceof LlmError ? e.message : `오류: ${(e as Error).message}`, 'err');
     } finally { busy = false; renderGame(); }

@@ -160,6 +160,15 @@ let fail = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); i
   await page.fill('#g-cmd', '시험 셋'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.click('#paper-close');
   ok(plReqs.length === 1 && plReqs[0].size > 16000 && plReqs[0].auth === 'Bearer pk-TEST', `Pollinations 키가 있으면 줄이지 않고 전체 프롬프트를 보냄: ${plReqs[0]?.size}자`);
 
+  // 모델별 프롬프트: 작은 모델(flash-lite)은 간추린 프롬프트 + 지침 + 예시, 큰 모델(pro)은 전체
+  await page.evaluate(() => window.__game.setCfg({ provider: 'gemini', geminiKey: 'K', geminiModel: 'gemini-2.5-flash-lite' })); reqs = []; adj = mk({ feasibility: 70 });
+  await page.fill('#g-cmd', '일본과 대화한다'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.keyboard.press('Escape');
+  const sysS = reqs.at(-1).systemInstruction.parts[0].text, usrS = reqs.at(-1).contents[0].parts[0].text;
+  ok(sysS.includes('【지침】') && sysS.includes('예시 출력') && usrS.includes('LEDGER'), `작은 모델: 지침·예시가 붙고 LEDGER 포함 (시스템 ${sysS.length}자)`);
+  await page.evaluate(() => window.__game.setCfg({ provider: 'gemini', geminiKey: 'K', geminiModel: 'gemini-2.5-pro' })); reqs = [];
+  await page.fill('#g-cmd', '일본과 다시 대화한다'); await page.click('#btn-go'); await page.waitForSelector('#paper:not([hidden])'); await waitIdle(); await page.keyboard.press('Escape');
+  const sysL = reqs.at(-1).systemInstruction.parts[0].text;
+  ok(!sysL.includes('【지침】') && sysL.length > sysS.length, `큰 모델: 전체 프롬프트·지침 없음 (시스템 ${sysL.length}자)`);
   console.log('페이지 오류:', errs.length ? errs.join(' ; ') : '없음'); if (errs.length) fail++;
   await browser.close(); console.log(fail ? `\n실패 ${fail}건` : '\n모두 통과'); process.exit(fail ? 1 : 0);
 })();

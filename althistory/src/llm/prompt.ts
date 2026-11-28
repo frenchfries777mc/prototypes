@@ -1,6 +1,7 @@
 import { difficultyBrief } from '../engine/difficulty';
 import type { World } from '../data/world';
 import type { GameState } from '../engine/state';
+import { goalText } from '../engine/goals';
 import { armiesOf, controlledBy, fmtDate, getRel, neighborsOf, ownedBy, warsOf } from '../engine/state';
 import { reachWithin } from '../engine/armies';
 
@@ -11,7 +12,7 @@ const SCHEMA = `{
   "if_success": DIFF,   // 성공했을 때의 결과
   "if_failure": DIFF,   // 실패했을 때의 결과 (성공과 달라야 하며, 보통 부정적/교착)
   "world_events": DIFF, // 플레이어와 무관하게 이번 달 다른 나라들이 하는 일 (0~3건)
-  "memory": "다음 턴을 위해 기억할 사실 한 문장 (선택)"
+  "memory": "다음 턴에도 이어져야 할 것 한 문장: 플레이어가 한 약속·진행 중인 계획·핵심 인물(지도자, 장군)·풀리지 않은 위기 (선택)"
 }
 DIFF = {
   "narrative": "한국어 2~4문장, 구체적인 서술",
@@ -46,7 +47,7 @@ const RULES = `당신은 실제 세계지도 위에서 진행되는 턴제 대�
     전투 결과는 병력, 장군 skill(1~10)과 특성, 사기, 보급, 지형, 시대의 무기·전술을 반영한다. 능력 있는 장군은 열세 병력도 이길 수 있으나 우연도 있다. 보통 손실은 병력의 5~40%. 장군은 드물게(전투당 10% 이하) 부상·포로·전사한다. GM_NOTES에 특별한 장군 설정이 있으면 그 설정을 따른다. trait에 \"불패\"가 있는 장군은 전사·포로가 되지 않는다. 병력 단위는 천 명.
 9. 아무 명령이 없는 턴(PASS)이면 if_success/if_failure는 빈 객체로 두고 world_events만 채운다.`;
 
-const EXAMPLE = `예시 입력 요약: 플레이어=KOR, 명령="일본과 경제 협력 협정을 추진한다"
+export const EXAMPLE = `예시 입력 요약: 플레이어=KOR, 명령="일본과 경제 협력 협정을 추진한다"
 예시 출력: {"interpretation":"한국이 일본과 경제 협력 협정을 추진한다","feasibility":72,"reasoning":"양국 관계가 나쁘지 않고 무역 이해가 크다.","if_success":{"narrative":"서울과 도쿄는 반도체 소재와 물류에 관한 협력 협정에 서명했다. 양국 기업의 투자가 늘고 관계가 한층 개선되었다.","headlines":["한일 경제협력 협정 체결"],"relation_changes":[{"a":"KOR","b":"JPN","delta":10}],"stat_changes":[{"country":"KOR","stat":"economy","delta":2},{"country":"JPN","stat":"economy","delta":2}]},"if_failure":{"narrative":"협상은 역사 문제와 관세 쟁점에서 교착되었고 양국 여론이 악화되었다.","headlines":["한일 협상 결렬"],"relation_changes":[{"a":"KOR","b":"JPN","delta":-4}],"stat_changes":[{"country":"KOR","stat":"stability","delta":-1}]},"world_events":{"narrative":"북한이 단거리 미사일을 시험발사해 동북아 긴장이 높아졌다.","headlines":["북한 미사일 발사"],"relation_changes":[{"a":"PRK","b":"KOR","delta":-5}]},"memory":"한일 경제협력 협상이 진행 중이다."}`;
 
 const sum = (c: { stats?: { stability: number; economy: number; military: number; influence: number } }): number => (c.stats ? c.stats.economy + c.stats.military + c.stats.influence : 0);
@@ -130,7 +131,9 @@ export function buildUserPrompt(s: GameState, w: World, command: string, pass: b
     `FRONT_PROVINCES (foreign land the player can operate against):\n${frontLines.join('\n') || '-'}`,
     lost.length ? `PLAYER_LOST_PROVINCES:\n${lost.join('\n')}` : '',
     `RECENT_HEADLINES: ${recent || '-'}`,
-    `MEMORY:\n${(s.memory || '-').slice(-Math.max(300, Math.floor(1400 * scale)))}`,
+    `LEDGER (엔진이 확인한 사실. 서술이 이와 모순되면 안 된다):\n${(s.ledger ?? []).slice(-(compact ? Math.max(4, Math.floor(14 * scale)) : 14)).join('\n') || '-'}`,
+    !compact && s.goals?.length ? `PLAYER_GOALS: ${s.goals.map((g) => `${g.label}${g.done !== undefined ? ' ✔' : ` (${goalText(s, g)})`}`).join(' / ')}` : '',
+    `NOTES (이전 판정관 기억):\n${(s.memory || '-').slice(-Math.max(300, Math.floor(1100 * scale)))}`,
     difficultyBrief(s.difficulty ?? 'normal'),
     pass ? 'COMMAND: (PASS — 플레이어는 이번 달 특별한 명령이 없다. world_events만 채워라.)' : `COMMAND: ${command}`,
   ].filter(Boolean).join('\n\n');

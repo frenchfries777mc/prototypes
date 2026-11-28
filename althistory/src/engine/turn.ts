@@ -9,6 +9,8 @@ import { aiTurn } from './ai';
 import { aiWarTurn } from './aiwar';
 import { stabilityTurn, supportBonus } from './stability';
 import { makeRng } from './rng';
+import { goalsTurn, makeGoals } from './goals';
+import { ledgerTurn } from './memory';
 import { healGenerals } from './armies';
 
 export interface TurnResult { record: TurnRecord; mapChanged: boolean }
@@ -32,6 +34,7 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
 
   // 신문에 실을 "턴 전후 비교"를 위해 먼저 찍어 둔다
   const before = { stats: { ...s.stats[pid] }, relations: { ...s.relations }, wars: new Set(s.wars) };
+  s.goals ??= makeGoals(s); // 목표 기준은 첫 턴을 처리하기 전 상태(옛 저장 파일은 이어하기 시점)
   const ctrlBefore = { ...s.controller };
   const ctlCount = (m: Record<string, string>) => { let n = 0; for (const k in m) if (m[k] === pid) n++; return n; };
   const terrBefore = ctlCount(ctrlBefore);
@@ -48,6 +51,7 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
   // 전쟁 중인 AI 군대의 진군·전투와, 모든 나라의 숨은 안정도(소요·반란)
   const war = aiWarTurn(s, w, rng, level); const home = stabilityTurn(s, w, rng, false);
   ai.news.push(...war.news, ...home); ai.headlines.push(...war.headlines); ai.againstPlayer = ai.againstPlayer || war.againstPlayer;
+  const goal = goalsTurn(s, w); ai.news.push(...goal.news); ai.headlines.unshift(...goal.headlines);
   const worldHl = [...(worldEv.headlines ?? []), ...ai.headlines];
   const headlines = [...(main.headlines ?? []), ...worldHl].slice(0, 6);
   // 작은 AI는 서술을 빠뜨리기도 한다: 플레이어 명령 쪽 서술이 비면 해석과 이유로 한 줄을 채워 기사가 비지 않게 한다
@@ -70,7 +74,7 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
     base: adj.feasibility, difficulty: level, report, reasoning: pass ? '' : (adj.reasoning ?? '').slice(0, 400),
     main: { narrative: mainNarr, headlines: main.headlines ?? [] }, world: { narrative: worldEv.narrative ?? '', headlines: worldHl },
     diplo: ai.news,
-    alert: ai.againstPlayer || playerWars.length > 0 || merged.notes.some((n) => n.startsWith('💀')) || report.lost.length >= 2 || report.gained.length >= 3,
+    alert: goal.ended || ai.againstPlayer || playerWars.length > 0 || merged.notes.some((n) => n.startsWith('💀')) || report.lost.length >= 2 || report.gained.length >= 3,
   };
 
   s.rng = rng.state();
@@ -79,7 +83,9 @@ export function resolveTurn(s: GameState, w: World, adj: Adjudication, command: 
   s.date = addMonths(s.date, s.turnMonths ?? 1);
   s.log.push(record);
   if (s.log.length > 240) s.log.splice(0, s.log.length - 240);
-  const mem = adj.memory || (command ? `${fmtDate(record.date)} ${adj.interpretation || command}: ${success ? '성공' : '실패'}` : '');
-  if (mem) s.memory = `${s.memory}\n${mem}`.trim().split('\n').slice(-18).join('\n').slice(-MEMORY_MAX);
+  ledgerTurn(s, w, record, ai, goal.news.map((n) => n.replace(/^[^\s]+\s/, '')));
+  // AI가 적은 기억(약속·진행 중 계획·인물)은 날짜를 붙여 12줄까지 두고, 같은 줄은 한 번만 남긴다
+  const mem = adj.memory ? `${fmtDate(record.date)} ${adj.memory.replace(/\s+/g, ' ').slice(0, 160)}` : (command ? `${fmtDate(record.date)} 명령 "${(adj.interpretation || command).slice(0, 60)}": ${success ? '성공' : '실패'}` : '');
+  if (mem) s.memory = [...s.memory.split('\n'), mem].filter((l, i, a) => l.trim() && a.indexOf(l) === i).slice(-12).join('\n').slice(-MEMORY_MAX);
   return { record, mapChanged: merged.mapChanged };
 }

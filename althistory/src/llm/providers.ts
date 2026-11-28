@@ -2,7 +2,8 @@ import type { World } from '../data/world';
 import type { Adjudication } from '../engine/diff';
 import { normalizeAdjudication } from '../engine/diff';
 import type { GameState } from '../engine/state';
-import { PROMPT_LEVELS, fitPrompt } from './prompt';
+import { EXAMPLE, PROMPT_LEVELS, fitPrompt } from './prompt';
+import { profileFor } from './profile';
 import { localAdjudicate } from './local';
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -76,6 +77,8 @@ export function extractJson(text: string): unknown {
   return JSON.parse(t.replace(/,\s*([}\]])/g, '$1'));
 }
 
+/** 지금 보내는 요청의 온도(모델 프로필이 정한다). 요청은 한 번에 하나씩이라 모듈 값으로 둔다. */
+let reqTemp = 0.8;
 async function callGemini(cfg: LlmConfig, system: string, msgs: Msg[], signal: AbortSignal): Promise<string> {
   const model = cfg.geminiModel.trim() || 'gemini-flash-latest';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
@@ -87,7 +90,7 @@ async function callGemini(cfg: LlmConfig, system: string, msgs: Msg[], signal: A
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: msgs.map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] })),
-        generationConfig: { temperature: 0.8, responseMimeType: 'application/json', maxOutputTokens: 8192 },
+        generationConfig: { temperature: reqTemp, responseMimeType: 'application/json', maxOutputTokens: 8192 },
       }),
     });
   } catch (e) {
@@ -155,7 +158,7 @@ async function callEndpoint(ep: Endpoint, system: string, msgs: Msg[], signal: A
     model,
     messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))],
     ...(json ? { response_format: { type: 'json_object' } } : {}),
-    ...(r ? { reasoning_effort: 'low', max_completion_tokens: 12000 } : ep.openai ? { temperature: 0.8, max_completion_tokens: 4000 } : { temperature: 0.8, max_tokens: 6000 }),
+    ...(r ? { reasoning_effort: 'low', max_completion_tokens: 12000 } : ep.openai ? { temperature: reqTemp, max_completion_tokens: 4000 } : { temperature: reqTemp, max_tokens: 6000 }),
   });
   let res: Response;
   try { res = await epFetch(ep, 'chat/completions', { method: 'POST', signal, body: body(true) }); }
@@ -252,7 +255,7 @@ async function callWebLlm(cfg: LlmConfig, system: string, msgs: Msg[], hooks: Ho
   let out;
   try { out = await eng.chat.completions.create({
     messages: [{ role: 'system', content: system }, ...msgs.map((m) => ({ role: m.role, content: m.text }))],
-    temperature: 0.7, max_tokens: 1800,
+    temperature: Math.min(0.7, reqTemp), max_tokens: 1800,
     // response_format json_object는 일부 모델에서 "Failed to initialize the grammar matcher" 오류를 내서 쓰지 않는다.
     // JSON은 프롬프트로 요구하고 응답에서 { … } 부분만 뽑아 쓴다. Qwen3 계열은 생각 모드를 꺼서 바로 JSON을 쓰게 한다.
     ...(/^Qwen3/.test(cfg.webllmModel) ? { extra_body: { enable_thinking: false } } : {}),
@@ -289,9 +292,17 @@ async function tryProvider(cfg0: LlmConfig, provider: ProviderId, s: GameState, 
   // 입력 길이에 한도가 있는 무료 서버(키 없이 쓰는 Pollinations 등)는 한도 안에 들어가는 단계까지 프롬프트를 줄인다.
   // 서버가 그래도 413으로 거절하면 한 단계씩 더 줄여 다시 보낸다.
   const limit = provider === 'free' && !freeEndpoint(cfg).key ? freePreset(cfg.freePreset).maxPromptChars ?? 0 : 0;
-  let level = provider === 'webllm' ? 2 : 0;
+  // 모델 이름으로 크기를 가늠해 프롬프트 단계·온도·지침을 정한다(작은 모델일수록 간추린 프롬프트 + 예시 + 낮은 온도)
+  const prof = profileFor(modeOf(cfg, provider).replace(/^[^(]*\(|\)$/g, ''));
+  reqTemp = prof.temp;
+  let level = Math.max(prof.minLevel, provider === 'webllm' ? 2 : 0);
   let system = '', msgs: Msg[] = [];
-  const rebuild = () => { const p = fitPrompt(w, s, command, pass, limit, level); level = p.level; system = p.system; msgs = [{ role: 'user', text: p.user }]; };
+  const rebuild = () => {
+    const extraLen = prof.hint.length + (prof.example ? EXAMPLE.length : 0) + 4;
+    const p = fitPrompt(w, s, command, pass, limit ? limit - extraLen : 0, level); level = p.level;
+    system = p.system + (prof.hint ? `\n\n${prof.hint}` : '') + (prof.example && p.level >= 2 ? `\n\n${EXAMPLE}` : '');
+    msgs = [{ role: 'user', text: p.user }];
+  };
   rebuild();
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 90_000 + (retryPolicy.delaysMs.length + 1) * MAX_WAIT_MS);
