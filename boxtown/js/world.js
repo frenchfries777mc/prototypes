@@ -85,6 +85,7 @@ export const SITES = {
   cabinC: { x: -150, z: 700, r: 22 },
   cabinD: { x: 330, z: 520, r: 20 },
   park: { x: -90, z: 110, r: 44, name: '강변 공원' },
+  arena: { x: 212, z: 182, r: 40, name: '투기장' }, // 맨 끝에 둔다: 다른 터(공단)의 완만한 비탈보다 나중에 다져져서 평평하게 남는다
 };
 
 // 나무·풀·바위 같은 자연물이 서면 안 되는 터(새로 만든 시설). assets.flush()가 이 안의 자연물을 치운다.
@@ -93,6 +94,7 @@ export const KEEP_CLEAR = [
   [SITES.dealer.x - 21, SITES.dealer.z + 6, 4, 3.4], // 레이스 접수대
   [SITES.dealer.x + 21, SITES.dealer.z + 6, 5.2, 5.2], // 열기구 자리
   [SITES.arcade.x, SITES.arcade.z, 18.5, 21.5], // 오락실·볼링장
+  [SITES.arena.x, SITES.arena.z, 26, 29], // 투기장
 ];
 
 // 지도에 적는 지명

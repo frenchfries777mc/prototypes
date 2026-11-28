@@ -140,7 +140,7 @@ export class Lobby {
       panel = `<div class="sheet multi"><h3>👥 같이 하기</h3>
         <label>내 이름<input id="mpName" maxlength="12" value="${esc(N.name)}" ${N.mode ? 'disabled' : ''}></label>
         ${N.on ? `<div class="code"><small>방 코드 (친구에게 알려 주세요)</small><b>${N.code}</b><button data-act="mcopy">${this.copied ? '복사됨!' : '복사'}</button></div><ul class="who">${who}</ul>
-          <p class="tip">게임 중 T 또는 Enter로 채팅해요. 주민·경찰·일거리는 각자 따로 돌아가요.</p><button data-act="mleave" class="danger">방 나가기</button>`
+          <p class="tip">게임 중 T 또는 Enter로 채팅해요. 주민·경찰·일거리는 각자 따로 돌아가요. P(또는 ⚔ 버튼)로 PvP를 켜면 켜 둔 친구끼리 겨룰 수 있고, 판매장 동쪽 투기장에서는 경기를 열 수 있어요.</p><button data-act="mleave" class="danger">방 나가기</button>`
         : N.mode ? `<p class="tip">${esc(N.status || '연결하는 중…')}</p><button data-act="mleave" class="danger">그만두기</button>`
         : `<button data-act="mhost" class="primary">방 만들기</button>
           <div class="join"><input id="mpCode" maxlength="5" placeholder="방 코드" value="${esc(this.codeDraft || '')}" autocapitalize="characters" autocomplete="off"><button data-act="mjoin" class="primary">들어가기</button></div>
@@ -155,7 +155,8 @@ export class Lobby {
       <span>지금까지 번 돈</span><b>${won(s('earned'))}원</b><span>해낸 일</span><b>${won(s('jobs'))}번</b><span>혼내 준 불량배</span><b>${won(s('kos'))}명</b>
       <span>경찰 따돌리기</span><b>${won(s('escapes'))}번</b><span>붙잡힘</span><b>${won(s('arrests'))}번</b><span>병원 신세</span><b>${won(s('downs'))}번</b>
       <span>기차 탄 횟수</span><b>${won(s('rides'))}번</b><span>가진 치장품</span><b>${this.wardrobe.owned.size}개</b><span>내 집</span><b>${this.interiors.owned.size}채</b>
-      <span>레이스 완주</span><b>${won(s('races'))}번</b><span>레이스 금메달</span><b>${won(s('golds'))}개</b></div>
+      <span>레이스 완주</span><b>${won(s('races'))}번</b><span>레이스 금메달</span><b>${won(s('golds'))}개</b>
+      <span>PvP 처치</span><b>${won(s('pvpKills'))}명</b><span>PvP 쓰러짐</span><b>${won(s('pvpDeaths'))}번</b><span>투기장 우승</span><b>${won(s('arenaWins'))}번</b></div>
       <div class="text"><b>🏅 일 평판 <small>(단계마다 벌이 +5%, 2단계부터 단골 팁)</small></b>${this.repRows()}</div>
       ${this.raceRows()}
       <button data-act="back" class="back">닫기</button></div>`;
