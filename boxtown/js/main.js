@@ -260,6 +260,11 @@ async function boot() {
   dealerRef = dealer;
   const race = new Race({ scene, assets, player, jobs, garage, groundY, lazyCollider: town.lazyCollider, weapons }); // 서킷 레이스 접수대
   raceRef = race;
+  player.crowd = () => { // 몸이 겹치면 안 되는 상대들(주민, 같은 방 친구)
+    const out = residents.list.filter((n) => n.mode !== 'sky' && n.mode !== 'down' && n.mode !== 'fly' && n.pos).map((n) => n.pos);
+    if (netRef && netRef.on) for (const r of netRef.remotes.values()) if (r.seen && !r.hidden && r.pos && !r.car) out.push(r.pos);
+    return out;
+  };
   const events = new Events({ scene, player, jobs, interiors, net: null, groundY }); // 큰 사건(net은 아래에서 연결)
   eventsRef = events; jobs.events = events;
   const heist = new Heist({ player, jobs, police, interiors, input, weapons });

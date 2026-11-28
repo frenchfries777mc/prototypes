@@ -340,6 +340,16 @@ export class Player {
       vy = JUMP_V * (this.jumpBoost || 1); this.jumpBuf = 0; this.jumped = true; this.airT = 1; this.grounded = false; this.jumpGrace = 0.18;
     }
     if (kick) { hx += kick.x; hz += kick.z; vy = kick.y; this.grounded = false; this.jumpGrace = 0.25; this.airT = 1; }
+    // 주민·다른 플레이어와 몸이 겹치지 않게 살짝 밀려난다(서로 파고들어 뒤섞여 보이던 것).
+    if (this.crowd && this.grounded) {
+      const f = this.feet;
+      for (const o of this.crowd()) {
+        const ddx = f.x - o.x, ddz = f.z - o.z;
+        if (Math.abs(ddx) > 0.9 || Math.abs(ddz) > 0.9 || Math.abs(o.y - f.y) > 1.8) continue;
+        const d = Math.hypot(ddx, ddz) || 0.01;
+        if (d < 0.9) { const push = Math.min(3.2, (0.9 - d) * 8); hx += (ddx / d) * push; hz += (ddz / d) * push; }
+      }
+    }
     this.vel.set(hx, vy, hz);
     cc.setVelocity(this.vel);
     cc.integrate(dt, sup, this.grav);

@@ -47,7 +47,7 @@ export class Dealer {
       parts.body.parent = root; for (const w of parts.wheels) { w.mesh.parent = root; w.mesh.position.copyFrom(w.pos); }
     });
     // 착륙장과 헬리콥터
-    put(11, 0.3, 11, 9, -0.13, 6, '#3a3d4d', true); put(6, 0.02, 1, 9, 0.04, 6, '#ffd84a'); put(1, 0.02, 6, 9, 0.045, 6, '#ffd84a');
+    put(11, 0.3, 11, 9, -0.11, 6, '#3a3d4d', true); put(6, 0.02, 1, 9, 0.06, 6, '#ffd84a'); put(1, 0.02, 6, 9, 0.075, 6, '#ffd84a'); // 착륙장은 마당보다 2cm 높게, 표시는 서로 겹치는 높이를 피한다
     put(8, 0.3, 8, 21, -0.13, 6, '#8fa86a', true); put(8.4, 0.05, 0.4, 21, 0.05, 2, '#ffd84a'); // 열기구 자리
     col.done();
     this.heli = new Heli(scene, S.x + 9, y + 0.3, S.z + 6, Math.PI, addShadow);

@@ -87,6 +87,14 @@ export const SITES = {
   park: { x: -90, z: 110, r: 44, name: '강변 공원' },
 };
 
+// 나무·풀·바위 같은 자연물이 서면 안 되는 터(새로 만든 시설). assets.flush()가 이 안의 자연물을 치운다.
+export const KEEP_CLEAR = [
+  [SITES.dealer.x, SITES.dealer.z, 16.5, 14.5], // 판매장 마당
+  [SITES.dealer.x - 21, SITES.dealer.z + 6, 4, 3.4], // 레이스 접수대
+  [SITES.dealer.x + 21, SITES.dealer.z + 6, 5.2, 5.2], // 열기구 자리
+  [SITES.arcade.x, SITES.arcade.z, 18.5, 21.5], // 오락실·볼링장
+];
+
 // 지도에 적는 지명
 // ---------- 시가지: 둥근 터에 바둑판 길을 깔고 건물로 채운다 ----------
 // kind에 따라 건물 종류가 달라진다(js/city.js). 길은 60m 간격의 4차선.
