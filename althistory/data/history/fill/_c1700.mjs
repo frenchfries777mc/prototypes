@@ -812,6 +812,7 @@ export function paintFor(y) {
     // ===== 아메리카 =====
     [UK, ...(A ? ['JAM'] : []), 'BHS', 'BLZ', 'BRB', 'ATG', 'KNA'],
     ...L(!A, ['DEN', 'VIR']),
+    ...L(A, ['DEN', N('VIR', 'Saint Thomas', 'Saint John')]), // 세인트크루아는 프랑스, 나머지 섬은 덴마크령
     ['KLN', 'DMA', 'VCT', N('TTO', 'Tobago')],
     // ----- 스페인령 아메리카와 변경의 원주민 -----
     ['CUB', 'CUB', 'SER', 'BJN', N('USA', 'Florida')],

@@ -374,7 +374,7 @@ export async function startApp(opts: GameOptions) {
 
   // ---------- 새 게임 / 불러오기 ----------
   /** 시나리오를 지도에 반영한다(국가 색, 시작 소유 상태, 초기 시점). */
-  function countStatus() { opts.onStatus(`주 ${world.provinces.length.toLocaleString()}개 · 국가 ${[...world.countries.values()].filter((c) => !c.neutral).length}개 · Natural Earth`); }
+  function countStatus() { opts.onStatus(`주 ${world.provinces.length.toLocaleString()}개 · 국가 ${[...world.countries.values()].filter((c) => !c.neutral).length}개`); }
   function showScenario(sc: Scenario, fit = true) {
     world.useScenario(sc); countStatus();
     view.setColors(world.countryList);

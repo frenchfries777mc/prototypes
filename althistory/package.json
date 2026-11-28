@@ -21,6 +21,7 @@
     "@types/geojson": "^7946.0.16",
     "@types/topojson-client": "^3.1.5",
     "mapshaper": "^0.8.9",
+    "polygon-clipping": "^0.15.7",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4"

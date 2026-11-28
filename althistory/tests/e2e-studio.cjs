@@ -37,7 +37,7 @@ let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); 
   await page.waitForTimeout(700); await settle();
   const cnt = await page.evaluate(() => [...document.querySelectorAll('[data-count]')].map((e) => e.textContent));
   console.log('   영토 수:', cnt.join(', '));
-  ok(parseInt(cnt[0]) >= 8 && parseInt(cnt[1]) >= 15, '현대 국가 전체 칠하기로 북국/남국 영토 생성');
+  ok(parseInt(cnt[0]) >= 8 && parseInt(cnt[1]) >= 12, '현대 국가 전체 칠하기로 북국/남국 영토 생성');
   await page.screenshot({ path: `${OUT}/st1_paint.png` });
   // 주 하나만 세 번째 나라로
   await page.check('input[name=tool][value=province]'); await page.check('input[name=brush][value="2"]'); await clickLL(126.6, 33.4); // 제주

@@ -177,64 +177,184 @@ if (problems.length) {
   process.exit(1);
 }
 
-// ---- 3a. 너무 큰 주를 실제 지역으로 쪼개기 ----
-// 원본 admin-1 에서 한 주가 여러 역사 지역을 한꺼번에 담는 곳(바이에른: 오버바이에른·니더바이에른·오버팔츠·프랑켄·슈바벤)을 상자(box)로 잘라 나눈다.
-// 마지막이 아닌 부분은 box 로 잘라 내고(mapshaper -clip bbox), 첫 부분(원래 id)은 나머지(-erase bbox)로 남긴다.
+// ---- 3a. 너무 큰 주를 비슷한 크기로 쪼개기 (자연스러운 모양: 면적 가중 k-평균 + 보로노이) ----
+// 사람이 사는 유럽(DENSE)은 주 하나가 약 45,000km², 그 밖의 넓은 땅은 약 150,000km²를 넘지 않게 한다.
+// 바이에른처럼 실제 지방 중심 도시를 알면 그 좌표를 씨앗으로 쓰고(SPLITS), 그 밖에는 주 안의 점들을 k-평균으로 묶어 씨앗을 정한다.
+// 조각의 바깥 경계는 원본 꼭짓점을 그대로 지켜서 이웃 주와 틈·겹침이 생기지 않는다.
+import polygonClipping from 'polygon-clipping';
+const ringKm = (r) => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a) / 2; };
+const areaKm2 = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let t = 0, lat = 0, n = 0;
+  for (const pl of polys) { t += ringKm(pl[0]) - pl.slice(1).reduce((x, h) => x + ringKm(h), 0); for (const pt of pl[0]) { lat += pt[1]; n++; } }
+  return t * Math.cos(((lat / Math.max(n, 1)) * Math.PI) / 180) * 111.32 * 111.32; };
+const MAX_DENSE = 45000, MAX_WIDE = 150000, DENSE = [-12, 35, 40, 61];
+const idAlias = new Map(); // 쪼개지거나 합쳐져 사라진 주 id -> 지금 그 땅을 가진 주 id들(템플릿의 ids 선택자가 계속 맞도록)
+const aliasOf = (id) => idAlias.get(id) ?? [id];
 const SPLITS = [
-  { id: 'DEU-1591', adm0: 'DEU', parts: [
-    { id: 'DEU-1591', name: 'Upper Bavaria', nameKo: '오버바이에른' },
-    { id: 'DEU-1591-ndb', name: 'Lower Bavaria', nameKo: '니더바이에른', box: [11.9, 48.3, 13.95, 49.05] },
-    { id: 'DEU-1591-opf', name: 'Upper Palatinate', nameKo: '오버팔츠', box: [11.65, 49.05, 13.95, 50.7] },
-    { id: 'DEU-1591-fra', name: 'Franconia', nameKo: '프랑켄', box: [8.8, 49.05, 11.65, 50.7] },
-    { id: 'DEU-1591-sch', name: 'Swabia', nameKo: '슈바벤', box: [9.3, 47.2, 11.0, 49.05] },
+  { id: 'DEU-1591', parts: [
+    { id: 'DEU-1591', name: 'Upper Bavaria', nameKo: '오버바이에른', at: [11.9, 47.9] },
+    { id: 'DEU-1591-ndb', name: 'Lower Bavaria', nameKo: '니더바이에른', at: [12.9, 48.7] },
+    { id: 'DEU-1591-opf', name: 'Upper Palatinate', nameKo: '오버팔츠', at: [12.0, 49.6] },
+    { id: 'DEU-1591-fra', name: 'Franconia', nameKo: '프랑켄', at: [10.3, 49.7] },
+    { id: 'DEU-1591-sch', name: 'Swabia', nameKo: '슈바벤', at: [10.3, 48.1] },
   ] },
 ];
+const ringArea = (r) => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a) / 2; };
+const polysOf = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates);
+const boxCenter = (g) => { let best = null, ba = -1; for (const pl of polysOf(g)) { const q = bboxOf(pl[0]), a = (q[2] - q[0]) * (q[3] - q[1]); if (a > ba) { ba = a; best = q; } } return [(best[0] + best[2]) / 2, (best[1] + best[3]) / 2]; };
+/** 쪼개진 조각의 좌표 상자 판정은 원래 주의 중심으로 한다(쪼개도 템플릿이 칠하는 결과는 그대로). */
+const origCenter = new Map();
+const pip = (x, y, r) => { let c = false; for (let a = 0, b = r.length - 1; a < r.length; b = a++) { const [xi, yi] = r[a], [xj, yj] = r[b]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+const thin = (r, max) => { if (r.length <= max) return r; const s = Math.ceil(r.length / max); return r.filter((_, i) => i % s === 0); };
+/** 주 안의 점들을 균등하게 뽑는다(시드용이라 꼭짓점은 성기게 줄여서 판정). x는 cos(위도)로 눌러 면적을 맞춘다. */
+function samplePoints(g, cx, want) {
+  const polys = polysOf(g).map((pl) => pl.map((r) => thin(r, 600))), bb = [1e9, 1e9, -1e9, -1e9];
+  for (const pl of polys) for (const [x, y] of pl[0]) { bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); }
+  const step = Math.sqrt(((bb[2] - bb[0]) * (bb[3] - bb[1])) / want) || 0.1, pts = [];
+  for (let y = bb[1] + step / 2; y < bb[3]; y += step) for (let x = bb[0] + step / 2; x < bb[2]; x += step) {
+    if (polys.some((pl) => pip(x, y, pl[0]) && !pl.slice(1).some((h) => pip(x, y, h)))) pts.push([x * cx, y]);
+  }
+  return pts;
+}
+function kmeans(pts, k) {
+  let mx = 0, my = 0; for (const [x, y] of pts) { mx += x; my += y; } mx /= pts.length; my /= pts.length;
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+  const cs = [pts.reduce((b, p) => (d2(p, [mx, my]) < d2(b, [mx, my]) ? p : b))];
+  while (cs.length < k) { let best = null, bd = -1; for (const p of pts) { const d = Math.min(...cs.map((c) => d2(p, c))); if (d > bd) { bd = d; best = p; } } cs.push(best); }
+  for (let it = 0; it < 14; it++) {
+    const sum = cs.map(() => [0, 0, 0]);
+    for (const p of pts) { let bi = 0, bd = Infinity; cs.forEach((c, i) => { const d = d2(p, c); if (d < bd) { bd = d; bi = i; } }); sum[bi][0] += p[0]; sum[bi][1] += p[1]; sum[bi][2]++; }
+    sum.forEach((s, i) => { if (s[2]) cs[i] = [s[0] / s[2], s[1] / s[2]]; });
+  }
+  return cs;
+}
+/** 씨앗들의 보로노이 칸(볼록 다각형)을 구해 주와 교차시킨다. 반환: 씨앗마다 MultiPolygon 좌표(비면 null). */
+function voronoiPieces(g, seeds, cx) {
+  const big = [[-1e4, -1e4], [1e4, -1e4], [1e4, 1e4], [-1e4, 1e4]];
+  const cut = (poly, a, b) => { // a 쪽(= a 가 b 보다 가까운 쪽)만 남긴다
+    const nx = b[0] - a[0], ny = b[1] - a[1], c = (nx * (a[0] + b[0]) + ny * (a[1] + b[1])) / 2, f = (p) => c - (nx * p[0] + ny * p[1]);
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length], fp = f(p), fq = f(q);
+      if (fp >= 0) out.push(p);
+      if ((fp >= 0) !== (fq >= 0)) { const t = fp / (fp - fq); out.push([p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]); }
+    }
+    return out;
+  };
+  const subject = polysOf(g);
+  return seeds.map((s, i) => {
+    let cell = big; for (let j = 0; j < seeds.length && cell.length > 2; j++) if (j !== i) cell = cut(cell, s, seeds[j]);
+    if (cell.length < 3) return null;
+    const ring = cell.map(([x, y]) => [x / cx, y]); ring.push(ring[0]);
+    const res = polygonClipping.intersection(subject, [ring]);
+    return res.length ? res : null;
+  });
+}
+const DIRS = [['동', 'East'], ['북동', 'Northeast'], ['북', 'North'], ['북서', 'Northwest'], ['서', 'West'], ['남서', 'Southwest'], ['남', 'South'], ['남동', 'Southeast']];
+function splitProvince(base, k, seedsAt, cx) {
+  const g = base.geometry;
+  const seeds = seedsAt ? seedsAt.map(([x, y]) => [x * cx, y]) : kmeans(samplePoints(g, cx, Math.max(500, 150 * k)), k);
+  const res = voronoiPieces(g, seeds, cx);
+  const pieces = res.map((coords, i) => ({ coords, i })).filter((x) => x.coords);
+  // 면적 검사는 위도 보정 없이 평면 넓이로 비교한다(조각마다 평균 위도가 달라 areaKm2 는 합이 어긋난다)
+  const flat = (polys) => polys.reduce((s, pl) => s + ringArea(pl[0]) - pl.slice(1).reduce((x, h) => x + ringArea(h), 0), 0);
+  const a0 = flat(polysOf(g)), a1 = pieces.reduce((s, x) => s + flat(x.coords), 0);
+  if (!pieces.length || Math.abs(a1 - a0) / a0 > 0.03) throw new Error(`[주 쪼개기] ${base.properties.id}: 면적이 맞지 않음 ${a0.toFixed(2)} → ${a1.toFixed(2)}`);
+  return pieces.map((x) => ({ type: 'Feature', geometry: { type: 'MultiPolygon', coordinates: x.coords }, seed: seeds[x.i] }));
+}
+const mean = (g) => { let x = 0, y = 0, n = 0; for (const pl of polysOf(g)) for (const [a, b] of pl[0]) { x += a; y += b; n++; } return [x / n, y / n]; };
+const cosAt = (g) => Math.max(0.2, Math.cos((mean(g)[1] * Math.PI) / 180));
 for (const sp of SPLITS) {
   const at = provinces.findIndex((f) => f.properties.id === sp.id);
   if (at < 0) { console.warn(`[주 쪼개기] ${sp.id} 를 찾지 못함`); continue; }
-  const base = provinces[at];
-  const dir = path.join(TMP, `split-${sp.id}`); fs.mkdirSync(dir, { recursive: true });
-  const inF = path.join(dir, 'in.geojson'); fs.writeFileSync(inF, JSON.stringify({ type: 'FeatureCollection', features: [base] }));
-  const ms = path.join(ROOT, 'node_modules/.bin/mapshaper');
-  const run = (args, out) => { execFileSync(ms, [inF, ...args, '-o', out, 'format=geojson', 'force'], { stdio: 'ignore' }); const j = JSON.parse(fs.readFileSync(out, 'utf8')); return j.features?.[0]?.geometry ?? null; };
-  const boxes = sp.parts.filter((x) => x.box);
-  const made = sp.parts.map((part, k) => {
-    const out = path.join(dir, `p${k}.geojson`);
-    const geometry = part.box ? run(['-clip', `bbox=${part.box.join(',')}`], out) : run(boxes.flatMap((b) => ['-erase', `bbox=${b.box.join(',')}`]), out);
-    if (!geometry) throw new Error(`[주 쪼개기] ${part.id}: 잘라 낸 모양이 비었다`);
-    return { type: 'Feature', geometry, properties: { ...base.properties, id: part.id, name: part.name, nameKo: part.nameKo } };
-  });
-  provinces.splice(at, 1, ...made);
+  const base = provinces[at], cx = cosAt(base.geometry);
+  const made = splitProvince(base, sp.parts.length, sp.parts.map((x) => x.at), cx);
+  provinces.splice(at, 1, ...made.map((m, k) => ({ type: 'Feature', geometry: m.geometry, properties: { ...base.properties, id: sp.parts[k].id, name: sp.parts[k].name, nameKo: sp.parts[k].nameKo } })));
 }
+const splitReport = [];
+(function splitBig() {
+  const out = [];
+  for (const f of provinces) {
+    const a = f.geometry ? areaKm2(f.geometry) : 0, [mx, my] = f.geometry ? mean(f.geometry) : [0, 0];
+    const dense = mx >= DENSE[0] && mx <= DENSE[2] && my >= DENSE[1] && my <= DENSE[3], max = dense ? MAX_DENSE : MAX_WIDE;
+    if (!f.geometry || a <= max * 1.25 || NEUTRAL.has(f.properties.owner) || NEUTRAL.has(f.properties.adm0)) { out.push(f); continue; }
+    const k = Math.ceil(a / max), cx = cosAt(f.geometry), pr = f.properties;
+    const pieces = splitProvince(f, k, null, cx);
+    const [bx, by] = [mx * cx, my];
+    const spread = Math.max(...pieces.map((p) => Math.hypot(p.seed[0] - bx, p.seed[1] - by))) || 1;
+    const used = new Map();
+    pieces.forEach((p, i) => {
+      const dx = p.seed[0] - bx, dy = p.seed[1] - by, near = Math.hypot(dx, dy) < spread * 0.3;
+      const d = near && pieces.length > 2 ? ['중', 'Central'] : DIRS[Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360 / 45) % 8];
+      const n = (used.get(d[0]) ?? 0) + 1; used.set(d[0], n);
+      const id = i === 0 ? pr.id : `${pr.id}-s${i + 1}`, tag = n > 1 ? ` ${n}` : '';
+      out.push({ type: 'Feature', geometry: p.geometry, properties: { ...pr, id, name: `${pr.name} ${d[1]}${tag}`, nameKo: pr.nameKo ? `${pr.nameKo} ${d[0]}부${tag}` : null } });
+    });
+    const c0 = boxCenter(f.geometry); for (const q of out.slice(-pieces.length)) origCenter.set(q.properties.id, c0);
+    idAlias.set(pr.id, out.slice(-pieces.length).map((x) => x.properties.id));
+    splitReport.push(`${pr.id} ×${pieces.length}`);
+  }
+  provinces.length = 0; provinces.push(...out);
+})();
 
 // ---- 3b. 너무 잘게 쪼개진 나라의 작은 주를 이웃에 합치기 -----------------------------------
 // 원본(admin-1)이 시·군 단위인 나라(슬로베니아 193개, 몰타 68개, 마케도니아 84개, 영국 232개 …)는 지도에서 주가 점처럼 작다.
 // 주 면적의 "중앙값"이 MERGE_MEDIAN 미만인 나라에서만, MERGE_MIN(km²) 미만 주를 공유 경계가 가장 긴 이웃에 합친다.
 // 서울·부산처럼 특별시가 작을 뿐인 정상적인 나라(중앙값이 큼)는 건드리지 않는다. 합쳐진 주는 가장 큰 구성원의 id·이름을 쓴다.
 const MERGE_MEDIAN = 700, MERGE_MIN = 1500;
-const ringKm = (r) => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a) / 2; };
-const areaKm2 = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let t = 0, lat = 0, n = 0;
-  for (const pl of polys) { t += ringKm(pl[0]) - pl.slice(1).reduce((x, h) => x + ringKm(h), 0); for (const pt of pl[0]) { lat += pt[1]; n++; } }
-  return t * Math.cos(((lat / Math.max(n, 1)) * Math.PI) / 180) * 111.32 * 111.32; };
+// 템플릿이 주를 가르는 기준(이름·좌표 상자·id 선택자)을 미리 모아서, 같은 선택자 집합에 속한 주끼리만 합친다.
+// (이탈리아 소국·독일 제후국처럼 템플릿이 주 단위로 칠하는 곳이 합쳐져서 칠할 땅이 사라지는 일을 구조적으로 막는다)
+const histDefs = [];
+{
+  const dir = path.join(ROOT, 'data/history');
+  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.mjs') && !x.startsWith('_')).sort()) {
+    const mod = await import(pathToFileURL(path.join(dir, f)).href);
+    const fillPath = path.join(dir, 'fill', `${mod.default.id}.mjs`);
+    histDefs.push(fs.existsSync(fillPath) ? { ...mod.default, _fill: (await import(pathToFileURL(fillPath).href)).default } : mod.default);
+  }
+}
+const selMap = new Map();
+(function walk(o) { if (!o || typeof o !== 'object') return; if (!Array.isArray(o) && (o.box || o.names || o.ids)) { selMap.set(JSON.stringify(o), o); return; } for (const v of Object.values(o)) walk(v); })(histDefs);
+const selList = [...selMap.values()];
+const sigOf = (f) => {
+  const g = f.properties, [cx, cy] = boxCenter(f.geometry), nm = (g.name || '').toLowerCase(), hit = [];
+  selList.forEach((s, k) => {
+    if (s.ids && !s.box && !s.names) return; // id 만 쓰는 선택자는 합쳐진 주를 별칭(idAlias)으로 따라가므로 합치기를 막지 않는다
+    if (s.adm0 !== undefined && ![].concat(s.adm0).includes(g.adm0)) return;
+    if (s.box && (cx < s.box[0] || cx > s.box[2] || cy < s.box[1] || cy > s.box[3])) return;
+    if (s.names && !s.names.some((n) => nm.includes(n.toLowerCase()))) return;
+    if (s.ids && !s.ids.some((x) => aliasOf(x).includes(g.id))) return;
+    hit.push(k);
+  });
+  return hit.join(',');
+};
 const mergeReport = [];
 (function mergeOversplit() {
   const byA = new Map();
-  provinces.forEach((f, i) => { if (!f.geometry) return; const k = f.properties.adm0; if (!byA.has(k)) byA.set(k, []); byA.get(k).push(i); });
+  provinces.forEach((f, i) => { if (!f.geometry) return; const k = `${f.properties.adm0}|${f.properties.owner}`; if (!byA.has(k)) byA.set(k, []); byA.get(k).push(i); });
   const vkey = (pt) => `${Math.round(pt[0] * 1e4)},${Math.round(pt[1] * 1e4)}`;
   const cen = (g) => { const polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates; let x = 0, y = 0, n = 0; for (const pl of polys) for (const pt of pl[0]) { x += pt[0]; y += pt[1]; n++; } return [x / n, y / n]; };
   for (const [adm0, idxs] of byA) {
     if (idxs.length < 3) continue;
     const area = new Map(idxs.map((i) => [i, areaKm2(provinces[i].geometry)]));
     const sorted = [...area.values()].sort((a, b) => a - b);
-    if (sorted[Math.floor(sorted.length / 2)] >= MERGE_MEDIAN) continue;
+    // 나라 안 주들의 중앙값에 따라 합치는 기준을 정한다: 시·군 단위로 잘게 쪼개진 나라는 1,500km², 중앙값이 4,000km² 미만이면 4,000km²,
+    // 그 밖에는 점처럼 작은 400km² 미만 조각만. (소유국이 다른 주끼리는 합치지 않는다 — 카슈미르·크림 같은 곳)
+    const med = sorted[Math.floor(sorted.length / 2)];
+    const limit = med < MERGE_MEDIAN ? MERGE_MIN : med < 4000 && idxs.length >= 6 ? 4000 : 400;
     // 이웃: 꼭짓점을 공유하는 정도(= 경계 길이의 대략치)
     const owner = new Map(); // vertex -> [idx]
+    const nv = new Map(); // 주마다 서로 다른 꼭짓점 수
     for (const i of idxs) {
       const g = provinces[i].geometry, polys = g.type === 'Polygon' ? [g.coordinates] : g.coordinates, seenV = new Set();
       for (const pl of polys) for (const ring of pl) for (const pt of ring) { const k = vkey(pt); if (seenV.has(k)) continue; seenV.add(k); if (!owner.has(k)) owner.set(k, []); owner.get(k).push(i); }
+      nv.set(i, seenV.size);
     }
     const adj = new Map(idxs.map((i) => [i, new Map()]));
-    for (const list of owner.values()) if (list.length > 1) for (const a of list) for (const b of list) if (a !== b) adj.get(a).set(b, (adj.get(a).get(b) ?? 0) + 1);
+    const sig = new Map(idxs.map((i) => [i, sigOf(provinces[i])]));
+    for (const list of owner.values()) if (list.length > 1) for (const a of list) for (const b of list) if (a !== b && sig.get(a) === sig.get(b)) adj.get(a).set(b, (adj.get(a).get(b) ?? 0) + 1);
+    // 비지(飛地): 경계의 90% 이상을 이웃 하나와 맞대고 있는 주(베를린·브레멘·모스크바처럼 다른 주 속에 박힌 주). 크기와 상관없이 둘러싼 주에 합친다.
+    // (소유국이 다른 비지, 곧 바티칸·산마리노·레소토 같은 별개 나라는 이 그룹에 들지 않아 그대로 남는다)
+    const forced = new Set(idxs.filter((i) => { const m = adj.get(i); if (m.size !== 1) return false; const [, w] = [...m][0]; return w >= 0.9 * nv.get(i); }));
     const cc = new Map(idxs.map((i) => [i, cen(provinces[i].geometry)]));
     const parent = new Map(idxs.map((i) => [i, i])); // 합쳐진 묶음의 대표
     const find = (i) => { while (parent.get(i) !== i) i = parent.get(i); return i; };
@@ -244,21 +364,21 @@ const mergeReport = [];
     while (guard-- > 0) {
       const live = [...new Set(idxs.map(find))];
       if (live.length <= 1) break;
-      const small = live.filter((r) => total.get(r) < MERGE_MIN && !skip.has(r)).sort((a, b) => total.get(a) - total.get(b))[0];
+      const small = live.filter((r) => (total.get(r) < limit || forced.has(r)) && !skip.has(r)).sort((a, b) => total.get(a) - total.get(b))[0];
       if (small === undefined) break;
       // 합칠 대상: 공유 경계가 가장 긴 이웃. 육지 이웃이 없는 섬은 "같은 처지의 섬"(이웃 없는 묶음)끼리만, 가장 가까운 것과 합친다
       // (오크니·셰틀랜드가 본토 주에 딸려 들어가지 않게). 짝이 없으면 그대로 둔다.
       let best = -1, bw = 0;
       for (const [o, w] of nb.get(small)) { const ro = find(o); if (ro !== small && w > bw) { bw = w; best = ro; } }
-      if (best < 0) {
+      if (best < 0 && limit >= MERGE_MIN) {
         let bd = Infinity; const c0 = cc.get(small);
         for (const r of live) {
-          if (r === small || [...nb.get(r).keys()].some((o) => find(o) !== r)) continue; // 육지 이웃이 있는 묶음은 제외
+          if (r === small || sig.get(r) !== sig.get(small) || [...nb.get(r).keys()].some((o) => find(o) !== r)) continue; // 육지 이웃이 있는 묶음은 제외
           const c1 = cc.get(r); const d = (c0[0] - c1[0]) ** 2 + (c0[1] - c1[1]) ** 2; if (d < bd && d <= 64) { bd = d; best = r; } // 약 8도(≈900km) 안의 섬끼리만
         }
       }
       if (best < 0) { skip.add(small); continue; }
-      parent.set(small, best); total.set(best, total.get(best) + total.get(small)); members.get(best).push(...members.get(small));
+      forced.delete(small); parent.set(small, best); total.set(best, total.get(best) + total.get(small)); members.get(best).push(...members.get(small));
       for (const [o, w] of nb.get(small)) { const ro = find(o); if (ro === best) continue; nb.get(best).set(ro, (nb.get(best).get(ro) ?? 0) + w); }
     }
     const groups = new Map();
@@ -268,9 +388,10 @@ const mergeReport = [];
       const lead = list.reduce((a, b) => (area.get(b) > area.get(a) ? b : a), list[0]);
       const lp = provinces[lead].properties;
       const label = list.length > 1 && lp.nameKo ? `${lp.nameKo} 일대` : lp.nameKo;
-      for (const i of list) { const pr = provinces[i].properties; pr.gid = lp.id; if (i !== lead) { pr.id = lp.id; pr.name = lp.name; } pr.nameKo = label; }
+      const names = [...new Set(list.map((i) => provinces[i].properties.name))].join(' / '); // 이름 선택자(names)가 합쳐진 주도 찾도록 이름을 모두 남긴다
+      for (const i of list) { const pr = provinces[i].properties, old = pr.id; pr.gid = lp.id; if (i !== lead) { pr.id = lp.id; idAlias.set(old, [lp.id]); } pr.name = names; pr.nameKo = label; }
     }
-    mergeReport.push(`${adm0} ${idxs.length}→${groups.size}`);
+    mergeReport.push(`${adm0.replace('|', '/')} ${idxs.length}→${groups.size}${forced.size ? ` (비지 ${forced.size})` : ''}`);
   }
 })();
 provinces.forEach((f) => { if (f.properties.gid === undefined) f.properties.gid = f.properties.id; });
@@ -400,9 +521,9 @@ const matchSel = (i, sel) => {
   const g = geoms[i].properties;
   if (sel.any && !(sel.any.includes(g.adm0) || sel.any.includes(g.owner))) return false;
   if (sel.adm0 && !sel.adm0.includes(g.adm0)) return false;
-  if (sel.box) { const [x, y] = centers[i]; if (x < sel.box[0] || x > sel.box[2] || y < sel.box[1] || y > sel.box[3]) return false; }
+  if (sel.box) { const [x, y] = origCenter.get(g.id) ?? centers[i]; if (x < sel.box[0] || x > sel.box[2] || y < sel.box[1] || y > sel.box[3]) return false; }
   if (sel.names && !sel.names.some((n) => (g.name || '').toLowerCase().includes(n.toLowerCase()))) return false;
-  if (sel.ids && !sel.ids.includes(g.id)) return false;
+  if (sel.ids && !sel.ids.some((x) => aliasOf(x).includes(g.id))) return false;
   return true;
 };
 const scaleStats = (st, k) => ({ stability: st.stability, economy: Math.round(st.economy * k), military: Math.round(st.military * k), influence: Math.round(st.influence * k) });
@@ -607,11 +728,8 @@ for (const [a, set] of near) for (const b of set) if (a < b && colorOf[a] === co
 const historical = [];
 const histDir = path.join(ROOT, 'data/history');
 if (fs.existsSync(histDir)) {
-  for (const f of fs.readdirSync(histDir).filter((x) => x.endsWith('.mjs') && !x.startsWith('_')).sort()) {
-    const mod = await import(pathToFileURL(path.join(histDir, f)).href);
-    if (ONLY && mod.default.id !== ONLY) continue;
-    const fillPath = path.join(histDir, 'fill', `${mod.default.id}.mjs`);
-    const def = fs.existsSync(fillPath) ? { ...mod.default, _fill: (await import(pathToFileURL(fillPath).href)).default } : mod.default;
+  for (const def of histDefs) {
+    if (ONLY && def.id !== ONLY) continue;
     historical.push(compileHistory(def));
   }
 }
@@ -638,6 +756,7 @@ const kb = (f) => (fs.statSync(f).size / 1024).toFixed(0) + ' KB';
 console.log('\n=== build-map 결과 ===');
 console.log(`주(province): ${geoms.length}  (admin-0 단일 주: ${singleProvince}, 수작업 패치: ${worldview.patches?.length ?? 0})`);
 console.log(`국가: ${countryList.length} (중립 ${countryList.filter((c) => c.neutral).length})`);
+console.log(`큰 주 쪼갬(${splitReport.length}개): ${splitReport.slice(0, 40).join(', ')}…`);
 console.log(`작은 주 합침(${mergeReport.length}개국): ${mergeReport.join(', ')}`);
 console.log(`빈 땅 메움: ${filled.length}건${filled.length ? ' -> ' + filled.join(' / ') : ''}`);
 console.log(`정책 검증: ${worldview.expect.length}건 통과 · 색 구분 필수 ${worldview.mustDiffer?.length ?? 0}쌍 통과 · 근접국 색 충돌 ${nearConflicts}쌍`);
