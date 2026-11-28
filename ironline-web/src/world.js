@@ -148,6 +148,20 @@ export class World {
     this.boxes.push(b);
     return b;
   }
+  // 경기 중에 놓는 상자(모래주머니). at 을 주면 그 번호 자리에 놓는다(다른 접속자와 번호를 맞추기 위해).
+  addDynamic(cx, cz, sx, sz, h, kind, at = -1) {
+    if (at >= 0) while (this.boxes.length < at) this.boxes.push({ mn: [1e7, 1e7, 1e7], mx: [1e7 + 1, 1e7 + 1, 1e7 + 1], kind: -1, yaw: 0, dead: true });
+    const b = this.addBox(cx, cz, sx, sz, h, kind);
+    let i = this.boxes.length - 1;
+    if (at >= 0 && at < i) { this.boxes[at] = b; this.boxes.pop(); i = at; }
+    for (let x = Math.floor(b.mn[0] / 8); x <= Math.floor(b.mx[0] / 8); x++) for (let z = Math.floor(b.mn[2] / 8); z <= Math.floor(b.mx[2] / 8); z++) {
+      const k = x * 4096 + z; let a = this.cells.get(k);
+      if (!a) this.cells.set(k, (a = []));
+      if (!a.includes(i)) a.push(i);
+    }
+    return i;
+  }
+  killBox(i) { const b = this.boxes[i]; if (!b) return; b.mn = [1e7, 1e7, 1e7]; b.mx = [1e7 + 1, 1e7 + 1, 1e7 + 1]; b.dead = true; }
   insideBox(x, y, z) {
     for (const bi of this.near(x, z)) {
       const b = this.boxes[bi];

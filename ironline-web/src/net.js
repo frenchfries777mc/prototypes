@@ -158,12 +158,13 @@ export class Net {
   }
 }
 
+import { CLASSES } from './sim.js';
 // ---- 스냅샷 직렬화 ----
 export function makeSnap(sim, n, humans) {
   return {
     t: 's', n, tm: r2(sim.time), tk: sim.tickets, w: sim.winner, hc: humans,
     p: sim.pts.map((p) => [p.owner, r3(p.cap), p.nA, p.nB]),
-    u: sim.units.map((u) => [r2(u.x), r2(u.y), r2(u.z), r3(u.yaw), r3(u.pitch), Math.round(u.hp), u.alive ? 1 : 0, u.weapon, u.ammo, Math.round(u.speedNow * 10) / 10, r2(u.walkDist), u.isBot ? 0 : 1, u.spawnN, Math.round(u.reloadT * 10) / 10]),
+    u: sim.units.map((u) => [r2(u.x), r2(u.y), r2(u.z), r3(u.yaw), r3(u.pitch), Math.round(u.hp), u.alive ? 1 : 0, u.weapon, u.ammo, Math.round(u.speedNow * 10) / 10, r2(u.walkDist), u.isBot ? 0 : 1, u.spawnN, Math.round(u.reloadT * 10) / 10, Math.round(u.abilityCd * 10) / 10, u.cls]),
   };
 }
 export function makeScore(sim) {
@@ -188,7 +189,7 @@ export function applySnap(sim, s, meId, force = false) {
     }
     if (was && !q[6]) u.deathAge = 0;
     u.hp = q[5]; u.alive = !!q[6]; u.isBot = !q[11];
-    if (i !== meId) u.weapon = q[7];
+    u.weapon = q[7]; u.cls = q[15]; u.maxHp = CLASSES[u.cls].hp; u.abilityCd = q[14];
     u.ammo = q[8]; u.speedNow = q[9]; u.walkDist = q[10]; u.spawnN = q[12]; u.reloadT = q[13];
   }
   return adopt;

@@ -9,7 +9,18 @@ export const WEAPONS = [
   { name: '볼트액션 소총', dmg: 70, cd: 1.15, mag: 5, reload: 2.9, spread: 0.0015, range: 240, auto: false, fall0: 150, botHit: 0.42, botCd: 2.4 },
   { name: '기관단총', dmg: 17, cd: 0.085, mag: 32, reload: 2.3, spread: 0.022, range: 90, auto: true, fall0: 25, botHit: 0.24, botCd: 3.4 },
   { name: '경기관총', dmg: 24, cd: 0.11, mag: 50, reload: 4.2, spread: 0.014, range: 160, auto: true, fall0: 70, botHit: 0.22, botCd: 3.2 },
+  { name: '카빈', dmg: 34, cd: 0.34, mag: 12, reload: 2.4, spread: 0.006, range: 150, auto: false, fall0: 60, botHit: 0.3, botCd: 2.6 },
+  { name: '산탄총', dmg: 11, pellets: 9, cd: 0.85, mag: 6, reload: 3.0, spread: 0.05, range: 45, auto: false, fall0: 10, botHit: 0.34, botCd: 2.6 },
 ];
+// 병과: 무기 + 특성 + (선택) F 능력. loadout 은 이 목록의 번호.
+export const CLASSES = [
+  { name: '돌격병', weapon: 1, hp: 100, speed: 1.06, ability: null, desc: '빠른 기동 · 연사' },
+  { name: '소총수', weapon: 0, hp: 100, speed: 1.0, ability: null, desc: '먼 거리 단발 고화력' },
+  { name: '기관총수', weapon: 2, hp: 130, speed: 0.92, ability: null, desc: '제압 사격 · 체력 130' },
+  { name: '의무병', weapon: 3, hp: 100, speed: 1.0, ability: 'heal', cd: 16, abilityName: '치료 팩', desc: 'F · 주변 아군 치료' },
+  { name: '공병', weapon: 4, hp: 110, speed: 1.0, ability: 'build', cd: 9, abilityName: '모래주머니', desc: 'F · 앞에 엄폐물 설치' },
+];
+export const MAX_BUILDS = 8;
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const wrapPi = (a) => { a = (a + Math.PI) % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a - Math.PI; };
@@ -20,7 +31,7 @@ export class Unit {
     this.id = id; this.team = team; this.isBot = true; this.alive = false; this.label = '';
     this.x = 0; this.y = 0; this.z = 0; this.vx = 0; this.vy = 0; this.vz = 0;
     this.yaw = 0; this.pitch = 0; this.hp = 100;
-    this.weapon = 0; this.loadout = 0; this.ammo = 0; this.fireCd = 0; this.reloadT = 0;
+    this.weapon = 0; this.loadout = 0; this.cls = 0; this.maxHp = 100; this.abilityCd = 0; this.abil = false; this.ammo = 0; this.fireCd = 0; this.reloadT = 0;
     this.respawnT = 1; this.invT = 0; this.deathAge = 0;
     this.kills = 0; this.deaths = 0; this.killer = -1; this.killW = 0; this.killDist = 0; this.killHp = 0;
     this.onGround = true; this.speedNow = 0; this.walkDist = 0;
@@ -44,6 +55,8 @@ export class Sim {
 
   reset(perTeam) {
     this.perTeam = perTeam;
+    if (this.builds) this.clearBuilds();
+    this.builds = [];
     this.tickets = [START_TICKETS, START_TICKETS];
     this.time = 0; this.bleedT = 0; this.winner = -1; this.winReason = ''; this.events = [];
     this.pts = [];
@@ -55,19 +68,23 @@ export class Sim {
     for (let t = 0; t < 2; t++) for (let k = 0; k < perTeam; k++) {
       const u = new Unit(this.units.length, t);
       u.respawnT = this.rng.range(0.3, 5);
-      u.weapon = this.botWeapon();
+      this.assignBotClass(u);
       u.avoid = this.rng.next() < 0.5 ? 1 : -1;
       u.label = (t === 0 ? 'A' : 'B') + u.id;
       this.units.push(u);
     }
   }
 
-  botWeapon() { const r = this.rng.next(); return r < 0.25 ? 0 : r < 0.7 ? 1 : 2; }
+  assignBotClass(u) {
+    const r = this.rng.next();
+    u.cls = r < 0.28 ? 0 : r < 0.5 ? 1 : r < 0.7 ? 2 : r < 0.86 ? 3 : 4;
+    u.weapon = CLASSES[u.cls].weapon; u.maxHp = CLASSES[u.cls].hp;
+  }
 
   // 사람이 맡는 슬롯. 한 번도 죽지 않았다면 기다리지 않고 바로 투입한다.
   claim(id, loadout = 0, name = '나') {
     const u = this.units[id];
-    u.isBot = false; u.loadout = loadout; u.weapon = loadout; u.label = name;
+    u.isBot = false; u.loadout = loadout; u.cls = loadout; u.weapon = CLASSES[loadout].weapon; u.maxHp = CLASSES[loadout].hp; u.label = name;
     if (!u.alive) {
       if (u.deaths === 0 && this.tickets[u.team] > 0) this.spawn(u); else u.respawnT = Math.min(u.respawnT, 0.15);
     }
@@ -93,6 +110,7 @@ export class Sim {
     }
     if (u.invT > 0) u.invT -= dt;
     u.fireCd = Math.max(0, u.fireCd - dt);
+    if (u.abilityCd > 0) u.abilityCd = Math.max(0, u.abilityCd - dt);
     if (u.reloadT > 0) { u.reloadT -= dt; if (u.reloadT <= 0) u.ammo = WEAPONS[u.weapon].mag; }
     if (u.remote) { this.stepRemote(u, dt); return; }
     if (u.isBot) this.botAi(u, dt);
@@ -102,6 +120,7 @@ export class Sim {
 
   humanActions(u) {
     const w = WEAPONS[u.weapon];
+    if (u.abil) { u.abil = false; this.useAbility(u); }
     if (u.reload) { u.reload = false; if (u.ammo < w.mag && u.reloadT <= 0) this.startReload(u); }
     if (u.fire && u.fireCd <= 0 && u.reloadT <= 0) {
       if (u.ammo <= 0) this.startReload(u);
@@ -120,7 +139,8 @@ export class Sim {
       u.onGround = !!i.og;
     }
     u.yaw = i.yaw; u.pitch = i.pitch; u.fire = !!i.fire; u.ads = !!i.ads; u.sprint = !!i.sp;
-    if (i.w !== u.weapon && i.w >= 0 && i.w < WEAPONS.length) { u.weapon = i.w; u.loadout = i.w; u.ammo = WEAPONS[i.w].mag; u.reloadT = 0; u.fireCd = 0.35; }
+    if (i.c >= 0 && i.c < CLASSES.length) u.loadout = i.c;   // 다음 출격부터 적용
+    if (i.ab) { i.ab = 0; u.abil = true; }
     if (i.rl) { u.reload = true; i.rl = 0; }
     this.humanActions(u);
   }
@@ -129,7 +149,8 @@ export class Sim {
   rematch() {
     this.tickets = [START_TICKETS, START_TICKETS]; this.time = 0; this.bleedT = 0; this.winner = -1; this.winReason = '';
     for (let i = 0; i < NPOINTS; i++) { const p = this.pts[i]; p.owner = i === 0 ? 0 : i === NPOINTS - 1 ? 1 : -1; p.cap = i === 0 ? 1 : i === NPOINTS - 1 ? -1 : 0; p.nA = p.nB = 0; }
-    for (const u of this.units) { u.alive = false; u.kills = 0; u.deaths = 0; u.killer = -1; u.respawnT = u.isBot ? this.rng.range(0.3, 4) : 0.3; u.deathAge = 0; u.hp = 100; }
+    for (const u of this.units) { u.alive = false; u.kills = 0; u.deaths = 0; u.killer = -1; u.respawnT = u.isBot ? this.rng.range(0.3, 4) : 0.3; u.deathAge = 0; u.hp = u.maxHp; u.abilityCd = 0; }
+    this.clearBuilds();
     this.events.push({ t: 'new' });
   }
 
@@ -140,6 +161,7 @@ export class Sim {
     let speed;
     if (u.isBot) speed = u.botSpeed;
     else speed = (u.sprint && u.moveY > 0 && !u.ads) ? SPRINT : (u.ads ? WALK * 0.55 : WALK);
+    speed *= CLASSES[u.cls].speed;
     const fx = -Math.sin(u.yaw), fz = -Math.cos(u.yaw), rx = Math.cos(u.yaw), rz = -Math.sin(u.yaw);
     let wx = rx * u.moveX + fx * u.moveY, wz = rz * u.moveX + fz * u.moveY;
     const l = Math.hypot(wx, wz);
@@ -186,22 +208,68 @@ export class Sim {
     u.ammo--; u.fireCd = w.cd;
     const sp = w.spread * (u.ads ? 0.35 : 1) * (1 + Math.min(u.speedNow, 6) * 0.18);
     const cp = Math.cos(u.pitch);
-    let dx = -Math.sin(u.yaw) * cp, dy = Math.sin(u.pitch), dz = -Math.cos(u.yaw) * cp;
-    dx += (this.rng.next() - 0.5) * 2 * sp; dy += (this.rng.next() - 0.5) * 2 * sp; dz += (this.rng.next() - 0.5) * 2 * sp;
-    const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
-    const ox = u.x, oy = u.y + EYE, oz = u.z;
-    const R = w.range;
-    const blockT = this.world.rayBlock(ox, oy, oz, ox + dx * R, oy + dy * R, oz + dz * R) * R;
-    let best = blockT, who = null, head = false;
-    for (const e of this.units) {
-      if (!e.alive || e.team === u.team) continue;
-      const h = this.rayUnit(ox, oy, oz, dx, dy, dz, best, e);
-      if (h && h.t < best) { best = h.t; who = e; head = h.head; }
+    const bx = -Math.sin(u.yaw) * cp, by = Math.sin(u.pitch), bz = -Math.cos(u.yaw) * cp;
+    const ox = u.x, oy = u.y + EYE, oz = u.z, R = w.range, n = w.pellets || 1;
+    const hits = new Map();   // 산탄은 한 번 쏜 알갱이를 유닛별로 모아서 한 번에 피해를 준다
+    let first = null;
+    for (let k = 0; k < n; k++) {
+      let dx = bx + (this.rng.next() - 0.5) * 2 * sp, dy = by + (this.rng.next() - 0.5) * 2 * sp, dz = bz + (this.rng.next() - 0.5) * 2 * sp;
+      const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
+      const blockT = this.world.rayBlock(ox, oy, oz, ox + dx * R, oy + dy * R, oz + dz * R) * R;
+      let best = blockT, who = null, head = false;
+      for (const e of this.units) {
+        if (!e.alive || e.team === u.team) continue;
+        const h = this.rayUnit(ox, oy, oz, dx, dy, dz, best, e);
+        if (h && h.t < best) { best = h.t; who = e; head = h.head; }
+      }
+      if (who) { const c = hits.get(who) || { d: 0, head: false }; c.d += w.dmg * this.falloff(w, best) * (head ? 2 : 1); c.head = c.head || head; hits.set(who, c); }
+      if (!first) first = { dx, dy, dz, best, who, R };
     }
-    const end = { x: ox + dx * best, y: oy + dy * best, z: oz + dz * best };
-    this.events.push({ t: 'shot', id: u.id, team: u.team, a: { x: ox + dx * 0.9, y: oy - 0.18 + dy * 0.9, z: oz + dz * 0.9 }, b: end, hit: !!who, weapon: u.weapon, surface: who ? 'body' : (best >= R - 0.01 ? 'air' : 'world') });
-    if (who) this.damage(who, w.dmg * this.falloff(w, best) * (head ? 2 : 1), u, head);
+    const end = { x: ox + first.dx * first.best, y: oy + first.dy * first.best, z: oz + first.dz * first.best };
+    this.events.push({ t: 'shot', id: u.id, team: u.team, a: { x: ox + first.dx * 0.9, y: oy - 0.18 + first.dy * 0.9, z: oz + first.dz * 0.9 }, b: end, hit: !!first.who, weapon: u.weapon, surface: first.who ? 'body' : (first.best >= R - 0.01 ? 'air' : 'world') });
+    for (const [e, c] of hits) this.damage(e, c.d, u, c.head);
   }
+
+  // ---- 병과 능력(F) ----
+  useAbility(u) {
+    const c = CLASSES[u.cls];
+    if (!u.alive || !c.ability || u.abilityCd > 0) return false;
+    if (c.ability === 'heal') {
+      let n = 0;
+      for (const e of this.units) {
+        if (!e.alive || e.team !== u.team || (e.x - u.x) ** 2 + (e.z - u.z) ** 2 > 49 || e.hp >= e.maxHp) continue;
+        e.hp = Math.min(e.maxHp, e.hp + (e === u ? 30 : 55)); n++;
+      }
+      if (!n) return false;
+      u.abilityCd = c.cd;
+      this.events.push({ t: 'heal', id: u.id, x: u.x, y: u.y, z: u.z, n });
+      return true;
+    }
+    if (c.ability === 'build') {
+      const fx = -Math.sin(u.yaw), fz = -Math.cos(u.yaw), px = u.x + fx * 2.5, pz = u.z + fz * 2.5;
+      const alongX = Math.abs(fz) > Math.abs(fx), sx = alongX ? 3.2 : 0.8, sz = alongX ? 0.8 : 3.2, h = 1.0, w = this.world;
+      const g0 = w.heightAt(px, pz);
+      for (const [ax, az] of [[0, 0], [-sx / 2, -sz / 2], [sx / 2, -sz / 2], [-sx / 2, sz / 2], [sx / 2, sz / 2]]) {
+        if (Math.abs(w.heightAt(px + ax, pz + az) - g0) > 0.6 || w.insideBox(px + ax, g0 + 0.3, pz + az)) return false;
+      }
+      // 같은 편의 모래주머니는 최대 4개, 전체 MAX_BUILDS 개까지(오래된 것부터 사라진다)
+      const mine = this.builds.filter((b) => b.team === u.team);
+      if (mine.length >= 4) this.removeBuild(mine[0]);
+      if (this.builds.length >= MAX_BUILDS) this.removeBuild(this.builds[0]);
+      const i = w.addDynamic(px, pz, sx, sz, h, 1);
+      const b = { i, team: u.team, x: px, z: pz, sx, sz, h };
+      this.builds.push(b);
+      u.abilityCd = c.cd;
+      this.events.push({ t: 'build', i, x: px, z: pz, sx, sz, h, team: u.team });
+      return true;
+    }
+    return false;
+  }
+  removeBuild(b) {
+    this.world.killBox(b.i); this.builds = this.builds.filter((x) => x !== b);
+    this.events.push({ t: 'unbuild', i: b.i });
+  }
+  clearBuilds() { for (const b of this.builds.slice()) this.removeBuild(b); }
 
   damage(e, amount, attacker, head) {
     if (!e.alive || e.invT > 0) return;
@@ -245,8 +313,8 @@ export class Sim {
       if (w.blocked(px, pz, RADIUS + 0.2, w.heightAt(px, pz)) < -1e8) break;
     }
     u.x = px; u.z = pz; u.y = w.heightAt(px, pz); u.vx = u.vy = u.vz = 0;
-    u.hp = 100; u.alive = true; u.deathAge = 0; u.spawnN++;
-    if (u.isBot) { u.weapon = this.botWeapon(); u.role = this.rng.next() < 0.18 ? 1 : 0; } else u.weapon = u.loadout;
+    if (u.isBot) { this.assignBotClass(u); u.role = this.rng.next() < 0.18 ? 1 : 0; } else { u.cls = u.loadout; u.weapon = CLASSES[u.cls].weapon; u.maxHp = CLASSES[u.cls].hp; }
+    u.hp = u.maxHp; u.abilityCd = 0; u.alive = true; u.deathAge = 0; u.spawnN++;
     u.ammo = WEAPONS[u.weapon].mag; u.reloadT = 0; u.fireCd = 0.5;
     u.invT = u.isBot ? 2 : 4;
     u.target = -1; u.obj = -1; u.thinkT = this.rng.next() * 0.3; u.stuckT = 0;
@@ -350,12 +418,17 @@ export class Sim {
     u.thinkT -= dt;
     if (u.thinkT <= 0) { u.thinkT = 0.25 + this.rng.next() * 0.15; this.botThink(u); }
     u.jump = false; u.sprint = false;
+    const cl = CLASSES[u.cls];
+    if (cl.ability === 'heal' && u.abilityCd <= 0 && u.thinkT > 0.2) {   // 의무병 봇: 다친 아군이 가까이 있으면 치료
+      for (const e of this.units) if (e.alive && e.team === u.team && e.hp < e.maxHp * 0.62 && (e.x - u.x) ** 2 + (e.z - u.z) ** 2 < 36) { this.useAbility(u); break; }
+    }
     let tgt = null;
     if (u.target >= 0) { tgt = this.units[u.target]; if (!tgt.alive) { u.target = -1; tgt = null; } }
     if (tgt) {
       const dx = tgt.x - u.x, dz = tgt.z - u.z, dist = Math.hypot(dx, dz);
       const want = Math.atan2(-dx, -dz);
       u.yaw = turn(u.yaw, want, 5.5 * dt);
+      if (cl.ability === 'build' && u.abilityCd <= 0 && dist > 14 && this.rng.next() < 0.01) this.useAbility(u);
       u.pitch = Math.atan2((tgt.y + 1.2) - (u.y + EYE), Math.max(dist, 1));
       u.strafeT -= dt;
       if (u.strafeT <= 0) { if (this.rng.next() < 0.6) u.strafe = -u.strafe; u.strafeT = this.rng.range(0.8, 2.2); }

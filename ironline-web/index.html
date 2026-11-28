@@ -150,7 +150,23 @@ canvas#view{position:fixed;inset:0;width:100%;height:100%;display:block}
 .lobby .btn{font-size:clamp(28px,3.4vw,40px);padding:18px clamp(40px,6vw,84px)}
 .lb-note{margin-top:12px;font-size:13px;color:#ffe9c0;text-shadow:0 2px 6px #000}
 canvas#view.lobbyfx{filter:saturate(1.25) contrast(1.06)}
+@media (max-width:900px){.lb-bottom{flex-wrap:wrap}}
 @media (max-width:760px){.lb-bottom{flex-direction:column;align-items:stretch}.lb-go{width:100%}.lobby .btn{width:100%}.lobby .wp{width:calc(33% - 10px);min-width:96px}}
+
+/* 점령 배너 · 능력 표시 · 계정 칩 */
+#banner{position:absolute;left:0;right:0;top:27%;text-align:center;font-family:"IL-Gothic",system-ui,sans-serif;font-style:italic;font-weight:700;font-size:clamp(40px,7vw,92px);opacity:0;
+  text-shadow:3px 0 0 var(--ink),-3px 0 0 var(--ink),0 3px 0 var(--ink),0 -3px 0 var(--ink),2px 2px 0 var(--ink),-2px -2px 0 var(--ink),2px -2px 0 var(--ink),-2px 2px 0 var(--ink),7px 7px 0 var(--ink);pointer-events:none}
+#banner.on{animation:bn 2.2s ease-out both}
+@keyframes bn{0%{opacity:0;transform:scale(.4) rotate(-4deg)}12%{opacity:1;transform:scale(1.18) rotate(-2deg)}22%{transform:scale(1) rotate(-2deg)}78%{opacity:1}100%{opacity:0;transform:scale(1.05) rotate(-2deg) translateY(-12px)}}
+#ammo.ready #abil{color:#9ff0a0}
+#death .spec small{color:var(--dim);font-size:13px}
+.lb-acct{position:absolute;right:clamp(18px,4vw,56px);top:clamp(18px,3vw,40px);display:flex;align-items:center;gap:10px;background:rgba(18,12,6,.66);border:2px solid rgba(255,255,255,.3);border-radius:999px;padding:6px 8px 6px 16px;font-size:14px;color:#fff}
+.lb-acct button{font:inherit;background:var(--sun);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:3px 12px;cursor:pointer;font-weight:700}
+.lb-acct b{color:var(--sun)}
+.lobby .wp .wd{font-size:12px;color:#5a4a36;margin-top:2px}.lobby .wp.on .wd{color:#3a2c10}
+.lobby .wp{width:clamp(112px,11.6vw,158px);padding:10px 11px 12px}
+.lb-bottom{flex-wrap:nowrap}.lb-weapons{flex:1 1 auto;min-width:0;flex-wrap:wrap}.lb-go{flex:0 0 auto}
+.lobby .wp b{font-size:15px}.lobby .wp .wd{font-size:11px;line-height:1.35}
 </style>
 </head>
 <body>
@@ -159,10 +175,10 @@ canvas#view.lobbyfx{filter:saturate(1.25) contrast(1.06)}
   <canvas id="mini" width="480" height="268"></canvas>
   <div id="netinfo"></div>
   <div id="top"><div class="tix a num"><span id="ta">250</span><i><b id="tab"></b></i></div><div id="pts"></div><div class="tix b num"><i><b id="tbb"></b></i><span id="tb">250</span></div><div id="timer" class="num">8:00</div></div>
-  <div id="feed"></div><div id="msg" class="num"></div>
+  <div id="feed"></div><div id="msg" class="num"></div><div id="banner" class="num"></div>
   <div id="cross"></div><div id="hitm"></div>
   <div id="hp" class="panel"><div class="num" id="hpn">100</div><div><small>체력</small><i><b id="hpb"></b></i></div></div>
-  <div id="ammo" class="panel"><div class="wn" id="wn"></div><div class="num"><span id="am">0</span><span class="mag" id="mg">/ 0</span></div><small>1 소총　2 기관단총　3 경기관총</small></div>
+  <div id="ammo" class="panel"><div class="wn" id="wn"></div><div class="num"><span id="am">0</span><span class="mag" id="mg">/ 0</span></div><small id="abil"></small></div>
   <div id="capbox" class="panel"><em id="capwarn"></em><div id="captxt"></div><div class="bar" id="capbar"><b id="capb"></b></div></div>
   <div id="low"></div><div id="dmg"></div>
   <div id="deploy" class="num">투입 중…</div>
@@ -171,11 +187,12 @@ canvas#view.lobbyfx{filter:saturate(1.25) contrast(1.06)}
   <div id="dbg"></div>
 </div>
 <div id="overlay"><div id="menu" class="lobby">
+  <div class="lb-acct" id="acct"></div>
   <div class="lb-top">
     <div class="lb-tag">대규모 1인칭 점령전</div>
     <h1 class="num">IRON<span>LINE</span></h1>
     <p class="lb-sub">수십 명이 맞붙는 전선. 거점 5개를 차례로 점령해 적 본진까지 밀어붙여라.</p>
-    <div class="lb-chips"><span>팀당 최대 48명</span><span>거점 5개 순차 점령</span><span>온라인 자동 매칭</span></div>
+    <div class="lb-chips"><span>팀당 최대 48명</span><span>병과 5종</span><span>온라인 자동 매칭</span></div>
   </div>
   <div class="lb-bottom">
     <div class="lb-weapons" id="wps"></div>
@@ -194,6 +211,7 @@ canvas#view.lobbyfx{filter:saturate(1.25) contrast(1.06)}
 <div class="box panel" id="res" style="display:none"><h2 class="num" id="resh"></h2><p id="resp"></p><div class="stats" id="resst"></div><div class="row"><button class="btn num" id="again">다시 출격</button><button class="btn sec" id="tomenu">메뉴로</button></div></div>
 </div>
 <script src="vendor/peerjs.min.js"></script>
+<script async src="https://frenchfries777.com/games/ff-auth.js?v=20261126e"></script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>
