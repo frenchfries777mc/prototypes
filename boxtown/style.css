@@ -340,3 +340,26 @@ body.touch #btnBag { top: calc(max(12px, env(safe-area-inset-top)) + 358px); }
 #lobby .sheet .rp em { font-style: normal; text-align: right; color: #ffd84a; font-weight: 800; font-size: 12px; }
 #lobby .sheet .rp.zero { opacity: .45; }
 #lobby .sheet .text b small { font-size: 11px; opacity: .7; font-weight: 600; margin-left: 4px; }
+
+/* 작은 알림 */
+#notices { position: absolute; left: 50%; top: calc(max(10px, env(safe-area-inset-top)) + 62px); transform: translateX(-50%); z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; max-width: 92vw; }
+.notice { padding: 8px 16px; border-radius: 999px; background: rgba(22, 34, 58, .9); color: #fff; font-size: 14px; font-weight: 800; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); animation: noticeIn .3s ease-out; text-align: center; transition: opacity .5s, transform .5s; }
+.notice.good { background: rgba(34, 120, 70, .92); } .notice.alert { background: rgba(200, 60, 40, .94); } .notice.out { opacity: 0; transform: translateY(-8px); }
+@keyframes noticeIn { from { opacity: 0; transform: translateY(-10px) scale(.96); } }
+
+/* 큰 사건 */
+#eventHud { position: absolute; left: 14px; top: calc(max(10px, env(safe-area-inset-top)) + 112px); z-index: 6; display: grid; gap: 1px; padding: 7px 13px; border-radius: 12px; background: rgba(180, 50, 38, .86); color: #fff; font-size: 13px; pointer-events: none; min-width: 150px; }
+#eventHud b { font-size: 14px; } #eventHud span { font-weight: 900; font-size: 18px; font-variant-numeric: tabular-nums; } #eventHud small { opacity: .9; font-size: 12px; }
+
+/* 볼링·오락실 */
+#bowlHud { position: absolute; left: 50%; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 70px); transform: translateX(-50%); z-index: 6; display: grid; gap: 4px; justify-items: center; padding: 10px 20px; border-radius: 16px; background: rgba(22, 34, 58, .88); color: #fff; pointer-events: none; min-width: 240px; }
+#bowlHud b { color: #ffd84a; font-size: 15px; } #bowlHud span { font-size: 26px; font-weight: 900; } #bowlHud small { opacity: .85; font-size: 13px; }
+#bowlHud .meter { position: relative; width: 220px; height: 14px; border-radius: 8px; background: linear-gradient(90deg, #e5553f, #ffd84a, #57c27a, #ffd84a, #e5553f); } #bowlHud .meter i { position: absolute; top: -4px; width: 6px; height: 22px; background: #fff; border-radius: 3px; box-shadow: 0 0 6px #000; transform: translateX(-3px); }
+#arcade { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(8, 14, 28, .72); }
+#arcade .box { width: min(400px, 94vw); max-height: 94vh; overflow: auto; padding: 16px; border-radius: 18px; background: #1b2744; color: #fff; display: grid; gap: 10px; }
+#arcade header { display: flex; justify-content: space-between; align-items: center; } #arcade header b { font-size: 19px; color: #ffd84a; } #arcade header button { border: 0; background: rgba(255, 255, 255, .14); color: #fff; width: 34px; height: 34px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+#arcMenu { display: grid; gap: 9px; } #arcMenu .cap { margin: 0; font-size: 13px; opacity: .85; }
+#arcMenu button { display: grid; gap: 3px; text-align: left; padding: 13px 15px; border: 0; border-radius: 13px; background: rgba(255, 255, 255, .12); color: #fff; cursor: pointer; font-family: inherit; } #arcMenu button b { font-size: 16px; } #arcMenu button small { opacity: .75; font-size: 12px; }
+#arcPlay { display: grid; gap: 8px; justify-items: center; } #arcInfo { font-weight: 800; font-size: 15px; } #arcCv { width: min(360px, 86vw); aspect-ratio: 1; border-radius: 12px; touch-action: none; background: #16223a; }
+#arcPad { display: grid; gap: 6px; justify-items: center; } #arcPad div { display: flex; gap: 6px; } #arcPad button { width: 56px; height: 46px; border: 0; border-radius: 12px; background: rgba(255, 255, 255, .16); color: #fff; font-size: 18px; cursor: pointer; }
+#raceHud[hidden], #raceBig[hidden], #eventHud[hidden], #bowlHud[hidden], #arcade[hidden], #arcMenu[hidden], #arcPlay[hidden], #arcPad[hidden], #bowlHud .meter[hidden] { display: none !important; }

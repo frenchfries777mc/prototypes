@@ -20,7 +20,7 @@ export function buildDistricts(h) {
   // 터 하나를 기준으로 한 배치 도구
   const at = (site, id) => {
     h.bucket(id, site.x, site.z);
-    const SHIFT = [[0, 0], [9, 0], [-9, 0], [0, 9], [0, -9], [14, 14], [-14, 14], [14, -14], [-14, -14], [22, 0], [-22, 0], [0, 22], [0, -22]];
+    const SHIFT = [[0, 0], [9, 0], [-9, 0], [0, 9], [0, -9], [14, 14], [-14, 14], [14, -14], [-14, -14], [22, 0], [-22, 0], [0, 22], [0, -22], [30, 12], [-30, 12], [30, -12], [-30, -12], [12, 30], [-12, 30], [12, -30], [-12, -30]];
     const P = (key, dx0, dz0, yaw = 0, scale = 1, shrink = 0.92) => {
       // 길에 걸치면 가까운 빈자리로 옮긴다(작은 소품은 그대로 두고 길 한가운데만 피한다).
       const bk = assets.bounds(key), area = (bk.max.x - bk.min.x) * (bk.max.z - bk.min.z) * scale * scale;
@@ -30,7 +30,7 @@ export function buildDistricts(h) {
         const bb = assets.bounds(key);
         for (const [ox, oz] of SHIFT) {
           const x = site.x + dx0 + ox, z = site.z + dz0 + oz;
-          if (height(x, z) < SEA + 0.4 || !clearOfRoads(bb, x, z, yaw * DEG, scale, 1.2)) continue;
+          if (height(x, z) < SEA + 0.4 || !clearOfRoads(bb, x, z, yaw * DEG, scale, 1.2) || assets.overlapsBuilding(key, x, z, yaw * DEG, scale, 0.5)) continue; // 길과 다른 건물을 피한다
           dx = dx0 + ox; dz = dz0 + oz; found = true; break;
         }
         if (!found) return false;

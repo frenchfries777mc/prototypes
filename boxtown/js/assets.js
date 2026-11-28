@@ -1,6 +1,6 @@
 // 에셋 팩(GLB) 불러오기와 배치.
 // 모델 하나당 "틀" 메시 하나를 만들고, 같은 모델은 전부 인스턴싱으로 한 번에 그린다.
-import { WORLD } from './world.js';
+import { WORLD, KEEP_CLEAR } from './world.js';
 const B = window.BABYLON;
 const REGION = WORLD.cell * WORLD.chunk; // 192m
 
@@ -237,8 +237,62 @@ export class Assets {
     return m;
   }
 
+  // 이미 세운 건물과 겹치는지(방향 있는 사각형끼리 분리축 검사). margin만큼 여유를 둔다.
+  overlapsBuilding(key, x, z, rotY, scale = 1, margin = 0.4) {
+    const rectOf = (k, px, pz, rot, sc) => {
+      const bb = this.bounds(k), s = typeof sc === 'number' ? sc : 1, c = Math.cos(rot), sn = Math.sin(rot);
+      const w = ((bb.max.x - bb.min.x) * s) / 2 + margin, d = ((bb.max.z - bb.min.z) * s) / 2 + margin, cx = ((bb.max.x + bb.min.x) * s) / 2, cz = ((bb.max.z + bb.min.z) * s) / 2;
+      const X = px + cx * c + cz * sn, Z = pz - cx * sn + cz * c;
+      return { X, Z, c, sn, pts: [[-w, -d], [w, -d], [w, d], [-w, d]].map(([a, b]) => [X + a * c + b * sn, Z - a * sn + b * c]) };
+    };
+    const me = rectOf(key, x, z, rotY, scale);
+    const sep = (A, Bq) => {
+      for (const ax of [[A.c, -A.sn], [A.sn, A.c], [Bq.c, -Bq.sn], [Bq.sn, Bq.c]]) {
+        let l1 = 1e9, h1 = -1e9, l2 = 1e9, h2 = -1e9;
+        for (const p of A.pts) { const d = p[0] * ax[0] + p[1] * ax[1]; l1 = Math.min(l1, d); h1 = Math.max(h1, d); }
+        for (const p of Bq.pts) { const d = p[0] * ax[0] + p[1] * ax[1]; l2 = Math.min(l2, d); h2 = Math.max(h2, d); }
+        if (Math.min(h1, h2) - Math.max(l1, l2) <= 0) return true;
+      }
+      return false;
+    };
+    for (const b of this.placedBuildings) {
+      if (Math.abs(b[1] - x) > 70 || Math.abs(b[2] - z) > 70) continue;
+      if (this.missing.has(b[0])) continue;
+      if (!sep(me, rectOf(b[0], b[1], b[2], b[3], b[4]))) return true;
+    }
+    return false;
+  }
+
+  // 건물 발자국이나 새 시설 터 안에 선 자연물(나무·풀·바위·농작물·울타리)을 치운다. 어느 쪽이 먼저 놓였든 한 번에 정리된다.
+  clearInside() {
+    const VEG = /tree|palm|rock|stone|bush|plant|flower|grass|crop|fence_|mushroom|log|stump|cactus|reed|shrub|hay|pumpkin|corn|wheat|carrot/, SOLID = /building|chimney|tank|tower|container|structure|windmill|ship|silo|house|roof/;
+    const rects = this.placedBuildings.filter((b) => !this.missing.has(b[0])).map(([k, x, z, rot, sc]) => {
+      const bb = this.bounds(k), s = typeof sc === 'number' ? sc : 1;
+      return { x, z, c: Math.cos(rot), s: Math.sin(rot), w: ((bb.max.x - bb.min.x) * s) / 2 - 0.1, d: ((bb.max.z - bb.min.z) * s) / 2 - 0.1, cx: ((bb.max.x + bb.min.x) * s) / 2, cz: ((bb.max.z + bb.min.z) * s) / 2 };
+    });
+    let removed = 0;
+    for (const g of this.pending.values()) {
+      if (!VEG.test(g.key) || SOLID.test(g.key)) continue;
+      const keep = [];
+      for (const m of g.mats) {
+        const px = m.m[12], pz = m.m[14];
+        let bad = KEEP_CLEAR.some(([x, z, hx, hz]) => Math.abs(px - x) < hx && Math.abs(pz - z) < hz);
+        if (!bad) for (const r of rects) {
+          if (Math.abs(r.x - px) > 40 || Math.abs(r.z - pz) > 40) continue;
+          const dx = px - r.x, dz = pz - r.z, lx = dx * r.c - dz * r.s - r.cx, lz = dx * r.s + dz * r.c - r.cz;
+          if (Math.abs(lx) < r.w && Math.abs(lz) < r.d) { bad = true; break; }
+        }
+        if (bad) removed++; else keep.push(m);
+      }
+      g.mats = keep;
+    }
+    this.cleared = (this.cleared || 0) + removed;
+  }
+
   flush() {
-    for (const [id, g] of this.pending) {
+    this.clearInside();
+    for (const [id, g] of [...this.pending]) {
+      if (!g.mats.length) { this.pending.delete(id); continue; }
       const buf = new Float32Array(g.mats.length * 16);
       g.mats.forEach((m, i) => m.copyToArray(buf, i * 16));
       const mesh = this.tpl(g.key).clone(id);

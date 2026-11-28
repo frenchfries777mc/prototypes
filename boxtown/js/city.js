@@ -53,7 +53,7 @@ export function buildCity(h) {
           const key = r.pick(pool), bb = assets.bounds(key), w = bb.max.x - bb.min.x, d = bb.max.z - bb.min.z;
           const setback = HW + 3.4 + d / 2, [x, z] = at(t + w / 2, side, setback), rad = Math.max(w, d) / 2;
           const fx0 = ns ? -side : 0, fz0 = ns ? 0 : -side, yaw0 = Math.atan2(-fx0, -fz0);
-          const ok = Math.hypot(x - c.x, z - c.z) < c.r - rad * 0.6 && roadDist(x, z) > setback - 0.8 && clearOfRoads(bb, x, z, yaw0, 1, 1.4) && !placed.some((q) => Math.hypot(q[0] - x, q[1] - z) < (q[2] + rad) * 0.86);
+          const ok = Math.hypot(x - c.x, z - c.z) < c.r - rad * 0.6 && roadDist(x, z) > setback - 0.8 && clearOfRoads(bb, x, z, yaw0, 1, 1.4) && !placed.some((q) => Math.hypot(q[0] - x, q[1] - z) < (q[2] + rad) * 0.86) && !assets.overlapsBuilding(key, x, z, yaw0, 1, 0.8);
           const fh = ok ? footprintHeights(bb, x, z, yaw0, 1) : null;
           if (!ok || fh.hi - fh.lo > 1.6) { t += 4; continue; } // 너무 가파른 자리는 건너뛴다
           // 정면(-Z)이 길을 보게 돌린다. 높은 쪽 땅에 맞추고, 낮은 쪽은 기초로 받친다.

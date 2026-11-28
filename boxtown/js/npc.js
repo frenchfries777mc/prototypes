@@ -221,7 +221,26 @@ export class Residents {
   }
 
   // player: { pos, vel, active }  cars: Vehicle 배열
+  // 걷거나 서 있는 주민끼리, 그리고 나와 몸이 겹치지 않게 살짝 밀어낸다.
+  separate(dt, player) {
+    const L = this.list, ok = (a) => (a.mode === 'walk' || a.mode === 'stand' || a.mode === 'return' || a.mode === 'cross' || a.mode === 'flee');
+    for (let i = 0; i < L.length; i++) {
+      const a = L[i]; if (!ok(a)) continue;
+      for (let j = i + 1; j < L.length; j++) {
+        const b = L[j]; if (!ok(b)) continue;
+        const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z;
+        if (Math.abs(dx) > 0.62 || Math.abs(dz) > 0.62 || Math.abs(a.pos.y - b.pos.y) > 1.5) continue;
+        const d = Math.hypot(dx, dz) || 0.01;
+        if (d < 0.62) { const k = ((0.62 - d) * 3 * dt) / d; a.pos.x -= dx * k; a.pos.z -= dz * k; b.pos.x += dx * k; b.pos.z += dz * k; }
+      }
+      if (player.active) {
+        const dx = a.pos.x - player.pos.x, dz = a.pos.z - player.pos.z;
+        if (Math.abs(dx) < 0.85 && Math.abs(dz) < 0.85 && Math.abs(a.pos.y - player.pos.y) < 1.8) { const d = Math.hypot(dx, dz) || 0.01; if (d < 0.85) { const k = ((0.85 - d) * 5 * dt) / d; a.pos.x += dx * k; a.pos.z += dz * k; } }
+      }
+    }
+  }
   update(dt, player, cars) {
+    this.separate(dt, player);
     for (const n of this.list) {
       const chr = n.chr, p = n.pos;
       let wish = null, landed = 0, lookYaw = 0, grounded = true;

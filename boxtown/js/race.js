@@ -5,7 +5,9 @@ import { SITES } from './world.js';
 import { NAV } from './police.js';
 import { Panel } from './panel.js';
 import { stats } from './stats.js';
-import { flatMat } from './util.js';
+import { flatMat, angDiff, clamp } from './util.js';
+import { Vehicle } from './vehicles.js';
+import { rep } from './reputation.js';
 const B = window.BABYLON;
 const KEY = 'boxtown.race';
 const $ = (id) => document.getElementById(id);
@@ -45,9 +47,10 @@ function buildLine(c) {
 }
 
 export class Race {
-  constructor({ scene, assets, player, jobs, garage, groundY, lazyCollider }) {
-    Object.assign(this, { scene, assets, player, jobs, garage, groundY });
+  constructor({ scene, assets, player, jobs, garage, groundY, lazyCollider, weapons }) {
+    Object.assign(this, { scene, assets, player, jobs, garage, groundY, weapons });
     this.state = 'idle'; this.course = null; this.data = load(); this.lobby = null;
+    this.rivals = []; this.multi = null; this.net = null; this.tk = null;
     // ----- 코스 만들기 -----
     this.courses = [];
     for (const c of COURSES) {
@@ -117,8 +120,12 @@ export class Race {
     Panel.show({
       title: '서킷 레이스', sel: this.course ? this.course.id : undefined,
       note: () => '코스를 고르면 출발선이 지도에 표시돼요. 차를 타고 출발선에 서세요',
-      items: () => this.courses.map((c) => { const b = this.data[c.id]; return { id: c.id, label: c.name, sub: b ? fmt(b.t) : `${c.laps}바퀴` }; }),
+      items: () => [
+        ...this.courses.map((c) => { const b = this.data[c.id]; return { id: c.id, label: c.name, sub: b ? fmt(b.t) : `${c.laps}바퀴` }; }),
+        ...(this.net && this.net.on ? this.courses.map((c) => ({ id: 'm:' + c.id, label: '👥 ' + c.name, sub: '친구와 함께' })) : []),
+      ],
       detail: (id) => {
+        const mult = id.startsWith('m:'); if (mult) id = id.slice(2);
         const c = this.courses.find((x) => x.id === id); if (!c) return null;
         const b = this.data[id];
         return {
@@ -127,10 +134,10 @@ export class Race {
             { label: '내 최고', ratio: b ? Math.min(1, c.gold / b.t) : 0, text: b ? `${fmt(b.t)} ${{ gold: '🥇', silver: '🥈', bronze: '🥉', '': '' }[this.medalOf(c, b.t)]}` : '기록 없음' },
             { label: '🥇 금메달', ratio: 1, text: fmt(c.gold) }, { label: '🥈 은메달', ratio: c.gold / c.silver, text: fmt(c.silver) }, { label: '🥉 동메달', ratio: c.gold / c.bronze, text: fmt(c.bronze) },
           ],
-          action: { label: this.course && this.course.id === id && this.state !== 'idle' ? '선택됨' : '이 코스로 달리기', state: 'buy' },
+          action: { label: mult ? '방 친구들과 함께 달리기' : this.course && this.course.id === id && this.state !== 'idle' ? '선택됨' : '라이벌 셋과 달리기', state: 'buy' },
         };
       },
-      pick: (id) => { const c = this.courses.find((x) => x.id === id); if (c) { Panel.close(); this.select(c); } },
+      pick: (id) => { const mult = id.startsWith('m:'); const c = this.courses.find((x) => x.id === (mult ? id.slice(2) : id)); if (c) { Panel.close(); if (mult) this.openMulti(c); else this.select(c); } },
     });
   }
   select(c) {
@@ -139,16 +146,19 @@ export class Race {
     this.showGates(0);
     const s = c.cps[c.cps.length - 1];
     this.pillar.position.set(s.x, s.y + 35, s.z); this.pillar.setEnabled(true);
-    this.jobs.toast(`${c.name}: 출발선(빛기둥)으로 가서 차를 세우세요`);
+    this.jobs.notice(`🏁 ${c.name}: 출발선(빛기둥)에 차를 세우세요`);
     this.paint();
   }
   cancel(msg, silent) {
     if (this.state === 'idle') return;
     if (this.state === 'count') this.player.input.blocked = false; // 카운트다운 중에 걸어 둔 브레이크를 푼다
     this.state = 'idle'; this.hide();
-    if (msg && !silent) this.jobs.toast(msg);
+    if (msg && !silent) this.jobs.notice(msg);
+    if (this.multi && !silent) this.sendG('rquit');
+    this.multi = null;
   }
   hide() {
+    this.dropRivals();
     this.pillar.setEnabled(false); for (const g of this.gates) g.setEnabled(false);
     this.hud.hidden = true; this.big.hidden = true;
     if (this.ghost) { this.ghost.root.dispose(false, false); this.ghost = null; }
@@ -165,16 +175,90 @@ export class Race {
   placeGate(g, p) { g.position.set(p.x, p.y + 0.1, p.z); g.rotation.y = p.yaw; }
 
   // ----- 달리기 -----
-  begin() {
+  // 출발 칸: 출발선 바로 뒤에 15m 간격으로 네 칸, 좌우로 번갈아 선다.
+  gridPos(c, k) {
+    const L = c.line, n = L.length, i = (((n - 4 - k * 5) % n) + n) % n, p = L[i], a = L[(i + 2) % n], o = L[(i - 2 + n) % n];
+    const yaw = Math.atan2(a.x - o.x, a.z - o.z), lat = (k % 2 ? 1 : -1) * 2.4;
+    return { x: p.x + Math.cos(yaw) * lat, z: p.z - Math.sin(yaw) * lat, y: p.y, yaw, i };
+  }
+  // 경로 위 어디쯤인지(번호)와 누적 거리(u)를 따라간다. 바퀴를 넘어가도 이어서 늘어난다.
+  track(tk, x, z) {
+    const L = this.course.line, n = L.length;
+    let best = -1, bd = 1e9;
+    const from = tk.i === undefined ? 0 : -8, to = tk.i === undefined ? n - 1 : 40;
+    for (let d = from; d <= to; d++) { const i = tk.i === undefined ? d : (((tk.i + d) % n) + n) % n, dd = Math.hypot(L[i].x - x, L[i].z - z); if (dd < bd) { bd = dd; best = i; } }
+    if (tk.i === undefined) { tk.i = best; tk.u = best > n / 2 ? best - n : best; return; }
+    let dl = best - tk.i; if (dl > n / 2) dl -= n; if (dl < -n / 2) dl += n;
+    tk.u += dl; tk.i = best;
+  }
+  arrive() { // 출발선에 도착했다
+    if (this.multi) return this.waitMulti();
     const c = this.course, v = this.player.vehicle;
-    this.state = 'count'; this.cd = 3.4; this.lap = 0; this.idx = 0; this.t = 0; this.lapT = 0; this.bestLap = 0; this.rec = []; this.recT = 0; this.off = 0;
     this.carKey = v.key;
+    this.placeMe(2);
+    this.spawnRivals(c, [0, 1, 3]);
+    this.startCount();
+  }
+  placeMe(slot) {
+    const c = this.course, v = this.player.vehicle, g = this.gridPos(c, slot);
+    v.reset(g.x, g.y + 0.8, g.z, g.yaw); this.player.snap = true;
+    this.tk = {}; this.track(this.tk, g.x, g.z);
+  }
+  startCount() {
+    const c = this.course;
+    this.state = 'count'; this.cd = 3.4; this.lap = 0; this.idx = 0; this.t = 0; this.lapT = 0; this.bestLap = 0; this.rec = []; this.recT = 0; this.off = 0;
     this.player.input.blocked = true; // 카운트다운 동안은 브레이크가 걸려 있다
     this.pillar.setEnabled(false);
     this.showGates(0); this.state = 'count';
     const rec = this.data[c.id];
-    if (rec && rec.g && rec.g.length > 4) this.makeGhost(rec);
+    if (!this.multi && rec && rec.g && rec.g.length > 4) this.makeGhost(rec);
   }
+  spawnRivals(c, slots) {
+    const defs = [['cars/sedan-sports', 22, '검은 번개'], ['cars/hatchback-sports', 20, '빨간 쾌속'], ['cars/taxi', 18, '택시 아저씨']], f = c.id === 'grand' ? 1.3 : 1;
+    this.rivals = defs.map(([key, top, name], i) => {
+      const g = this.gridPos(c, slots[i]);
+      let v;
+      try { v = new Vehicle(this.scene, this.assets, key, g.x, g.y + 0.8, g.z, g.yaw); } catch (e) { return null; }
+      v.temp = true; v.rival = true; this.garage.cars.push(v); if (this.weapons) this.weapons.byBody.set(v.body, v);
+      const r = { car: v, top: top * f, name, tk: {}, fin: 0, still: 0 };
+      this.track(r.tk, g.x, g.z);
+      v.ai = (dt) => this.driveRival(r, dt);
+      return r;
+    }).filter(Boolean);
+  }
+  // 라이벌: 경로 앞쪽 점을 보고 달린다. 앞 구간이 휘면 속도를 줄인다.
+  driveRival(r, dt) {
+    const c = this.course, v = r.car;
+    if (!c || this.state === 'idle') return { throttle: 0, steer: 0, handbrake: true };
+    if (this.state === 'count') return { throttle: 0, steer: 0, handbrake: true };
+    v.hp = 100; v.dead = false; // 라이벌은 부서지지 않는다
+    this.track(r.tk, v.pos.x, v.pos.z);
+    const L = c.line, n = L.length, sp = Math.abs(v.speed);
+    if (!r.fin && r.tk.u >= n * c.laps) r.fin = this.t;
+    if (r.fin) return { throttle: sp > 6 ? -0.5 : 0, steer: 0, handbrake: false };
+    const at = (d) => L[(((r.tk.i + d) % n) + n) % n], look = clamp(Math.round((7 + sp * 0.9) / 3), 3, 16);
+    const tg = at(look), want = Math.atan2(tg.x - v.pos.x, tg.z - v.pos.z), err = angDiff(v.yaw, want);
+    // 앞쪽 모퉁이마다 '그 앞에서 줄여야 하는 속도'를 구해 가장 작은 값을 쓴다(제동 7m/s²로 미리 줄인다).
+    const hd = (d) => Math.atan2(at(d + 3).x - at(d).x, at(d + 3).z - at(d).z), h0 = hd(0);
+    let vt = r.top;
+    for (const d of [3, 6, 9, 12, 16, 20]) {
+      const ang = Math.abs(angDiff(h0, hd(d))), vc = clamp(r.top / (1 + ang * 4.2), 6.5, r.top);
+      vt = Math.min(vt, Math.sqrt(vc * vc + 2 * 7 * d * 3));
+    }
+    // 오래 못 움직이면 경로 위로 되돌려 놓는다(끼었을 때).
+    r.still = sp < 1.2 ? r.still + dt : 0;
+    if (r.still > 3.5) { const p = at(2), a = at(5); v.reset(p.x, p.y + 0.8, p.z, Math.atan2(a.x - p.x, a.z - p.z)); r.still = 0; }
+    return { throttle: sp < vt ? 1 : sp > vt + 2 ? -0.8 : 0.1, steer: clamp(err * 1.7, -1, 1), handbrake: false, human: true };
+  }
+  dropRivals() {
+    for (const r of this.rivals) {
+      const v = r.car, k = this.garage.cars.indexOf(v); if (k >= 0) this.garage.cars.splice(k, 1);
+      if (this.weapons) { this.weapons.byBody.delete(v.body); const fx = this.weapons.carFx.get(v); if (fx) { fx.smoke.dispose(false); fx.fire.dispose(false); this.weapons.carFx.delete(v); } }
+      v.ai = null; v.body.dispose(); v.root.getChildMeshes().forEach((m) => m.dispose()); v.root.dispose();
+    }
+    this.rivals = [];
+  }
+  rank() { if (!this.tk || !this.rivals.length) return 0; return 1 + this.rivals.filter((r) => r.tk.u > this.tk.u).length; }
   makeGhost(rec) {
     try {
       const parts = this.assets.spawnCar(rec.k || 'cars/sedan'), root = new B.TransformNode('raceGhost', this.scene);
@@ -199,12 +283,20 @@ export class Race {
     if (P.jailed) return this.cancel('레이스가 취소됐어요');
     if (this.state === 'toStart') {
       const s = c.cps[c.cps.length - 1];
-      if (valid(v) && Math.hypot(v.pos.x - s.x, v.pos.z - s.z) < 12 && Math.abs(v.pos.y - s.y) < 6) this.begin();
+      if (valid(v) && Math.hypot(v.pos.x - s.x, v.pos.z - s.z) < 12 && Math.abs(v.pos.y - s.y) < 6) this.arrive();
       this.hudT -= dt; if (this.hudT <= 0) { this.hudT = 0.2; this.paint(); }
       return;
     }
     // 차에서 내리거나 다른 탈것을 타면 잠시 뒤 중단된다.
     if (valid(v)) this.off = 0; else { this.off += dt; if (this.off > 6) return this.cancel('차에서 내려서 레이스가 끝났어요'); }
+    if (this.state === 'wait') { // 친구들이 모이길 기다린다. 방을 연 사람이 모두 모이거나 50초가 지나면 출발을 알린다.
+      const m = this.multi, n = this.net;
+      this.waitT += dt;
+      if (m && n && m.owner === this.myId() && (m.ready.size >= n.remotes.size + 1 || this.waitT > 50)) { this.sendG('rgo'); this.startCountMulti(); }
+      else if (this.waitT > 120) return this.cancel('출발 신호가 오지 않아 레이스를 그만뒀어요');
+      this.hudT -= dt; if (this.hudT <= 0) { this.hudT = 0.3; this.paint(); }
+      return;
+    }
     if (this.state === 'count') {
       this.cd -= dt;
       const n = Math.ceil(this.cd);
@@ -221,6 +313,7 @@ export class Race {
     this.recT += dt;
     if (this.recT >= 0.2 && v) { this.recT -= 0.2; this.rec.push([+v.pos.x.toFixed(1), +v.pos.y.toFixed(2), +v.pos.z.toFixed(1), Math.round(v.yaw * 100)]); }
     this.stepGhost();
+    if (v && this.tk) this.track(this.tk, v.pos.x, v.pos.z);
     const cp = c.cps[this.idx];
     if (valid(v) && Math.hypot(v.pos.x - cp.x, v.pos.z - cp.z) < 14 && Math.abs(v.pos.y - cp.y) < 8) {
       this.idx++;
@@ -228,7 +321,7 @@ export class Race {
         this.lap++;
         const lt = this.lapT; this.lapT = 0; if (!this.bestLap || lt < this.bestLap) this.bestLap = lt;
         if (this.lap >= c.laps) return this.finish();
-        this.idx = 0; this.jobs.toast(`${this.lap}바퀴 완료 ${fmt(lt)}`);
+        this.idx = 0;
       }
       this.showGates(this.idx);
     }
@@ -236,22 +329,75 @@ export class Race {
   }
   finish() {
     const c = this.course, t = this.t, prev = this.data[c.id], first = !prev, best = !prev || t < prev.t, medal = this.medalOf(c, t);
-    if (best) { this.data[c.id] = { t: +t.toFixed(2), k: this.carKey, g: this.rec, lap: +this.bestLap.toFixed(2) }; save(this.data); }
+    if (!this.multi && best) { this.data[c.id] = { t: +t.toFixed(2), k: this.carKey, g: this.rec, lap: +this.bestLap.toFixed(2) }; save(this.data); }
+    else if (this.multi && best) { this.data[c.id] = { t: +t.toFixed(2), k: this.carKey, g: this.rec, lap: +this.bestLap.toFixed(2) }; save(this.data); }
     stats.bump('races'); if (medal === 'gold') stats.bump('golds');
-    const mult = { gold: 1.6, silver: 1.1, bronze: 0.7, '': 0.25 }[medal], pay = Math.round((c.dist * 0.35 * mult) / 10) * 10;
-    this.jobs.pay(pay, `${c.name} 완주 ${fmt(t)}${medal ? ' ' + { gold: '🥇', silver: '🥈', bronze: '🥉' }[medal] : ''}`, 'race');
-    this.state = 'idle'; this.hide();
+    // 순위: 라이벌과 달릴 때는 먼저 들어온 라이벌 수, 친구와 달릴 때는 나보다 빨리 끝낸 친구 수
+    let place = 1, total = 1;
+    if (this.multi) { place = 1 + this.multi.results.filter((r) => r.t < t).length; total = 1 + this.net.remotes.size; this.multi.results.push({ id: this.myId(), name: '나', t }); this.sendG('rfin', { ft: +t.toFixed(2) }); }
+    else if (this.rivals.length) { place = 1 + this.rivals.filter((r) => r.fin > 0).length; total = this.rivals.length + 1; }
+    const mult = { gold: 1.6, silver: 1.1, bronze: 0.7, '': 0.25 }[medal] * ([1.3, 1.1, 0.95][place - 1] || 0.85);
+    const pay = Math.round((c.dist * 0.35 * mult) / 10) * 10;
+    this.jobs.pay(pay, `${c.name} 완주 ${fmt(t)}`, 'race');
+    if (place === 1 && total > 1) { const lv = rep.add('race', 1); if (lv) setTimeout(() => this.jobs.levelUp('race', lv), 1200); }
+    const keepMulti = this.multi;
+    this.state = 'idle'; this.hide(); this.multi = keepMulti;
     this.big.hidden = false; this.big.className = 'done';
-    this.big.innerHTML = `<b>${medal ? { gold: '🥇 금메달', silver: '🥈 은메달', bronze: '🥉 동메달' }[medal] : '완주!'}</b><span>${fmt(t)}${best && !first ? ' · 신기록!' : first ? ' · 첫 기록' : ''}</span>`;
-    clearTimeout(this.bigT); this.bigT = setTimeout(() => { if (this.state === 'idle') this.big.hidden = true; }, 4200);
+    const placeTxt = total > 1 ? `${place}등 / ${total}명` : '';
+    this.big.innerHTML = `<b>${medal ? { gold: '🥇 금메달', silver: '🥈 은메달', bronze: '🥉 동메달' }[medal] : '완주!'}</b><span>${fmt(t)}${best && !first ? ' · 신기록!' : first ? ' · 첫 기록' : ''}</span>${placeTxt ? `<span>${placeTxt}</span>` : ''}`;
+    clearTimeout(this.bigT); this.bigT = setTimeout(() => { if (this.state === 'idle') this.big.hidden = true; }, 5200);
+    if (keepMulti) { clearTimeout(this.multiT); this.multiT = setTimeout(() => { if (this.state === 'idle') this.multi = null; }, 25000); }
+  }
+  // ----- 친구와 함께 달리기 -----
+  myId() { const n = this.net; return n.mode === 'host' ? 'host' : n.id; }
+  sendG(k, data = {}) { const n = this.net; if (!n || !n.on) return; const m = { t: 'g', k, ...data }; if (n.mode === 'host') m.i = 'host'; n.send(m); }
+  openMulti(c) {
+    if (!this.net || !this.net.on) return;
+    this.select(c);
+    this.multi = { course: c, owner: this.myId(), ready: new Set(), results: [] };
+    this.sendG('rinv', { c: c.id });
+    this.jobs.notice(`👥 ${c.name}: 방 친구들에게 알렸어요. 출발선에 모이세요`, 'good');
+  }
+  waitMulti() {
+    const m = this.multi; this.state = 'wait'; this.waitT = 0; this.carKey = this.player.vehicle.key;
+    m.ready.add(this.myId()); this.sendG('rrdy');
+    this.player.input.blocked = true; this.pillar.setEnabled(false); this.paint();
+  }
+  startCountMulti() {
+    const ids = [...this.multi.ready].sort();
+    this.placeMe(Math.max(0, ids.indexOf(this.myId())));
+    this.startCount();
+  }
+  onNet(m) {
+    const n = this.net; if (!n || typeof m.k !== 'string') return;
+    const from = m.i, name = (n.remotes.get(from) || {}).name || '친구';
+    if (m.k === 'rinv') {
+      const c = this.courses.find((x) => x.id === m.c);
+      if (!c || this.state !== 'idle') return;
+      this.select(c); this.multi = { course: c, owner: from, ready: new Set(), results: [] };
+      this.jobs.notice(`👥 ${name} 님이 ${c.name} 레이스를 열었어요! 출발선으로`, 'good');
+      return;
+    }
+    if (!this.multi || this.multi.course !== this.course) return;
+    if (m.k === 'rrdy') this.multi.ready.add(from);
+    else if (m.k === 'rgo') { if (this.state === 'wait') this.startCountMulti(); else if (this.state === 'toStart') this.cancel('친구들이 먼저 출발했어요'); }
+    else if (m.k === 'rfin') { const t = +m.ft; if (isFinite(t) && t > 0 && t < 3600) { this.multi.results.push({ id: from, name, t }); this.showResults(); } }
+    else if (m.k === 'rquit') this.multi.ready.delete(from);
+  }
+  showResults() {
+    const r = [...this.multi.results].sort((a, b) => a.t - b.t), esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    this.big.hidden = false; this.big.className = 'done';
+    this.big.innerHTML = '<b>🏁 결과</b>' + r.map((x, i) => `<span>${i + 1}등 ${esc(x.name)} ${fmt(x.t)}</span>`).join('');
+    clearTimeout(this.bigT); this.bigT = setTimeout(() => { if (this.state === 'idle') this.big.hidden = true; }, 7000);
   }
   paint() {
     const c = this.course; if (!c) return;
     this.hud.hidden = false;
-    if (this.state === 'toStart') { this.hud.innerHTML = `<b>🏁 ${c.name}</b><span>출발선(빛기둥)에 차를 세우세요 · ${c.laps}바퀴</span><button data-quit>그만두기</button>`; return; }
-    const b = this.data[c.id];
+    if (this.state === 'toStart') { this.hud.innerHTML = `<b>🏁 ${c.name}</b><span>${this.multi ? '👥 친구와 함께 · ' : ''}출발선(빛기둥)에 차를 세우세요 · ${c.laps}바퀴</span><button data-quit>그만두기</button>`; return; }
+    if (this.state === 'wait') { const m = this.multi; this.hud.innerHTML = `<b>🏁 ${c.name}</b><span>⏳ 친구를 기다리는 중 (${m.ready.size}/${this.net.remotes.size + 1})</span><button data-quit>그만두기</button>`; return; }
+    const b = this.data[c.id], rk = this.rank();
     const ghost = this.ghost ? ' · 👻 고스트' : '';
-    this.hud.innerHTML = `<b>🏁 ${c.name}</b><span>${Math.min(this.lap + 1, c.laps)}/${c.laps}바퀴 · ${fmt(Math.max(0, this.t))}</span><small>문 ${Math.min(this.idx + 1, c.cps.length)}/${c.cps.length}${b ? ' · 최고 ' + fmt(b.t) : ''}${ghost}</small><button data-quit>그만두기</button>`;
+    this.hud.innerHTML = `<b>🏁 ${c.name}</b><span>${rk ? rk + '/' + (this.rivals.length + 1) + '등 · ' : ''}${Math.min(this.lap + 1, c.laps)}/${c.laps}바퀴 · ${fmt(Math.max(0, this.t))}</span><small>문 ${Math.min(this.idx + 1, c.cps.length)}/${c.cps.length}${b ? ' · 최고 ' + fmt(b.t) : ''}${ghost}</small><button data-quit>그만두기</button>`;
   }
   marks() {
     const out = [{ x: this.kiosk.x, z: this.kiosk.z, color: '#ffd84a', name: '레이스' }];

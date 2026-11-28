@@ -66,6 +66,7 @@ export const SITES = {
   dealer: { x: 196, z: 80, r: 17, name: '자동차 판매장' },
   base: { x: -100, z: 790, r: 64, name: '군사 기지' },
   plaza: { x: 186, z: 30, r: 25, name: '마트와 버거 가게' },
+  arcade: { x: 170, z: 160, r: 26, name: '오락실·볼링장' },
   farm: { x: -320, z: 172, r: 76, name: '서쪽 농장' },
   wind: { x: -318, z: 590, r: 46, name: '풍차 언덕' },
   works: { x: 300, z: 262, r: 84, name: '공단' },
@@ -85,6 +86,14 @@ export const SITES = {
   cabinD: { x: 330, z: 520, r: 20 },
   park: { x: -90, z: 110, r: 44, name: '강변 공원' },
 };
+
+// 나무·풀·바위 같은 자연물이 서면 안 되는 터(새로 만든 시설). assets.flush()가 이 안의 자연물을 치운다.
+export const KEEP_CLEAR = [
+  [SITES.dealer.x, SITES.dealer.z, 16.5, 14.5], // 판매장 마당
+  [SITES.dealer.x - 21, SITES.dealer.z + 6, 4, 3.4], // 레이스 접수대
+  [SITES.dealer.x + 21, SITES.dealer.z + 6, 5.2, 5.2], // 열기구 자리
+  [SITES.arcade.x, SITES.arcade.z, 18.5, 21.5], // 오락실·볼링장
+];
 
 // 지도에 적는 지명
 // ---------- 시가지: 둥근 터에 바둑판 길을 깔고 건물로 채운다 ----------
